@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v5
+      # The tag (v1.2.3 -> 1.2.3) sets the mod version, so the jar and mods.toml match the release.
+      - run: ./gradlew build -Pmod_version=${GITHUB_REF_NAME#v}
+      - run: gh release create "$GITHUB_REF_NAME" build/libs/*.jar --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
