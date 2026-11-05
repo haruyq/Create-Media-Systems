@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "create_media_systems:block/speaker_front",
+    "bottom": "create_media_systems:block/speaker_side",
+    "side": "create_media_systems:block/speaker_side"
+  }
+}

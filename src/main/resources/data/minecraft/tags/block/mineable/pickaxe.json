@@ -1,0 +1,10 @@
+{
+  "values": [
+    "create_media_systems:train_detector",
+    "create_media_systems:train_signal_receiver",
+    "create_media_systems:display",
+    "create_media_systems:image_viewer",
+    "create_media_systems:blu_ray_player",
+    "create_media_systems:equalizer"
+  ]
+}

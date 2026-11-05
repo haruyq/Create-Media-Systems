@@ -1,0 +1,190 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.144'
+    id 'idea'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    maven { url = 'https://maven.createmod.net' }
+    maven { url = 'https://maven.ithundxr.dev/snapshots' }
+    maven {
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    maven {
+        url = 'https://maven.ryanhcode.dev/releases'
+        content { includeGroup 'dev.ryanhcode.sable-companion' }
+    }
+}
+
+neoForge {
+    // Sable 2.0.6, loaded for its game tests only, needs a newer NeoForge than CMS does.
+    version = providers.gradleProperty('sableTests').isPresent() ? '21.1.228' : project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    runs {
+        client {
+            client()
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+        }
+
+        gameTestServer {
+            type = 'gameTestServer'
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+
+    // Puts Minecraft on the test classpath, so client classes like StreamSound can be tested.
+    unitTest {
+        enable()
+        testedMod = mods."${mod_id}"
+    }
+}
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") {
+        transitive = false
+    }
+    implementation("net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}")
+    compileOnly("dev.engine-room.flywheel:flywheel-neoforge-api-${minecraft_version}:${flywheel_version}")
+    runtimeOnly("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}")
+    runtimeOnly("dev.engine-room.vanillin:vanillin-neoforge-${minecraft_version}:${vanillin_version}")
+    implementation("com.tterrag.registrate:Registrate:${registrate_version}")
+    // Puts blocks on Sable sub-levels (moving structures, e.g. Create: Aeronautics ships) where they really are;
+    // does nothing without Sable. Bundled in the jar.
+    jarJar(implementation("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}")) {
+        version { strictly "[${sable_companion_version},)"; prefer sable_companion_version }
+    }
+
+    // Mods CMS integrates with when present, so `gradlew runClient` / `runServer` have them. Dev runs only:
+    // they aren't part of the built jar, and are reached by reflection.
+    localRuntime("maven.modrinth:sound-physics-remastered:${sound_physics_version}")
+    // Mods that aren't on a Maven go in libs/; the folder is gitignored.
+    localRuntime(fileTree(dir: 'libs', include: '*.jar'))
+
+    if (providers.gradleProperty('sableTests').isPresent()) {
+        implementation('maven.modrinth:sable:2.0.6+mc1.21.1') { transitive = false }
+    }
+
+    testImplementation(platform('org.junit:junit-bom:5.11.4'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+if (providers.gradleProperty('sableTests').isPresent()) {
+    sourceSets.main.java.srcDir('src/gametest/java')
+    sourceSets.main.resources.srcDir('src/gametest/resources')
+    neoForge.runs.gameTestServer {
+        gameDirectory = file('build/sable-gametest')
+        systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+    }
+}
+
+// VideoLAN's own VLC for 64-bit Windows, bundled so CMS plays media with nothing else installed (see Vlc.java).
+// Downloaded once into Gradle's cache, checked against VideoLAN's published SHA-256, and left without the parts
+// playback doesn't use (its interfaces, scripting, streaming out). Other systems use their own VLC 3.
+def vlcVersion = '3.0.21'
+def vlcSha256 = 'a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843'
+def vlcDownload = file("${gradle.gradleUserHomeDir}/caches/create_media_systems/vlc-${vlcVersion}-win64.zip")
+def vlcResources = layout.buildDirectory.dir('generated/vlc')
+var downloadVlc = tasks.register('downloadVlc') {
+    outputs.file vlcDownload
+    doLast {
+        def sha256 = { File f -> f.bytes.sha256() }
+        if (vlcDownload.exists() && sha256(vlcDownload) == vlcSha256) return
+        vlcDownload.parentFile.mkdirs()
+        def url = "https://download.videolan.org/pub/videolan/vlc/${vlcVersion}/win64/vlc-${vlcVersion}-win64.zip"
+        logger.lifecycle("Downloading ${url}")
+        vlcDownload.bytes = new URL(url).bytes
+        if (sha256(vlcDownload) != vlcSha256) {
+            vlcDownload.delete()
+            throw new GradleException("The VLC download does not match VideoLAN's SHA-256")
+        }
+    }
+}
+var bundleVlc = tasks.register('bundleVlc', Zip) {
+    dependsOn downloadVlc
+    def root = "vlc-${vlcVersion}/"
+    from({ zipTree(vlcDownload) }) {
+        include "${root}libvlc.dll", "${root}libvlccore.dll", "${root}COPYING.txt", "${root}plugins/**"
+        exclude(['gui', 'visualization', 'lua', 'stream_out', 'access_output', 'mux', 'services_discovery',
+                 'control', 'video_splitter'].collect { "${root}plugins/${it}/**" })
+        eachFile { it.path = it.path.substring(root.length()) }
+    }
+    includeEmptyDirs = false
+    archiveFileName = 'win-x64.zip'
+    destinationDirectory = vlcResources.map { it.dir('create_media_systems/vlc') }
+    doLast {
+        new File(destinationDirectory.get().asFile, 'version').text = vlcVersion
+    }
+}
+sourceSets.main.resources.srcDir(files(vlcResources).builtBy(bundleVlc))
+
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [
+        minecraft_version: minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        neo_version: neo_version,
+        loader_version_range: loader_version_range,
+        create_mod_version: create_mod_version,
+        mod_id: mod_id,
+        mod_name: mod_name,
+        mod_license: mod_license,
+        mod_version: mod_version,
+        mod_authors: mod_authors,
+        mod_description: mod_description,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs.add '-Xlint:deprecation'
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+}
+
+
+idea.module {
+    downloadSources = true
+    downloadJavadoc = true
+}

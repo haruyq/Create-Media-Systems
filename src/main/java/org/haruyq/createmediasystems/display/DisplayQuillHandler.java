@@ -1,0 +1,164 @@
+package org.haruyq.createmediasystems.display;
+
+import java.util.Optional;
+
+import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.Quill;
+import org.haruyq.createmediasystems.playback.VlcPlayer;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.simibubi.create.AllKeys;
+
+import net.createmod.catnip.outliner.Outliner;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+/**
+ * The display quill's controls, like the range quill's: right-click a Blu-ray player to pick it, then right-click
+ * displays to link them to it (again to unlink). Looking at a display: Ctrl+scroll makes it a block wider or
+ * narrower (with Shift, a sixteenth), its height following its ratio; Alt+scroll sets the height alone (and the
+ * ratio to free); Shift+right-click steps through the ratios (free, 16:9, 4:3, 21:9, 1:1, the video's or image's
+ * own). Image viewers are sized the same; right-clicking one takes its frame away or puts it back.
+ */
+final class DisplayQuillHandler {
+    private static final Object SCREEN_OUTLINE = new Object();
+    private static final Object SOURCE_OUTLINE = new Object();
+
+    @Nullable
+    private static BlockPos videoPlayer;
+    @Nullable
+    private static BlockPos hovered;
+    /** The display last pointed at, to say what to do with it once, when it comes into view. */
+    @Nullable
+    private static BlockPos hinted;
+
+    private DisplayQuillHandler() {
+    }
+
+    static void register() {
+        Quill.listen(DisplayQuillHandler::tick, DisplayQuillHandler::mouseScrolled, DisplayQuillHandler::onRightClick);
+    }
+
+    @Nullable
+    private static DisplayBlock.Entity display(@Nullable BlockPos pos) {
+        var level = Minecraft.getInstance().level;
+        return pos != null && level.getBlockEntity(pos) instanceof DisplayBlock.Entity display ? display : null;
+    }
+
+    private static boolean onRightClick() {
+        if (!isActive() || hovered == null) {
+            return false;
+        }
+        var mc = Minecraft.getInstance();
+        DisplayBlock.Entity display = display(hovered);
+        if (display == null) {
+            if (!mc.level.getBlockState(hovered).is(CreateMediaSystems.VIDEO_PLAYER.get())) {
+                return false;
+            }
+            videoPlayer = hovered;
+            Quill.status("create_media_systems.display_quill.picked", videoPlayer.getX(), videoPlayer.getY(), videoPlayer.getZ());
+            return true;
+        }
+        if (mc.player.isShiftKeyDown()) {
+            DisplayBlock.Ratio ratio = display.ratio().next();
+            resize(display, display.widthUnits(), heightFor(display, ratio, display.widthUnits()), ratio);
+            return true;
+        }
+        if (display.isImageViewer()) {
+            PacketDistributor.sendToServer(new DisplayQuill.ToggleFrame(hovered));
+            return true;
+        }
+        if (videoPlayer == null) {
+            Quill.status("create_media_systems.display_quill.pick_first");
+            return true;
+        }
+        boolean linked = linked(display);
+        PacketDistributor.sendToServer(new DisplayQuill.LinkDisplay(hovered, linked ? Optional.empty() : Optional.of(videoPlayer)));
+        return true;
+    }
+
+    private static boolean mouseScrolled(double delta) {
+        DisplayBlock.Entity display = isActive() ? display(hovered) : null;
+        boolean alt = Screen.hasAltDown();
+        if (display == null || !(AllKeys.ctrlDown() || alt)) {
+            return false;
+        }
+        int step = (int) Math.signum(delta) * (Screen.hasShiftDown() ? 1 : DisplayBlock.UNIT);
+        if (alt) {
+            resize(display, display.widthUnits(), display.heightUnits() + step, DisplayBlock.Ratio.FREE);
+        } else {
+            int width = DisplayBlock.clampSize(display.widthUnits() + step);
+            resize(display, width, heightFor(display, display.ratio(), width), display.ratio());
+        }
+        return true;
+    }
+
+    /** The height (sixteenths) a screen {@code width} wide has at {@code ratio}; as it is now when free. */
+    private static int heightFor(DisplayBlock.Entity display, DisplayBlock.Ratio ratio, int width) {
+        double value = ratio.value;
+        if (ratio == DisplayBlock.Ratio.VIDEO) {
+            Images.Picture picture = DisplayRenderer.picture(display);
+            VlcPlayer.Frame frame = DisplayRenderer.frame(display);
+            value = picture != null ? picture.width / (double) picture.height
+                    : frame != null && frame.height() > 0 ? frame.width() / (double) frame.height()
+                    : DisplayBlock.Ratio.WIDE.value;
+        }
+        return value <= 0 ? display.heightUnits() : DisplayBlock.clampSize((int) Math.round(width / value));
+    }
+
+    private static void resize(DisplayBlock.Entity display, int width, int height, DisplayBlock.Ratio ratio) {
+        int w = DisplayBlock.clampSize(width);
+        int h = DisplayBlock.clampSize(height);
+        PacketDistributor.sendToServer(new DisplayQuill.ResizeDisplay(display.getBlockPos(), w, h, ratio.ordinal()));
+        Minecraft.getInstance().player.displayClientMessage(DisplayBlock.sizeText(w, h, ratio), true);
+    }
+
+    private static void tick() {
+        if (!isActive()) {
+            hovered = null;
+            return;
+        }
+        BlockHitResult trace = Quill.pointedAt();
+        hovered = trace == null ? null : trace.getBlockPos();
+        DisplayBlock.Entity display = display(hovered);
+        if (display != null && !display.getBlockPos().equals(hinted)) {
+            boolean linked = linked(display);
+            if (display.isImageViewer()) {
+                Quill.status("create_media_systems.display_quill.hint_frame");
+            } else if (videoPlayer == null && display.source().isEmpty()) {
+                Quill.status("create_media_systems.display_quill.hint_pick");
+            } else if (videoPlayer != null && !linked) {
+                Quill.status("create_media_systems.display_quill.hint_link");
+            } else {
+                Minecraft.getInstance().player.displayClientMessage(
+                        DisplayBlock.sizeText(display.widthUnits(), display.heightUnits(), display.ratio()), true);
+            }
+        }
+        hinted = display == null ? null : display.getBlockPos();
+        if (display != null) {
+            Outliner.getInstance().showAABB(SCREEN_OUTLINE, SableCompat.toWorld(Minecraft.getInstance().level, display.box(0, 0)))
+                    .colored(display.isImageViewer() || linked(display)
+                            ? Quill.SETTING : Quill.PICKED)
+                    .lineWidth(Quill.LINE_WIDTH);
+        }
+        if (videoPlayer != null) {
+            Outliner.getInstance().showAABB(SOURCE_OUTLINE, SableCompat.toWorld(Minecraft.getInstance().level, new AABB(videoPlayer)))
+                    .colored(Quill.PICKED).lineWidth(Quill.LINE_WIDTH);
+        }
+    }
+
+    private static boolean isActive() {
+        return Quill.held(CreateMediaSystems.DISPLAY_QUILL.get());
+    }
+
+    /** Whether {@code display} shows the picked Blu-ray player. */
+    private static boolean linked(DisplayBlock.Entity display) {
+        return videoPlayer != null && display.source().filter(videoPlayer::equals).isPresent();
+    }
+}

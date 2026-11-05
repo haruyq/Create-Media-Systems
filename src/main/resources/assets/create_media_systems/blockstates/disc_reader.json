@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "create_media_systems:block/disc_reader"
+    }
+  }
+}

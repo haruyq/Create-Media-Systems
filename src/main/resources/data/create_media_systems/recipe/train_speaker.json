@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "create_media_systems:speaker" },
+    { "item": "create:railway_casing" }
+  ],
+  "result": { "id": "create_media_systems:train_speaker", "count": 1 }
+}

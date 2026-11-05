@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "create_media_systems:block/equalizer"
+    },
+    "facing=east": {
+      "model": "create_media_systems:block/equalizer",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "create_media_systems:block/equalizer",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "create_media_systems:block/equalizer",
+      "y": 270
+    }
+  }
+}

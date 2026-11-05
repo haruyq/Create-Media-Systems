@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "tag": "c:music_discs" },
+    { "item": "minecraft:amethyst_shard" }
+  ],
+  "result": { "id": "create_media_systems:custom_disc", "count": 1 }
+}

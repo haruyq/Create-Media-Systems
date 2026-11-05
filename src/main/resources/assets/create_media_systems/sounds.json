@@ -1,0 +1,11 @@
+{
+  "stream": {
+    "sounds": [
+      {
+        "name": "minecraft:music_disc.13",
+        "type": "event",
+        "stream": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "create:schematic_and_quill" },
+    { "item": "minecraft:note_block" }
+  ],
+  "result": { "id": "create_media_systems:range_quill", "count": 1 }
+}

@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "create_media_systems:block/blu_ray_player"
+    },
+    "facing=east": {
+      "model": "create_media_systems:block/blu_ray_player",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "create_media_systems:block/blu_ray_player",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "create_media_systems:block/blu_ray_player",
+      "y": 270
+    }
+  }
+}

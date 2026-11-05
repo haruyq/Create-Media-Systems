@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "create_media_systems:blu_ray_player",
+    "create_media_systems:disc_reader",
+    "create_media_systems:train_disc_reader"
+  ]
+}

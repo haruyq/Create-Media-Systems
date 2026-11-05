@@ -1,0 +1,46 @@
+package org.haruyq.createmediasystems.display;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.mojang.logging.LogUtils;
+
+import net.neoforged.fml.ModList;
+
+/** Whether an Iris shader pack is on, asked through Iris' API by reflection: no dependency, and false without Iris. */
+final class IrisCompat {
+    @Nullable
+    private static final MethodHandle IN_USE = ModList.get().isLoaded("iris") ? inUse() : null;
+    private static volatile boolean failed;
+
+    private IrisCompat() {
+    }
+
+    static boolean shaderPackInUse() {
+        if (IN_USE == null || failed) {
+            return false;
+        }
+        try {
+            return (boolean) IN_USE.invoke();
+        } catch (Throwable e) {
+            failed = true;
+            LogUtils.getLogger().warn("Iris's API failed; displays draw as without a shader pack", e);
+            return false;
+        }
+    }
+
+    @Nullable
+    private static MethodHandle inUse() {
+        try {
+            Object api = Class.forName("net.irisshaders.iris.api.v0.IrisApi").getMethod("getInstance").invoke(null);
+            return MethodHandles.publicLookup().findVirtual(api.getClass(), "isShaderPackInUse",
+                    MethodType.methodType(boolean.class)).bindTo(api);
+        } catch (ReflectiveOperationException | LinkageError e) {
+            LogUtils.getLogger().warn("Iris is installed but its API changed; displays draw as without a shader pack", e);
+            return null;
+        }
+    }
+}

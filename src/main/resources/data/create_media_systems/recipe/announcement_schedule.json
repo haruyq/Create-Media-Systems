@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "create:schedule" },
+    { "item": "minecraft:note_block" }
+  ],
+  "result": { "id": "create_media_systems:announcement_schedule", "count": 1 }
+}

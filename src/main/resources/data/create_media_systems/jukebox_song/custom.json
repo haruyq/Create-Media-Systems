@@ -1,0 +1,8 @@
+{
+  "sound_event": "create_media_systems:stream",
+  "description": {
+    "translate": "jukebox_song.create_media_systems.custom"
+  },
+  "length_in_seconds": 86400.0,
+  "comparator_output": 15
+}

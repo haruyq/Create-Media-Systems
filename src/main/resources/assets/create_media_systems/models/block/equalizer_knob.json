@@ -1,0 +1,131 @@
+{
+  "textures": {
+    "particle": "minecraft:block/black_concrete",
+    "stem": "minecraft:block/black_concrete",
+    "cap": "minecraft:block/white_concrete",
+    "line": "minecraft:block/snow"
+  },
+  "elements": [
+    {
+      "from": [7.5, 15, 7],
+      "to": [8.5, 17, 9],
+      "faces": {
+        "north": {
+          "texture": "#stem"
+        },
+        "south": {
+          "texture": "#stem"
+        },
+        "west": {
+          "texture": "#stem"
+        },
+        "east": {
+          "texture": "#stem"
+        }
+      }
+    },
+    {
+      "from": [6, 17, 6.5],
+      "to": [10, 18.5, 9.5],
+      "faces": {
+        "down": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "north": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#cap",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [6, 18.5, 6.5],
+      "to": [10, 19.25, 7.25],
+      "faces": {
+        "up": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "north": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#cap",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [6, 18.5, 8.75],
+      "to": [10, 19.25, 9.5],
+      "faces": {
+        "up": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "north": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#cap",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#cap",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "from": [6, 18.5, 7.75],
+      "to": [10, 18.75, 8.25],
+      "faces": {
+        "up": {
+          "texture": "#line"
+        },
+        "north": {
+          "texture": "#line"
+        },
+        "south": {
+          "texture": "#line"
+        },
+        "west": {
+          "texture": "#line"
+        },
+        "east": {
+          "texture": "#line"
+        }
+      }
+    }
+  ]
+}
