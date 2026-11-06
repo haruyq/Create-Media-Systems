@@ -11,7 +11,9 @@ import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
 import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
 
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.openal.AL;
 import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.SOFTDeferredUpdates;
 
 import com.mojang.logging.LogUtils;
 
@@ -75,6 +77,13 @@ public final class SoundPhysicsCompat {
         }
         handle.execute(channel -> {
             Vec3 at = take();
+            // Sound Physics moves the source to where its echoes seem to come from midway through tracing, then sets
+            // its filters one by one; OpenAL mixing in between played the speaker from there for a moment (more often
+            // the slower tracing ran, as when frames drop), a crackle. Deferred, all of it lands in one mix, put back.
+            boolean defer = AL.getCapabilities().AL_SOFT_deferred_updates;
+            if (defer) {
+                SOFTDeferredUpdates.alDeferUpdatesSOFT();
+            }
             try {
                 int source = ((ChannelAccessor) channel).create_media_systems$source();
                 Object ignored = PROCESS_SOUND.invoke(source, at.x, at.y, at.z, SoundSource.BLOCKS,
@@ -83,6 +92,10 @@ public final class SoundPhysicsCompat {
             } catch (Throwable e) {
                 failed = true;
                 LogUtils.getLogger().warn("Sound Physics Remastered failed on a CMS stream; turning it off for CMS", e);
+            } finally {
+                if (defer) {
+                    SOFTDeferredUpdates.alProcessUpdatesSOFT();
+                }
             }
         });
     }
