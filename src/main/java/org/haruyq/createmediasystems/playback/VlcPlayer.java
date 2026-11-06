@@ -315,6 +315,12 @@ public final class VlcPlayer implements NativeAudio.Backend {
                     }
                 }
             }
+            return shown();
+        }
+
+        /** The texture as last uploaded, without a newer picture: for a display out of sight. Render thread. */
+        @Nullable
+        public ResourceLocation shown() {
             return textureWidth > 0 ? id : null;
         }
 

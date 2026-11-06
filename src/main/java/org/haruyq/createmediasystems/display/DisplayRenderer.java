@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.playback.VlcPlayer;
 
@@ -117,20 +118,27 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         }
         panel(buffers.getBuffer(RenderType.textBackground()), matrix, screen, width, height);
         VlcPlayer.Frame frame = frame(display);
-        ResourceLocation texture = frame == null ? null : frame.texture();
+        // Lights, not shapes: nothing of them in a shader pack's shadow map.
+        boolean shadow = IrisCompat.shadowPass();
+        // Drawn while its picture or glow is in sight; out of sight, only its light on the blocks around (when that is
+        // in sight, or this wouldn't be called: getRenderBoundingBox), in the last picture, with no new one uploaded.
+        boolean seen = !shadow && seen(display, display.box(GLOW_REACH * Math.max(width, height), 0.1f));
+        ResourceLocation texture = frame == null ? null : seen ? frame.texture() : frame.shown();
         float lighting = display.lighting();
         shine(display, texture != null ? lighting * frame.brightness() : 0);
-        if (texture == null) {
+        if (texture == null || shadow) {
             return;
         }
-        // Under a shader pack, drawn as glowing eyes are: the pack's bloom and emissive lighting take it as a light.
-        RenderType picture = IrisCompat.shaderPackInUse() ? RenderType.eyes(texture) : RenderType.text(texture);
-        fit(display, buffers.getBuffer(picture), matrix, screen, width, height, frame.width(), frame.height(), texture, 0);
+        if (seen) {
+            // Under a shader pack, drawn as glowing eyes are: the pack's bloom and emissive lighting take it as a light.
+            RenderType picture = IrisCompat.shaderPackInUse() ? RenderType.eyes(texture) : RenderType.text(texture);
+            fit(display, buffers.getBuffer(picture), matrix, screen, width, height, frame.width(), frame.height(), texture, 0);
+        }
         if (lighting <= 0) {
             return;
         }
         int glow = Math.round(255 * GLOW_STRENGTH * lighting);
-        if (glow > 0) {
+        if (seen && glow > 0) {
             // On the display's back plane: the wall it hangs on. UV 0..1 is the display, the video stretched over it.
             VertexConsumer out = buffers.getBuffer(GLOW.apply(texture));
             float rx = GLOW_REACH * width;
@@ -298,6 +306,18 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         }
     }
 
+    /**
+     * Whether {@code box}, in the display's block space, is in the camera's view: where it is now on a Sable
+     * sub-level, a little larger for the structure's motion since its last tick. Always in Ponder's scenes.
+     */
+    private static boolean seen(DisplayBlock.Entity display, AABB box) {
+        Level level = display.getLevel();
+        if (level != Minecraft.getInstance().level) {
+            return true;
+        }
+        return Minecraft.getInstance().levelRenderer.getFrustum().isVisible(SableCompat.toWorld(level, box).inflate(1));
+    }
+
     /** The video a display shows as it plays here, or null. */
     @Nullable
     static VlcPlayer.Frame frame(DisplayBlock.Entity display) {
@@ -324,6 +344,9 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
 
     @Override
     public AABB getRenderBoundingBox(DisplayBlock.Entity display) {
+        if (display.isImageViewer()) {
+            return display.box(0, 0.1f).inflate(0.1);
+        }
         float r = Math.max(DisplayLight.RANGE, GLOW_REACH * (float) Math.max(display.width(), display.height()));
         return display.box(r, DisplayLight.RANGE).inflate(0.1);
     }
