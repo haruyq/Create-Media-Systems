@@ -14,6 +14,8 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
@@ -346,8 +348,12 @@ public final class VlcPlayer implements NativeAudio.Backend {
             }
             GlStateManager._bindTexture(texture.getId());
             if (textureWidth != width || textureHeight != height) {
-                GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-                GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+                texture.setFilter(true, true);
+                if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
+                    // Sharp at a slant too, where mipmaps alone blur text; past the GPU's own maximum, it takes that.
+                    GlStateManager._texParameter(GL11.GL_TEXTURE_2D,
+                            EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, 16f);
+                }
                 GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
                 GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
                 GlStateManager._texImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL11.GL_RGBA,
@@ -361,7 +367,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
             GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
             GlStateManager._texSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height, GL11.GL_RGBA,
                     GL11.GL_UNSIGNED_BYTE, Pointer.nativeValue(pixels));
-            // A display's glow samples a small mipmap as its blur (see DisplayRenderer).
+            // For the picture's own sampling, and a display's glow samples a small mipmap as its blur (see DisplayRenderer).
             GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
             // ponytail: 8 × 8 pixels' luma, plenty for a light level 0..15; average the mipmap's last level if not.
             long sum = 0;
@@ -397,7 +403,14 @@ public final class VlcPlayer implements NativeAudio.Backend {
             });
         }
 
+        /** Sampled through its mipmaps, so a video shown smaller than it is doesn't shimmer into noise. */
         private static final class Texture extends AbstractTexture {
+            /** Render types ask for unfiltered pictures, as they would for text; this one always keeps its own. */
+            @Override
+            public void setFilter(boolean blur, boolean mipmap) {
+                super.setFilter(true, true);
+            }
+
             @Override
             public void load(ResourceManager resourceManager) {
             }
