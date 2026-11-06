@@ -96,6 +96,34 @@ class VlcAudioTest {
     }
 
     @Test
+    void clockDriftNeverPlaysASilentSample() {
+        clockDrift(100_005); // OpenAL's clock 50 ppm fast against VLC's: a sample is skipped now and then
+        clockDrift(99_995); // 50 ppm slow: a sample is held now and then
+    }
+
+    private void clockDrift(long readEvery) {
+        fed = 0;
+        VlcAudio audio = new VlcAudio();
+        VlcAudio.Stream stream = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
+        feedUntil(audio, START + 5_000_000);
+        int previous = 0;
+        for (int k = 0; k < 40; k++) {
+            ByteBuffer out = ByteBuffer.allocateDirect(RATE * 2 / 10);
+            stream.fill(out, START + k * readEvery, true);
+            out.order(ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < out.capacity() / 2; i++) {
+                int value = out.getShort(i * 2);
+                assertNotEquals(0, value, "silence at read " + k + ", sample " + i);
+                if (previous != 0) {
+                    int step = Math.floorMod(value - previous, 30_000); // the fed values wrap at 30 000
+                    assertTrue(step <= 2, "a jump from " + previous + " to " + value);
+                }
+                previous = value;
+            }
+        }
+    }
+
+    @Test
     void eightSpeakersRebuildTheirBuffersAtTheCurrentVideoTimeAfterABriefPause() {
         VlcAudio audio = new VlcAudio();
         List<VlcAudio.Stream> streams = new ArrayList<>();

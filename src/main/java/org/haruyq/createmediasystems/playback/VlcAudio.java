@@ -41,6 +41,8 @@ final class VlcAudio {
     private static final long SEAMLESS_MICROS = 2_000;
     /** Audio this far behind is stale (VLC was paused or seeking), not just late: it is dropped. */
     private static final long STALE_MICROS = 1_000_000;
+    /** A gap this short (1 ms) is clock drift, not VLC running dry: the last sample is held over it. */
+    private static final int HOLD_BYTES = Pcm.BYTES_PER_SECOND / 1000;
     /** At most this much is kept for a reader that falls behind. */
     private static final int MAX_QUEUED_BYTES = Pcm.BYTES_PER_SECOND * 5;
 
@@ -153,6 +155,9 @@ final class VlcAudio {
 
         /** How much of the head chunk has been played. */
         private int headOffset;
+        /** The last sample played, held over a gap of up to a millisecond instead of silence. */
+        private byte lastLow;
+        private byte lastHigh;
 
         Stream(VlcAudio audio, Streams.Channel channel) {
             this.audio = audio;
@@ -268,12 +273,21 @@ final class VlcAudio {
                             dropHead();
                         }
                     } else if (due > at + early) {
-                        int gap = (int) Math.min(out.remaining(), (due - at) * Pcm.RATE / 1_000_000L * 2) & ~1;
-                        out.position(out.position() + Math.max(gap, 2));
+                        int gap = Math.max((int) Math.min(out.remaining(), (due - at) * Pcm.RATE / 1_000_000L * 2) & ~1, 2);
+                        if (gap <= HOLD_BYTES) {
+                            // OpenAL's clock and VLC's drift a sample apart every second or so: a zero there clicked.
+                            for (int i = 0; i < gap; i += 2) {
+                                out.put(lastLow).put(lastHigh);
+                            }
+                        } else {
+                            out.position(out.position() + gap);
+                        }
                     } else {
                         int n = Math.min(out.remaining(), head.pcm.length - headOffset);
                         out.put(head.pcm, headOffset, n);
                         headOffset += n;
+                        lastLow = head.pcm[headOffset - 2];
+                        lastHigh = head.pcm[headOffset - 1];
                         if (headOffset == head.pcm.length) {
                             dropHead();
                         }
