@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.display;
 
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 import org.joml.Matrix4f;
@@ -62,7 +63,11 @@ final class DisplayLight {
                     .setLayeringState(RenderStateShard.POLYGON_OFFSET_LAYERING)
                     .createCompositeState(false)));
 
-    private record Lit(long at, float[] vertices) {
+    /** The faces last found, kept on screen while a background look for the next ones runs. */
+    private static final class Lit {
+        long at = Long.MIN_VALUE;
+        volatile float[] vertices = new float[0];
+        volatile boolean busy;
     }
 
     private DisplayLight() {
@@ -79,10 +84,19 @@ final class DisplayLight {
             return;
         }
         long now = level.getGameTime();
-        Lit lit = LIT.get(display);
-        if (lit == null || now - lit.at >= REFRESH_TICKS || now < lit.at) {
-            lit = new Lit(now, faces(level, display.getBlockPos(), screen, width, height));
-            LIT.put(display, lit);
+        Lit lit = LIT.computeIfAbsent(display, d -> new Lit());
+        if (!lit.busy && (now - lit.at >= REFRESH_TICKS || now < lit.at)) {
+            lit.at = now;
+            lit.busy = true;
+            BlockPos at = display.getBlockPos();
+            Lit target = lit;
+            CompletableFuture.supplyAsync(() -> faces(level, at, screen, width, height), Util.backgroundExecutor())
+                    .whenComplete((found, error) -> {
+                        if (found != null) {
+                            target.vertices = found;
+                        }
+                        target.busy = false;
+                    });
         }
         VertexConsumer out = buffers.getBuffer(TYPE.apply(video));
         float[] v = lit.vertices;
@@ -92,8 +106,9 @@ final class DisplayLight {
         }
     }
 
-    // ponytail: scans every block within RANGE once a second on the render thread, a few ms for the largest screens;
-    // move it off-thread or update on block changes if that shows up as stutter.
+    // ponytail: runs on a background thread and reads the live client level, like vanilla's section rebuilds do; a
+    // chunk changing mid-read can throw, which just skips that refresh. Rescans everything once a second; update on
+    // block changes instead if the CPU time matters.
     private static float[] faces(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height) {
         AABB box = new AABB(screen.at(-RANGE, -RANGE, -(float) DisplayBlock.DEPTH),
                 screen.at(width + RANGE, height + RANGE, RANGE));

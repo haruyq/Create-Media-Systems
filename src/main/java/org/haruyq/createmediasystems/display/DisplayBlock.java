@@ -53,7 +53,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
     /** Sizes are in sixteenths of a block, so a screen can keep a ratio exactly. */
     public static final int UNIT = 16;
     /** Largest side of a screen, in blocks. */
-    public static final int MAX_SIZE = 32;
+    public static final int MAX_SIZE = 128;
     /** How far the panel stands out of the wall it is on; the picture is on its front. */
     public static final double DEPTH = 1 / 16.0;
     private static final Map<Direction, VoxelShape> SHAPES = Map.of(

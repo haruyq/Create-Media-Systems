@@ -315,6 +315,13 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         return true;
     }
 
+    /** Measured from the screen's nearest point, not its block: a big screen reaches past the view distance. */
+    @Override
+    public boolean shouldRender(DisplayBlock.Entity display, Vec3 camera) {
+        double reach = getViewDistance();
+        return display.box(0, 0).distanceToSqr(camera) < reach * reach;
+    }
+
     @Override
     public AABB getRenderBoundingBox(DisplayBlock.Entity display) {
         float r = Math.max(DisplayLight.RANGE, GLOW_REACH * (float) Math.max(display.width(), display.height()));
