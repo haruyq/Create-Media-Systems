@@ -47,12 +47,15 @@ public final class YtDlp {
         return prepare(JsonParser.parseString(out).getAsJsonObject(), maxHeight);
     }
 
-    /** Whether {@code url} is a YouTube playlist page (not a video in one), which a disc's playlist screen expands. */
+    /**
+     * Whether {@code url} is a YouTube link with a playlist in it ({@code list=}: a playlist page, a video in a
+     * playlist, a mix), which a disc's playlist screen expands.
+     */
     public static boolean isPlaylist(String url) {
         try {
             URI uri = new URI(url.strip());
-            return ProviderUrls.youtube(uri) && "/playlist".equals(uri.getPath())
-                    && uri.getQuery() != null && uri.getQuery().matches("(.*&)?list=[^&]+.*");
+            return ProviderUrls.youtube(uri) && uri.getRawQuery() != null
+                    && uri.getRawQuery().matches("(.*&)?list=[^&]+.*");
         } catch (java.net.URISyntaxException e) {
             return false;
         }
@@ -60,7 +63,8 @@ public final class YtDlp {
 
     /** The first {@code max} (at least 1) video links of the playlist at {@code page}; fails with yt-dlp's reason. */
     public static List<String> playlist(String page, int max) throws IOException, InterruptedException {
-        return run(URI.create(page.strip()), TIMEOUT_SECONDS, "--flat-playlist", "--print", "url",
+        // --yes-playlist overrides run's --no-playlist, so a video in a playlist gives the playlist, not the video.
+        return run(URI.create(page.strip()), TIMEOUT_SECONDS, "--yes-playlist", "--flat-playlist", "--print", "url",
                 "--playlist-items", "1:" + Math.max(1, max)).lines().map(String::strip).filter(l -> !l.isEmpty())
                 .toList();
     }

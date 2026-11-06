@@ -89,7 +89,13 @@ class YtDlpTest {
         String list = "https://www.youtube.com/playlist?list=PL123";
         assertTrue(YtDlp.isPlaylist(list));
         assertTrue(YtDlp.isPlaylist("https://music.youtube.com/playlist?foo=1&list=PL1"));
-        assertFalse(YtDlp.isPlaylist("https://www.youtube.com/watch?v=a&list=PL123"), "a video in a playlist stays one");
+        assertTrue(YtDlp.isPlaylist("https://www.youtube.com/watch?v=iT318d30d2c&list=PLUQKJP1sVuNPQxernpjwSwQV8KCnbOf5N"));
+        assertTrue(YtDlp.isPlaylist("https://www.youtube.com/watch?v=r48R3iD3lqk&list=RDGMEMYH9CUrFO7CfLJpaD7UR85w"
+                + "&start_radio=1&rv=dOP7G5J755s"), "a mix");
+        assertTrue(YtDlp.isPlaylist("https://youtu.be/a?list=PL1"));
+        assertFalse(YtDlp.isPlaylist("https://www.youtube.com/watch?v=a"));
+        assertFalse(YtDlp.isPlaylist("https://www.youtube.com/watch?v=a&playlist=PL1"));
+        assertFalse(YtDlp.isPlaylist("https://www.youtube.com/watch?v=a&list="));
         assertFalse(YtDlp.isPlaylist("https://evil.test/playlist?list=PL1"));
         assertFalse(YtDlp.isPlaylist("not a url"));
         var videos = java.util.Map.of(list, java.util.List.of("v1", "v2", "v3", "v4"));
