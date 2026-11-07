@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.display;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -22,9 +23,8 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 
-import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
-import net.minecraft.Util;
+import org.haruyq.createmediasystems.client.Workers;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
@@ -77,12 +77,10 @@ final class DisplayLight {
     private static final int RAY_BUDGET = 200_000;
     /** Frames a display may go undrawn before its buffers are freed. */
     private static final int FORGET_FRAMES = 600;
-    /**
-     * Per vertex, in the display's block space: x, y, z; atlas u, v; roughness, F0, how much of the screen it sees,
-     * whether a block's face (1) or a water surface (0); its normal in the screen's space.
+    /*
+     * Per vertex, in the display's block space: x, y, z; atlas u, v; as its colour, roughness, F0, how much of the
+     * screen it sees, whether a block's face (1) or a water surface (0); its normal in the screen's space.
      */
-    private static final int FLOATS = 12;
-    private static final int SEEN = 7;
     /** POSITION_TEX_COLOR_NORMAL's layout, its own instance: Iris extends some vanilla formats by identity. */
     static final VertexFormat FORMAT = VertexFormat.builder()
             .add("Position", VertexFormatElement.POSITION)
@@ -113,12 +111,17 @@ final class DisplayLight {
         /** When it last looked; at first, long enough ago to look now (Long.MIN_VALUE overflowed the subtraction). */
         long at = -REFRESH_TICKS;
         volatile boolean busy;
-        /** Found on the background thread, not yet uploaded. */
-        volatile float[][] found;
+        /** Found on the background thread, not yet uploaded (faces, water). Guarded by this. */
+        @Nullable
+        private Mesh[] found;
+        /** Freed: what's found for it from now is freed too. Guarded by this. */
+        private boolean closed;
         @Nullable
         VertexBuffer faces;
         @Nullable
         VertexBuffer water;
+        int facesHash;
+        int waterHash;
         int drawn;
         /** As drawn this frame. */
         final Matrix4f toScreen = new Matrix4f();
@@ -151,39 +154,50 @@ final class DisplayLight {
             shader.safeGetUniform("Specular").set(specular ? 1f : 0f);
         }
 
+        /** Found on the background thread: kept for the next upload, or freed if this light is gone. */
+        synchronized void found(Mesh[] meshes) {
+            if (closed) {
+                Mesh.close(meshes);
+                return;
+            }
+            if (found != null) {
+                Mesh.close(found);
+            }
+            found = meshes;
+        }
+
         /** Its new faces, if found, into its vertex buffers. Render thread. */
         void upload() {
-            float[][] next = found;
+            Mesh[] next;
+            synchronized (this) {
+                next = found;
+                found = null;
+            }
             if (next == null) {
                 return;
             }
-            found = null;
-            faces = upload(faces, next[0]);
-            water = upload(water, next[1]);
+            faces = upload(faces, next[0], facesHash);
+            facesHash = next[0].hash;
+            water = upload(water, next[1], waterHash);
+            waterHash = next[1].hash;
         }
 
+        /** Vertices the same as last time (nothing in the room changed) are left as they are in the buffer. */
         @Nullable
-        private static VertexBuffer upload(@Nullable VertexBuffer buffer, float[] vertices) {
-            if (vertices.length == 0) {
-                if (buffer != null) {
-                    buffer.close();
-                }
-                return null;
-            }
-            try (ByteBufferBuilder bytes = new ByteBufferBuilder(vertices.length / FLOATS * FORMAT.getVertexSize())) {
-                BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, FORMAT);
-                for (int i = 0; i < vertices.length; i += FLOATS) {
-                    out.addVertex(vertices[i], vertices[i + 1], vertices[i + 2]).setUv(vertices[i + 3], vertices[i + 4])
-                            .setColor(vertices[i + 5], vertices[i + 6], vertices[i + 7], vertices[i + 8])
-                            .setNormal(vertices[i + 9], vertices[i + 10], vertices[i + 11]);
-                }
-                MeshData mesh = out.build();
-                if (mesh == null) {
+        private static VertexBuffer upload(@Nullable VertexBuffer buffer, Mesh mesh, int hash) {
+            try (mesh) {
+                if (buffer != null && mesh.data != null && mesh.hash == hash) {
                     return buffer;
+                }
+                if (mesh.data == null) {
+                    if (buffer != null) {
+                        buffer.close();
+                    }
+                    return null;
                 }
                 VertexBuffer to = buffer != null ? buffer : new VertexBuffer(VertexBuffer.Usage.STATIC);
                 to.bind();
-                to.upload(mesh);
+                to.upload(mesh.data);
                 VertexBuffer.unbind();
                 return to;
             }
@@ -202,12 +216,36 @@ final class DisplayLight {
         }
 
         void close() {
+            synchronized (this) {
+                closed = true;
+                if (found != null) {
+                    Mesh.close(found);
+                    found = null;
+                }
+            }
             if (faces != null) {
                 faces.close();
             }
             if (water != null) {
                 water.close();
             }
+        }
+    }
+
+    /** Vertices built off the render thread, in native memory (no large arrays for the GC), till uploaded. */
+    private record Mesh(ByteBufferBuilder bytes, @Nullable MeshData data, int hash) implements AutoCloseable {
+        static void close(Mesh[] meshes) {
+            for (Mesh mesh : meshes) {
+                mesh.close();
+            }
+        }
+
+        @Override
+        public void close() {
+            if (data != null) {
+                data.close();
+            }
+            bytes.close();
         }
     }
 
@@ -242,10 +280,10 @@ final class DisplayLight {
             lit.at = now;
             lit.busy = true;
             BlockPos at = display.getBlockPos();
-            CompletableFuture.supplyAsync(() -> faces(level, at, screen, width, height, range), Util.backgroundExecutor())
+            CompletableFuture.supplyAsync(() -> faces(level, at, screen, width, height, range), Workers.LIGHT)
                     .whenComplete((found, error) -> {
                         if (found != null) {
-                            lit.found = found;
+                            lit.found(found);
                         } else if (!warned) {
                             // Once: a chunk changing mid-read can throw now and then, and only skips that look.
                             warned = true;
@@ -316,8 +354,8 @@ final class DisplayLight {
     // ponytail: runs on a background thread and reads the live client level, like vanilla's section rebuilds do; a
     // chunk changing mid-read can throw, which just skips that refresh. Rescans everything each time; update on block
     // changes instead if the CPU time matters.
-    private static float[][] faces(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height,
-                                   float range) {
+    private static Mesh[] faces(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height,
+                                float range) {
         Vec3 lo = screen.at(-range, -range, -(float) DisplayBlock.DEPTH);
         Vec3 hi = screen.at(width + range, height + range, range);
         BlockPos min = at.offset(Mth.floor(Math.min(lo.x, hi.x)), Mth.floor(Math.min(lo.y, hi.y)),
@@ -328,6 +366,18 @@ final class DisplayLight {
         RandomSource random = RandomSource.create();
         Lighting faces = new Lighting(screen, width, height, range);
         Lighting water = new Lighting(screen, width, height, range);
+        try {
+            return faces(level, at, min, max, blocks, random, faces, water, screen, width, height);
+        } catch (Throwable failed) {
+            faces.bytes.close();
+            water.bytes.close();
+            throw failed;
+        }
+    }
+
+    private static Mesh[] faces(Level level, BlockPos at, BlockPos min, BlockPos max, BlockRenderDispatcher blocks,
+                                RandomSource random, Lighting faces, Lighting water, DisplayBlock.Screen screen,
+                                float width, float height) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int minY = Math.max(min.getY(), level.getMinBuildHeight());
         int maxY = Math.min(max.getY(), level.getMaxBuildHeight() - 1);
@@ -359,7 +409,13 @@ final class DisplayLight {
             }
         }
         Shade shade = new Shade(level, at, screen, width, height, faces.size() + water.size());
-        return new float[][] {faces.finish(shade), water.finish(shade)};
+        Mesh found = faces.finish(shade);
+        try {
+            return new Mesh[] {found, water.finish(shade)};
+        } catch (Throwable failed) {
+            found.close();
+            throw failed;
+        }
     }
 
     private static void block(Level level, BlockPos at, BlockPos pos, BlockRenderDispatcher blocks,
@@ -405,7 +461,8 @@ final class DisplayLight {
         private final float width;
         private final float height;
         private final float range;
-        private final FloatArrayList out = new FloatArrayList();
+        final ByteBufferBuilder bytes = new ByteBufferBuilder(1024 * FORMAT.getVertexSize());
+        private final BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, FORMAT);
         private final List<Vec3> points = new ArrayList<>();
         private final List<Vec3> normals = new ArrayList<>();
 
@@ -440,29 +497,26 @@ final class DisplayLight {
             Vec3 n = new Vec3(normal.dot(screen.right()), normal.y, normal.dot(screen.out()));
             for (int k = 0; k < 4; k++) {
                 Vec3 p = corners[k];
-                out.add((float) p.x);
-                out.add((float) p.y);
-                out.add((float) p.z);
-                out.add(uv[2 * k]);
-                out.add(uv[2 * k + 1]);
-                out.add(roughness);
-                out.add(f0);
-                out.add(1);
-                out.add(kind);
-                out.add((float) n.x);
-                out.add((float) n.y);
-                out.add((float) n.z);
+                // How much of the screen it sees (blue) is shaded in once every face is found, see finish.
+                out.addVertex((float) p.x, (float) p.y, (float) p.z).setUv(uv[2 * k], uv[2 * k + 1])
+                        .setColor(roughness, f0, 1, kind).setNormal((float) n.x, (float) n.y, (float) n.z);
                 points.add(p);
                 normals.add(normal);
             }
         }
 
-        float[] finish(Shade shade) {
-            float[] vertices = out.toFloatArray();
-            for (int i = 0; i < points.size(); i++) {
-                vertices[i * FLOATS + SEEN] = shade.seen(points.get(i), normals.get(i));
+        /** Its vertices, each shaded by how much of the screen it sees; their memory is the caller's to free. */
+        Mesh finish(Shade shade) {
+            MeshData mesh = out.build();
+            if (mesh != null) {
+                ByteBuffer vertices = mesh.vertexBuffer();
+                int stride = FORMAT.getVertexSize();
+                int seen = FORMAT.getOffset(VertexFormatElement.COLOR) + 2;
+                for (int i = 0; i < points.size(); i++) {
+                    vertices.put(i * stride + seen, (byte) (int) (shade.seen(points.get(i), normals.get(i)) * 255));
+                }
             }
-            return vertices;
+            return new Mesh(bytes, mesh, mesh == null ? 0 : mesh.vertexBuffer().hashCode());
         }
     }
 
@@ -510,6 +564,7 @@ final class DisplayLight {
         private final BlockPos at;
         private final Vec3[] targets;
         private final Long2BooleanOpenHashMap opaque = new Long2BooleanOpenHashMap();
+        private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         private final Map<Vec3, Float> seen = new HashMap<>();
 
         Shade(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height, int points) {
@@ -589,11 +644,16 @@ final class DisplayLight {
         }
 
         private boolean opaque(int x, int y, int z) {
-            BlockPos pos = at.offset(x, y, z);
-            if (pos.equals(at)) {
+            if (x == 0 && y == 0 && z == 0) {
                 return false;
             }
-            return opaque.computeIfAbsent(pos.asLong(), key -> level.getBlockState(pos).canOcclude());
+            long key = BlockPos.asLong(at.getX() + x, at.getY() + y, at.getZ() + z);
+            if (opaque.containsKey(key)) {
+                return opaque.get(key);
+            }
+            boolean blocks = level.getBlockState(cursor.set(key)).canOcclude();
+            opaque.put(key, blocks);
+            return blocks;
         }
     }
 }

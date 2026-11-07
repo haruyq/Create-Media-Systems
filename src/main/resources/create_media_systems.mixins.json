@@ -15,6 +15,7 @@
     "ChannelAccessor",
     "ChannelMixin",
     "EntityRendererMixin",
+    "LevelRendererMixin",
     "LibraryMixin",
     "SoundEngineAccessor",
     "SoundEngineMixin",

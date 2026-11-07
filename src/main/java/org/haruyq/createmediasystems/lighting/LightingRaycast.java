@@ -33,13 +33,22 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** One frame's Sable-aware beam traces. Endpoints and the returned point/normal are world-space. */
 public final class LightingRaycast {
+    /**
+     * How long the render thread's block shapes are kept at most, in nanoseconds. A changed block's section is
+     * forgotten at once (sectionChanged); this only bounds what a missed change could leave behind.
+     */
+    private static final long RENDER_CACHE_NANOS = 10_000_000_000L;
+    /** Sections the render thread's cache holds at most (16 KB of references each) before it starts again. */
+    private static final int RENDER_CACHE_SECTIONS = 1024;
+    private static final List<AABB> EMPTY = List.of();
+    private static final List<AABB> FULL = Shapes.block().toAabbs();
     private static Cache renderCache;
     private final Level level;
     private final BlockPos ignored;
     private final List<Snapshot> subLevels;
     private final List<LightingScreens.Panel> screens;
     private final Cache cache;
-    private boolean cacheShapes;
+    private final boolean cacheShapes;
 
     private record Snapshot(SubLevelAccess owner, Pose3dc pose, Matrix3d normals, AABB bounds) {
     }
@@ -48,13 +57,15 @@ public final class LightingRaycast {
         this.level = level;
         this.ignored = ignored;
         if (render && level.isClientSide) {
-            if (renderCache == null || renderCache.level != level) {
+            if (renderCache == null || renderCache.level != level || renderCache.sections.size() > RENDER_CACHE_SECTIONS
+                    || System.nanoTime() - renderCache.created > RENDER_CACHE_NANOS) {
                 renderCache = new Cache(level);
             }
             cache = renderCache;
         } else {
             cache = new Cache(level);
         }
+        cacheShapes = render;
         List<Snapshot> snapshots = new ArrayList<>();
         for (SubLevelAccess subLevel : SableCompanion.INSTANCE.getAllIntersecting(level,
                 new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000))) {
@@ -65,6 +76,42 @@ public final class LightingRaycast {
         }
         this.subLevels = List.copyOf(snapshots);
         this.screens = LightingScreens.snapshot(level, render);
+    }
+
+    /** The same snapshot with a cache of its own, for one background thread; only where there are no sub-levels. */
+    private LightingRaycast(LightingRaycast from) {
+        level = from.level;
+        ignored = from.ignored;
+        subLevels = from.subLevels;
+        screens = from.screens;
+        cache = new Cache(level);
+        cacheShapes = true;
+    }
+
+    LightingRaycast detached() {
+        return new LightingRaycast(this);
+    }
+
+    /** A block in section {@code key} changed: its shapes are looked up again. Render thread. */
+    static void sectionChanged(long key) {
+        if (renderCache != null) {
+            renderCache.sections.remove(key);
+            renderCache.lastKey = Long.MIN_VALUE;
+        }
+    }
+
+    /** Chunk column ({@code x}, {@code z}) was loaded anew. Render thread. */
+    static void chunkChanged(int x, int z) {
+        if (renderCache == null) {
+            return;
+        }
+        for (var it = renderCache.sections.keySet().iterator(); it.hasNext(); ) {
+            long key = it.nextLong();
+            if (SectionPos.x(key) == x && SectionPos.z(key) == z) {
+                it.remove();
+            }
+        }
+        renderCache.lastKey = Long.MIN_VALUE;
     }
 
     public Hit clip(Vec3 fromWorld, Vec3 toWorld) {
@@ -99,12 +146,9 @@ public final class LightingRaycast {
         return best == null ? miss(toWorld, fromWorld) : best;
     }
 
-    void cacheShapes() {
-        cacheShapes = true;
-    }
-
-    static void beginFrame() {
-        renderCache = null;
+    /** Whether any Sable sub-level was there to trace: its blocks may move from one frame to the next. */
+    boolean hasSubLevels() {
+        return !subLevels.isEmpty();
     }
 
     private static AABB bounds(SubLevelAccess subLevel, Pose3dc pose) {
@@ -141,13 +185,38 @@ public final class LightingRaycast {
             if (pos.equals(ignored) || !allowed.test(pos)) {
                 return null;
             }
-            VoxelShape shape = cache.shape(pos, clip, cacheShapes);
-            return shape == Shapes.empty() ? null : shape.clip(clip.getFrom(), clip.getTo(), pos);
+            List<AABB> boxes = cache.boxes(pos, clip, cacheShapes);
+            return boxes.isEmpty() ? null : clip(boxes, clip.getFrom(), clip.getTo(), pos);
         }, clip -> null);
+    }
+
+    /**
+     * VoxelShape.clip with the shape's boxes kept: it lists them anew each call, most of a trace's time for a shape
+     * of many boxes.
+     */
+    private static BlockHitResult clip(List<AABB> boxes, Vec3 from, Vec3 to, BlockPos pos) {
+        Vec3 d = to.subtract(from);
+        if (d.lengthSqr() < 1.0E-7) {
+            return null;
+        }
+        // Starting inside the shape, it's hit where it starts.
+        Vec3 start = from.add(d.scale(0.001));
+        double x = start.x - pos.getX(), y = start.y - pos.getY(), z = start.z - pos.getZ();
+        for (AABB box : boxes) {
+            if (box.contains(x, y, z)) {
+                return new BlockHitResult(start, Direction.getNearest(d.x, d.y, d.z).getOpposite(), pos, true);
+            }
+        }
+        return AABB.clip(boxes, from, to, pos);
+    }
+
+    private static List<AABB> boxes(VoxelShape shape) {
+        return shape.isEmpty() ? EMPTY : shape == Shapes.block() ? FULL : shape.toAabbs();
     }
 
     private static final class Cache {
         private final Level level;
+        private final long created = System.nanoTime();
         private final Long2ObjectOpenHashMap<Section> sections = new Long2ObjectOpenHashMap<>();
         private long lastKey = Long.MIN_VALUE;
         private Section last;
@@ -156,10 +225,10 @@ public final class LightingRaycast {
             this.level = level;
         }
 
-        VoxelShape shape(BlockPos pos, ClipContext context, boolean shapes) {
+        List<AABB> boxes(BlockPos pos, ClipContext context, boolean shapes) {
             if (level.isDebug()) {
                 var chunk = level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, ChunkStatus.FULL, false);
-                return chunk == null ? Shapes.block() : context.getBlockShape(chunk.getBlockState(pos), level, pos);
+                return chunk == null ? FULL : LightingRaycast.boxes(context.getBlockShape(chunk.getBlockState(pos), level, pos));
             }
             long key = SectionPos.asLong(pos);
             if (key != lastKey) {
@@ -173,44 +242,42 @@ public final class LightingRaycast {
                     sections.put(key, last);
                 }
             }
-            return last.shape(level, pos, context, shapes);
+            return last.boxes(level, pos, context, shapes);
         }
     }
 
     private static final class Section {
         private final LevelChunkSection blocks;
         private final boolean missing;
-        private VoxelShape[] shapes;
+        private List<AABB>[] shapes;
 
         Section(LevelChunkSection blocks, boolean missing) {
             this.blocks = blocks == null || blocks.hasOnlyAir() ? null : blocks;
             this.missing = missing;
         }
 
-        VoxelShape shape(Level level, BlockPos pos, ClipContext context, boolean cache) {
+        @SuppressWarnings("unchecked")
+        List<AABB> boxes(Level level, BlockPos pos, ClipContext context, boolean cache) {
             if (missing) {
-                return Shapes.block();
+                return FULL;
             }
             if (blocks == null) {
-                return Shapes.empty();
+                return EMPTY;
             }
             int x = pos.getX() & 15, y = pos.getY() & 15, z = pos.getZ() & 15;
             int index = y << 8 | z << 4 | x;
             if (cache && shapes == null) {
-                shapes = new VoxelShape[4096];
+                shapes = new List[4096];
             }
-            VoxelShape shape = shapes == null ? null : shapes[index];
-            if (shape == null) {
+            List<AABB> boxes = shapes == null ? null : shapes[index];
+            if (boxes == null) {
                 var state = blocks.getBlockState(x, y, z);
-                shape = state.isAir() ? Shapes.empty() : context.getBlockShape(state, level, pos);
-                if (shape.isEmpty()) {
-                    shape = Shapes.empty();
-                }
+                boxes = state.isAir() ? EMPTY : LightingRaycast.boxes(context.getBlockShape(state, level, pos));
                 if (shapes != null) {
-                    shapes[index] = shape;
+                    shapes[index] = boxes;
                 }
             }
-            return shape;
+            return boxes;
         }
     }
 

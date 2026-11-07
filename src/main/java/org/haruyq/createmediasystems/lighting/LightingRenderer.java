@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -36,6 +38,7 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -53,8 +56,8 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 public final class LightingRenderer implements BlockEntityRenderer<StageLightBlock.Entity> {
@@ -87,7 +90,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final int RAYS = 9;
 
     public static void register(IEventBus modBus) {
-        NeoForge.EVENT_BUS.addListener((RenderFrameEvent.Pre event) -> LightingRaycast.beginFrame());
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
                 effects(event);
@@ -98,17 +100,27 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
                 effects(event);
+                LightingIllumination.endFrame();
             }
         });
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), LightingRenderer::new);
             event.registerBlockEntityRenderer(CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get(), Console::new);
         });
+        modBus.addListener((RegisterShadersEvent event) -> {
+            try {
+                event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("spot_light"),
+                        LightingIllumination.FORMAT), LightingIllumination::setShader);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
     }
 
     private static void effects(RenderLevelStageEvent event) {
         boolean entities = event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES;
-        if (!effectsPending || !entities && event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || shadowPass()) {
+        if (!effectsPending && !LightingIllumination.pending()
+                || !entities && event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || shadowPass()) {
             return;
         }
         // Finish the last video before light, while keeping light before translucent terrain and shader compositing.
@@ -126,6 +138,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         try {
             EFFECT_BUFFERS.values().forEach(MultiBufferSource.BufferSource::endBatch);
             effectsPending = false;
+            LightingIllumination.drawSurfaces();
         } finally {
             view.popMatrix();
             RenderSystem.applyModelViewMatrix();
@@ -386,9 +399,33 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         LightingRaycast.Hit[] intersections = new LightingRaycast.Hit[0];
         LightingGeometry.Plane[] planes = new LightingGeometry.Plane[0];
         LightingGeometry.Plane[] middle = new LightingGeometry.Plane[0];
+        /** The frame last traced, and from where: a light held still traces again only when a block changes. */
+        long traced = -2;
+        Vec3 lastOrigin;
+        Vec3 lastForward;
+        Vec3 lastRight;
+        int lastPattern;
+        float lastRange;
+        float lastSpread;
 
         void update(BeamFrame frame, Vec3 forward, Vec3 right, Vec3 up,
                     int pattern, float range, float spread) {
+            long now = LightingIllumination.frame();
+            // Off the world (a Ponder scene), or with sub-levels that move under it, every frame.
+            boolean still = now - traced <= 1 && frame.lamp.getLevel() == Minecraft.getInstance().level
+                    && !frame.rays.hasSubLevels() && !LightingIllumination.blocksChanged()
+                    && pattern == lastPattern && range == lastRange && spread == lastSpread
+                    && frame.origin.equals(lastOrigin) && forward.equals(lastForward) && right.equals(lastRight);
+            traced = now;
+            if (still) {
+                return;
+            }
+            lastOrigin = frame.origin;
+            lastForward = forward;
+            lastRight = right;
+            lastPattern = pattern;
+            lastRange = range;
+            lastSpread = spread;
             int count = pattern < 2 ? SIDES + 1 : pattern == 2 ? 1 : RAYS;
             if (ends.length != count) {
                 ends = new Vec3[count];
@@ -429,16 +466,23 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                              boolean narrow) {
         Vec3 origin = frame.origin;
         Vec3 center = trace.ends[SIDES];
+        // Each edge's points from the lamp out, shared by the two strips either side of it.
+        Vec3[][] along = new Vec3[SIDES][9];
         for (int i = 0; i < SIDES; i++) {
-            Vec3 edgeA = trace.ends[i];
-            Vec3 edgeB = trace.ends[(i + 1) % SIDES];
+            for (int step = 0; step <= 8; step++) {
+                along[i][step] = origin.lerp(trace.ends[i], step / 8.0);
+            }
+        }
+        for (int i = 0; i < SIDES; i++) {
+            Vec3[] edgeA = along[i];
+            Vec3[] edgeB = along[(i + 1) % SIDES];
             for (int step = 0; step < 8; step++) {
                 double t0 = step / 8.0;
                 double t1 = (step + 1) / 8.0;
                 int alpha0 = (int) (strength * (narrow ? 38 : 17) * (1 - t0 * 0.75));
                 int alpha1 = (int) (strength * (narrow ? 38 : 17) * (1 - t1 * 0.75));
-                clippedQuad(out, matrix, origin.lerp(edgeA, t0), origin.lerp(edgeB, t0), origin.lerp(edgeB, t1),
-                        origin.lerp(edgeA, t1), color, color, alpha0, alpha0, alpha1, alpha1,
+                clippedQuad(out, matrix, edgeA[step], edgeB[step], edgeB[step + 1], edgeA[step + 1],
+                        color, color, alpha0, alpha0, alpha1, alpha1,
                         trace.planes[i], trace.planes[(i + 1) % SIDES], trace.middle[i]);
             }
         }
@@ -577,10 +621,15 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         }
     }
 
+    /**
+     * The buffer for {@code type} asked for again each quad: another type asked for between (text, another part)
+     * may have ended its batch. Everything here is drawn in whole quads, 4 vertices together.
+     */
     private static final class Output implements VertexConsumer {
         private final MultiBufferSource buffers;
         private final RenderType type;
         private VertexConsumer current;
+        private int vertices;
 
         Output(MultiBufferSource buffers, RenderType type) {
             this.buffers = buffers;
@@ -589,7 +638,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
         @Override
         public VertexConsumer addVertex(float x, float y, float z) {
-            current = buffers.getBuffer(type);
+            if ((vertices++ & 3) == 0) {
+                current = buffers.getBuffer(type);
+            }
             current.addVertex(x, y, z);
             return this;
         }

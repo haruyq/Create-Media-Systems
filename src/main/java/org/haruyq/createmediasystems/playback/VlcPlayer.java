@@ -254,26 +254,37 @@ public final class VlcPlayer implements NativeAudio.Backend {
 
     /**
      * The player's pictures, RGBA, which VLC writes into memory of ours and the render thread copies into a texture
-     * (see {@link #texture}). They take turns on {@link #guard}: an upload never reads a picture half written.
+     * (see {@link #texture}). Two pictures: VLC writes into the back one while the render thread copies the other,
+     * the last VLC finished, without holding {@link #guard}, so neither waits on the other's copy.
      */
     public static final class Frame {
         private static final AtomicInteger IDS = new AtomicInteger();
 
         private final Object guard = new Object();
-        /** Guarded by guard. */
-        @Nullable
-        private Memory pixels;
+        /** Guarded by guard: buffers[back] is VLC's to write, the other holds the latest picture. */
+        private final Memory[] buffers = new Memory[2];
+        private int back;
         private int width;
         private int height;
         /** VLC is between lock and unlock, writing a picture. */
         private boolean writing;
+        /** The render thread is copying the latest picture into a texture; it stays where it is till done. */
+        private boolean reading;
+        /** VLC finished a picture while reading: it's still in the back buffer, swapped in once the copy is done. */
+        private boolean missed;
         /** A picture VLC finished that the texture doesn't have yet. */
         private volatile boolean fresh;
-        /** On the render thread. */
+        /**
+         * On the render thread. Two textures taking turns: a new picture goes into the one not drawn last frame, so
+         * the driver needn't wait for the GPU to finish reading it first.
+         */
+        private final ResourceLocation[] ids = new ResourceLocation[2];
+        private final Texture[] textures = new Texture[2];
+        private final int[] allocated = new int[4];
+        private int current = 1;
+        /** The texture with the latest picture (one of ids), and its size. */
         @Nullable
         private ResourceLocation id;
-        @Nullable
-        private Texture texture;
         private int textureWidth;
         private int textureHeight;
         private float brightness;
@@ -298,11 +309,19 @@ public final class VlcPlayer implements NativeAudio.Backend {
             pitches.setInt(0, w * 4);
             lines.setInt(0, h);
             synchronized (guard) {
-                if (pixels != null) {
-                    pixels.close();
+                if (!awaitReading()) {
+                    return 0;
                 }
-                pixels = new Memory((long) w * h * 4);
-                pixels.clear();
+                for (int i = 0; i < 2; i++) {
+                    if (buffers[i] != null) {
+                        buffers[i].close();
+                    }
+                    buffers[i] = new Memory((long) w * h * 4);
+                    buffers[i].clear();
+                }
+                back = 0;
+                missed = false;
+                fresh = false;
                 this.width = w;
                 this.height = h;
                 lightingColors = null;
@@ -314,7 +333,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
         final Vlc.VideoLock lock = (opaque, planes) -> {
             synchronized (guard) {
                 writing = true;
-                planes.setPointer(0, pixels);
+                planes.setPointer(0, buffers[back]);
             }
             return null;
         };
@@ -329,13 +348,22 @@ public final class VlcPlayer implements NativeAudio.Backend {
             if (firstPicture == 0) {
                 firstPicture = now;
             }
-            fresh = true;
             synchronized (guard) {
-                if (!writing && pixels != null && lightingUntil != 0 && now - lightingUntil < 0 && now - nextLighting >= 0) {
+                Memory written = buffers[back];
+                if (written == null) {
+                    return;
+                }
+                if (reading) {
+                    missed = true;
+                } else {
+                    back ^= 1;
+                    fresh = true;
+                }
+                if (lightingUntil != 0 && now - lightingUntil < 0 && now - nextLighting >= 0) {
                     int[] colors = LightingMedia.colors(width, height, index -> {
                         long at = (long) index * 4;
-                        return (pixels.getByte(at) & 255) << 16 | (pixels.getByte(at + 1) & 255) << 8
-                                | pixels.getByte(at + 2) & 255;
+                        return (written.getByte(at) & 255) << 16 | (written.getByte(at + 1) & 255) << 8
+                                | written.getByte(at + 2) & 255;
                     });
                     LightingMedia.Colors previous = lightingColors;
                     float amount = previous == null ? 1 : Math.min(1, (now - previous.at()) / 200_000_000f);
@@ -372,14 +400,49 @@ public final class VlcPlayer implements NativeAudio.Backend {
         @Nullable
         public ResourceLocation texture() {
             if (fresh) {
+                Memory latest;
+                int w, h;
                 synchronized (guard) {
-                    if (!writing && pixels != null) {
-                        upload();
-                        fresh = false;
+                    latest = buffers[back ^ 1];
+                    if (!fresh || latest == null) {
+                        return shown();
+                    }
+                    fresh = false;
+                    reading = true;
+                    w = width;
+                    h = height;
+                }
+                try {
+                    upload(latest, w, h);
+                } finally {
+                    synchronized (guard) {
+                        reading = false;
+                        if (missed) {
+                            missed = false;
+                            // Still writing, VLC is already over it with a newer one, swapped in when it finishes.
+                            if (!writing) {
+                                back ^= 1;
+                                fresh = true;
+                            }
+                        }
+                        guard.notifyAll();
                     }
                 }
             }
             return shown();
+        }
+
+        /** Waits, under guard, till the render thread is done with the latest picture; false if interrupted. */
+        private boolean awaitReading() {
+            while (reading) {
+                try {
+                    guard.wait();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            return true;
         }
 
         /** The texture as last uploaded, without a newer picture: for a display out of sight. Render thread. */
@@ -410,14 +473,16 @@ public final class VlcPlayer implements NativeAudio.Backend {
             }
         }
 
-        private void upload() {
+        private void upload(Memory pixels, int width, int height) {
+            int next = current ^ 1;
+            Texture texture = textures[next];
             if (texture == null) {
-                texture = new Texture();
-                id = CreateMediaSystems.id("video/" + IDS.incrementAndGet());
-                Minecraft.getInstance().getTextureManager().register(id, texture);
+                texture = textures[next] = new Texture();
+                ids[next] = CreateMediaSystems.id("video/" + IDS.incrementAndGet());
+                Minecraft.getInstance().getTextureManager().register(ids[next], texture);
             }
             GlStateManager._bindTexture(texture.getId());
-            if (textureWidth != width || textureHeight != height) {
+            if (allocated[next * 2] != width || allocated[next * 2 + 1] != height) {
                 texture.setFilter(true, true);
                 if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
                     // Sharp at a slant too, where mipmaps alone blur text; past the GPU's own maximum, it takes that.
@@ -428,9 +493,13 @@ public final class VlcPlayer implements NativeAudio.Backend {
                 GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
                 GlStateManager._texImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL11.GL_RGBA,
                         GL11.GL_UNSIGNED_BYTE, null);
-                textureWidth = width;
-                textureHeight = height;
+                allocated[next * 2] = width;
+                allocated[next * 2 + 1] = height;
             }
+            current = next;
+            id = ids[next];
+            textureWidth = width;
+            textureHeight = height;
             GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
             GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
             GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
@@ -459,17 +528,23 @@ public final class VlcPlayer implements NativeAudio.Backend {
         /** The player is gone: frees the pictures now and the texture on the render thread. */
         private void close() {
             synchronized (guard) {
-                if (pixels != null) {
-                    pixels.close();
-                    pixels = null;
+                // Interrupted, left to JNA's cleaner: freed now, the copy under way would read freed memory.
+                boolean idle = awaitReading();
+                for (int i = 0; i < 2; i++) {
+                    if (idle && buffers[i] != null) {
+                        buffers[i].close();
+                    }
+                    buffers[i] = null;
                 }
                 fresh = false;
                 lightingColors = null;
                 lastPicture = 0;
             }
             Minecraft.getInstance().execute(() -> {
-                if (id != null) {
-                    Minecraft.getInstance().getTextureManager().release(id);
+                for (ResourceLocation each : ids) {
+                    if (each != null) {
+                        Minecraft.getInstance().getTextureManager().release(each);
+                    }
                 }
                 textureWidth = 0;
             });

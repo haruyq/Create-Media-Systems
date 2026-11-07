@@ -1,7 +1,9 @@
 package org.haruyq.createmediasystems.display;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.jetbrains.annotations.Nullable;
@@ -29,6 +31,8 @@ public final class ScreenLight {
     private static final Map<RenderType, ByteBufferBuilder> MEMORY = new HashMap<>();
     /** This frame's light, by render type. */
     private static final Map<RenderType, BufferBuilder> KEPT = new LinkedHashMap<>();
+    /** This frame's light drawn from its own buffers (stage lights' lit surfaces), drawn again here. */
+    private static final List<Runnable> DRAWS = new ArrayList<>();
     /** The light alone, over black. */
     @Nullable
     private static TextureTarget target;
@@ -47,6 +51,13 @@ public final class ScreenLight {
         BufferBuilder kept = KEPT.computeIfAbsent(type, t -> new BufferBuilder(
                 MEMORY.computeIfAbsent(t, m -> new ByteBufferBuilder(t.bufferSize())), t.mode(), t.format()));
         return VertexMultiConsumer.create(out, kept);
+    }
+
+    /** Under a shader pack, {@code draw} is run again for displays' pictures; it must draw light as alsoOnScreens' is. */
+    public static void alsoOnScreens(Runnable draw) {
+        if (IrisCompat.shaderPackInUse() && !IrisCompat.shadowPass()) {
+            DRAWS.add(draw);
+        }
     }
 
     /**
@@ -73,6 +84,8 @@ public final class ScreenLight {
             }
         });
         KEPT.clear();
+        DRAWS.forEach(Runnable::run);
+        DRAWS.clear();
         main.bindWrite(true);
         return target.getColorTextureId();
     }
@@ -86,5 +99,6 @@ public final class ScreenLight {
             }
         });
         KEPT.clear();
+        DRAWS.clear();
     }
 }
