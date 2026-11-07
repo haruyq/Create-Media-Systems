@@ -335,6 +335,15 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         return true;
     }
 
+    /**
+     * As far as the world itself is drawn, not block entities' usual 64 blocks: a venue's screen stays in sight from
+     * its far end. Out of view, culling skips it anyway (see render).
+     */
+    @Override
+    public int getViewDistance() {
+        return Minecraft.getInstance().options.getEffectiveRenderDistance() * 16;
+    }
+
     /** Measured from the screen's nearest point, not its block: a big screen reaches past the view distance. */
     @Override
     public boolean shouldRender(DisplayBlock.Entity display, Vec3 camera) {
