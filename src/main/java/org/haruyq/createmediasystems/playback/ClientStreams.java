@@ -162,13 +162,19 @@ public final class ClientStreams {
     private static void releaseFinished(ClientTickEvent.Post event) {
         var sounds = Minecraft.getInstance().getSoundManager();
         Map.copyOf(PLAYING).forEach((channel, sound) -> {
-            if (!sounds.isActive(sound) && sound.wantsRestart()) {
+            if (sounds.isActive(sound)) {
+                return;
+            }
+            if (sound.wantsRestart()) {
                 LogUtils.getLogger().info("The sound engine dropped CMS stream {} as its audio ran dry; starting it again", channel);
                 play(channel, sound.again());
+            } else if (sound.waitingForChannel() && sound.retryChannelNow()) {
+                // Never started, so the same sound: it still joins its playback where it is now (see NativeAudio).
+                sounds.play(sound);
             }
         });
         PLAYING.entrySet().removeIf(entry -> {
-            boolean finished = !sounds.isActive(entry.getValue());
+            boolean finished = !sounds.isActive(entry.getValue()) && !entry.getValue().waitingForChannel();
             if (finished) {
                 entry.getValue().release();
                 if (entry.getKey() instanceof BlockPos pos) {

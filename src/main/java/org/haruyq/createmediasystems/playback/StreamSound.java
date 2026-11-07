@@ -55,6 +55,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      * and out before it stops for the listener leaving (getting off a train), so nothing cuts in or off.
      */
     private static final int FADE_TICKS = 20;
+    /** How often (ticks) a stream the engine had no channel for asks again, after the first tick (see waitingForChannel). */
+    private static final int CHANNEL_RETRY_TICKS = 20;
     // HTTP/1.1: through Cloudflare, an HTTP/2 stream read at playback speed is reset (RST_STREAM) after about
     // 3 minutes; HTTP/1.1 runs to the end. Resuming covers any other proxy or network drop.
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -97,6 +99,10 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private final SoundPhysicsCompat soundPhysics = new SoundPhysicsCompat();
     /** Ticks since it was made, so one that keeps being dropped at once isn't started again every tick. */
     private int age;
+    /** The engine asked for its audio, which it does only once it has a channel for it (see waitingForChannel). */
+    private boolean requested;
+    /** Ticks it has waited for a channel. */
+    private int channelWaits;
     /** Where it plays from in the world now, asked every tick; null plays it at the listener. */
     @Nullable
     private final Supplier<Vec3> position;
@@ -177,6 +183,25 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     }
 
     /**
+     * Whether it is still to play but the engine had no free streaming channel for it, and so dropped it unheard
+     * (silently, outside a dev environment). Every speaker is a stream of its own, and the engine frees a stopped
+     * stream's channel only on its next tick, so restarting a wall of speakers (a new track, a seek) briefly needs
+     * twice their number, more than there are (see LibraryMixin): the newest of them were dropped, and as nothing
+     * played them again, those speakers stayed silent until the listener left and came back.
+     */
+    boolean waitingForChannel() {
+        return !requested && !released && !isStopped() && present.getAsBoolean() && nearby.getAsBoolean();
+    }
+
+    /**
+     * While {@link #waitingForChannel}, whether to ask again now: the tick after, when the restart's old channels are
+     * free, then once a second, as each ask waits on the sound thread.
+     */
+    boolean retryChannelNow() {
+        return channelWaits++ % CHANNEL_RETRY_TICKS == 0;
+    }
+
+    /**
      * The same stream again, from where it is now: it joins its playback's native player, which plays on, so it is
      * back in step with the others at once, at the volume it had.
      */
@@ -219,6 +244,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
 
     @Override
     public CompletableFuture<AudioStream> getStream(SoundBufferLibrary soundBuffers, Sound sound, boolean looping) {
+        requested = true;
         return CompletableFuture.supplyAsync(this::open, Util.nonCriticalIoPool());
     }
 
