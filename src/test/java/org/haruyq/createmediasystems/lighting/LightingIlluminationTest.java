@@ -2,13 +2,72 @@ package org.haruyq.createmediasystems.lighting;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Arrays;
+
 import org.junit.jupiter.api.Test;
+
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.VertexFormat;
 
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.world.phys.Vec3;
 
 class LightingIlluminationTest {
     private static final Vec3 FORWARD = new Vec3(0, 0, 1);
+
+    @Test
+    void cachedVerticesMatchMinecraftsVertexWriter() {
+        Vec3[] samples = new Vec3[9];
+        for (int i = 0; i < samples.length; i++) {
+            samples[i] = new Vec3(i * 0.25 - 3, i / 3 * 0.5, -0.125);
+        }
+        Vec3 normal = new Vec3(-1.2, 0.58, -0.37);
+        float[] uv = {0.125f, 0.125f, 0.875f, 0.125f, 0.875f, 0.875f, 0.125f, 0.875f};
+        float[] texels = {0.125f, 0.5f, 0.875f};
+        byte[] packed = LightingIllumination.vertices(samples, normal, uv, 0x3F81C2);
+        int stride = LightingIllumination.FORMAT.getVertexSize();
+        assertEquals(28, stride);
+        assertEquals(stride * 16, packed.length);
+        try (var memory = new ByteBufferBuilder(packed.length)) {
+            var out = new BufferBuilder(memory, VertexFormat.Mode.QUADS, LightingIllumination.FORMAT);
+            for (int i : new int[] {0, 1, 4, 3, 1, 2, 5, 4, 3, 4, 7, 6, 4, 5, 8, 7}) {
+                Vec3 point = samples[i];
+                out.addVertex((float) point.x, (float) point.y, (float) point.z).setUv(texels[i % 3], texels[i / 3])
+                        .setColor(0x3F, 0x81, 0xC2, 255).setNormal((float) normal.x, (float) normal.y, (float) normal.z);
+            }
+            try (var mesh = out.buildOrThrow()) {
+                var expected = mesh.vertexBuffer();
+                for (int i = 0; i < packed.length; i++) {
+                    if (i % stride != stride - 1) {
+                        assertEquals(expected.get(i), packed[i], "vertex byte " + i);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void visibilityKeepsTheFourCellsAndTheirSharedCorners() {
+        byte[] seen = new byte[13];
+        Arrays.fill(seen, (byte) 1);
+        for (int cell = 0; cell < 4; cell++) {
+            seen[9 + cell] = 0;
+            for (int other = 0; other < 4; other++) {
+                assertEquals(cell != other, LightingIllumination.cellLit(seen, other % 2, other / 2));
+            }
+            seen[9 + cell] = 1;
+        }
+        seen[0] = -1;
+        assertFalse(LightingIllumination.cellLit(seen, 0, 0));
+        assertTrue(LightingIllumination.cellLit(seen, 1, 0));
+        assertTrue(LightingIllumination.cellLit(seen, 0, 1));
+        assertTrue(LightingIllumination.cellLit(seen, 1, 1));
+        seen[4] = -1;
+        for (int cell = 0; cell < 4; cell++) {
+            assertFalse(LightingIllumination.cellLit(seen, cell % 2, cell / 2));
+        }
+    }
 
     @Test
     void newFacesAndRefreshesShareAFiniteBudget() {

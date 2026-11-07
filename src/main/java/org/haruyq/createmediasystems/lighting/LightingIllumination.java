@@ -1,14 +1,16 @@
 package org.haruyq.createmediasystems.lighting;
 
 import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 
 import org.haruyq.createmediasystems.SableCompat;
@@ -16,6 +18,7 @@ import org.haruyq.createmediasystems.client.Workers;
 import org.haruyq.createmediasystems.display.ScreenLight;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.lwjgl.system.MemoryUtil;
 
 import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import dev.ryanhcode.sable.companion.SableCompanion;
@@ -38,6 +41,7 @@ import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
@@ -62,7 +66,7 @@ import net.neoforged.neoforge.client.model.data.ModelData;
  * current cone (shaders/core/spot_light). Entities receive light through their light coordinates (light).
  */
 public final class LightingIllumination {
-    private static final Map<StageLightBlock.Entity, Beam> BEAMS = new WeakHashMap<>();
+    private static final Map<StageLightBlock.Entity, Beam> BEAMS = new HashMap<>();
     private static final ArrayDeque<SurfaceScan> SCANS = new ArrayDeque<>();
     private static WeakReference<Level> knownLevel = new WeakReference<>(null);
     /** POSITION_TEX_COLOR_NORMAL's layout, its own instance: Iris extends some vanilla formats by identity. */
@@ -168,6 +172,13 @@ public final class LightingIllumination {
         /** The buffer no longer shows what the light sees: a cell in the beam changed (dirty), or one outside it (pending). */
         boolean dirty;
         boolean pending;
+        boolean geometryDirty = true;
+        boolean resident;
+        final BitSet changedFaces = new BitSet();
+        int[] slots = new int[0];
+        byte[] cells = new byte[0];
+        int litCells;
+        DynamicTexture visibility;
         long built = Long.MIN_VALUE;
         long drawn;
         VertexBuffer buffer;
@@ -192,6 +203,8 @@ public final class LightingIllumination {
         private void setup() {
             Minecraft.getInstance().getTextureManager().getTexture(InventoryMenu.BLOCK_ATLAS).setFilter(false, true);
             RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
+            RenderSystem.setShaderTexture(1, resident && visibility != null ? visibility.getId() : 0);
+            shader.safeGetUniform("Masked").set(resident ? 1 : 0);
             shader.safeGetUniform("Origin").set(drawOrigin);
             shader.safeGetUniform("Direction").set(drawDirection);
             shader.safeGetUniform("Tangent").set(drawTangent);
@@ -219,10 +232,11 @@ public final class LightingIllumination {
                 if (face.seen[i] == 0) {
                     continue;
                 }
-                byte seen = (byte) (visible(rays, from, geometry.rays[i]) ? 1 : -1);
+                byte seen = (byte) (rays.visible(from, geometry.rays[i]) ? 1 : -1);
                 if (seen != face.seen[i]) {
                     face.seen[i] = seen;
                     dirty = true;
+                    changedFaces.set(this.face);
                 }
             }
             face.sight = sight;
@@ -246,7 +260,8 @@ public final class LightingIllumination {
                 if (face.sight == 0) {
                     face.sight = sight;
                 }
-                face.seen[i] = (byte) (visible(rays, from, geometry.rays[i]) ? 1 : -1);
+                face.seen[i] = (byte) (rays.visible(from, geometry.rays[i]) ? 1 : -1);
+                changedFaces.set(this.face);
                 if (inBeam) {
                     dirty = true;
                 } else {
@@ -271,6 +286,8 @@ public final class LightingIllumination {
             axis = scan.axis;
             next = 0;
             dirty = true;
+            geometryDirty = true;
+            changedFaces.clear();
         }
 
         /** Whether the last scan holds every face {@code radius} around {@code center} on a surface on {@code axis}. */
@@ -331,6 +348,10 @@ public final class LightingIllumination {
                 buffer.close();
                 buffer = null;
             }
+            if (visibility != null) {
+                visibility.close();
+                visibility = null;
+            }
         }
     }
 
@@ -348,6 +369,8 @@ public final class LightingIllumination {
         final int tint;
         /** As the lamp sees it with nothing moving (see geometry). */
         final Geometry still;
+        /** Packed FORMAT vertices, reused when the next scan keeps this face. */
+        final byte[] mesh;
         /** As this frame saw it, with sub-levels where they are: still, unless the lamp and face are on different ones. */
         Geometry shown;
         /** Each point's sight (see Geometry): 0 not yet, 1 lit, -1 shaded; and the sight (Beam.sight) it was traced under. */
@@ -366,6 +389,7 @@ public final class LightingIllumination {
             this.winding = winding;
             this.tint = tint;
             this.still = geometry(null, null, offset);
+            this.mesh = vertices(still.samples, still.normal, uv, tint);
             this.shown = still;
         }
 
@@ -382,10 +406,38 @@ public final class LightingIllumination {
 
         /** Whether the light reaches the whole of cell ({@code x}, {@code y}) of the 2×2 over the face. */
         boolean lit(int x, int y) {
-            int corner = y * 3 + x;
-            return seen[9 + y * 2 + x] > 0 && seen[corner] > 0 && seen[corner + 1] > 0 && seen[corner + 3] > 0
-                    && seen[corner + 4] > 0;
+            return cellLit(seen, x, y);
         }
+    }
+
+    static boolean cellLit(byte[] seen, int x, int y) {
+        int corner = y * 3 + x;
+        return seen[9 + y * 2 + x] > 0 && seen[corner] > 0 && seen[corner + 1] > 0 && seen[corner + 3] > 0
+                && seen[corner + 4] > 0;
+    }
+
+    static byte[] vertices(Vec3[] samples, Vec3 normal, float[] uv, int tint) {
+        ByteBuffer out = ByteBuffer.allocate(FORMAT.getVertexSize() * 16).order(ByteOrder.nativeOrder());
+        byte nx = (byte) (Mth.clamp((float) normal.x, -1, 1) * 127);
+        byte ny = (byte) (Mth.clamp((float) normal.y, -1, 1) * 127);
+        byte nz = (byte) (Mth.clamp((float) normal.z, -1, 1) * 127);
+        for (int y = 0; y < 2; y++) {
+            for (int x = 0; x < 2; x++) {
+                for (int corner = 0; corner < 4; corner++) {
+                    int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
+                    int cy = y + (corner >= 2 ? 1 : 0);
+                    float u = cx * 0.5f;
+                    float v = cy * 0.5f;
+                    Vec3 point = samples[cy * 3 + cx];
+                    out.putFloat((float) point.x).putFloat((float) point.y).putFloat((float) point.z);
+                    out.putFloat(Mth.lerp(v, Mth.lerp(u, uv[0], uv[2]), Mth.lerp(u, uv[6], uv[4])));
+                    out.putFloat(Mth.lerp(v, Mth.lerp(u, uv[1], uv[3]), Mth.lerp(u, uv[7], uv[5])));
+                    out.put((byte) (tint >> 16)).put((byte) (tint >> 8)).put((byte) tint).put((byte) 255);
+                    out.put(nx).put(ny).put(nz).put((byte) 0);
+                }
+            }
+        }
+        return out.array();
     }
 
     /**
@@ -612,6 +664,7 @@ public final class LightingIllumination {
                             beam.untraced--;
                         }
                         beam.dirty = true;
+                        beam.changedFaces.set(i);
                         continue;
                     }
                     beam.refresh(face, geometry);
@@ -628,8 +681,12 @@ public final class LightingIllumination {
             beam.next = beam.resume < 0 ? 0 : beam.resume;
             beam.rays = null;
         }
-        // Once a tick at most, but each frame on another sub-level: faces traced come in a few blocks ahead (LEAD).
-        if (posed || (beam.dirty || beam.pending) && beam.built != beam.at) {
+        if (beam.resident == posed) {
+            beam.resident = !posed;
+            beam.geometryDirty = true;
+        }
+        // Different moving sub-levels still rebuild their geometry; otherwise only changed visibility is uploaded.
+        if (beam.geometryDirty || posed || (beam.dirty || beam.pending) && beam.built != beam.at) {
             upload(beam);
         }
         if (beam.empty) {
@@ -655,6 +712,71 @@ public final class LightingIllumination {
 
     /** The lit cells of the beam's faces into its vertex buffer, in the lamp's block space. */
     private static void upload(Beam beam) {
+        if (beam.resident && !beam.geometryDirty) {
+            visibility(beam);
+            beam.dirty = false;
+            beam.pending = false;
+            beam.built = beam.at;
+            return;
+        }
+        MeshData mesh;
+        int cells = 0;
+        if (beam.resident) {
+            beam.slots = new int[beam.faces.size()];
+            Arrays.fill(beam.slots, -1);
+            for (int i = 0; i < beam.faces.size(); i++) {
+                if (beam.faces.get(i) != null) {
+                    beam.slots[i] = cells;
+                    cells += 4;
+                }
+            }
+            mesh = null;
+            if (cells > 0) {
+                int count = cells * 4;
+                int bytes = count * FORMAT.getVertexSize();
+                ByteBuffer out = MemoryUtil.memByteBuffer(SCRATCH.reserve(bytes), bytes);
+                for (Face face : beam.faces) {
+                    if (face != null) {
+                        out.put(face.mesh);
+                    }
+                }
+                mesh = new MeshData(SCRATCH.build(), new MeshData.DrawState(FORMAT, count, cells * 6,
+                        VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(count)));
+            }
+        } else {
+            mesh = movingMesh(beam);
+        }
+        beam.empty = mesh == null;
+        if (mesh != null) {
+            if (beam.buffer == null) {
+                beam.buffer = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
+            }
+            beam.buffer.bind();
+            beam.buffer.upload(mesh);
+            VertexBuffer.unbind();
+        }
+        if (beam.resident) {
+            int height = Math.max(1, (cells + 255) / 256);
+            if (beam.visibility == null || beam.visibility.getPixels().getHeight() != height) {
+                if (beam.visibility != null) {
+                    beam.visibility.close();
+                }
+                beam.visibility = new DynamicTexture(256, height, false);
+            }
+            beam.cells = new byte[cells];
+            Arrays.fill(beam.cells, (byte) -1);
+            beam.litCells = 0;
+            beam.changedFaces.set(0, beam.faces.size());
+            visibility(beam);
+        }
+        beam.geometryDirty = false;
+        beam.changedFaces.clear();
+        beam.dirty = false;
+        beam.pending = false;
+        beam.built = beam.at;
+    }
+
+    private static MeshData movingMesh(Beam beam) {
         BufferBuilder out = new BufferBuilder(SCRATCH, VertexFormat.Mode.QUADS, FORMAT);
         for (Face face : beam.faces) {
             if (face == null) {
@@ -682,19 +804,38 @@ public final class LightingIllumination {
                 }
             }
         }
-        MeshData mesh = out.build();
-        beam.empty = mesh == null;
-        if (mesh != null) {
-            if (beam.buffer == null) {
-                beam.buffer = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
+        return out.build();
+    }
+
+    private static void visibility(Beam beam) {
+        boolean changed = false;
+        var pixels = beam.visibility.getPixels();
+        for (int i = beam.changedFaces.nextSetBit(0); i >= 0; i = beam.changedFaces.nextSetBit(i + 1)) {
+            int slot = beam.slots[i];
+            if (slot < 0) {
+                continue;
             }
-            beam.buffer.bind();
-            beam.buffer.upload(mesh);
-            VertexBuffer.unbind();
+            Face face = beam.faces.get(i);
+            for (int cell = 0; cell < 4; cell++) {
+                byte lit = (byte) (face != null && face.lit(cell % 2, cell / 2) ? 1 : 0);
+                int at = slot + cell;
+                if (beam.cells[at] == lit) {
+                    continue;
+                }
+                if (beam.cells[at] == 1) {
+                    beam.litCells--;
+                }
+                beam.litCells += lit;
+                beam.cells[at] = lit;
+                pixels.setPixelRGBA(at % 256, at / 256, lit == 1 ? -1 : 0);
+                changed = true;
+            }
         }
-        beam.dirty = false;
-        beam.pending = false;
-        beam.built = beam.at;
+        if (changed) {
+            beam.visibility.upload();
+        }
+        beam.empty = beam.litCells == 0;
+        beam.changedFaces.clear();
     }
 
     /** Draws this frame's lit surfaces; LightingRenderer.effects, with the beams. */
@@ -779,10 +920,11 @@ public final class LightingIllumination {
         shader = loaded;
     }
 
-    private static void forgetAll() {
+    static void forgetAll() {
         BEAMS.values().forEach(Beam::close);
         BEAMS.clear();
         SCANS.clear();
+        SURFACES.clear();
     }
 
     private static Pose3dc renderPose(Level level, BlockPos pos) {
@@ -844,7 +986,7 @@ public final class LightingIllumination {
                 remaining -= face.seen.length;
             }
             for (int i = 0; i < face.seen.length; i++) {
-                face.seen[i] = (byte) (facing && visible(rays, from, still.rays[i]) ? 1 : -1);
+                face.seen[i] = (byte) (facing && rays.visible(from, still.rays[i]) ? 1 : -1);
             }
             face.sight = sight;
             face.untraced = false;

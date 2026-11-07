@@ -14,6 +14,9 @@ import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL33;
 
 import com.mojang.logging.LogUtils;
 import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollValueBehaviour;
@@ -30,12 +33,14 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -273,8 +278,40 @@ public final class LightingBenchmark {
         private static BufferedWriter output;
         private static boolean failed;
         private static Phase captured;
+        private static final int[][] queries = new int[8][2];
+        private static final Phase[] queryPhases = new Phase[8];
+        private static int queryHead;
+        private static int queryCount;
+        private static int queryFrame;
+        private static boolean queryActive;
+        private static long gpuOverlayNs;
 
         private Frames() {
+        }
+
+        @SubscribeEvent(priority = EventPriority.HIGH)
+        public static void beforeOverlays(RenderLevelStageEvent event) {
+            if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || phase == null || phase != active
+                    || !GL.getCapabilities().OpenGL33 || ++queryFrame % 8 != 0 || queryCount == queries.length) {
+                return;
+            }
+            int slot = (queryHead + queryCount) % queries.length;
+            if (queries[slot][0] == 0) {
+                queries[slot][0] = GL15.glGenQueries();
+                queries[slot][1] = GL15.glGenQueries();
+            }
+            queryPhases[slot] = phase;
+            GL33.glQueryCounter(queries[slot][0], GL33.GL_TIMESTAMP);
+            queryActive = true;
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public static void afterOverlays(RenderLevelStageEvent event) {
+            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL && queryActive) {
+                GL33.glQueryCounter(queries[(queryHead + queryCount) % queries.length][1], GL33.GL_TIMESTAMP);
+                queryCount++;
+                queryActive = false;
+            }
         }
 
         @SubscribeEvent
@@ -313,6 +350,15 @@ public final class LightingBenchmark {
             Phase current = active;
             if (current == null || failed) {
                 return;
+            }
+            gpuOverlayNs = -1;
+            while (queryCount > 0 && GL15.glGetQueryObjecti(queries[queryHead][1], GL15.GL_QUERY_RESULT_AVAILABLE) != 0) {
+                if (queryPhases[queryHead] == current) {
+                    gpuOverlayNs = GL33.glGetQueryObjectui64(queries[queryHead][1], GL15.GL_QUERY_RESULT)
+                            - GL33.glGetQueryObjectui64(queries[queryHead][0], GL15.GL_QUERY_RESULT);
+                }
+                queryHead = (queryHead + 1) % queries.length;
+                queryCount--;
             }
             Minecraft minecraft = Minecraft.getInstance();
             long now = System.nanoTime();
@@ -362,7 +408,7 @@ public final class LightingBenchmark {
                 }
                 output.write("{\"wallMillis\":" + System.currentTimeMillis() + ",\"phase\":\"" + phase.mode.key
                         + "\",\"phaseStartNs\":" + phase.started + ",\"frameNs\":" + frameNs + ",\"renderNs\":"
-                        + (now - started) + "}\n");
+                        + (now - started) + ",\"gpuOverlayNs\":" + gpuOverlayNs + "}\n");
                 if (now - nextFlush >= 0) {
                     output.flush();
                     nextFlush = now + 1_000_000_000L;
@@ -377,6 +423,17 @@ public final class LightingBenchmark {
         public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
             started = 0;
             previous = 0;
+            for (int[] query : queries) {
+                if (query[0] != 0) {
+                    GL15.glDeleteQueries(query[0]);
+                    GL15.glDeleteQueries(query[1]);
+                    query[0] = 0;
+                    query[1] = 0;
+                }
+            }
+            queryCount = 0;
+            queryHead = 0;
+            queryActive = false;
             if (output != null) {
                 try {
                     output.close();

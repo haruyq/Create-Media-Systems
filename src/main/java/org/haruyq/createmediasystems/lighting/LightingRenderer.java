@@ -55,6 +55,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
@@ -90,6 +91,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final int RAYS = 9;
 
     public static void register(IEventBus modBus) {
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> LightingIllumination.forgetAll());
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
                 effects(event);
@@ -605,6 +607,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     private static void box(VertexConsumer out, Matrix4f matrix, float x0, float y0, float z0, float x1, float y1, float z1,
                             int color, int light) {
+        if (out instanceof Output output) {
+            out = output.buffers.getBuffer(output.type);
+        }
         Vec3 a = new Vec3(x0, y0, z0), b = new Vec3(x1, y0, z0), c = new Vec3(x1, y1, z0), d = new Vec3(x0, y1, z0);
         Vec3 e = new Vec3(x0, y0, z1), f = new Vec3(x1, y0, z1), g = new Vec3(x1, y1, z1), h = new Vec3(x0, y1, z1);
         metalQuad(out, matrix, a, b, c, d, color, light, Direction.NORTH);

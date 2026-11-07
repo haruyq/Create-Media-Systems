@@ -11,6 +11,7 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3d;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2ByteOpenHashMap;
 import org.joml.Matrix3d;
 import org.joml.Matrix4d;
 import org.joml.Vector3d;
@@ -49,6 +50,8 @@ public final class LightingRaycast {
     private final List<LightingScreens.Panel> screens;
     private final Cache cache;
     private final boolean cacheShapes;
+    private Vec3 visibilityOrigin;
+    private Object2ByteOpenHashMap<Vec3> visibility;
 
     private record Snapshot(SubLevelAccess owner, Pose3dc pose, Matrix3d normals, AABB bounds) {
     }
@@ -146,6 +149,25 @@ public final class LightingRaycast {
         return best == null ? miss(toWorld, fromWorld) : best;
     }
 
+    /** Shared face corners use the same trace within this snapshot and from the same origin. */
+    public boolean visible(Vec3 from, Vec3 to) {
+        if (visibility == null) {
+            visibility = new Object2ByteOpenHashMap<>();
+        }
+        if (!from.equals(visibilityOrigin)) {
+            visibility.clear();
+            visibilityOrigin = from;
+        }
+        byte known = visibility.getByte(to);
+        if (known != 0) {
+            return known > 0;
+        }
+        Hit hit = clip(from, to);
+        boolean seen = hit.block().getType() == HitResult.Type.MISS || hit.point().distanceToSqr(to) < 1e-8;
+        visibility.put(to, (byte) (seen ? 1 : -1));
+        return seen;
+    }
+
     /** Whether moving blocks could intersect this part of the world. */
     public boolean hasSubLevels(AABB bounds) {
         for (Snapshot snapshot : subLevels) {
@@ -187,11 +209,11 @@ public final class LightingRaycast {
         ClipContext context = new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
                 CollisionContext.empty());
         return BlockGetter.traverseBlocks(from, to, context, (clip, pos) -> {
-            if (pos.equals(ignored) || !allowed.test(pos)) {
+            if (pos.equals(ignored)) {
                 return null;
             }
             List<AABB> boxes = cache.boxes(pos, clip, cacheShapes);
-            return boxes.isEmpty() ? null : clip(boxes, clip.getFrom(), clip.getTo(), pos);
+            return boxes.isEmpty() || !allowed.test(pos) ? null : clip(boxes, clip.getFrom(), clip.getTo(), pos);
         }, clip -> null);
     }
 

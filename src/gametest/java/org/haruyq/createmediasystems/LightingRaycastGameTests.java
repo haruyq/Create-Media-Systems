@@ -35,6 +35,23 @@ public final class LightingRaycastGameTests {
     }
 
     @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 20)
+    public static void visibilityReusesAnOriginAndRefreshesOnTheNextSnapshot(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos source = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos wall = source.offset(2, 0, 0);
+        Vec3 from = source.getCenter();
+        Vec3 to = from.add(4, 0, 0);
+        level.setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
+        LightingRaycast rays = new LightingRaycast(level, source, true);
+        helper.assertTrue(!rays.visible(from, to) && !rays.visible(from, to), "the cached corner stays occluded");
+        helper.assertTrue(rays.visible(to.add(1, 0, 0), to), "another origin must not reuse the occlusion");
+        helper.assertTrue(!rays.visible(from, to), "returning to the first origin must still hit the wall");
+        level.removeBlock(wall, false);
+        helper.assertTrue(new LightingRaycast(level, source, true).visible(from, to), "the next snapshot must see the removed wall");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 20)
     public static void worldWallStopsBeam(GameTestHelper helper) {
         BlockPos source = helper.absolutePos(new BlockPos(2, 2, 2));
         BlockPos wall = helper.absolutePos(new BlockPos(4, 2, 2));
