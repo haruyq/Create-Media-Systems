@@ -28,6 +28,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
@@ -79,6 +80,11 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
+    /**
+     * A fixture the lighting console drives. Other mods' fixtures extend it with their own block entity type (see
+     * the protected constructor): the console, the lighting link and the fixture controls take any subclass, and
+     * {@link LightingIllumination#render} lights the faces its beam reaches. They draw themselves.
+     */
     public static class Entity extends BlockEntity implements IHaveGoggleInformation {
         public BlockPos console;
         private UUID consoleId;
@@ -87,11 +93,22 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         public int individualColor;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), pos, state);
+            this(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), pos, state);
+        }
+
+        /** For other mods' fixtures, each under its own block entity type. */
+        protected Entity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+            super(type, pos, state);
         }
 
         public boolean laser() {
             return getBlockState().is(CreateMediaSystems.LASER_PROJECTOR.get());
+        }
+
+        /** The fixture's name, as its goggle tooltip heads it. */
+        public Component fixtureName() {
+            return Component.translatable(laser() ? "block.create_media_systems.laser_projector"
+                    : "block.create_media_systems.stage_light");
         }
 
         @Nullable
@@ -159,8 +176,7 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
             LightingConsoleBlock.Entity owner = controller();
-            tooltip.add(Component.translatable(laser() ? "block.create_media_systems.laser_projector"
-                    : "block.create_media_systems.stage_light").withColor(LightingText.TEXT));
+            tooltip.add(fixtureName().copy().withColor(LightingText.TEXT));
             tooltip.add(console == null ? LightingText.message("unlinked")
                     : LightingText.group(owner == null ? null : owner.settings, group));
             tooltip.add(LightingText.message("fixture", LightingText.number(order + 1), LightingText.number(individualColor + 1)));
