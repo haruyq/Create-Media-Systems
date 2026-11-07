@@ -105,6 +105,18 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
             return getBlockState().is(CreateMediaSystems.LASER_PROJECTOR.get());
         }
 
+        /** The family stage lights and laser projectors share: the console's own page runs them. */
+        public static final String DEFAULT_FAMILY = CreateMediaSystems.MOD_ID;
+
+        /**
+         * Which console page runs this fixture (LightingConsolePage, registered for this family): fixtures of one
+         * family share a page, so a console group holds fixtures of one family only. Another mod's fixtures name
+         * their own, usually their mod id.
+         */
+        public String family() {
+            return DEFAULT_FAMILY;
+        }
+
         /** The fixture's name, as its goggle tooltip heads it. */
         public Component fixtureName() {
             return Component.translatable(laser() ? "block.create_media_systems.laser_projector"

@@ -1,7 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -10,10 +10,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Another mod's page of the lighting console (client side): while it is {@link #active} for a console, it takes over
- * the console's three right-hand bays, deck and monitors (x from 1 to 4), drawing them (render) and answering what
- * is pointed at there (hit). The left bay, the group faders and the group list, stays the console's own, so groups
- * are chosen as ever. A page might show while its mod's fixtures are in the selected group, say.
+ * Another mod's page of the lighting console (client side), for its family of fixtures
+ * (StageLightBlock.Entity.family): while the console's selected group holds that family, the page takes over the
+ * console's three right-hand bays, deck and monitors (x from 1 to 4), drawing them (render) and answering what is
+ * pointed at there (hit). The left bay, the group faders and the group list, stays the console's own, so groups are
+ * chosen as ever. A group holds one family only (LightingConsoleBlock.Entity.accepts), so each shows one page.
  *
  * <p>Deck points are (x across, from 0 at the left to 4; z from the front edge, 0, back to 1.55), monitor points
  * (x across; y up, from 1.12 to 1.86), as LightingConsoleSurface draws them. Settings the console keeps are changed
@@ -21,9 +22,6 @@ import net.minecraft.world.phys.Vec3;
  * with the console, changed through its own packets.
  */
 public interface LightingConsolePage {
-    /** Whether this page shows on {@code console} now. */
-    boolean active(LightingConsoleBlock.Entity console);
-
     /** Draws the page's bays. */
     void render(LightingConsoleBlock.Entity console, LightingConsoleSurface surface);
 
@@ -69,21 +67,18 @@ public interface LightingConsolePage {
         }
     }
 
-    List<LightingConsolePage> PAGES = new CopyOnWriteArrayList<>();
+    Map<String, LightingConsolePage> PAGES = new ConcurrentHashMap<>();
 
-    /** Adds a page, from the client's setup. The first active one shows (see showing). */
-    static void register(LightingConsolePage page) {
-        PAGES.add(page);
+    /** Adds the page for {@code family}'s fixtures, from the client's setup. */
+    static void register(String family, LightingConsolePage page) {
+        PAGES.put(family, page);
     }
 
+    /** The page {@code console} shows now: its selected group's family's, or null for the console's own. */
     @Nullable
     static LightingConsolePage showing(LightingConsoleBlock.Entity console) {
-        for (LightingConsolePage page : PAGES) {
-            if (page.active(console)) {
-                return page;
-            }
-        }
-        return null;
+        String family = console.family(console.settings.selectedGroup);
+        return family == null ? null : PAGES.get(family);
     }
 
     /**

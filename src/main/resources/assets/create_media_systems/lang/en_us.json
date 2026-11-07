@@ -15,6 +15,7 @@
   "create_media_systems.lighting.too_far": "Keep linked devices within 128 blocks of the console.",
   "create_media_systems.lighting.linked": "Linked to %s · Order %s",
   "create_media_systems.lighting.full": "This console already has 64 fixtures.",
+  "create_media_systems.lighting.other_family": "%s runs another kind of fixture: pick another group for this one.",
   "create_media_systems.lighting.source_linked": "Media source linked. Enable audio/video linking on the console.",
   "create_media_systems.lighting.following": "Tracking %s",
   "create_media_systems.lighting.link_help": "Right-click a console to pick it, then fixtures and media players to link them. Right-click a fixture again, or Shift+right-click it, to unlink it.",

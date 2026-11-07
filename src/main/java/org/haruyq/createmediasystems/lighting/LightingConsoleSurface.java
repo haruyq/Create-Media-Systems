@@ -27,6 +27,26 @@ public final class LightingConsoleSurface {
         ink = new LightingRenderer.Output(buffers, LightingRenderer.SCREEN);
     }
 
+    /**
+     * For drawing what the rest of this class doesn't: the console's space into the frame's, where x runs across the
+     * console from its left edge (0) to its right (4), y up from its foot (the deck at height(z), the monitors from
+     * 1.12 to 1.86), and z back from the deck's front edge (0; the monitors lean back, at z = 1.455 + (y - 1) *
+     * 0.4142). A copy, to transform freely.
+     */
+    public Matrix4f pose() {
+        return new Matrix4f(matrix);
+    }
+
+    /** The frame's buffers, for drawing with any render type. */
+    public MultiBufferSource buffers() {
+        return buffers;
+    }
+
+    /** The packed light at the console, for lit render types. */
+    public int light() {
+        return light;
+    }
+
     /** The deck's height at {@code z}. */
     public float height(float z) {
         return LightingRenderer.Console.height(z);

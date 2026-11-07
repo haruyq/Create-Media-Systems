@@ -162,6 +162,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         public final List<BlockPos> fixtures = new ArrayList<>();
         private final Map<BlockPos, Integer> assignments = new HashMap<>();
         private final Map<BlockPos, UUID> fixtureIds = new HashMap<>();
+        /** Each fixture's family (StageLightBlock.Entity.family), kept for fixtures not loaded. */
+        private final Map<BlockPos, String> families = new HashMap<>();
         private UUID identity;
         private UUID audioId;
         private UUID videoId;
@@ -237,6 +239,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 List<BlockPos> positions = new ArrayList<>();
                 Map<BlockPos, Integer> groups = new HashMap<>();
                 Map<BlockPos, UUID> ids = new HashMap<>();
+                Map<BlockPos, String> kinds = new HashMap<>();
                 for (BlockPos previous : fixtures) {
                     UUID id = fixtureIds.get(previous);
                     if (id == null && level.isLoaded(previous)
@@ -255,6 +258,10 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                             continue;
                         }
                         light.follow(this);
+                        updated |= !light.family().equals(families.get(previous));
+                        kinds.put(pos, light.family());
+                    } else {
+                        kinds.put(pos, families.getOrDefault(previous, StageLightBlock.Entity.DEFAULT_FAMILY));
                     }
                     positions.add(pos);
                     groups.put(pos, assignments.getOrDefault(previous, 0));
@@ -269,6 +276,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 assignments.putAll(groups);
                 fixtureIds.clear();
                 fixtureIds.putAll(ids);
+                families.clear();
+                families.putAll(kinds);
                 BlockPos previousAudio = audioSource;
                 BlockPos previousVideo = videoSource;
                 if (!Objects.equals(audioSource, resolvedAudio)) {
@@ -334,6 +343,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                                 || !light.follows(this))) {
                             assignments.remove(pos);
                             fixtureIds.remove(pos);
+                            families.remove(pos);
                             return true;
                         }
                         return false;
@@ -453,11 +463,12 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 if (level.isLoaded(pos) && !(level.getBlockEntity(pos) instanceof StageLightBlock.Entity)) {
                     assignments.remove(pos);
                     fixtureIds.remove(pos);
+                    families.remove(pos);
                     return true;
                 }
                 return false;
             });
-            if (!fixtures.contains(light.getBlockPos()) && fixtures.size() >= MAX_LIGHTS) {
+            if (!fixtures.contains(light.getBlockPos()) && fixtures.size() >= MAX_LIGHTS || !accepts(light, group)) {
                 return false;
             }
             Entity previous = light.linkedController();
@@ -470,10 +481,33 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             fixtures.add(light.getBlockPos().immutable());
             assignments.put(light.getBlockPos().immutable(), group);
             fixtureIds.put(light.getBlockPos().immutable(), SourceLinks.identifyBlock(level, light.getBlockPos()));
+            families.put(light.getBlockPos().immutable(), light.family());
             reorder();
             light.changed();
             changed();
             return true;
+        }
+
+        /** The family of {@code group}'s fixtures (StageLightBlock.Entity.family), or null while it has none. */
+        @Nullable
+        public String family(int group) {
+            return family(group, null);
+        }
+
+        @Nullable
+        private String family(int group, @Nullable BlockPos except) {
+            for (BlockPos pos : fixtures) {
+                if (!pos.equals(except) && assignments.getOrDefault(pos, 0) == group) {
+                    return families.getOrDefault(pos, StageLightBlock.Entity.DEFAULT_FAMILY);
+                }
+            }
+            return null;
+        }
+
+        /** Whether {@code light} may join {@code group}: one family to a group, so its fixtures share one page. */
+        public boolean accepts(StageLightBlock.Entity light, int group) {
+            String family = family(group, light.getBlockPos());
+            return family == null || family.equals(light.family());
         }
 
         public void reorder() {
@@ -497,6 +531,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             fixtures.remove(pos);
             assignments.remove(pos);
             fixtureIds.remove(pos);
+            families.remove(pos);
             reorder();
             changed();
         }
@@ -575,6 +610,11 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 }
             }
             tag.put("FixtureIds", links);
+            ListTag kinds = new ListTag();
+            for (BlockPos pos : fixtures) {
+                kinds.add(net.minecraft.nbt.StringTag.valueOf(families.getOrDefault(pos, StageLightBlock.Entity.DEFAULT_FAMILY)));
+            }
+            tag.put("FixtureFamilies", kinds);
             ListTag saved = new ListTag();
             for (CompoundTag preset : presets) {
                 saved.add(preset == null ? new CompoundTag() : preset.copy());
@@ -602,12 +642,16 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             fixtures.clear();
             assignments.clear();
             fixtureIds.clear();
+            families.clear();
+            ListTag kinds = tag.getList("FixtureFamilies", Tag.TAG_STRING);
             int[] groups = tag.getIntArray("FixtureGroups");
             int index = 0;
             for (long pos : tag.getLongArray("Fixtures")) {
                 if (fixtures.size() < MAX_LIGHTS && !fixtures.contains(BlockPos.of(pos))) {
                     fixtures.add(BlockPos.of(pos));
                     assignments.put(BlockPos.of(pos), index < groups.length ? Math.max(0, Math.min(5, groups[index])) : 0);
+                    families.put(BlockPos.of(pos), index < kinds.size() ? kinds.getString(index)
+                            : StageLightBlock.Entity.DEFAULT_FAMILY);
                 }
                 index++;
             }

@@ -115,10 +115,13 @@ final class LightingLinkHandler {
         }
         int group = picked.settings.selectedGroup;
         if (block instanceof StageLightBlock.Entity light) {
-            return picked.fixtures.contains(pos) && light.group == group
-                    ? LightingText.message("hint_unlink", LightingText.group(picked.settings, group),
-                            LightingText.number(light.order + 1))
-                    : LightingText.message("hint_link", LightingText.group(picked.settings, group));
+            if (picked.fixtures.contains(pos) && light.group == group) {
+                return LightingText.message("hint_unlink", LightingText.group(picked.settings, group),
+                        LightingText.number(light.order + 1));
+            }
+            // A group holds one family of fixtures: say so before the click is refused.
+            return picked.accepts(light, group) ? LightingText.message("hint_link", LightingText.group(picked.settings, group))
+                    : LightingText.message("other_family", LightingText.group(picked.settings, group));
         }
         return LightingText.message(block instanceof VideoPlayerBlock.Entity ? "hint_video" : "hint_audio");
     }

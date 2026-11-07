@@ -15,6 +15,7 @@
   "create_media_systems.lighting.too_far": "接続機器は制御卓から128ブロック以内に置いてください。",
   "create_media_systems.lighting.linked": "%s に接続しました・並び順 %s",
   "create_media_systems.lighting.full": "この制御卓には既に64台の灯具が接続されています。",
+  "create_media_systems.lighting.other_family": "%s には別の種類の灯具が接続されています。この灯具は別のグループを選んで接続してください。",
   "create_media_systems.lighting.source_linked": "メディア機器を接続しました。卓で音声／映像連動を有効にできます。",
   "create_media_systems.lighting.following": "追従対象: %s",
   "create_media_systems.lighting.link_help": "制御卓を右クリックで選んでから、灯具や再生機器を右クリックして接続します。灯具をもう一度右クリックするか、Shift＋右クリックすると解除します。",
