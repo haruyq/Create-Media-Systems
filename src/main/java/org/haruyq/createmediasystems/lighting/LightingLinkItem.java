@@ -73,6 +73,10 @@ public class LightingLinkItem extends Item {
             say(player, "picked", LightingText.group(clicked.settings, clicked.settings.selectedGroup));
             return;
         }
+        if (block instanceof LightingConsoleBlock.Entity || level.getBlockState(pos).getBlock() instanceof LightingMonitorBlock) {
+            say(player, "assembly");
+            return;
+        }
         LightingConsoleBlock.Entity console = selected(player);
         if (console == null) {
             say(player, "pick_first");
@@ -88,9 +92,9 @@ public class LightingLinkItem extends Item {
             if (previous != null && !SableCompat.mayInteract(level, player, previous.getBlockPos())) {
                 return;
             }
-            if (player.isShiftKeyDown()) {
+            if (player.isShiftKeyDown() || previous == console && light.group == console.settings.selectedGroup) {
                 light.unlink();
-                say(player, "unlinked");
+                say(player, "link_removed");
             } else if (console.bind(light, console.settings.selectedGroup)) {
                 say(player, "linked", LightingText.group(console.settings, light.group), LightingText.number(light.order + 1));
             } else {

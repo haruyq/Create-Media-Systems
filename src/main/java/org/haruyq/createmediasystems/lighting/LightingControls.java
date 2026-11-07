@@ -1,10 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
-
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.client.Quill;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -50,6 +47,7 @@ public final class LightingControls {
     }
 
     public static void register() {
+        LightingLinkHandler.register();
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         NeoForge.EVENT_BUS.addListener((InputEvent.MouseScrollingEvent event) -> {
             if (scroll(event.getScrollDeltaY())) {
@@ -168,17 +166,6 @@ public final class LightingControls {
 
     private static boolean press() {
         Minecraft mc = Minecraft.getInstance();
-        if (Quill.held(CreateMediaSystems.LIGHTING_LINK.get())) {
-            if (mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.ENTITY) {
-                return false;
-            }
-            BlockHitResult at = pointed(Reach.QUILL);
-            if (at != null) {
-                PacketDistributor.sendToServer(new LightingPackets.Link(at.getBlockPos()));
-                return true;
-            }
-            return false;
-        }
         if (!hand()) {
             return false;
         }
@@ -500,8 +487,6 @@ public final class LightingControls {
                             LightingText.number(light.order + 1), LightingText.number(light.individualColor + 1));
                 }
             }
-        } else if (Quill.held(CreateMediaSystems.LIGHTING_LINK.get())) {
-            status("link_help");
         }
     }
 

@@ -59,8 +59,8 @@ public final class LightingText {
     public static MutableComponent message(String key, Object... args) {
         int color = switch (key) {
             case "preset_saved", "preset_loaded", "picked", "linked", "source_linked", "following" -> ON;
-            case "unlinked" -> OFF;
-            case "preset_choose_slot", "preset_save_help", "preset_start_help", "pick_first", "too_far", "full" -> WARNING;
+            case "unlinked", "link_removed" -> OFF;
+            case "preset_choose_slot", "preset_save_help", "preset_start_help", "pick_first", "too_far", "full", "assembly" -> WARNING;
             case "preset_cancelled", "preset_empty_help", "link_help", "track_help", "controls" -> MUTED;
             default -> TEXT;
         };
