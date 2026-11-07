@@ -1,8 +1,8 @@
 {
   "parent": "minecraft:block/block",
   "textures": {
-    "particle": "create_media_systems:block/blu_ray_player_side",
-    "metal": "create_media_systems:block/blu_ray_player_side"
+    "particle": "create_media_systems:block/lighting_console_casing",
+    "metal": "create_media_systems:block/lighting_console_frame"
   },
   "elements": [
     {

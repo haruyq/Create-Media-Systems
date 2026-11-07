@@ -62,10 +62,9 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 public final class LightingRenderer implements BlockEntityRenderer<StageLightBlock.Entity> {
-    private static final ResourceLocation METAL = CreateMediaSystems.id("textures/block/blu_ray_player_side.png");
-    static final RenderType SOLID = RenderType.entityCutoutNoCull(METAL);
     static final RenderType CONSOLE_FRAME = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_frame.png"));
     static final RenderType CONSOLE_PLATE = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_plate.png"));
+    static final RenderType CONSOLE_CASING = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_casing.png"));
     private static final RenderType LIGHT = RenderType.create("create_media_systems_stage_light",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
             RenderType.CompositeState.builder()
@@ -231,12 +230,14 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         Matrix4f yoke = new Matrix4f(base).rotateY((float) Math.toRadians(-pan));
         Matrix4f head = new Matrix4f(yoke).translate(0, 0.56f, 0).rotateX((float) Math.toRadians(-tilt));
         Matrix4f model = new Matrix4f(pose.last().pose());
-        VertexConsumer metal = new Output(buffers, SOLID);
-        box(metal, new Matrix4f(model).mul(yoke), -0.39f, 0.13f, -0.13f, -0.29f, 0.66f, 0.13f, 0x676A76, light);
-        box(metal, new Matrix4f(model).mul(yoke), 0.29f, 0.13f, -0.13f, 0.39f, 0.66f, 0.13f, 0x676A76, light);
-        box(metal, new Matrix4f(model).mul(yoke), -0.35f, 0.13f, -0.13f, 0.35f, 0.22f, 0.13f, 0x737785, light);
-        box(metal, new Matrix4f(model).mul(head), -0.3f, -0.24f, -0.31f, 0.3f, 0.24f, 0.29f, 0x999DA9, light);
-        box(metal, new Matrix4f(model).mul(head), -0.335f, -0.265f, -0.34f, 0.335f, 0.265f, -0.285f, 0xADB3C2, light);
+        // The console's own brushed frame and riveted casing, so fixtures and console read as one set.
+        VertexConsumer metal = new Output(buffers, CONSOLE_FRAME);
+        VertexConsumer casing = new Output(buffers, CONSOLE_CASING);
+        box(metal, new Matrix4f(model).mul(yoke), -0.39f, 0.13f, -0.13f, -0.29f, 0.66f, 0.13f, 0x9A9CA8, light);
+        box(metal, new Matrix4f(model).mul(yoke), 0.29f, 0.13f, -0.13f, 0.39f, 0.66f, 0.13f, 0x9A9CA8, light);
+        box(metal, new Matrix4f(model).mul(yoke), -0.35f, 0.13f, -0.13f, 0.35f, 0.22f, 0.13f, 0x9A9CA8, light);
+        box(casing, new Matrix4f(model).mul(head), -0.3f, -0.24f, -0.31f, 0.3f, 0.24f, 0.29f, 0xFFFFFF, light);
+        box(metal, new Matrix4f(model).mul(head), -0.335f, -0.265f, -0.34f, 0.335f, 0.265f, -0.285f, 0xB1B3BE, light);
         box(metal, new Matrix4f(model).mul(yoke), -0.42f, 0.47f, -0.1f, -0.375f, 0.65f, 0.1f, 0xE5BC55, light);
         box(metal, new Matrix4f(model).mul(yoke), 0.375f, 0.47f, -0.1f, 0.42f, 0.65f, 0.1f, 0xE5BC55, light);
         if (shadowPass()) {
