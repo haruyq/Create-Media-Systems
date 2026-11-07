@@ -500,9 +500,10 @@ public final class LightingIllumination {
             if (lamp.isRemoved() || beam.origin == null || now < beam.at || now - beam.at > 2) {
                 continue;
             }
+            // A fixture lit without a console (another mod's, on redstone, say) is lit while it draws its beam.
             var console = lamp.controller();
-            if (console == null || !console.formed || !console.settings.enabled || console.settings.master <= 0
-                    || console.settings.groups[lamp.group].brightness <= 0) {
+            if (console == null ? lamp.console != null : !console.formed || !console.settings.enabled
+                    || console.settings.master <= 0 || console.settings.groups[lamp.group].brightness <= 0) {
                 continue;
             }
             Vec3 local = SableCompat.toRenderBlockSpace(entity.level(), lamp.getBlockPos(), target)
@@ -518,9 +519,26 @@ public final class LightingIllumination {
         return packedLight(original, intensity);
     }
 
+    /** The most blocks across the surface hit a stage light's faces are found for, either way from the hit. */
+    public static final int STAGE_RADIUS = 8;
+    /** The most a fixture may ask for (see render): a floodlight over a hall's floor. */
+    public static final int MAX_RADIUS = 48;
+
     public static void render(StageLightBlock.Entity lamp, Vec3 origin, Vec3 direction, double halfAngle, float range,
                               float strength, int color, LightingRaycast.Hit hit, LightingRaycast rays,
                               Matrix4f matrix, MultiBufferSource buffers) {
+        render(lamp, origin, direction, halfAngle, range, strength, color, hit, rays, matrix, buffers, STAGE_RADIUS);
+    }
+
+    /**
+     * The light of {@code lamp}'s beam on the faces it reaches this frame, {@code origin} and {@code direction} in
+     * its block space. {@code hit} is where the beam's middle meets a block (from {@code rays}); faces are found up
+     * to {@code maxRadius} blocks across that surface from it (at most MAX_RADIUS), so a wide beam from far off
+     * lights all of the floor it falls on.
+     */
+    public static void render(StageLightBlock.Entity lamp, Vec3 origin, Vec3 direction, double halfAngle, float range,
+                              float strength, int color, LightingRaycast.Hit hit, LightingRaycast rays,
+                              Matrix4f matrix, MultiBufferSource buffers, int maxRadius) {
         Level level = lamp.getLevel();
         if (knownLevel.get() != level) {
             forgetAll();
@@ -547,7 +565,7 @@ public final class LightingIllumination {
         Vec3 offset = Vec3.atLowerCornerOf(lamp.getBlockPos());
         Pose3dc lampPose = renderPose(level, lamp.getBlockPos());
         Vec3 impact = (lampPose == null ? hit.point() : lampPose.transformPositionInverse(hit.point())).subtract(offset);
-        int radius = Mth.ceil(Math.min(8, origin.distanceTo(impact) * beam.tangent)) + 1;
+        int radius = Mth.ceil(Math.min(Mth.clamp(maxRadius, 1, MAX_RADIUS), origin.distanceTo(impact) * beam.tangent)) + 1;
         Direction.Axis axis = hit.block().getDirection().getAxis();
         if (beam.touched(lamp.getBlockPos())) {
             beam.sight++;
@@ -592,8 +610,10 @@ public final class LightingIllumination {
                 BlockPos at = lamp.getBlockPos();
                 long sight = beam.sight;
                 double tangent = beam.tangent;
+                // Rays in proportion to the surface: a floodlight's floor is traced there, not a few faces a frame.
+                int budget = SCAN_RAYS * Math.max(1, scan * scan / ((STAGE_RADIUS + 1) * (STAGE_RADIUS + 1)));
                 beam.scanning = CompletableFuture.supplyAsync(() -> scan(level, at, center, scan, axis, previous,
-                        traced, origin, from, direction, tangent, range, sight), Workers.LIGHT)
+                        traced, origin, from, direction, tangent, range, sight, budget), Workers.LIGHT)
                         .exceptionally(LightingIllumination::failed);
             }
         }
@@ -907,12 +927,12 @@ public final class LightingIllumination {
     }
 
     /** Whether any block changed since the last frame (see sectionChanged). */
-    static boolean blocksChanged() {
+    public static boolean blocksChanged() {
         return !DIRTY_SECTIONS.isEmpty() || !DIRTY_COLUMNS.isEmpty();
     }
 
     /** Frames drawn so far. */
-    static long frame() {
+    public static long frame() {
         return frame;
     }
 
@@ -973,10 +993,10 @@ public final class LightingIllumination {
     // mid-read can throw, which skips that scan (failed) and tries again next frame.
     private static Scan scan(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
                              List<Face> previous, LightingRaycast rays, Vec3 origin, Vec3 from, Vec3 direction,
-                             double tangent, float range, long sight) {
+                             double tangent, float range, long sight, int budget) {
         SurfaceScan scan = new SurfaceScan(level, lamp, center, radius, axis, previous, false);
         scan.advance(Integer.MAX_VALUE);
-        int remaining = SCAN_RAYS;
+        int remaining = budget;
         for (Face face : scan.created) {
             Geometry still = face.still;
             // Turned away from the light, a face can't be lit: as a trace to it would find, through its own block.

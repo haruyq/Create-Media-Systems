@@ -157,6 +157,24 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     LightingRenderer(BlockEntityRendererProvider.Context context) {
     }
 
+    /**
+     * For other mods' fixtures: where to draw beams (in {@link #beamType()}) this frame. In the client's world, with
+     * the stage lights' beams and lit faces, after block entities; elsewhere (a Ponder scene), {@code buffers}.
+     */
+    public static MultiBufferSource beamBuffers(Level level, MultiBufferSource buffers) {
+        return level == Minecraft.getInstance().level ? EFFECTS : buffers;
+    }
+
+    /** Additive, unlit, position and colour: a stage light's beams. */
+    public static RenderType beamType() {
+        return LIGHT;
+    }
+
+    /** Opaque, unlit, position and colour: a stage light's lens. */
+    public static RenderType lensType() {
+        return SCREEN;
+    }
+
     @Override
     public void render(StageLightBlock.Entity lamp, float partialTick, PoseStack pose, MultiBufferSource buffers,
                        int light, int overlay) {
@@ -299,7 +317,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         }
     }
 
-    static boolean shadowPass() {
+    /** Whether a shader pack is drawing its shadow map: fixtures then draw their bodies only, no light. */
+    public static boolean shadowPass() {
         if (SHADOW_PASS == null || shaderApiFailed) {
             return false;
         }
