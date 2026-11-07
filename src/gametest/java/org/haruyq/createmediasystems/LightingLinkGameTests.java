@@ -144,7 +144,36 @@ public class LightingLinkGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void consoleFormsAndBreaksUpOnTheNextTick(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 2, 2));
+        BlockPos monitor = LightingConsoleBlock.at(origin, Direction.SOUTH, 3, 1, 1);
+        build(level, origin);
+        level.setBlockAndUpdate(monitor, Blocks.AIR.defaultBlockState());
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(!level.getBlockState(origin).getValue(LightingConsoleBlock.FORMED), "incomplete console stays apart");
+            level.setBlockAndUpdate(monitor, CreateMediaSystems.LIGHTING_MONITOR.get().defaultBlockState()
+                    .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
+            helper.runAfterDelay(2, () -> {
+                helper.assertTrue(((LightingConsoleBlock.Entity) level.getBlockEntity(origin)).formed, "last monitor forms the console");
+                level.setBlockAndUpdate(LightingConsoleBlock.at(origin, Direction.SOUTH, 2, 0, 1), Blocks.AIR.defaultBlockState());
+                helper.runAfterDelay(2, () -> {
+                    helper.assertTrue(!level.getBlockState(origin).getValue(LightingConsoleBlock.FORMED)
+                            && !level.getBlockState(monitor).getValue(LightingConsoleBlock.FORMED), "a missing desk breaks it up");
+                    helper.succeed();
+                });
+            });
+        });
+    }
+
     private static List<BlockPos> console(ServerLevel level, BlockPos origin) {
+        List<BlockPos> blocks = build(level, origin);
+        ((LightingConsoleBlock.Entity) level.getBlockEntity(origin)).updateStructure();
+        return blocks;
+    }
+
+    private static List<BlockPos> build(ServerLevel level, BlockPos origin) {
         List<BlockPos> blocks = new ArrayList<>();
         Direction facing = Direction.SOUTH;
         for (int x = 0; x < 4; x++) {
@@ -159,7 +188,6 @@ public class LightingLinkGameTests {
                     .setValue(LightingConsoleBlock.FACING, facing));
             blocks.add(monitor);
         }
-        ((LightingConsoleBlock.Entity) level.getBlockEntity(origin)).updateStructure();
         return blocks;
     }
 

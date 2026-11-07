@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -42,6 +43,22 @@ public class LightingMonitorBlock extends HorizontalDirectionalBlock {
         Direction facing = below.getBlock() instanceof LightingConsoleBlock ? below.getValue(FACING)
                 : context.getHorizontalDirection().getOpposite();
         return defaultBlockState().setValue(FACING, facing);
+    }
+
+    /** Has the desk below check whether the console is complete now, as a placed desk does. */
+    @Override
+    protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+        if (!state.is(oldState.getBlock()) && level.getBlockState(pos.below()).getBlock() instanceof LightingConsoleBlock desk) {
+            level.scheduleTick(pos.below(), desk, 1);
+        }
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock())) {
+            LightingConsoleBlock.recheck(level, pos, state);
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     @Override

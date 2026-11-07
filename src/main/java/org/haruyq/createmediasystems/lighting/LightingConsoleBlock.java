@@ -25,6 +25,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
@@ -88,6 +90,48 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return level.isClientSide || type != CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get() ? null
                 : (l, p, s, be) -> ((Entity) be).tick();
+    }
+
+    @Override
+    protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+        if (!state.is(oldState.getBlock())) {
+            level.scheduleTick(pos, this, 1);
+        }
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock())) {
+            recheck(level, pos, state);
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    /** Checks the structure the part at {@code pos} belongs to next tick, rather than at the next second's poll. */
+    @Override
+    protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        if (level.getBlockEntity(pos) instanceof Entity entity) {
+            entity.updateStructure();
+        }
+    }
+
+    /** After a part of a formed console ({@code state}, at {@code pos}) left, has every desk of it check next tick. */
+    static void recheck(Level level, BlockPos pos, BlockState state) {
+        if (!state.getValue(FORMED)) {
+            return;
+        }
+        Direction facing = state.getValue(FACING);
+        boolean monitor = state.getBlock() instanceof LightingMonitorBlock;
+        BlockPos origin = at(monitor ? pos.below() : pos, facing, -state.getValue(COLUMN), 0,
+                monitor || state.getValue(BACK) ? -1 : 0);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                BlockPos part = at(origin, facing, x, 0, z);
+                if (level.getBlockState(part).getBlock() instanceof LightingConsoleBlock desk) {
+                    level.scheduleTick(part, desk, 1);
+                }
+            }
+        }
     }
 
     public static BlockPos at(BlockPos origin, Direction facing, int x, int y, int z) {
