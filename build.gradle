@@ -127,6 +127,27 @@ if (providers.gradleProperty('lightingNetworkTest').isPresent()) {
     }
 }
 
+// Speaker stress test: a dedicated server and a client that reconnects on its own (see scripts/speaker_stress.py).
+if (providers.gradleProperty('speakerStress').isPresent()) {
+    sourceSets.main.java.srcDir('src/speakerStress/java')
+    neoForge.runs {
+        stressServer {
+            server()
+            gameDirectory = file('build/speaker-stress/server')
+            programArgument '--nogui'
+        }
+        stressClient {
+            client()
+            gameDirectory = file('build/speaker-stress/client')
+            programArguments.addAll('--username', 'CMS_Listener', '--width', '960', '--height', '600')
+        }
+        configureEach {
+            systemProperty 'cms.speakerStress', 'true'
+            jvmArgument '-Xmx3G'
+        }
+    }
+}
+
 configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
