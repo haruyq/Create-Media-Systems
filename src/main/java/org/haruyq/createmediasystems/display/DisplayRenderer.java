@@ -86,6 +86,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
                 event.registerBlockEntityRenderer(CreateMediaSystems.DISPLAY_ENTITY.get(), DisplayRenderer::new));
         modBus.addListener(DisplayRenderer::registerShaders);
         NeoForge.EVENT_BUS.addListener(DisplayRenderer::overdraw);
+        DisplayLight.register();
         DisplayQuillHandler.register();
         Images.register();
     }
@@ -95,7 +96,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_glow"),
                     DefaultVertexFormat.POSITION_TEX_COLOR), shader -> glowShader = shader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_light"),
-                    DefaultVertexFormat.POSITION_TEX_COLOR), DisplayLight::setShader);
+                    DisplayLight.FORMAT), DisplayLight::setShader);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -149,7 +150,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             glowVertex(out, matrix, screen.at(width + rx, height + ry, lift), 1 + GLOW_REACH, -GLOW_REACH, glow);
             glowVertex(out, matrix, screen.at(-rx, height + ry, lift), -GLOW_REACH, -GLOW_REACH, glow);
         }
-        DisplayLight.render(display, screen, width, height, matrix, buffers, texture, DisplayLight.STRENGTH * lighting);
+        DisplayLight.render(display, screen, width, height, matrix, texture, DisplayLight.STRENGTH * lighting);
     }
 
     /** Its image on its black panel, or (without its frame) alone on the wall, see-through where the image is. */
@@ -356,7 +357,8 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         if (display.isImageViewer()) {
             return display.box(0, 0.1f).inflate(0.1);
         }
-        float r = Math.max(DisplayLight.RANGE, GLOW_REACH * (float) Math.max(display.width(), display.height()));
-        return display.box(r, DisplayLight.RANGE).inflate(0.1);
+        float range = DisplayLight.range(display.width(), display.height());
+        float r = Math.max(range, GLOW_REACH * (float) Math.max(display.width(), display.height()));
+        return display.box(r, range).inflate(0.1);
     }
 }
