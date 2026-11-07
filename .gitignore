@@ -18,4 +18,5 @@ libs/
 !/scripts/test_lighting_latency_proxy.py
 !/scripts/analyze_lighting_network.py
 !/scripts/prepare_lighting_network.py
+!/scripts/speaker_stress.py
 /docs/

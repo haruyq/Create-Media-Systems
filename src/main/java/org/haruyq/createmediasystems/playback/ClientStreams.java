@@ -401,6 +401,13 @@ public final class ClientStreams {
             if (sounds.isActive(sound)) {
                 return;
             }
+            // As things are now, not as of this tick's start: leaving the world (the server closing, a kick) stops
+            // every sound mid-tick, and its emitters, still there then, made it look dropped, so every stream was
+            // started again as the player left.
+            Group group = channel instanceof Side side ? GROUPS.get(side) : null;
+            if (group != null) {
+                group.update();
+            }
             if (sound.wantsRestart()) {
                 LogUtils.getLogger().info("The sound engine dropped CMS stream {} as its audio ran dry; starting it again", channel);
                 play(channel, sound.again());
