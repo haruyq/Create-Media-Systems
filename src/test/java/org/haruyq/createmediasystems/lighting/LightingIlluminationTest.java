@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.lighting;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
+import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +16,27 @@ import net.minecraft.world.phys.Vec3;
 
 class LightingIlluminationTest {
     private static final Vec3 FORWARD = new Vec3(0, 0, 1);
+
+    @Test
+    void surfaceSamplesKeepBilinearPositionsAndOcclusionOffsets() {
+        Random random = new Random(42);
+        for (int face = 0; face < 100; face++) {
+            Vec3[] corners = new Vec3[4];
+            for (int i = 0; i < corners.length; i++) {
+                corners[i] = new Vec3(random.nextDouble(-30_000_000, 30_000_000), random.nextDouble(-64, 320),
+                        random.nextDouble(-30_000_000, 30_000_000));
+            }
+            for (Vec3 offset : new Vec3[] {Vec3.ZERO, new Vec3(-0.0003, 0.0007, 0.0005)}) {
+                for (int y = 0; y <= 4; y++) {
+                    for (int x = 0; x <= 4; x++) {
+                        float u = x / 4f, v = y / 4f;
+                        Vec3 expected = corners[0].lerp(corners[1], u).lerp(corners[3].lerp(corners[2], u), v).add(offset);
+                        assertEquals(expected, LightingIllumination.sample(corners, u, v, offset));
+                    }
+                }
+            }
+        }
+    }
 
     @Test
     void cachedVerticesMatchMinecraftsVertexWriter() {

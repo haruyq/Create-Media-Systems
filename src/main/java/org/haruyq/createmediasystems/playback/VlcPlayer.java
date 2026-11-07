@@ -21,7 +21,9 @@ import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.sun.jna.CallbackThreadInitializer;
 import com.sun.jna.Memory;
+import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
@@ -65,6 +67,15 @@ public final class VlcPlayer implements NativeAudio.Backend {
     /** A player of {@code video}, or of a record's audio alone if null, asked to play at {@code requestedAt}. */
     VlcPlayer(@Nullable Streams.Video video, long requestedAt) {
         frame = video == null ? null : new Frame();
+        var callbacks = new CallbackThreadInitializer(true, false, "CMS VLC callback");
+        Native.setCallbackThreadInitializer(audio.play, callbacks);
+        Native.setCallbackThreadInitializer(audio.flush, callbacks);
+        if (frame != null) {
+            Native.setCallbackThreadInitializer(frame.setup, callbacks);
+            Native.setCallbackThreadInitializer(frame.lock, callbacks);
+            Native.setCallbackThreadInitializer(frame.unlock, callbacks);
+            Native.setCallbackThreadInitializer(frame.display, callbacks);
+        }
         maxHeight = video == null ? 0 : MediaSources.height(video);
         diagnostics = video == null ? null : new Diagnostics(video, frame, audio, maxHeight, requestedAt);
     }

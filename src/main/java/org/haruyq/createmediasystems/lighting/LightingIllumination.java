@@ -454,11 +454,11 @@ public final class LightingIllumination {
             for (int i = 0; i < 9; i++) {
                 float u = i % 3 * 0.5f;
                 float v = i / 3 * 0.5f;
-                samples[i] = sample(local, u, v);
-                rays[i] = sample(world, u, v).add(lift);
+                samples[i] = sample(local, u, v, Vec3.ZERO);
+                rays[i] = sample(world, u, v, lift);
             }
             for (int i = 0; i < 4; i++) {
-                rays[9 + i] = sample(world, (i % 2 + 0.5f) / 2, (i / 2 + 0.5f) / 2).add(lift);
+                rays[9 + i] = sample(world, (i % 2 + 0.5f) / 2, (i / 2 + 0.5f) / 2, lift);
             }
             return new Geometry(samples, normal, local[0].lerp(local[2], 0.5), rays);
         }
@@ -935,8 +935,11 @@ public final class LightingIllumination {
         return owner == null ? null : owner.logicalPose();
     }
 
-    private static Vec3 sample(Vec3[] points, float u, float v) {
-        return points[0].lerp(points[1], u).lerp(points[3].lerp(points[2], u), v);
+    static Vec3 sample(Vec3[] points, float u, float v, Vec3 offset) {
+        return new Vec3(
+                Mth.lerp(v, Mth.lerp(u, points[0].x, points[1].x), Mth.lerp(u, points[3].x, points[2].x)) + offset.x,
+                Mth.lerp(v, Mth.lerp(u, points[0].y, points[1].y), Mth.lerp(u, points[3].y, points[2].y)) + offset.y,
+                Mth.lerp(v, Mth.lerp(u, points[0].z, points[1].z), Mth.lerp(u, points[3].z, points[2].z)) + offset.z);
     }
 
     private static boolean visible(LightingRaycast rays, Vec3 from, Vec3 to) {
@@ -1069,7 +1072,7 @@ public final class LightingIllumination {
             Vec3 offset = Vec3.atLowerCornerOf(pos).add(state.getOffset(level, pos));
             int index = 0;
             for (int side = 0; side <= 6; side++) {
-                Direction direction = side == 6 ? null : Direction.values()[side];
+                Direction direction = side == 6 ? null : Direction.from3DDataValue(side);
                 if (direction != null && !Block.shouldRenderFace(state, level, pos, direction, pos.relative(direction))) {
                     continue;
                 }
