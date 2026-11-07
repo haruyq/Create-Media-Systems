@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.playback;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.DoubleFunction;
 
@@ -13,6 +14,8 @@ import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
+
+import org.jetbrains.annotations.Nullable;
 
 import com.mojang.logging.LogUtils;
 
@@ -31,13 +34,111 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * The streams playing on this computer, one per channel: an emitter block's (keyed by its position), or one train
- * disc reader's announcements (keyed by a string); different channels play at the same time.
+ * The streams playing on this computer, one per channel: one side of a source's track (keyed by its {@link Side}),
+ * or one train disc reader's announcements (keyed by a string); different channels play at the same time.
  */
 public final class ClientStreams {
     private static final Map<Object, StreamSound> PLAYING = new HashMap<>();
-    /** Live settings per block stream; RetuneAtBlock updates them without restarting the audio. */
+    /** Live settings per emitter block; RetuneAtBlock updates them without restarting the audio. */
     private static final Map<BlockPos, JukeboxSettings> SETTINGS = new HashMap<>();
+    private static final Map<Side, Group> GROUPS = new HashMap<>();
+    /** The side each emitter block playing here plays. */
+    private static final Map<BlockPos, Side> SIDES = new HashMap<>();
+
+    /**
+     * One side (see Streams.Channel) of the track of the source at {@code source}. Every emitter playing it here is
+     * heard through one stream, so a source takes at most 3 sound channels (its mix, left and right) however many
+     * jukeboxes, speakers and displays play it: one each was an OpenAL source each, and a wall of speakers froze the
+     * game waiting on the sound thread.
+     */
+    private record Side(BlockPos source, Streams.Channel channel) {
+    }
+
+    /** The emitters playing one side, and how they sound together as of this tick (see update). */
+    private static final class Group {
+        final String url;
+        /** When the track's top was as the first of them asked (System.nanoTime), to tell a restart (see joins). */
+        final long origin;
+        /** Each emitter's block, and how it sounds. */
+        final Map<BlockPos, Streams.Sound> emitters = new LinkedHashMap<>();
+        boolean present;
+        boolean nearby;
+        double gain;
+        @Nullable
+        Vec3 at;
+
+        Group(String url, long origin) {
+            this.url = url;
+            this.origin = origin;
+        }
+
+        /**
+         * Whether an emitter asked to play {@code url} from its top at {@code origin} joins this playback: by the
+         * rule its native player is shared by (see NativeAudio.Shared#join), so the two never disagree.
+         */
+        boolean joins(String url, double startSeconds, long origin) {
+            return this.url.equals(url)
+                    && (startSeconds > 0 || Math.abs(origin - this.origin) / 1e9 < SyncClock.SAME_PLAYBACK_SECONDS);
+        }
+
+        /** Sums up its emitters as heard from the camera now (see Mix); its stream asks this every tick. */
+        void update() {
+            Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+            Mix mix = new Mix();
+            present = false;
+            nearby = false;
+            Vec3 first = null;
+            for (var emitter : emitters.entrySet()) {
+                BlockPos pos = emitter.getKey();
+                Streams.Sound sound = emitter.getValue();
+                Vec3 world = toWorld(pos, sound.origin());
+                first = first == null ? world : first;
+                if (!blockPresent(pos)) {
+                    continue;
+                }
+                present = true;
+                nearby |= inRange(pos, sound.origin());
+                Vec3 ear = toBlockSpace(pos, camera);
+                mix.add(world, settings(pos).gain(pos, sound.origin(), ear) * sound.directivity(ear));
+            }
+            gain = mix.gain();
+            Vec3 heard = mix.at();
+            at = heard != null ? heard : first != null ? first : at;
+        }
+    }
+
+    /**
+     * Emitters of one side heard as one: as loud as their sound powers summed (they play the same samples, from
+     * different places), from between them, weighted by that power, so it comes from those heard most. A stereo pair's
+     * sides stay two streams, each from its own speakers.
+     * ponytail: one place per side, so standing among a side's speakers it is heard from their middle; split a side
+     * by direction from the listener if that is ever missed.
+     */
+    static final class Mix {
+        private double power;
+        private double x;
+        private double y;
+        private double z;
+
+        void add(Vec3 at, double gain) {
+            double p = gain * gain;
+            power += p;
+            x += p * at.x;
+            y += p * at.y;
+            z += p * at.z;
+        }
+
+        /** At most 1, as the engine plays it no louder. */
+        double gain() {
+            return Math.min(1, Math.sqrt(power));
+        }
+
+        /** Null while none of them is heard. */
+        @Nullable
+        Vec3 at() {
+            return power > 0 ? new Vec3(x / power, y / power, z / power) : null;
+        }
+    }
 
     private ClientStreams() {
     }
@@ -52,6 +153,7 @@ public final class ClientStreams {
         });
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> ExtensionUrls.refresh());
         NeoForge.EVENT_BUS.addListener(ClientStreams::muteVanillaJukeboxSound);
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre event) -> GROUPS.values().forEach(Group::update));
         NeoForge.EVENT_BUS.addListener(ClientStreams::releaseFinished);
         NeoForge.EVENT_BUS.addListener(ClientStreams::resolveNext);
         if (SoundPhysicsCompat.available()) {
@@ -59,20 +161,52 @@ public final class ClientStreams {
         }
     }
 
+    /**
+     * The emitter at {@code payload.pos()} plays: it joins its side's stream if that plays the same playback, else
+     * that side starts over with it, keeping the emitters it had (on a restart the server sends each of them again).
+     */
     public static void play(StreamPackets.PlayAtBlock payload) {
-        BlockPos pos = payload.pos();
+        BlockPos pos = payload.pos().immutable();
         Streams.Sound sound = payload.sound();
-        Vec3 origin = sound.origin();
         SETTINGS.put(pos, payload.settings());
-        Streams.Channel channel = sound.channel();
+        Side side = new Side(sound.source(), sound.channel());
+        Side was = SIDES.put(pos, side);
+        if (was != null && !was.equals(side)) {
+            leave(was, pos);
+        }
+        Group group = GROUPS.get(side);
+        long origin = System.nanoTime() - Math.round(payload.startSeconds() * 1e9);
+        if (group != null && group.joins(payload.url(), payload.startSeconds(), origin)) {
+            group.emitters.put(pos, sound);
+            return;
+        }
+        Group fresh = new Group(payload.url(), origin);
+        if (group != null) {
+            fresh.emitters.putAll(group.emitters);
+        }
+        fresh.emitters.put(pos, sound);
+        fresh.update();
+        GROUPS.put(side, fresh);
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
-        play(pos, new StreamSound(apiStream(payload.url(), payload.startSeconds(), channel), payload.url(),
-                sound.source(), payload.startSeconds(), SoundSource.RECORDS, () -> toWorld(pos, origin),
-                () -> blockPresent(pos), () -> inRange(pos, origin), () -> {
-                    Vec3 ear = toBlockSpace(pos, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition());
-                    return settings(pos).gain(pos, origin, ear) * sound.directivity(ear);
-                }, payload.video().orElse(null), channel, seconds -> Minecraft.getInstance().execute(
-                        () -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(pos, (float) seconds)))));
+        play(side, new StreamSound(apiStream(payload.url(), payload.startSeconds(), side.channel()), payload.url(),
+                side.source(), payload.startSeconds(), SoundSource.RECORDS, () -> fresh.at, () -> fresh.present,
+                () -> fresh.nearby, () -> fresh.gain, payload.video().orElse(null), side.channel(),
+                // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
+                seconds -> Minecraft.getInstance().execute(() -> fresh.emitters.keySet().stream().findFirst()
+                        .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(at, (float) seconds))))));
+    }
+
+    /** The emitter at {@code pos} no longer plays {@code side}; the side stops with its last emitter. */
+    private static void leave(Side side, BlockPos pos) {
+        Group group = GROUPS.get(side);
+        if (group != null && group.emitters.remove(pos) != null && group.emitters.isEmpty()) {
+            GROUPS.remove(side);
+            StreamSound sound = PLAYING.remove(side);
+            if (sound != null) {
+                Minecraft.getInstance().getSoundManager().stop(sound);
+                sound.release();
+            }
+        }
     }
 
     /** The API's stream of {@code url} from {@code startSeconds} in, plus the offset asked for. */
@@ -85,7 +219,8 @@ public final class ClientStreams {
     }
 
     public static void sync(StreamPackets.SyncAtBlock payload) {
-        StreamSound sound = PLAYING.get(payload.pos());
+        Side side = SIDES.get(payload.pos());
+        StreamSound sound = side == null ? null : PLAYING.get(side);
         var mc = Minecraft.getInstance();
         if (sound != null && mc.player != null && mc.getConnection() != null) {
             // The server's position as it sent this; it is half our ping further on by now.
@@ -95,11 +230,10 @@ public final class ClientStreams {
     }
 
     public static void stop(StreamPackets.StopAtBlock payload) {
-        StreamSound sound = PLAYING.remove(payload.pos());
         SETTINGS.remove(payload.pos());
-        if (sound != null) {
-            Minecraft.getInstance().getSoundManager().stop(sound);
-            sound.release();
+        Side side = SIDES.remove(payload.pos());
+        if (side != null) {
+            leave(side, payload.pos());
         }
     }
 
@@ -177,8 +311,12 @@ public final class ClientStreams {
             boolean finished = !sounds.isActive(entry.getValue()) && !entry.getValue().waitingForChannel();
             if (finished) {
                 entry.getValue().release();
-                if (entry.getKey() instanceof BlockPos pos) {
-                    SETTINGS.remove(pos);
+                Group group = entry.getKey() instanceof Side side ? GROUPS.remove(side) : null;
+                if (group != null) {
+                    group.emitters.keySet().forEach(pos -> {
+                        SIDES.remove(pos, entry.getKey());
+                        SETTINGS.remove(pos);
+                    });
                 }
             }
             return finished;

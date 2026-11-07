@@ -184,10 +184,10 @@ public final class StreamSound extends AbstractTickableSoundInstance {
 
     /**
      * Whether it is still to play but the engine had no free streaming channel for it, and so dropped it unheard
-     * (silently, outside a dev environment). Every speaker is a stream of its own, and the engine frees a stopped
-     * stream's channel only on its next tick, so restarting a wall of speakers (a new track, a seek) briefly needs
-     * twice their number, more than there are (see LibraryMixin): the newest of them were dropped, and as nothing
-     * played them again, those speakers stayed silent until the listener left and came back.
+     * (silently, outside a dev environment). The engine frees a stopped stream's channel only on its next tick, so
+     * restarting many sources at once (a new track) briefly needs twice their streams, which may be more than there
+     * are (see LibraryMixin): the newest of them were dropped, and as nothing played them again, their speakers stayed
+     * silent until the listener left and came back.
      */
     boolean waitingForChannel() {
         return !requested && !released && !isStopped() && present.getAsBoolean() && nearby.getAsBoolean();

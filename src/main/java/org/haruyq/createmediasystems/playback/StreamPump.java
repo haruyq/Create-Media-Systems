@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.playback;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
 import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
@@ -18,7 +19,11 @@ import net.minecraft.client.Minecraft;
  */
 public final class StreamPump {
     private static final long PERIOD_MILLIS = 20;
+    /** How long a queued pass may wait before another is queued anyway: the engine drops its queue as it reloads. */
+    private static final long STALE_NANOS = 1_000_000_000L;
     private static final Set<Channel> CHANNELS = ConcurrentHashMap.newKeySet();
+    /** When the pass waiting on the sound thread was queued (System.nanoTime); 0 for none. */
+    private static final AtomicLong POSTED_AT = new AtomicLong();
 
     static {
         Thread.ofPlatform().daemon().name("CMS stream pump").start(StreamPump::run);
@@ -40,10 +45,21 @@ public final class StreamPump {
         try {
             while (true) {
                 Thread.sleep(PERIOD_MILLIS);
-                if (!CHANNELS.isEmpty()) {
+                long posted = POSTED_AT.get();
+                // One pass queued at a time: a pass that takes longer than the period, queued every period anyway,
+                // piled up on the sound thread without end, and every sound the game played (each waits on that
+                // thread) froze it a while longer. Past STALE_NANOS it is taken as dropped (the engine reloading).
+                if (!CHANNELS.isEmpty() && (posted == 0 || System.nanoTime() - posted >= STALE_NANOS)) {
                     var engine = ((SoundManagerAccessor) Minecraft.getInstance().getSoundManager()).create_media_systems$soundEngine();
+                    POSTED_AT.set(System.nanoTime());
                     // updateStream only tops up what OpenAL has played, so an extra call costs nothing.
-                    ((SoundEngineAccessor) engine).create_media_systems$executor().execute(() -> CHANNELS.forEach(Channel::updateStream));
+                    ((SoundEngineAccessor) engine).create_media_systems$executor().execute(() -> {
+                        try {
+                            CHANNELS.forEach(Channel::updateStream);
+                        } finally {
+                            POSTED_AT.set(0);
+                        }
+                    });
                 }
             }
         } catch (InterruptedException e) {
