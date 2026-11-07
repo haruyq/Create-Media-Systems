@@ -350,8 +350,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     }
 
     /**
-     * Makes the display a light source as bright as its picture ({@code brightness} 0..1), on this computer only, a few
-     * times a second: each change relights the blocks around it.
+     * Keeps a little block light for entities, which DisplayLight's surface illumination does not reach.
      */
     private static void shine(DisplayBlock.Entity display, float brightness) {
         Level level = display.getLevel();
@@ -361,7 +360,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         }
         AuxiliaryLightManager lights = level.getAuxLightManager(display.getBlockPos());
         if (lights != null) {
-            lights.setLightAt(display.getBlockPos(), Math.round(15 * (float) Math.sqrt(brightness)));
+            lights.setLightAt(display.getBlockPos(), Math.round(6 * brightness));
         }
     }
 

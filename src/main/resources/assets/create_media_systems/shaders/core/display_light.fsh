@@ -37,7 +37,7 @@ const float PI = 3.14159265;
 // How brightly the room is exposed: the gain on the light before it saturates.
 const float EXPOSURE = 3.0;
 // The share of the screen's light bounced about the room.
-const float BOUNCE = 0.2;
+const float BOUNCE = 0.04;
 
 // The picture around `at` (blocks on the screen), blurred to about `footprint` blocks across.
 vec3 video(vec2 at, float footprint) {

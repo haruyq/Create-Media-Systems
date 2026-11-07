@@ -608,6 +608,25 @@ public final class DisplayLight {
         });
     }
 
+    static Vec3[] shadeTargets(DisplayBlock.Screen screen, float width, float height, int points) {
+        int across = Mth.clamp(Math.round(width / 2), 3, 6);
+        int up = Mth.clamp(Math.round(height / 2), 2, 4);
+        // Corners are shared by about four faces each.
+        int rays = Mth.clamp(RAY_BUDGET * 4 / Math.max(points, 1), 2, across * up);
+        Vec3[] targets = new Vec3[rays];
+        int bits = 32 - Integer.numberOfLeadingZeros(rays - 1);
+        int next = 0;
+        // Bit reversal spreads even the smallest budgets across both dimensions without changing between scans.
+        for (int k = 0; k < (1 << bits); k++) {
+            int row = Integer.reverse(k) >>> (32 - bits);
+            if (row < rays) {
+                targets[next] = screen.at(width * (next + 0.5f) / rays, height * (row + 0.5f) / rays, 0.05f);
+                next++;
+            }
+        }
+        return targets;
+    }
+
     /**
      * How much of the screen each point sees past the blocks around it: rays to points spread over the picture,
      * through blocks that hide what's behind them (stairs and slabs as whole blocks). Per vertex, so the shade is soft
@@ -624,20 +643,7 @@ public final class DisplayLight {
         Shade(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height, int points) {
             this.level = level;
             this.at = at;
-            int across = Mth.clamp(Math.round(width / 2), 3, 6);
-            int up = Mth.clamp(Math.round(height / 2), 2, 4);
-            Vec3[] all = new Vec3[across * up];
-            for (int i = 0; i < across; i++) {
-                for (int j = 0; j < up; j++) {
-                    all[i * up + j] = screen.at(width * (i + 0.5f) / across, height * (j + 0.5f) / up, 0.05f);
-                }
-            }
-            // Corners are shared by about four faces each.
-            int rays = Mth.clamp(RAY_BUDGET * 4 / Math.max(points, 1), 2, all.length);
-            targets = new Vec3[rays];
-            for (int k = 0; k < rays; k++) {
-                targets[k] = all[k * all.length / rays];
-            }
+            targets = shadeTargets(screen, width, height, points);
         }
 
         /** 0..1 of the screen's points {@code p}, on a face turned {@code normal}, has a clear line to. */
