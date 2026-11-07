@@ -41,6 +41,11 @@ public final class Jukeboxes {
         if (playing != null && Streams.endedAt(playing)) {
             jukebox.getSongPlayer().stop(level, jukebox.getBlockState());
         }
+        if (nowPlaying(jukebox) != null) {
+            // Saves how far in it is: vanilla marks a jukebox changed only as its song starts or stops, so after a
+            // server restart its track, and every speaker on it, went back to where the chunk was last saved.
+            jukebox.setChanged();
+        }
         Streams.relay(level, jukebox, new Streams.Sound(jukebox.getBlockPos().getCenter(), Optional.empty(), Streams.Channel.MIX,
                 jukebox.getBlockPos()), jukebox.getData(CreateMediaSystems.JUKEBOX_SETTINGS));
     }
