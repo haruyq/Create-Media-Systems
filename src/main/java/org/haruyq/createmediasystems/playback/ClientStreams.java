@@ -10,12 +10,18 @@ import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.Reports;
+import org.haruyq.createmediasystems.mixin.ChannelAccessor;
+import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
+import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.openal.AL;
+import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.EXTSourceRadius;
 
 import com.mojang.logging.LogUtils;
 
@@ -24,6 +30,7 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -66,6 +73,12 @@ public final class ClientStreams {
         double gain;
         @Nullable
         Vec3 at;
+        /** How wide it is heard (see Mix#radius). */
+        double radius;
+        /** The stream last given a radius (a restarted one is a new OpenAL source), and that radius. */
+        @Nullable
+        private StreamSound spreadOn;
+        private double spreadRadius;
 
         Group(String url, long origin) {
             this.url = url;
@@ -84,7 +97,7 @@ public final class ClientStreams {
         /** Sums up its emitters as heard from the camera now (see Mix); its stream asks this every tick. */
         void update() {
             Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-            Mix mix = new Mix();
+            Mix mix = new Mix(camera);
             present = false;
             nearby = false;
             Vec3 first = null;
@@ -104,28 +117,66 @@ public final class ClientStreams {
             gain = mix.gain();
             Vec3 heard = mix.at();
             at = heard != null ? heard : first != null ? first : at;
+            radius = heard != null ? mix.radius() : 0;
+        }
+
+        /**
+         * Gives {@code sound}, its stream, the width its emitters are heard over (see Mix#radius), once its channel
+         * is there and again as that width changes; each change waits its turn on the sound thread, so not for less.
+         */
+        void spread(@Nullable StreamSound sound) {
+            if (sound == null || sound == spreadOn && Math.abs(radius - spreadRadius) <= 0.05 * Math.max(1, spreadRadius)) {
+                return;
+            }
+            var engine = ((SoundManagerAccessor) Minecraft.getInstance().getSoundManager()).create_media_systems$soundEngine();
+            var handle = ((SoundEngineAccessor) engine).create_media_systems$instanceToChannel().get(sound);
+            if (handle == null) {
+                return; // not playing yet
+            }
+            float given = (float) radius;
+            spreadOn = sound;
+            spreadRadius = given;
+            handle.execute(channel -> {
+                // Without it (not OpenAL Soft), a point between them, as heard from the listener.
+                if (AL.getCapabilities().AL_EXT_SOURCE_RADIUS) {
+                    AL10.alSourcef(((ChannelAccessor) channel).create_media_systems$source(),
+                            EXTSourceRadius.AL_SOURCE_RADIUS, given);
+                }
+            });
         }
     }
 
     /**
-     * Emitters of one side heard as one: as loud as their sound powers summed (they play the same samples, from
-     * different places), from between them, weighted by that power, so it comes from those heard most. A stereo pair's
-     * sides stay two streams, each from its own speakers.
-     * ponytail: one place per side, so standing among a side's speakers it is heard from their middle; split a side
-     * by direction from the listener if that is ever missed.
+     * Emitters of one side, heard from {@code listener} as one stream: as loud as their sound powers summed (they
+     * play the same samples, from different places), from the direction they are heard from, weighted by that power,
+     * and as wide as they spread around the listener. One speaker is heard where it is, a wall in front over its
+     * width, and standing among a side's speakers, from all around. A stereo pair's sides stay two streams.
      */
     static final class Mix {
+        private final Vec3 listener;
         private double power;
-        private double x;
-        private double y;
-        private double z;
+        /** Power-weighted sums of the directions from the listener (unit vectors) and the distances. */
+        private double dx;
+        private double dy;
+        private double dz;
+        private double distance;
+
+        Mix(Vec3 listener) {
+            this.listener = listener;
+        }
 
         void add(Vec3 at, double gain) {
             double p = gain * gain;
+            Vec3 to = at.subtract(listener);
+            double length = to.length();
             power += p;
-            x += p * at.x;
-            y += p * at.y;
-            z += p * at.z;
+            distance += p * length;
+            // One at the listener's head is all around it: no direction, so it widens the rest.
+            if (length > 1e-3) {
+                dx += p * to.x / length;
+                dy += p * to.y / length;
+                dz += p * to.z / length;
+            }
         }
 
         /** At most 1, as the engine plays it no louder. */
@@ -133,10 +184,49 @@ public final class ClientStreams {
             return Math.min(1, Math.sqrt(power));
         }
 
-        /** Null while none of them is heard. */
+        /**
+         * How much they are heard from one direction: 1 all from one, 0 evenly all around (the length of their
+         * mean direction).
+         */
+        double focus() {
+            return power > 0 ? Math.min(1, Math.sqrt(dx * dx + dy * dy + dz * dz) / power) : 0;
+        }
+
+        /**
+         * Where to play it from: their mean direction, as far as they are on average. Null while none of them is
+         * heard; at the listener when they are evenly all around.
+         */
         @Nullable
         Vec3 at() {
-            return power > 0 ? new Vec3(x / power, y / power, z / power) : null;
+            if (power <= 0) {
+                return null;
+            }
+            double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            double far = distance / power;
+            return length < 1e-6 ? listener : listener.add(dx / length * far, dy / length * far, dz / length * far);
+        }
+
+        /**
+         * The angle they are heard over (radians): none from one direction, a half circle at focus 0.5, all around
+         * at 0. ponytail: a plain curve through those three, not measured against how speakers are laid out.
+         */
+        double spread() {
+            return 2 * Math.acos(Mth.clamp(2 * focus() - 1, -1, 1));
+        }
+
+        /**
+         * The OpenAL source radius that plays {@link #at()} over {@link #spread()}. OpenAL Soft spreads a source of
+         * radius r at distance d over 2·asin(r/d), up to a half circle at r = d, and inside it over 2π − d/r·π.
+         */
+        double radius() {
+            double spread = spread();
+            double far = power > 0 ? distance / power : 0;
+            Vec3 at = at();
+            double d = at == null ? 0 : at.distanceTo(listener);
+            if (d < 1e-3) {
+                return Math.max(far, 1); // at the listener: any radius is all around
+            }
+            return spread <= Math.PI ? d * Math.sin(spread / 2) : d * Math.PI / Math.max(2 * Math.PI - spread, Math.PI / 16);
         }
     }
 
@@ -153,7 +243,10 @@ public final class ClientStreams {
         });
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> ExtensionUrls.refresh());
         NeoForge.EVENT_BUS.addListener(ClientStreams::muteVanillaJukeboxSound);
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre event) -> GROUPS.values().forEach(Group::update));
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre event) -> GROUPS.forEach((side, group) -> {
+            group.update();
+            group.spread(PLAYING.get(side));
+        }));
         NeoForge.EVENT_BUS.addListener(ClientStreams::releaseFinished);
         NeoForge.EVENT_BUS.addListener(ClientStreams::resolveNext);
         if (SoundPhysicsCompat.available()) {
