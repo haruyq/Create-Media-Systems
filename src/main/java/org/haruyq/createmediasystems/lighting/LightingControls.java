@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.lighting;
 
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -63,11 +64,14 @@ public final class LightingControls {
         });
     }
 
-    record Hit(LightingConsoleBlock.Entity console, Control control, int index, Vec3 point, boolean monitor) {
+    /** A control pointed at: the console's own ({@code control}), or a page's ({@code page}; control is then null). */
+    record Hit(LightingConsoleBlock.Entity console, Control control, int index, Vec3 point, boolean monitor,
+               @Nullable LightingConsolePage.Control page) {
+        Hit(LightingConsoleBlock.Entity console, Control control, int index, Vec3 point, boolean monitor) {
+            this(console, control, index, point, monitor, null);
+        }
     }
 
-    record Area(float left, float bottom, float right, float top) {
-    }
 
     static Hit hovered(LightingConsoleBlock.Entity console) {
         return hovered != null && hovered.console == console ? hovered : null;
@@ -94,6 +98,9 @@ public final class LightingControls {
     }
 
     static Area area(Hit hit) {
+        if (hit.page != null) {
+            return hit.page.area();
+        }
         int index = hit.index;
         if (hit.monitor) {
             if (hit.control == Control.GROUP) {
@@ -148,7 +155,7 @@ public final class LightingControls {
     static Hit within(Hit hit) {
         Area area = area(hit);
         double vertical = hit.monitor ? hit.point.y : hit.point.z;
-        return hit.point.x >= area.left && hit.point.x <= area.right && vertical >= area.bottom && vertical <= area.top ? hit : null;
+        return area.contains(hit.point.x, vertical) ? hit : null;
     }
 
     private static boolean hand() {
@@ -174,6 +181,18 @@ public final class LightingControls {
             return false;
         }
         boolean shift = mc.player.isShiftKeyDown();
+        if (hit.page != null) {
+            savingGroup = -1;
+            if (hit.page.drags()) {
+                held = hit;
+                heldGroup = hit.console.settings.selectedGroup;
+                drag(true);
+            } else {
+                hit.page.press(shift);
+            }
+            feedback(hit, "hover", label(hit), scope(hit), value(hit));
+            return true;
+        }
         if (hit.control != Control.PRESET && hit.control != Control.PRESET_SAVE && hit.control != Control.PRESET_BANK) {
             savingGroup = -1;
         }
@@ -231,6 +250,12 @@ public final class LightingControls {
         Minecraft mc = Minecraft.getInstance();
         Hit hit = hit();
         int step = delta > 0 ? 1 : -1;
+        if (hit != null && hit.page != null) {
+            savingGroup = -1;
+            hit.page.scroll(step, mc.player.isShiftKeyDown(), controlDown());
+            feedback(hit, "hover", label(hit), scope(hit), value(hit));
+            return true;
+        }
         if (hit != null) {
             if (hit.control == Control.PRESET || hit.control == Control.PRESET_BANK || hit.control == Control.PRESET_SAVE
                     || hit.control == Control.AIM) {
@@ -326,7 +351,9 @@ public final class LightingControls {
         Vec3 point = intersect(held.console, false);
         boolean down = mc.options.keyUse.isDown();
         if (point != null && (force || !down || mc.level.getGameTime() % 2 == 0)) {
-            if (held.control == Control.AIM) {
+            if (held.page != null) {
+                held.page.drag(point);
+            } else if (held.control == Control.AIM) {
                 send(held.console, heldGroup, Control.AIM, 0, (float) ((point.x - 3.5) / 0.4 * 180),
                         (float) ((point.z - 0.625) / 0.475 * 85));
             } else {
@@ -353,7 +380,15 @@ public final class LightingControls {
         }
         Vec3 monitor = intersect(console, true);
         Vec3 top = intersect(console, false);
-        if (monitor != null && (top == null || distance(console, monitor) < distance(console, top))) {
+        boolean onMonitor = monitor != null && (top == null || distance(console, monitor) < distance(console, top));
+        // Right of the left bay, another mod's page answers while it shows.
+        LightingConsolePage page = LightingConsolePage.showing(console);
+        Vec3 point = onMonitor ? monitor : top;
+        if (page != null && point != null && point.x >= 1) {
+            LightingConsolePage.Control control = page.hit(console, point, onMonitor);
+            return control == null ? null : within(new Hit(console, null, 0, point, onMonitor, control));
+        }
+        if (onMonitor) {
             int column = Mth.clamp((int) monitor.x, 0, 3);
             int row = Mth.clamp((int) ((1.86 - monitor.y) / 0.74 * 6), 0, 5);
             if (column == 0) {
@@ -491,6 +526,9 @@ public final class LightingControls {
     }
 
     private static Component value(Hit hit) {
+        if (hit.page != null) {
+            return hit.page.value();
+        }
         LightingSettings s = hit.console.settings;
         LightingSettings.Group g = s.groups[s.selectedGroup];
         return switch (hit.control) {
@@ -543,6 +581,9 @@ public final class LightingControls {
     }
 
     static Component label(Hit hit) {
+        if (hit.page != null) {
+            return hit.page.label();
+        }
         var label = Component.translatable("create_media_systems.lighting.label." + hit.control.name().toLowerCase(java.util.Locale.ROOT))
                 .withColor(LightingText.TEXT);
         return hit.control == Control.RANGE ? label.append(" ").append(LightingText.message("range_help")

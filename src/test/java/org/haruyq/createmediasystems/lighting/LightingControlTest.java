@@ -24,6 +24,38 @@ class LightingControlTest {
     }
 
     @Test
+    void aPagesControlIsPointedAtOnlyWithinItsOwnArea() {
+        LightingConsolePage.Control key = new LightingConsolePage.Control() {
+            @Override
+            public LightingConsolePage.Area area() {
+                return new LightingConsolePage.Area(1.1f, 0.2f, 1.4f, 0.5f);
+            }
+
+            @Override
+            public boolean monitor() {
+                return false;
+            }
+
+            @Override
+            public net.minecraft.network.chat.Component label() {
+                return net.minecraft.network.chat.Component.empty();
+            }
+
+            @Override
+            public net.minecraft.network.chat.Component value() {
+                return net.minecraft.network.chat.Component.empty();
+            }
+        };
+        var inside = new LightingControls.Hit(null, null, 0, new Vec3(1.2, 0.9, 0.3), false, key);
+        assertSame(inside, LightingControls.within(inside));
+        assertEquals(key.area(), LightingControls.area(inside));
+        assertNull(LightingControls.within(new LightingControls.Hit(null, null, 0, new Vec3(1.5, 0.9, 0.3), false, key)));
+        // On a monitor, the area's vertical is y, not z.
+        var shown = new LightingControls.Hit(null, null, 0, new Vec3(1.2, 0.3, 9), true, key);
+        assertSame(shown, LightingControls.within(shown));
+    }
+
+    @Test
     void malformedControlPacketsAreRejectedBeforeReadingConsoleState() {
         int rgb = LightingPackets.Control.RGB.ordinal();
         LightingPackets.Change[] malformed = {

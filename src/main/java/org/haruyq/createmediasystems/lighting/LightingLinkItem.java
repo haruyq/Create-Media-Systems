@@ -97,6 +97,8 @@ public class LightingLinkItem extends Item {
                 say(player, "link_removed");
             } else if (console.bind(light, console.settings.selectedGroup)) {
                 say(player, "linked", LightingText.group(console.settings, light.group), LightingText.number(light.order + 1));
+            } else if (!console.accepts(light, console.settings.selectedGroup)) {
+                say(player, "other_family", LightingText.group(console.settings, console.settings.selectedGroup));
             } else {
                 say(player, "full");
             }
