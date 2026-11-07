@@ -49,8 +49,11 @@ final class VlcAudio {
     private final List<Stream> streams = new CopyOnWriteArrayList<>();
     /** What every stream hears it through; set by the player (see VlcPlayer#equalize). */
     final Equalizer equalizer = new Equalizer();
+    private final LightingMedia.Audio lighting = new LightingMedia.Audio();
+    private volatile long lightingUntil;
     /** When VLC played its first samples (System.nanoTime); 0 before. */
     volatile long firstSamples;
+    volatile long lastSamples;
     /** Held by the player: VLC calls them as long as it plays, so they must outlive no reference. */
     final Vlc.AudioPlay play = (opaque, samples, count, pts) -> play(samples, count, pts);
     final Vlc.AudioPts flush = (opaque, pts) -> flush();
@@ -88,6 +91,16 @@ final class VlcAudio {
         return stream;
     }
 
+    LightingMedia.AudioFrame lighting() {
+        lightingUntil = System.nanoTime() + 2_000_000_000L;
+        return lighting.sample(Vlc.LIB.libvlc_clock());
+    }
+
+    void clearLighting() {
+        lastSamples = 0;
+        lighting.clear();
+    }
+
     /** When audio OpenAL plays at {@code device} (its clock, ns) is heard, on VLC's clock (µs); 0 if it can't tell. */
     private synchronized long onVlcClock(long device) {
         if (anchorDevice == 0) {
@@ -102,8 +115,13 @@ final class VlcAudio {
     }
 
     private void play(Pointer samples, int sampleCount, long pts) {
+        if (sampleCount <= 0) {
+            return;
+        }
+        long now = System.nanoTime();
+        lastSamples = now;
         if (firstSamples == 0) {
-            firstSamples = System.nanoTime();
+            firstSamples = now;
         }
         if (!streams.isEmpty()) {
             byte[] stereo = samples.getByteArray(0, sampleCount * 4);
@@ -125,6 +143,9 @@ final class VlcAudio {
             next = pts;
         }
         runSamples += count;
+        if (lightingUntil != 0 && System.nanoTime() - lightingUntil < 0) {
+            lighting.offer(stereo, count, next);
+        }
         for (Stream stream : streams) {
             stream.offer(stereo, next);
         }
@@ -132,6 +153,7 @@ final class VlcAudio {
 
     private void flush() {
         runSamples = 0;
+        clearLighting();
         streams.forEach(Stream::clear);
     }
 

@@ -68,6 +68,51 @@ neoForge {
     }
 }
 
+// The lighting demo is opt-in so ordinary runClient saves are untouched.
+if (providers.gradleProperty('lightingDemo').isPresent() || providers.gradleProperty('lightingNetworkTest').isPresent()) {
+    sourceSets.main.java.srcDir('src/lightingDemo/java')
+    sourceSets.main.resources.srcDir('src/lightingDemo/resources')
+    def sableLightingDemo = providers.gradleProperty('sableTests').isPresent()
+    if (sableLightingDemo) {
+        sourceSets.main.java.srcDir('src/sableLightingDemo/java')
+        sourceSets.main.resources.srcDir('src/sableLightingDemo/resources')
+    }
+    neoForge.runs.client {
+        gameDirectory = file(sableLightingDemo ? 'run-sable-lighting-demo' : 'run-lighting-demo')
+        systemProperty 'cms.sableLightingDemo', Boolean.toString(sableLightingDemo)
+        programArgument '--width'
+        programArgument '1280'
+        programArgument '--height'
+        programArgument '800'
+    }
+}
+
+if (providers.gradleProperty('lightingNetworkTest').isPresent()) {
+    sourceSets.main.java.srcDir('src/lightingNetworkTest/java')
+    neoForge.runs {
+        analysisServer {
+            server()
+            gameDirectory = file('build/lighting-network/server')
+            programArgument '--nogui'
+        }
+        analysisA {
+            client()
+            gameDirectory = file('build/lighting-network/a')
+            programArguments.addAll('--username', 'CMS_Analyst', '--quickPlayMultiplayer', '127.0.0.1:25584', '--width', '800', '--height', '500')
+        }
+        analysisB {
+            client()
+            gameDirectory = file('build/lighting-network/b')
+            programArguments.addAll('--username', 'CMS_Observer', '--quickPlayMultiplayer', '127.0.0.1:25585', '--width', '800', '--height', '500')
+        }
+        configureEach {
+            systemProperty 'cms.lightingNetworkTest', 'true'
+            systemProperty 'cms.demoSeconds', providers.gradleProperty('lightingNetworkSeconds').orElse('180').get()
+            jvmArgument '-Xmx2G'
+        }
+    }
+}
+
 configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
@@ -113,7 +158,7 @@ if (providers.gradleProperty('sableTests').isPresent()) {
 
 // VideoLAN's own VLC for 64-bit Windows, bundled so CMS plays media with nothing else installed (see Vlc.java).
 // Downloaded once into Gradle's cache, checked against VideoLAN's published SHA-256, and left without the parts
-// playback doesn't use (its interfaces, scripting, streaming out). Other systems use their own VLC 3.
+// playback and lighting analysis don't use (its interfaces, scripting, network output). Other systems use their own VLC 3.
 def vlcVersion = '3.0.21'
 def vlcSha256 = 'a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843'
 def vlcDownload = file("${gradle.gradleUserHomeDir}/caches/create_media_systems/vlc-${vlcVersion}-win64.zip")
@@ -138,15 +183,17 @@ var bundleVlc = tasks.register('bundleVlc', Zip) {
     def root = "vlc-${vlcVersion}/"
     from({ zipTree(vlcDownload) }) {
         include "${root}libvlc.dll", "${root}libvlccore.dll", "${root}COPYING.txt", "${root}plugins/**"
-        exclude(['gui', 'visualization', 'lua', 'stream_out', 'access_output', 'mux', 'services_discovery',
+        exclude(['gui', 'visualization', 'lua', 'access_output', 'mux', 'services_discovery',
                  'control', 'video_splitter'].collect { "${root}plugins/${it}/**" })
+        exclude { entry -> entry.path.startsWith("${root}plugins/stream_out/") && !entry.directory
+                && !['libstream_out_smem_plugin.dll', 'libstream_out_transcode_plugin.dll'].contains(entry.name) }
         eachFile { it.path = it.path.substring(root.length()) }
     }
     includeEmptyDirs = false
     archiveFileName = 'win-x64.zip'
     destinationDirectory = vlcResources.map { it.dir('create_media_systems/vlc') }
     doLast {
-        new File(destinationDirectory.get().asFile, 'version').text = vlcVersion
+        new File(destinationDirectory.get().asFile, 'version').text = "${vlcVersion}-analysis-1"
     }
 }
 sourceSets.main.resources.srcDir(files(vlcResources).builtBy(bundleVlc))

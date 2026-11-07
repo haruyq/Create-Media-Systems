@@ -16,6 +16,11 @@ import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.display.DisplayQuill;
 import org.haruyq.createmediasystems.display.ImageViewerBlock;
+import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
+import org.haruyq.createmediasystems.lighting.LightingLinkItem;
+import org.haruyq.createmediasystems.lighting.LightingMonitorBlock;
+import org.haruyq.createmediasystems.lighting.LightingPackets;
+import org.haruyq.createmediasystems.lighting.StageLightBlock;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.train.AnnouncementScheduleItem;
@@ -187,6 +192,29 @@ public class CreateMediaSystems {
     public static final DeferredItem<?> EQUALIZER_ITEM = ITEMS.registerSimpleBlockItem("equalizer", EQUALIZER);
     public static final Supplier<BlockEntityType<EqualizerBlock.Entity>> EQUALIZER_ENTITY = BLOCK_ENTITIES.register(
             "equalizer", () -> BlockEntityType.Builder.of(EqualizerBlock.Entity::new, EQUALIZER.get()).build(null));
+    public static final DeferredBlock<StageLightBlock> STAGE_LIGHT = BLOCKS.register("stage_light",
+            () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
+    public static final DeferredItem<?> STAGE_LIGHT_ITEM = ITEMS.registerSimpleBlockItem("stage_light", STAGE_LIGHT);
+    public static final DeferredBlock<StageLightBlock> LASER_PROJECTOR = BLOCKS.register("laser_projector",
+            () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
+    public static final DeferredItem<?> LASER_PROJECTOR_ITEM = ITEMS.registerSimpleBlockItem("laser_projector", LASER_PROJECTOR);
+    public static final Supplier<BlockEntityType<StageLightBlock.Entity>> STAGE_LIGHT_ENTITY = BLOCK_ENTITIES.register(
+            "stage_light", () -> BlockEntityType.Builder.of(StageLightBlock.Entity::new, STAGE_LIGHT.get(), LASER_PROJECTOR.get())
+                    .build(null));
+    public static final DeferredBlock<LightingConsoleBlock> LIGHTING_CONSOLE = BLOCKS.register("lighting_console",
+            () -> new LightingConsoleBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
+    public static final DeferredItem<?> LIGHTING_CONSOLE_ITEM = ITEMS.registerSimpleBlockItem("lighting_console", LIGHTING_CONSOLE);
+    public static final DeferredBlock<LightingMonitorBlock> LIGHTING_MONITOR = BLOCKS.register("lighting_monitor",
+            () -> new LightingMonitorBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
+    public static final DeferredItem<?> LIGHTING_MONITOR_ITEM = ITEMS.registerSimpleBlockItem("lighting_monitor", LIGHTING_MONITOR);
+    public static final Supplier<BlockEntityType<LightingConsoleBlock.Entity>> LIGHTING_CONSOLE_ENTITY = BLOCK_ENTITIES.register(
+            "lighting_console", () -> BlockEntityType.Builder.of(LightingConsoleBlock.Entity::new, LIGHTING_CONSOLE.get()).build(null));
+    public static final Supplier<DataComponentType<GlobalPos>> LIGHTING_TARGET = COMPONENTS.registerComponentType(
+            "lighting_target", b -> b.persistent(GlobalPos.CODEC).networkSynchronized(GlobalPos.STREAM_CODEC));
+    public static final Supplier<DataComponentType<UUID>> LIGHTING_SOURCE = COMPONENTS.registerComponentType(
+            "lighting_source", b -> b.persistent(UUIDUtil.CODEC).networkSynchronized(UUIDUtil.STREAM_CODEC));
+    public static final DeferredItem<LightingLinkItem> LIGHTING_LINK = ITEMS.register("lighting_link",
+            () -> new LightingLinkItem(new Item.Properties().stacksTo(1)));
 
     public CreateMediaSystems(IEventBus modBus, ModContainer container) {
         ServerConfig.register(modBus, container);
@@ -211,6 +239,7 @@ public class CreateMediaSystems {
         modBus.addListener(CreateMediaSystems::setup);
         modBus.addListener(CreateMediaSystems::registerPayloads);
         NeoForge.EVENT_BUS.addListener(TrainSignals::onServerTick);
+        org.haruyq.createmediasystems.lighting.AnalysisCoordinator.register();
     }
 
     public static ResourceLocation id(String path) {
@@ -247,7 +276,7 @@ public class CreateMediaSystems {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("10");
+        var registrar = event.registrar("12");
         ServerConfig.registerPayloads(registrar);
         StreamPackets.registerPayloads(registrar);
         TrainDiscReaderBehaviour.registerPayloads(registrar);
@@ -259,6 +288,8 @@ public class CreateMediaSystems {
         EqualizerBlock.registerPayloads(registrar);
         DisplayQuill.registerPayloads(registrar);
         ImageViewerBlock.registerPayloads(registrar);
+        LightingPackets.register(registrar);
+        org.haruyq.createmediasystems.lighting.AnalysisPackets.register(registrar);
     }
 
 }

@@ -47,7 +47,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
     /** Guarded by lock; null before start and once released. */
     @Nullable
     private Pointer player;
-    private boolean released;
+    private volatile boolean released;
     private volatile boolean resumed;
     private boolean live;
     /** The length the resolver gave (see NativeMediaResolver.Prepared#duration); 0 if VLC is to tell. */
@@ -135,6 +135,15 @@ public final class VlcPlayer implements NativeAudio.Backend {
         return seconds;
     }
 
+    boolean recentMedia(long now) {
+        return !released && (recent(audio.lastSamples, now, 2_000_000_000L)
+                || frame != null && recent(frame.lastPicture, now, 2_000_000_000L));
+    }
+
+    private static boolean recent(long at, long now, long lifetime) {
+        return at != 0 && now - at >= 0 && now - at < lifetime;
+    }
+
     @Override
     public NativeAudio.Status status() {
         if (!lock.tryLock()) {
@@ -169,6 +178,10 @@ public final class VlcPlayer implements NativeAudio.Backend {
         lock.lock();
         try {
             if (player != null) {
+                audio.clearLighting();
+                if (frame != null) {
+                    frame.clearLighting();
+                }
                 LIB.libvlc_media_player_set_time(player, millis);
             }
         } finally {
@@ -216,6 +229,10 @@ public final class VlcPlayer implements NativeAudio.Backend {
         if (diagnostics != null) {
             diagnostics.send();
         }
+        audio.clearLighting();
+        if (frame != null) {
+            frame.clearLighting();
+        }
         // Stopping waits for VLC's threads, which may take a moment: never on the game's or the sound engine's.
         RELEASER.execute(() -> {
             lock.lock();
@@ -228,6 +245,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
             } finally {
                 lock.unlock();
             }
+            audio.clearLighting();
             if (frame != null) {
                 frame.close();
             }
@@ -263,6 +281,11 @@ public final class VlcPlayer implements NativeAudio.Backend {
         private volatile int shownHeight;
         /** When VLC finished its first picture (System.nanoTime); 0 before. */
         volatile long firstPicture;
+        volatile long lastPicture;
+        private volatile long lightingUntil;
+        private long nextLighting;
+        @Nullable
+        private volatile LightingMedia.Colors lightingColors;
 
         // Held here: VLC calls them as long as it plays.
         final Vlc.VideoSetup setup = (opaque, chroma, width, height, pitches, lines) -> {
@@ -282,6 +305,9 @@ public final class VlcPlayer implements NativeAudio.Backend {
                 pixels.clear();
                 this.width = w;
                 this.height = h;
+                lightingColors = null;
+                lastPicture = 0;
+                nextLighting = 0;
             }
             return 1;
         };
@@ -298,11 +324,49 @@ public final class VlcPlayer implements NativeAudio.Backend {
             }
         };
         final Vlc.VideoDisplay display = (opaque, picture) -> {
+            long now = System.nanoTime();
+            lastPicture = now;
             if (firstPicture == 0) {
-                firstPicture = System.nanoTime();
+                firstPicture = now;
             }
             fresh = true;
+            synchronized (guard) {
+                if (!writing && pixels != null && lightingUntil != 0 && now - lightingUntil < 0 && now - nextLighting >= 0) {
+                    int[] colors = LightingMedia.colors(width, height, index -> {
+                        long at = (long) index * 4;
+                        return (pixels.getByte(at) & 255) << 16 | (pixels.getByte(at + 1) & 255) << 8
+                                | pixels.getByte(at + 2) & 255;
+                    });
+                    LightingMedia.Colors previous = lightingColors;
+                    float amount = previous == null ? 1 : Math.min(1, (now - previous.at()) / 200_000_000f);
+                    lightingColors = new LightingMedia.Colors(
+                            previous == null ? colors[0] : LightingMedia.blend(previous.left(), colors[0], amount),
+                            previous == null ? colors[1] : LightingMedia.blend(previous.right(), colors[1], amount), now);
+                    nextLighting = now + 50_000_000L;
+                }
+            }
         };
+
+        @Nullable
+        LightingMedia.Colors lighting() {
+            return lighting(System.nanoTime());
+        }
+
+        @Nullable
+        LightingMedia.Colors lighting(long now) {
+            lightingUntil = now + 2_000_000_000L;
+            LightingMedia.Colors colors = lightingColors;
+            return recent(lastPicture, now, 1_000_000_000L) && colors != null
+                    && recent(colors.at(), now, 1_000_000_000L) ? colors : null;
+        }
+
+        private void clearLighting() {
+            synchronized (guard) {
+                lightingColors = null;
+                lastPicture = 0;
+                nextLighting = 0;
+            }
+        }
 
         /** The texture with the latest picture, uploading it first if new; null before the first. Render thread. */
         @Nullable
@@ -400,6 +464,8 @@ public final class VlcPlayer implements NativeAudio.Backend {
                     pixels = null;
                 }
                 fresh = false;
+                lightingColors = null;
+                lastPicture = 0;
             }
             Minecraft.getInstance().execute(() -> {
                 if (id != null) {

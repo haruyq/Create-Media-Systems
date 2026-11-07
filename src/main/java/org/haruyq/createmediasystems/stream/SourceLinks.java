@@ -105,13 +105,19 @@ public final class SourceLinks extends SavedData {
 
     @Nullable
     public static UUID identify(Level level, @Nullable BlockPos pos) {
+        return pos != null && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource
+                ? identifyBlock(level, pos) : null;
+    }
+
+    @Nullable
+    public static UUID identifyBlock(Level level, @Nullable BlockPos pos) {
         if (!(level instanceof ServerLevel server) || pos == null || !level.isLoaded(pos)) {
             return null;
         }
-        if (!(level.getBlockEntity(pos) instanceof MediaSource media)) {
+        BlockEntity source = level.getBlockEntity(pos);
+        if (source == null) {
             return null;
         }
-        BlockEntity source = (BlockEntity) media;
         UUID id = source.getData(CreateMediaSystems.SOURCE_ID);
         source.setChanged();
         get(server).put(id, pos);

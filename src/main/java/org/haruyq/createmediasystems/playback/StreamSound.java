@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleConsumer;
@@ -34,6 +35,7 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.client.sounds.JOrbisAudioStream;
 import net.minecraft.client.sounds.SoundBufferLibrary;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -193,6 +195,12 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         }
     }
 
+    long position(BlockPos source, String url) {
+        PcmStream current = stream;
+        long millis = current == null || !source.equals(playback) || !url.equals(track) ? -1 : current.position();
+        return millis < 0 ? -1 : millis + Math.round(startSeconds * 1000);
+    }
+
     /** The Blu-ray player whose video this is the sound of; null for none. */
     @Nullable
     Streams.Video video() {
@@ -250,7 +258,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 this::request, reason -> {
                     LogUtils.getLogger().warn("Stream {} broke off: {}", urlAt.apply(0), reason);
                     ClientStreams.interrupted(this, reason);
-                }));
+                }), playback, channel, track);
         stream = opened;
         if (released) {
             close(opened);
@@ -394,7 +402,16 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      * {@link #read}, only waits on the network if the API falls behind real time.
      */
     static final class PcmStream implements AudioStream, DeviceClock.Timed {
+        final String track;
         private final Feed.Reader feed;
+        @Nullable
+        private final BlockPos playback;
+        private final Streams.Channel channel;
+        private final LightingMedia.Audio lighting = new LightingMedia.Audio();
+        private final ArrayDeque<Played> played = new ArrayDeque<>();
+        private int source;
+        private long startAt;
+        private long analyzedPosition = -1;
         private volatile boolean closed;
         /** Silence to play before the audio, to wait for the others of its playback (see lineUp). */
         private long silenceBytes;
@@ -402,8 +419,84 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         @Nullable
         private SyncClock.Start start;
 
+        private record Played(long at, long position, int bytes) {
+        }
+
         PcmStream(Feed.Reader feed) {
+            this(feed, null, Streams.Channel.MIX);
+        }
+
+        PcmStream(Feed.Reader feed, @Nullable Object playback, Streams.Channel channel) {
+            this(feed, playback, channel, null);
+        }
+
+        PcmStream(Feed.Reader feed, @Nullable Object playback, Streams.Channel channel, @Nullable String track) {
+            this.track = track;
             this.feed = feed;
+            this.playback = playback instanceof BlockPos pos ? pos.immutable() : null;
+            this.channel = channel;
+            if (this.playback != null) {
+                LightingMedia.openRelay(this.playback, this);
+            }
+        }
+
+        Streams.Channel channel() {
+            return channel;
+        }
+
+        synchronized long position() {
+            long now = System.nanoTime();
+            Played current = null;
+            for (Played buffer : played) {
+                if (buffer.at <= now) {
+                    current = buffer;
+                }
+            }
+            return closed || current == null || current.position < 0
+                    || now - current.at >= (long) current.bytes * 1_000_000_000L / Pcm.BYTES_PER_SECOND ? -1
+                    : current.position * 1000 / Pcm.BYTES_PER_SECOND + (now - current.at) / 1_000_000;
+        }
+
+        @Nullable
+        LightingMedia.AudioFrame lighting() {
+            return lighting(System.nanoTime());
+        }
+
+        @Nullable
+        synchronized LightingMedia.AudioFrame lighting(long now) {
+            Played current = null;
+            for (Played buffer : played) {
+                if (buffer.at <= now) {
+                    current = buffer;
+                }
+            }
+            if (closed || current == null || now - current.at >= (long) current.bytes * 1_000_000_000L / Pcm.BYTES_PER_SECOND) {
+                return null;
+            }
+            if (current.position < 0) {
+                lighting.clear();
+                analyzedPosition = -1;
+                return new LightingMedia.AudioFrame(now / 1000, 0, 0, 0, 0, 0, 120);
+            }
+            long position = current.position + ((now - current.at) * Pcm.BYTES_PER_SECOND / 1_000_000_000L & ~1L);
+            long from = analyzedPosition;
+            if (from < 0 || position < from || position - from > Pcm.BYTES_PER_SECOND / 4) {
+                lighting.clear();
+                from = Math.max(0, position - Pcm.BYTES_PER_SECOND / 5) & ~1L;
+            }
+            int length = (int) (position - from);
+            if (length > 0) {
+                byte[] pcm = feed.peek(from, length);
+                if (pcm == null) {
+                    lighting.clear();
+                    analyzedPosition = -1;
+                    return null;
+                }
+                long at = current.at + (from - current.position) * 1_000_000_000L / Pcm.BYTES_PER_SECOND;
+                lighting.offerMono(pcm, at / 1000);
+                analyzedPosition = position;
+            }
+            return lighting.sample(now / 1000);
         }
 
         /** Waits until the start of the track is buffered; returns early if closed or ended. */
@@ -432,8 +525,13 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         }
 
         @Override
-        public long attach(int source, long deviceNow) {
-            return start == null ? 0 : start.playAt(deviceNow);
+        public synchronized long attach(int source, long deviceNow) {
+            this.source = source;
+            startAt = start == null ? 0 : start.playAt(deviceNow);
+            played.clear();
+            lighting.clear();
+            analyzedPosition = -1;
+            return startAt;
         }
 
         @Override
@@ -451,9 +549,10 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             if (silenceBytes > 0) {
                 int n = (int) Math.min(wanted, silenceBytes);
                 silenceBytes -= n;
-                return ByteBuffer.allocateDirect(n);
+                return buffer(new byte[n], -1);
             }
             byte[] pcm;
+            long position = feed.position();
             int ready = feed.available() & ~1;
             if (ready > 0 || feed.done()) {
                 pcm = feed.read(ready > 0 ? Math.min(wanted, ready) : wanted);
@@ -462,13 +561,37 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 // every sound and the game itself wait on, so a stalled connection froze the whole client.
                 // Play a moment of silence instead.
                 pcm = new byte[Math.min(wanted, STARVED_SILENCE_BYTES)];
+                position = -1;
+            }
+            return buffer(pcm, position);
+        }
+
+        private synchronized ByteBuffer buffer(byte[] pcm, long position) {
+            if (playback != null && source != 0 && pcm.length > 0) {
+                int queued = DeviceClock.queuedBuffers(source);
+                long samples = 0;
+                var iterator = played.descendingIterator();
+                for (int i = 0; i < queued && iterator.hasNext(); i++) {
+                    samples += iterator.next().bytes / 2;
+                }
+                queued(DeviceClock.presentationTime(source, startAt, samples), position, pcm.length);
             }
             return ByteBuffer.allocateDirect(pcm.length).put(pcm).flip();
+        }
+
+        synchronized void queued(long at, long position, int bytes) {
+            played.addLast(new Played(at, position, bytes));
+            while (played.size() > 16) {
+                played.removeFirst();
+            }
         }
 
         @Override
         public void close() {
             closed = true;
+            if (playback != null) {
+                LightingMedia.closeRelay(playback, this);
+            }
             feed.close();
         }
     }

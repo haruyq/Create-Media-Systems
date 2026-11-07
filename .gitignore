@@ -1,6 +1,8 @@
 .gradle/
 build/
 run/
+run-lighting-demo/
+run-sable-lighting-demo/
 out/
 *.iml
 .idea/
@@ -10,4 +12,8 @@ libs/
 /logs/
 .yomiyasu/
 /scripts/*
+!/scripts/lighting_latency_proxy.py
+!/scripts/test_lighting_latency_proxy.py
+!/scripts/analyze_lighting_network.py
+!/scripts/prepare_lighting_network.py
 /docs/

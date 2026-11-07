@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.video;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.PercentSetting;
@@ -79,6 +80,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && videoPlayer.cd.isEmpty()) {
+            videoPlayer.initiator = player.getUUID();
             videoPlayer.insert(stack.split(1));
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
@@ -138,6 +140,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private long ticks;
         private boolean playing;
         private boolean paused;
+        public UUID initiator;
         /** When a linked speaker last played it (game time); not saved. */
         private long heldAt = Long.MIN_VALUE / 2;
         private ScrollValueBehaviour volume;
@@ -161,6 +164,11 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         public List<String> playlist() {
             return cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+        }
+
+        @Override
+        public UUID initiator() {
+            return initiator;
         }
 
         public int index() {
@@ -319,6 +327,9 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tag.putLong("Ticks", ticks);
             tag.putBoolean("Playing", playing);
             tag.putBoolean("Paused", paused);
+            if (initiator != null) {
+                tag.putUUID("Initiator", initiator);
+            }
         }
 
         @Override
@@ -329,6 +340,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             ticks = tag.getLong("Ticks");
             playing = tag.getBoolean("Playing");
             paused = tag.getBoolean("Paused");
+            initiator = tag.hasUUID("Initiator") ? tag.getUUID("Initiator") : null;
         }
     }
 }

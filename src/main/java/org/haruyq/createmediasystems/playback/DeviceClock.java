@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.playback;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.SOFTDeviceClock;
@@ -56,12 +57,29 @@ public final class DeviceClock {
      * started yet.
      */
     static long queueEnd(int source, long startAt, int bufferSamples) {
+        return queueEnd(source, startAt, (long) AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED) * bufferSamples);
+    }
+
+    private static long queueEnd(int source, long startAt, long queuedSamples) {
         long[] offsetAndClock = new long[2];
         SOFTSourceLatency.alGetSourcei64vSOFT(source, SOFTDeviceClock.AL_SAMPLE_OFFSET_CLOCK_SOFT, offsetAndClock);
         // The offset is 32.32 fixed point, from the start of the queue; 0 (and the clock now) until it plays.
         long queueStart = offsetAndClock[1] - (offsetAndClock[0] >> 32) * 1_000_000_000L / Pcm.RATE;
-        long queued = (long) AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED) * bufferSamples;
-        return Math.max(queueStart, startAt) + queued * 1_000_000_000L / Pcm.RATE;
+        return Math.max(queueStart, startAt) + queuedSamples * 1_000_000_000L / Pcm.RATE;
+    }
+
+    static int queuedBuffers(int source) {
+        return AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED);
+    }
+
+    static long presentationTime(int source, long startAt, long queuedSamples) {
+        long now = System.nanoTime();
+        long[] device = nowAndLatency();
+        if (device != null) {
+            return now + Math.max(0, queueEnd(source, startAt, queuedSamples) - device[0]) + device[1];
+        }
+        double remaining = queuedSamples / (double) Pcm.RATE - AL10.alGetSourcef(source, AL11.AL_SEC_OFFSET);
+        return now + Math.max(0, Math.round(remaining * 1e9));
     }
 
     /** The open device if it has everything needed, else 0. */

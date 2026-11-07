@@ -5,6 +5,10 @@
     "create_media_systems:display",
     "create_media_systems:image_viewer",
     "create_media_systems:blu_ray_player",
-    "create_media_systems:equalizer"
+    "create_media_systems:equalizer",
+    "create_media_systems:stage_light",
+    "create_media_systems:laser_projector",
+    "create_media_systems:lighting_console",
+    "create_media_systems:lighting_monitor"
   ]
 }

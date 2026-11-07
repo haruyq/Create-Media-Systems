@@ -262,6 +262,29 @@ final class Feed {
             }
         }
 
+        long position() {
+            synchronized (Feed.this) {
+                return position;
+            }
+        }
+
+        @Nullable
+        byte[] peek(long from, int length) {
+            synchronized (Feed.this) {
+                if (left || from < Math.max(0, received - ring.length) || length < 0 || from + length > received) {
+                    return null;
+                }
+                byte[] bytes = new byte[length];
+                for (int i = 0; i < length; ) {
+                    int at = (int) ((from + i) % ring.length);
+                    int n = Math.min(length - i, ring.length - at);
+                    System.arraycopy(ring, at, bytes, i, n);
+                    i += n;
+                }
+                return bytes;
+            }
+        }
+
         /** Skips {@code bytes}, waiting until the download has got there (or ended, or this closed). */
         void skip(long bytes) {
             synchronized (Feed.this) {

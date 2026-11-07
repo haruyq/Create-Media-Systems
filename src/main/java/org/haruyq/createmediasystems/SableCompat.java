@@ -2,8 +2,10 @@ package org.haruyq.createmediasystems;
 
 import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
+import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -31,6 +33,23 @@ public final class SableCompat {
     public static Vec3 toWorld(Level level, BlockPos anchor, Vec3 local) {
         SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, anchor);
         return subLevel == null ? local : subLevel.logicalPose().transformPosition(local);
+    }
+
+    public static Vec3 toRenderWorld(Level level, BlockPos anchor, Vec3 local) {
+        SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, anchor);
+        return subLevel instanceof ClientSubLevelAccess client
+                ? client.renderPose().transformPosition(local) : toWorld(level, anchor, local);
+    }
+
+    public static Vec3 toRenderBlockSpace(Level level, BlockPos anchor, Vec3 global) {
+        SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, anchor);
+        return subLevel instanceof ClientSubLevelAccess client
+                ? client.renderPose().transformPositionInverse(global) : toBlockSpace(level, anchor, global);
+    }
+
+    public static boolean mayInteract(Level level, Player player, BlockPos pos) {
+        BlockPos world = BlockPos.containing(toWorld(level, pos, Vec3.atCenterOf(pos)));
+        return level.mayInteract(player, world);
     }
 
     /**

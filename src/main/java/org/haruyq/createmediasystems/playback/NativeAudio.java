@@ -114,6 +114,33 @@ public final class NativeAudio {
         return null;
     }
 
+    @Nullable
+    static VlcPlayer lighting(BlockPos pos) {
+        return lighting(pos, null);
+    }
+
+    @Nullable
+    static VlcPlayer lighting(BlockPos pos, @Nullable String track) {
+        synchronized (SHARED) {
+            for (Shared shared : SHARED.values()) {
+                if ((pos.equals(shared.key.display()) || pos.equals(shared.playback))
+                        && (track == null || shared.key.source().toString().equals(track))
+                        && shared.playing.isDone() && !shared.playing.isCompletedExceptionally()
+                        && shared.owner instanceof VlcPlayer player) {
+                    return player;
+                }
+            }
+        }
+        return null;
+    }
+
+    static boolean lightingLive(BlockPos pos, String track) {
+        synchronized (SHARED) {
+            return SHARED.values().stream().anyMatch(shared -> shared.live && shared.key.source().toString().equals(track)
+                    && (pos.equals(shared.key.display()) || pos.equals(shared.playback)));
+        }
+    }
+
     /** Every Blu-ray player's video playing here plays through {@code bands} of its player (see Equalizer#set). */
     public static void equalize(Function<BlockPos, float[]> bands) {
         synchronized (SHARED) {

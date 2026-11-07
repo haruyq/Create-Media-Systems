@@ -210,6 +210,18 @@ public final class Streams {
     public static void loading(BlockEntity source) {
         source.setChanged();
         LOADS.put(key(source), new Load());
+        org.haruyq.createmediasystems.lighting.AnalysisCoordinator.restart(source);
+    }
+
+    public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
+        Set<ServerPlayer> players = new HashSet<>();
+        RELAYS.forEach((emitter, relay) -> {
+            if (emitter.getLevel() == level && source.equals(relay.sound.source())) {
+                relay.listeners.stream().filter(player -> !player.isRemoved() && player.level() == level)
+                        .forEach(players::add);
+            }
+        });
+        return players;
     }
 
     /**

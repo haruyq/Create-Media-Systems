@@ -14,6 +14,8 @@ import org.haruyq.createmediasystems.stream.Streams;
 
 import org.junit.jupiter.api.Test;
 
+import com.sun.jna.Memory;
+
 class VlcAudioTest {
     private static final int RATE = 48_000;
     private static final long START = 10_000_000;
@@ -21,6 +23,48 @@ class VlcAudioTest {
 
     private final Random wobble = new Random(1);
     private int fed;
+
+    @Test
+    void callbacksKeepStandbyEligibleWithoutAudioTapsOrLightingDemand() {
+        VlcPlayer player = new VlcPlayer(null, 0);
+        assertFalse(player.recentMedia(System.nanoTime()));
+        try (Memory sample = new Memory(4)) {
+            player.audio.play.invoke(null, sample, 1, START);
+            long last = player.audio.lastSamples;
+            assertTrue(player.recentMedia(last));
+            assertTrue(player.recentMedia(last + 1_999_999_999L));
+            assertFalse(player.recentMedia(last + 2_000_000_000L));
+            player.audio.flush.invoke(null, START);
+            assertFalse(player.recentMedia(last));
+            player.audio.play.invoke(null, sample, 0, START);
+            assertEquals(0, player.audio.lastSamples);
+            player.audio.play.invoke(null, sample, 1, START);
+            player.release();
+            player.audio.play.invoke(null, sample, 1, START);
+            assertFalse(player.recentMedia(player.audio.lastSamples));
+        }
+    }
+
+    @Test
+    void lightingColorsExpireEvenWhenCallsKeepRequestingAnalysis() {
+        VlcPlayer.Frame frame = new VlcPlayer.Frame();
+        try (Memory format = new Memory(20)) {
+            format.setInt(4, 8);
+            format.setInt(8, 8);
+            assertEquals(1, frame.setup.invoke(null, format, format.share(4), format.share(8),
+                    format.share(12), format.share(16)));
+            frame.display.invoke(null, null);
+            assertNotEquals(0, frame.lastPicture);
+            assertNull(frame.lighting());
+            frame.display.invoke(null, null);
+            long last = frame.lastPicture;
+            assertNotNull(frame.lighting(last));
+            assertNotNull(frame.lighting(last + 900_000_000L));
+            assertNull(frame.lighting(last + 1_000_000_000L));
+            frame.lastPicture = last + 1_500_000_000L;
+            assertNull(frame.lighting(frame.lastPicture), "a fresh callback cannot make old analysis colors fresh");
+        }
+    }
 
     /** VLC's blocks up to {@code until} (µs); sample n's left value is n + 1, each block timed a hair off. */
     private void feedUntil(VlcAudio audio, long until) {

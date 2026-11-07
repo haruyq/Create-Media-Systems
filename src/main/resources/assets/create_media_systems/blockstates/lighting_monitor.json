@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "create_media_systems:block/lighting_monitor",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "create_media_systems:block/lighting_monitor",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "create_media_systems:block/lighting_monitor",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "create_media_systems:block/lighting_monitor",
+      "y": 270
+    }
+  }
+}

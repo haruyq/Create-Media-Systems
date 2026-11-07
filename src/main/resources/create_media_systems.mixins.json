@@ -14,6 +14,7 @@
   "client": [
     "ChannelAccessor",
     "ChannelMixin",
+    "EntityRendererMixin",
     "LibraryMixin",
     "SoundEngineAccessor",
     "SoundEngineMixin",

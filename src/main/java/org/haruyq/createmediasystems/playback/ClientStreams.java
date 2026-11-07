@@ -103,6 +103,16 @@ public final class ClientStreams {
         }
     }
 
+    static long position(BlockPos source, String track) {
+        for (StreamSound sound : PLAYING.values()) {
+            long position = sound.position(source, track);
+            if (position >= 0) {
+                return position;
+            }
+        }
+        return -1;
+    }
+
     /** Plays {@code sound} on {@code channel}, instead of what played there. */
     public static void play(Object channel, StreamSound sound) {
         var sounds = Minecraft.getInstance().getSoundManager();
