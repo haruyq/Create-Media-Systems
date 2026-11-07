@@ -11,6 +11,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** What a block's stream says between server and client (see Streams and ClientStreams). */
@@ -24,18 +25,21 @@ public final class StreamPackets {
     /**
      * Server → client: stream {@code url} from the emitter at {@code pos}, sounding as {@code sound}, from
      * {@code startSeconds} in. {@code video} is the Blu-ray player whose video it is (and its disc's quality), which
-     * its player also plays for that Blu-ray player's displays to show.
+     * its player also plays for that Blu-ray player's displays to show. {@code load} says which load of its source's
+     * track it is (see Streams.Load): streams of one load are one playback, however far apart they come (while it
+     * loads, every one of them says 0 s, so their time can't tell); 0 if unknown.
      */
     public record PlayAtBlock(String url, BlockPos pos, float startSeconds, JukeboxSettings settings,
-                              Streams.Sound sound, Optional<Streams.Video> video) implements CustomPacketPayload {
+                              Streams.Sound sound, Optional<Streams.Video> video, long load) implements CustomPacketPayload {
         public static final Type<PlayAtBlock> TYPE = new Type<>(CreateMediaSystems.id("play_at_block"));
-        public static final StreamCodec<ByteBuf, PlayAtBlock> CODEC = StreamCodec.composite(
+        public static final StreamCodec<ByteBuf, PlayAtBlock> CODEC = NeoForgeStreamCodecs.composite(
                 ByteBufCodecs.STRING_UTF8, PlayAtBlock::url,
                 BlockPos.STREAM_CODEC, PlayAtBlock::pos,
                 ByteBufCodecs.FLOAT, PlayAtBlock::startSeconds,
                 JukeboxSettings.STREAM_CODEC, PlayAtBlock::settings,
                 Streams.Sound.CODEC, PlayAtBlock::sound,
                 ByteBufCodecs.optional(Streams.Video.CODEC), PlayAtBlock::video,
+                ByteBufCodecs.VAR_LONG, PlayAtBlock::load,
                 PlayAtBlock::new);
 
         @Override

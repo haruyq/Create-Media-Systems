@@ -17,6 +17,7 @@ import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -71,6 +72,11 @@ public final class Streams {
      */
     // ponytail: never evicted, one entry per place a track was started since the server started; prune on removal if that grows.
     private static final Map<UUID, Load> LOADS = new HashMap<>();
+    /**
+     * The last Load#id given out; on the server thread. From a random start, so a client still holding a playback
+     * from before a server restart never takes a new load for it.
+     */
+    private static long lastLoadId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE / 2);
 
     /**
      * A source's track as its listeners load it. Its position counts from when they all have it loaded (or the first
@@ -79,12 +85,20 @@ public final class Streams {
      * starts that far in, and the track doesn't end that early.
      */
     private static final class Load {
+        /**
+         * Which load of a track this is, sent with every stream of it: clients take streams of one load for one
+         * playback, however far apart they arrive (see PlayAtBlock#load). Never 0, which means unknown.
+         */
+        final long id = ++lastLoadId;
         /** The tick count since the track started at which it began to play; LOADING while it loads. */
         long playingFrom = LOADING;
         /** The players it was sent to while it loaded, whom it waits for. */
         final Set<ServerPlayer> expected = new HashSet<>();
-        /** Those that have it loaded, waiting to play it, and the emitter each said so of, to tell them through. */
-        final Map<ServerPlayer, BlockPos> ready = new HashMap<>();
+        /**
+         * Those that have it loaded, waiting to play it, and every emitter each said so of: each is told through all
+         * of them, as a client may have opened its sides apart (one native player each), and each waits to be told.
+         */
+        final Map<ServerPlayer, Set<BlockPos>> ready = new HashMap<>();
         /** The tick count at which the first of them had it loaded; LOADING until then. */
         long firstReadyAt = LOADING;
     }
@@ -242,9 +256,10 @@ public final class Streams {
             if (everyone || ticks >= MAX_LOAD_TICKS
                     || load.firstReadyAt != LOADING && ticks - load.firstReadyAt >= BARRIER_TICKS) {
                 load.playingFrom = ticks;
-                load.ready.forEach((player, emitter) -> {
+                load.ready.forEach((player, emitters) -> {
                     if (!player.isRemoved()) {
-                        PacketDistributor.sendToPlayer(player, new StreamPackets.SyncAtBlock(emitter, 0));
+                        emitters.forEach(emitter ->
+                                PacketDistributor.sendToPlayer(player, new StreamPackets.SyncAtBlock(emitter, 0)));
                     }
                 });
                 load.ready.clear();
@@ -284,7 +299,7 @@ public final class Streams {
         Load load = loadOf(level, sourcePos);
         boolean loading = load != null && load.playingFrom == LOADING;
         if (loading) {
-            load.ready.putIfAbsent(player, pos);
+            load.ready.computeIfAbsent(player, p -> new HashSet<>()).add(pos.immutable());
         }
         // Counts it as played so far, which plays it now if this player was the last it waited for.
         Source playing = source(level, sourcePos);
@@ -357,7 +372,8 @@ public final class Streams {
                     load.expected.add(player);
                 }
                 PacketDistributor.sendToPlayer(player, new StreamPackets.PlayAtBlock(playing.url(), pos,
-                        playing.ticks() / 20f, settings, sound, Optional.ofNullable(playing.video())));
+                        playing.ticks() / 20f, settings, sound, Optional.ofNullable(playing.video()),
+                        load == null ? 0 : load.id));
             }
         }
     }

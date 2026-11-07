@@ -64,6 +64,8 @@ public final class ClientStreams {
     /** The emitters playing one side, and how they sound together as of this tick (see update). */
     private static final class Group {
         final String url;
+        /** Which load of the source's track they play (see Streams.Load); 0 if unknown. */
+        final long load;
         /** When the track's top was as the first of them asked (System.nanoTime), to tell a restart (see joins). */
         final long origin;
         /** Each emitter's block, and how it sounds. */
@@ -80,18 +82,25 @@ public final class ClientStreams {
         private StreamSound spreadOn;
         private double spreadRadius;
 
-        Group(String url, long origin) {
+        Group(String url, long load, long origin) {
             this.url = url;
+            this.load = load;
             this.origin = origin;
         }
 
         /**
-         * Whether an emitter asked to play {@code url} from its top at {@code origin} joins this playback: by the
-         * rule its native player is shared by (see NativeAudio.Shared#join), so the two never disagree.
+         * Whether an emitter asked to play {@code url}'s {@code load} from its top at {@code origin} joins this
+         * playback: by the rule its native player is shared by (see NativeAudio.Shared#join), so the two never
+         * disagree. A known load decides alone: while a track loads, every emitter of it says 0 s.
          */
-        boolean joins(String url, double startSeconds, long origin) {
-            return this.url.equals(url)
-                    && (startSeconds > 0 || Math.abs(origin - this.origin) / 1e9 < SyncClock.SAME_PLAYBACK_SECONDS);
+        boolean joins(String url, long load, double startSeconds, long origin) {
+            if (!this.url.equals(url)) {
+                return false;
+            }
+            if (load != 0 && this.load != 0) {
+                return load == this.load;
+            }
+            return startSeconds > 0 || Math.abs(origin - this.origin) / 1e9 < SyncClock.SAME_PLAYBACK_SECONDS;
         }
 
         /** Sums up its emitters as heard from the camera now (see Mix); its stream asks this every tick. */
@@ -269,11 +278,11 @@ public final class ClientStreams {
         }
         Group group = GROUPS.get(side);
         long origin = System.nanoTime() - Math.round(payload.startSeconds() * 1e9);
-        if (group != null && group.joins(payload.url(), payload.startSeconds(), origin)) {
+        if (group != null && group.joins(payload.url(), payload.load(), payload.startSeconds(), origin)) {
             group.emitters.put(pos, sound);
             return;
         }
-        Group fresh = new Group(payload.url(), origin);
+        Group fresh = new Group(payload.url(), payload.load(), origin);
         if (group != null) {
             fresh.emitters.putAll(group.emitters);
         }
@@ -282,8 +291,8 @@ public final class ClientStreams {
         GROUPS.put(side, fresh);
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
         play(side, new StreamSound(apiStream(payload.url(), payload.startSeconds(), side.channel()), payload.url(),
-                side.source(), payload.startSeconds(), SoundSource.RECORDS, () -> fresh.at, () -> fresh.present,
-                () -> fresh.nearby, () -> fresh.gain, payload.video().orElse(null), side.channel(),
+                side.source(), payload.load(), payload.startSeconds(), SoundSource.RECORDS, () -> fresh.at,
+                () -> fresh.present, () -> fresh.nearby, () -> fresh.gain, payload.video().orElse(null), side.channel(),
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
                 seconds -> Minecraft.getInstance().execute(() -> fresh.emitters.keySet().stream().findFirst()
                         .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(at, (float) seconds))))));

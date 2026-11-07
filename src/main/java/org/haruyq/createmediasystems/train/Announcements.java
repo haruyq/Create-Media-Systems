@@ -30,7 +30,7 @@ final class Announcements {
         Vec3[] last = {Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()};
         ClientStreams.play("train/" + payload.channel(), new StreamSound(
                 ClientStreams.apiStream(payload.url(), payload.startSeconds(), Streams.Channel.MIX), payload.url(),
-                null, payload.startSeconds(), SoundSource.VOICE,
+                null, 0, payload.startSeconds(), SoundSource.VOICE,
                 () -> {
                     Vec3 at = speaker(payload.carriages(), speakers);
                     return at == null ? last[0] : (last[0] = at);

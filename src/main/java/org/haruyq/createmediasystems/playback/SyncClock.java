@@ -21,14 +21,25 @@ final class SyncClock {
         private final long startedAt;
         /** When the track's top was, by the request that started the clock (see start). */
         private final long origin;
+        /** Which load of the track it times (see Streams.Load); 0 if unknown. */
+        private final long load;
         /** The device clock at {@link #anchoredAt}, taken once so all streams of the playback map time alike. */
         private long deviceAt;
         private long anchoredAt;
 
-        Clock(double startSeconds, long startedAt, long origin) {
+        Clock(double startSeconds, long startedAt, long origin, long load) {
             this.startSeconds = startSeconds;
             this.startedAt = startedAt;
             this.origin = origin;
+            this.load = load;
+        }
+
+        /** Whether a stream {@code skip} seconds off this clock, asked as {@code origin} and {@code load} say, is of its playback. */
+        boolean times(double skip, long origin, long load) {
+            if (load != 0 && this.load != 0) {
+                return load == this.load;
+            }
+            return Math.abs(skip) < SAME_PLAYBACK_SECONDS || Math.abs(origin - this.origin) / 1e9 < SAME_PLAYBACK_SECONDS;
         }
 
         double positionAt(long now) {
@@ -60,18 +71,20 @@ final class SyncClock {
      * How a stream of {@code track} that asked to start at {@code startSeconds}, ready now, lines up. {@code origin}
      * is when the track's top was by its request (System.nanoTime when asked, less the start): streams asked for
      * together are one playback however far apart they get ready (the first loads of a fresh disc take a while).
+     * {@code load} is which load of its source's track it is (see Streams.Load), 0 if unknown: known for both, it
+     * alone decides, as while a track loads every stream of it asks for 0 s, so a speaker that came 2 s after its
+     * pair (walking into its range, chunks loading in after a rejoin) started the track over, seconds behind it.
      */
-    static Start start(String track, double startSeconds, long origin) {
+    static Start start(String track, double startSeconds, long origin, long load) {
         long now = System.nanoTime();
         Clock clock = CLOCKS.get(track);
         if (clock != null) {
             double skip = clock.positionAt(now) - startSeconds;
-            if (Math.abs(skip) < SAME_PLAYBACK_SECONDS
-                    || Math.abs(origin - clock.origin) / 1e9 < SAME_PLAYBACK_SECONDS) {
+            if (clock.times(skip, origin, load)) {
                 return new Start(skip, clock, now);
             }
         }
-        clock = new Clock(startSeconds, now, origin);
+        clock = new Clock(startSeconds, now, origin, load);
         CLOCKS.put(track, clock);
         return new Start(0, clock, now);
     }

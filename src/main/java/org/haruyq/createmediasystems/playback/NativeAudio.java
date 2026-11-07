@@ -70,19 +70,20 @@ public final class NativeAudio {
     }
 
     /**
-     * {@code playback} is what plays it on the server (see {@link Shared#join}); null if unknown. {@code display} is
+     * {@code playback} is what plays it on the server, and {@code load} which load of its track (see
+     * {@link Shared#join}); null and 0 if unknown. {@code display} is
      * the Blu-ray player whose video it is, if any. {@code loaded} is told the track's length in seconds (0 if
      * unknown or live) once it is loaded; with {@code go}, its player then waits, paused, for the server's word to
      * play, so every listener starts it together (see Streams#started).
      */
-    static AudioStream open(URI source, @Nullable Object playback, @Nullable Streams.Video video, double startSeconds,
-                            long requestedAt, BooleanSupplier cancelled, Streams.Channel channel,
+    static AudioStream open(URI source, @Nullable Object playback, long load, @Nullable Streams.Video video,
+                            double startSeconds, long requestedAt, BooleanSupplier cancelled, Streams.Channel channel,
                             @Nullable CompletableFuture<Go> go, DoubleConsumer loaded) throws IOException {
         if (Vlc.MISSING != null) {
             throw new IOException(Vlc.MISSING);
         }
-        return open(() -> new VlcPlayer(video, requestedAt), source, playback, video == null ? null : video.player(),
-                startSeconds, requestedAt, cancelled, channel, go, loaded);
+        return open(() -> new VlcPlayer(video, requestedAt), source, playback, load,
+                video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded);
     }
 
     /**
@@ -156,7 +157,7 @@ public final class NativeAudio {
      * Joins the player of the same playback of {@code source} on this client if there is one, else opens one from
      * {@code players} (VLC's, or a test's stand-in).
      */
-    static AudioStream open(Supplier<Backend> players, URI source, @Nullable Object playback,
+    static AudioStream open(Supplier<Backend> players, URI source, @Nullable Object playback, long load,
                                     @Nullable BlockPos display, double startSeconds, long requestedAt,
                                     BooleanSupplier cancelled, Streams.Channel channel,
                                     @Nullable CompletableFuture<Go> go, DoubleConsumer loaded) throws IOException {
@@ -166,8 +167,8 @@ public final class NativeAudio {
         boolean opener = false;
         synchronized (SHARED) {
             shared = SHARED.get(key);
-            if (shared == null || !shared.join(origin, playback, startSeconds > 0)) {
-                shared = new Shared(key, playback, players.get(), origin);
+            if (shared == null || !shared.join(origin, playback, load, startSeconds > 0)) {
+                shared = new Shared(key, playback, load, players.get(), origin);
                 SHARED.put(key, shared);
                 opener = true;
             }
@@ -195,7 +196,7 @@ public final class NativeAudio {
         if (shared.playing.isCompletedExceptionally()) {
             // Its opener failed or gave up (it may only have been stopped): open one of our own.
             stream.close();
-            return open(players, source, playback, display, startSeconds, requestedAt, cancelled, channel, go, loaded);
+            return open(players, source, playback, load, display, startSeconds, requestedAt, cancelled, channel, go, loaded);
         }
         if (!cancelled.getAsBoolean()) {
             loaded.accept(shared.owner.seconds());
@@ -354,6 +355,8 @@ public final class NativeAudio {
         final Key key;
         @Nullable
         final Object playback;
+        /** Which load of the track it plays (see Streams.Load); 0 if unknown. */
+        final long load;
         final Backend owner;
         /** What its video's playback took (see Diagnostics); null for a record's. */
         @Nullable
@@ -371,9 +374,10 @@ public final class NativeAudio {
         /** When it last sought; on the sound thread (see correct). */
         private long seekedAt;
 
-        Shared(Key key, @Nullable Object playback, Backend owner, long origin) {
+        Shared(Key key, @Nullable Object playback, long load, Backend owner, long origin) {
             this.key = key;
             this.playback = playback;
+            this.load = load;
             this.owner = owner;
             this.origin = origin;
             diagnostics = owner instanceof VlcPlayer player ? player.diagnostics : null;
@@ -381,17 +385,28 @@ public final class NativeAudio {
 
         /**
          * Whether a stream asked to play from the track's top at {@code origin} plays this; if so, it is a user.
-         * One joining the same source mid-way ({@code midway}) always does: the server's position for it lags the
-         * one we hear whenever the server falls below 20 TPS. A fresh start goes by time, so a restart is new.
+         * Known on both sides, the server's {@code load} decides: the same load of the same source is this playback,
+         * however long after the first stream the next one came, and another load (a restart) is new. While a track
+         * loads every stream of it says 0 s, so by time alone, the side whose first speaker came 2 s later (walking
+         * into its range, chunks loading in after a rejoin) opened a player of its own, and the stereo pair played
+         * apart for the whole track. Without it: one joining the same source mid-way ({@code midway}) always does,
+         * as the server's position for it lags the one we hear whenever the server falls below 20 TPS, and a fresh
+         * start goes by time, so a restart is new.
          */
-        synchronized boolean join(long origin, @Nullable Object playback, boolean midway) {
-            boolean sameSource = midway && playback != null && playback.equals(this.playback);
-            if (users == 0 || playing.isCompletedExceptionally() || !sameSource && !live
-                    && Math.abs(origin - this.origin) / 1e9 >= SyncClock.SAME_PLAYBACK_SECONDS) {
+        synchronized boolean join(long origin, @Nullable Object playback, long load, boolean midway) {
+            if (users == 0 || playing.isCompletedExceptionally() || !samePlayback(origin, playback, load, midway)) {
                 return false;
             }
             users++;
             return true;
+        }
+
+        private boolean samePlayback(long origin, @Nullable Object playback, long load, boolean midway) {
+            boolean sameSource = playback != null && playback.equals(this.playback);
+            if (load != 0 && this.load != 0) {
+                return live || sameSource && load == this.load;
+            }
+            return midway && sameSource || live || Math.abs(origin - this.origin) / 1e9 < SyncClock.SAME_PLAYBACK_SECONDS;
         }
 
         synchronized void tapped() {

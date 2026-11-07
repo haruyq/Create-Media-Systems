@@ -72,6 +72,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     /** What plays it on the server (a source block), so streams of one source share a native player; null if unknown. */
     @Nullable
     private final Object playback;
+    /** Which load of its source's track it plays (see Streams.Load), to tell its playback by; 0 if unknown. */
+    private final long load;
     private final double startSeconds;
     /** When the server said to play: a stream joining mid-way catches up on its own start-up delay from here. */
     private final long requestedAt = System.nanoTime();
@@ -123,13 +125,15 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      * "has a disc" block state only at the end of its tick, so at first the disc may not be there yet.
      * {@code started} runs once the audio is loaded and about to play.
      */
-    public StreamSound(DoubleFunction<String> urlAt, String track, @Nullable Object playback, double startSeconds,
-                SoundSource source, @Nullable Supplier<Vec3> position, BooleanSupplier present, BooleanSupplier nearby,
-                DoubleSupplier gain, @Nullable Streams.Video video, Streams.Channel channel, DoubleConsumer started) {
+    public StreamSound(DoubleFunction<String> urlAt, String track, @Nullable Object playback, long load,
+                double startSeconds, SoundSource source, @Nullable Supplier<Vec3> position, BooleanSupplier present,
+                BooleanSupplier nearby, DoubleSupplier gain, @Nullable Streams.Video video, Streams.Channel channel,
+                DoubleConsumer started) {
         super(CreateMediaSystems.STREAM.get(), source, SoundInstance.createUnseededRandom());
         this.urlAt = urlAt;
         this.track = track;
         this.playback = playback;
+        this.load = load;
         this.startSeconds = startSeconds;
         this.present = present;
         this.nearby = nearby;
@@ -207,8 +211,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      */
     StreamSound again() {
         double playedSeconds = (System.nanoTime() - requestedAt) / 1e9;
-        StreamSound again = new StreamSound(urlAt, track, playback, startSeconds + playedSeconds, getSource(), position,
-                present, nearby, gain, video, channel, started);
+        StreamSound again = new StreamSound(urlAt, track, playback, load, startSeconds + playedSeconds, getSource(),
+                position, present, nearby, gain, video, channel, started);
         again.volume = volume;
         return again;
     }
@@ -262,8 +266,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         // An extension's video plays through the API's relay, so a video's sound is its player's like any other.
         if (video != null || !usesApiAudio(track)) {
             try {
-                AudioStream opened = NativeAudio.open(URI.create(track), playback, video, startSeconds, requestedAt,
-                        () -> released, channel, go, started);
+                AudioStream opened = NativeAudio.open(URI.create(track), playback, load, video, startSeconds,
+                        requestedAt, () -> released, channel, go, started);
                 direct = opened;
                 if (released) {
                     close(opened);
@@ -300,7 +304,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 // holds it at 0 until a listener has it loaded (see Streams#started).
                 double catchUp = startSeconds > 0 ? (System.nanoTime() - requestedAt) / 1e9 : 0;
                 SyncClock.Start start = SyncClock.start(track, startSeconds + catchUp,
-                        requestedAt - Math.round(startSeconds * 1e9));
+                        requestedAt - Math.round(startSeconds * 1e9), load);
                 opened.lineUp(catchUp + start.skipSeconds(), start);
                 started.accept(0);
             }
