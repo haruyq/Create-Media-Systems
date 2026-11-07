@@ -21,6 +21,9 @@ import com.mojang.blaze3d.vertex.VertexMultiConsumer;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
 /**
  * Light added over the world without writing depth, as stage lights' beams are. Under a shader pack, displays draw
@@ -31,13 +34,34 @@ public final class ScreenLight {
     private static final Map<RenderType, ByteBufferBuilder> MEMORY = new HashMap<>();
     /** This frame's light, by render type. */
     private static final Map<RenderType, BufferBuilder> KEPT = new LinkedHashMap<>();
-    /** This frame's light drawn from its own buffers (stage lights' lit surfaces), drawn again here. */
-    private static final List<Runnable> DRAWS = new ArrayList<>();
+    private static final List<Runnable> AFTER_PACK = new ArrayList<>();
     /** The light alone, over black. */
     @Nullable
     private static TextureTarget target;
 
     private ScreenLight() {
+    }
+
+    static void register() {
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOW, (RenderLevelStageEvent event) -> {
+            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL && !AFTER_PACK.isEmpty()) {
+                Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+                try {
+                    AFTER_PACK.forEach(Runnable::run);
+                } finally {
+                    AFTER_PACK.clear();
+                }
+            }
+        });
+    }
+
+    /** Surface illumination is added after Iris lights the world and displays restore their pictures. */
+    public static boolean afterPack(Runnable draw) {
+        if (!IrisCompat.shaderPackInUse() || IrisCompat.shadowPass()) {
+            return false;
+        }
+        AFTER_PACK.add(draw);
+        return true;
     }
 
     /**
@@ -51,13 +75,6 @@ public final class ScreenLight {
         BufferBuilder kept = KEPT.computeIfAbsent(type, t -> new BufferBuilder(
                 MEMORY.computeIfAbsent(t, m -> new ByteBufferBuilder(t.bufferSize())), t.mode(), t.format()));
         return VertexMultiConsumer.create(out, kept);
-    }
-
-    /** Under a shader pack, {@code draw} is run again for displays' pictures; it must draw light as alsoOnScreens' is. */
-    public static void alsoOnScreens(Runnable draw) {
-        if (IrisCompat.shaderPackInUse() && !IrisCompat.shadowPass()) {
-            DRAWS.add(draw);
-        }
     }
 
     /**
@@ -84,8 +101,6 @@ public final class ScreenLight {
             }
         });
         KEPT.clear();
-        DRAWS.forEach(Runnable::run);
-        DRAWS.clear();
         main.bindWrite(true);
         return target.getColorTextureId();
     }
@@ -99,6 +114,5 @@ public final class ScreenLight {
             }
         });
         KEPT.clear();
-        DRAWS.clear();
     }
 }

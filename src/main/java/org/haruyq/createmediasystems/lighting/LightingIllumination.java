@@ -96,6 +96,7 @@ public final class LightingIllumination {
     private static final int REFRESH_BUDGET = 64;
     /** Rays a beam may trace per frame for faces outside it, so they're known by the time it reaches them. */
     private static final int AHEAD_BUDGET = 32;
+    private static final int SCAN_RAYS = 2048;
     /** How far, in blocks, the light may move before the faces are traced from where it is again. */
     private static final double SIGHT_TOLERANCE = 1 / 8.0;
     /** Blocks past the beam's edge whose faces are traced at once, so the beam finds them lit as it moves. */
@@ -538,8 +539,10 @@ public final class LightingIllumination {
                 LightingRaycast traced = rays.detached();
                 BlockPos at = lamp.getBlockPos();
                 long sight = beam.sight;
+                double tangent = beam.tangent;
                 beam.scanning = CompletableFuture.supplyAsync(() -> scan(level, at, center, scan, axis, previous,
-                        traced, origin, from, sight), Workers.LIGHT).exceptionally(LightingIllumination::failed);
+                        traced, origin, from, direction, tangent, range, sight), Workers.LIGHT)
+                        .exceptionally(LightingIllumination::failed);
             }
         }
         // Once a tick, the faces in the beam are checked to still stand; the rest wait till it reaches them.
@@ -641,9 +644,10 @@ public final class LightingIllumination {
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
         Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
         if (level == Minecraft.getInstance().level) {
-            // With the beams: after the frame's videos, before translucent terrain (LightingRenderer.effects).
-            SURFACES.add(() -> beam.draw(modelView, projection));
-            ScreenLight.alsoOnScreens(() -> beam.draw(modelView, projection));
+            Runnable draw = () -> beam.draw(modelView, projection);
+            if (!ScreenLight.afterPack(draw)) {
+                SURFACES.add(draw);
+            }
         } else {
             beam.draw(modelView, projection);
         }
@@ -823,14 +827,22 @@ public final class LightingIllumination {
     // ponytail: off the render thread it reads the live client level, as DisplayLight's scan does; a chunk changing
     // mid-read can throw, which skips that scan (failed) and tries again next frame.
     private static Scan scan(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
-                             List<Face> previous, LightingRaycast rays, Vec3 origin, Vec3 from,
-                             long sight) {
+                             List<Face> previous, LightingRaycast rays, Vec3 origin, Vec3 from, Vec3 direction,
+                             double tangent, float range, long sight) {
         SurfaceScan scan = new SurfaceScan(level, lamp, center, radius, axis, previous, false);
         scan.advance(Integer.MAX_VALUE);
+        int remaining = SCAN_RAYS;
         for (Face face : scan.created) {
             Geometry still = face.still;
             // Turned away from the light, a face can't be lit: as a trace to it would find, through its own block.
             boolean facing = still.normal.dot(origin.subtract(still.middle)) > 0;
+            if (facing) {
+                if (remaining < face.seen.length
+                        || exposure(still.middle.subtract(origin), direction, tangent, range, LEAD) <= 0) {
+                    continue;
+                }
+                remaining -= face.seen.length;
+            }
             for (int i = 0; i < face.seen.length; i++) {
                 face.seen[i] = (byte) (facing && visible(rays, from, still.rays[i]) ? 1 : -1);
             }

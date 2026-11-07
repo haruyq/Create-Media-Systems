@@ -20,12 +20,14 @@ import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollVa
 
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -41,7 +43,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class LightingBenchmark {
     private static final int FLOOR = 120;
     private static final int FIXTURES = 24;
-    private static final Vec3 CAMERA = new Vec3(0.5, FLOOR + 12.5, 24.5);
+    private static final boolean DENSE = Boolean.getBoolean("cms.lightingDense");
+    private static final Vec3 CAMERA = new Vec3(0.5, FLOOR + (DENSE ? 22.5 : 12.5), DENSE ? 64.5 : 24.5);
     private static final float CAMERA_YAW = 180;
     private static final float CAMERA_PITCH = 12;
     private static final BlockPos CONSOLE = new BlockPos(-1, 65, 5);
@@ -74,6 +77,9 @@ public final class LightingBenchmark {
             return;
         }
         configure(level, console, mode);
+        var lighting = VideoPlayerBlock.Entity.class.getDeclaredField("lighting");
+        lighting.setAccessible(true);
+        ((ScrollValueBehaviour) lighting.get(player)).setValue(mode.displayLighting());
         player.control(VideoPlayerBlock.Action.SELECT, 1);
         level.players().forEach(LightingBenchmark::camera);
         active = new Phase(mode, System.nanoTime());
@@ -110,12 +116,13 @@ public final class LightingBenchmark {
             }
         }
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int x = -18; x <= 22; x++) {
-            for (int z = -25; z <= 27; z++) {
+        int right = DENSE ? 36 : 22;
+        for (int x = DENSE ? -36 : -18; x <= right; x++) {
+            for (int z = DENSE ? -40 : -25; z <= (DENSE ? 70 : 27); z++) {
                 level.setBlock(pos.set(x, FLOOR, z), Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState(), 3);
                 for (int y = FLOOR + 1; y <= FLOOR + 14; y++) {
                     pos.set(x, y, z);
-                    if (x == 22) {
+                    if (x == right) {
                         level.setBlock(pos, Blocks.WHITE_CONCRETE.defaultBlockState(), 3);
                     } else if (!level.isEmptyBlock(pos)) {
                         level.removeBlock(pos, false);
@@ -123,14 +130,33 @@ public final class LightingBenchmark {
                 }
             }
         }
+        if (DENSE) {
+            for (int x = -30; x <= 30; x += 2) {
+                for (int z = 4; z <= 54; z += 2) {
+                    level.setBlock(new BlockPos(x, FLOOR + 1 + z / 8, z),
+                            Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.NORTH), 3);
+                }
+            }
+        }
         level.removeBlock(new BlockPos(-5, 67, 5), false);
-        level.setBlockAndUpdate(DISPLAY, CreateMediaSystems.DISPLAY.get().defaultBlockState()
-                .setValue(DisplayBlock.FACING, Direction.SOUTH));
-        if (level.getBlockEntity(DISPLAY) instanceof DisplayBlock.Entity display) {
-            var link = DisplayBlock.Entity.class.getDeclaredMethod("link", BlockPos.class);
-            link.setAccessible(true);
-            link.invoke(display, PLAYER);
-            display.resize(12 * DisplayBlock.UNIT, 108, DisplayBlock.Ratio.WIDE);
+        List<BlockPos> displays = DENSE
+                ? List.of(new BlockPos(-16, FLOOR + 4, -28), new BlockPos(-34, FLOOR + 4, -4),
+                        new BlockPos(34, FLOOR + 4, 16), new BlockPos(-16, FLOOR + 24, -28),
+                        new BlockPos(-34, FLOOR + 24, -4))
+                : List.of(DISPLAY, DISPLAY.offset(-14, 0, 0), DISPLAY.above(8),
+                        DISPLAY.offset(-14, 8, 0), new BlockPos(21, FLOOR + 4, 7));
+        int count = Math.clamp(Integer.getInteger("cms.lightingDisplays", 1), 1, displays.size());
+        for (int i = 0; i < count; i++) {
+            BlockPos at = displays.get(i);
+            Direction facing = DENSE ? i == 1 || i == 4 ? Direction.EAST : i == 2 ? Direction.WEST : Direction.SOUTH
+                    : i == 4 ? Direction.WEST : Direction.SOUTH;
+            level.setBlockAndUpdate(at, CreateMediaSystems.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, facing));
+            if (level.getBlockEntity(at) instanceof DisplayBlock.Entity display) {
+                var link = DisplayBlock.Entity.class.getDeclaredMethod("link", BlockPos.class);
+                link.setAccessible(true);
+                link.invoke(display, PLAYER);
+                display.resize((DENSE ? 32 : 12) * DisplayBlock.UNIT, DENSE ? 288 : 108, DisplayBlock.Ratio.WIDE);
+            }
         }
         player.getBehaviour(ScrollValueBehaviour.TYPE).setValue(0);
     }
@@ -148,7 +174,7 @@ public final class LightingBenchmark {
                 console.bind(lamp, group);
             }
         }
-        console.settings.enabled = mode != Mode.OFF;
+        console.settings.enabled = mode.fixtures();
         console.settings.master = 1;
         for (int i = 0; i < console.settings.groups.length; i++) {
             var group = console.settings.groups[i];
@@ -191,7 +217,8 @@ public final class LightingBenchmark {
     private enum Mode {
         LASER_HIT(true, true), LASER_CLEAR(true, false), SPOT_HIT(false, true), SPOT_CLEAR(false, false),
         LASER_MOVE(true, true), SPOT_MOVE(false, true), LASER_DEPTH(true, false), LASER_DEPTH_BACK(true, false),
-        LASER_DEPTH_FRONT(true, false), OFF(false, false), STOP(false, false);
+        LASER_DEPTH_FRONT(true, false), OFF(false, false), STOP(false, false),
+        DISPLAY_OFF(false, true), DISPLAY_LOW(false, true), DISPLAY_HIGH(false, true), SPOT_ONLY(false, true);
 
         final boolean laser;
         final boolean hit;
@@ -220,7 +247,15 @@ public final class LightingBenchmark {
         }
 
         int motion() {
-            return this == LASER_MOVE || this == SPOT_MOVE ? 1 : 0;
+            return this == LASER_MOVE || this == SPOT_MOVE || this == SPOT_ONLY ? 1 : 0;
+        }
+
+        boolean fixtures() {
+            return this != OFF && this != DISPLAY_OFF && this != DISPLAY_LOW && this != DISPLAY_HIGH;
+        }
+
+        int displayLighting() {
+            return this == DISPLAY_OFF || this == SPOT_ONLY ? 0 : this == DISPLAY_LOW ? 1 : 100;
         }
     }
 
@@ -237,6 +272,7 @@ public final class LightingBenchmark {
         private static long nextStopCheck;
         private static BufferedWriter output;
         private static boolean failed;
+        private static Phase captured;
 
         private Frames() {
         }
@@ -292,7 +328,7 @@ public final class LightingBenchmark {
                 started = 0;
                 var video = NativeAudio.screen(PLAYER);
                 if (!(minecraft.level.getBlockEntity(CONSOLE) instanceof LightingConsoleBlock.Entity console)
-                        || console.fixtures.size() != FIXTURES || console.settings.enabled != (current.mode != Mode.OFF)
+                        || console.fixtures.size() != FIXTURES || console.settings.enabled != current.mode.fixtures()
                         || console.settings.groups[0].pattern != (current.mode.laser ? 3 : 0)
                         || console.settings.groups[0].tilt != current.mode.tilt(0)
                         || console.settings.groups[2].brightness != current.mode.brightness(2)
@@ -313,6 +349,12 @@ public final class LightingBenchmark {
                 return;
             }
             long now = System.nanoTime();
+            if (Boolean.getBoolean("cms.benchmarkCapture") && captured != phase && now - phase.started > 15_000_000_000L) {
+                captured = phase;
+                Minecraft minecraft = Minecraft.getInstance();
+                Screenshot.grab(minecraft.gameDirectory, "benchmark-" + phase.mode.key + ".png",
+                        minecraft.getMainRenderTarget(), message -> LogUtils.getLogger().info(message.getString()));
+            }
             try {
                 if (output == null) {
                     output = Files.newBufferedWriter(FMLPaths.GAMEDIR.get().resolve("lighting-benchmark.jsonl"),

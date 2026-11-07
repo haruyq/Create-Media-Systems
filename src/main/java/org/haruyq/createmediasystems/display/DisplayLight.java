@@ -42,6 +42,7 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -55,6 +56,7 @@ import net.neoforged.neoforge.client.model.IQuadTransformer;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.Tags;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 
 /**
  * A playing display lights the room in front of it as a cinema screen does: an area light the size of the screen, its
@@ -63,9 +65,9 @@ import net.neoforged.neoforge.common.Tags;
  * about the room on faces turned away; and, if glossy (glass, ice, polished stone, metal, water), mirroring the
  * picture, blurred by its roughness. Under a shader pack, no reflections (the pack draws its own), and the light is
  * added once the pack has finished the frame.
- * The faces are found on a background thread about once a second and kept in a vertex buffer, drawn each frame.
+ * The faces are found in the background when blocks change and kept in a vertex buffer, drawn each frame.
  */
-final class DisplayLight {
+public final class DisplayLight {
     /** How far from the picture, in blocks, the light reaches at least; a big screen's reaches further (see range). */
     private static final float MIN_RANGE = 16;
     private static final float MAX_RANGE = 64;
@@ -93,8 +95,7 @@ final class DisplayLight {
     private static final Map<DisplayBlock.Entity, Lit> LIT = new HashMap<>();
     /** Water surfaces lit this frame, drawn once the water itself is (see stage). */
     private static final List<Runnable> WATER = new ArrayList<>();
-    /** Under a shader pack, the light drawn this frame, drawn once the pack has finished the frame (see stage). */
-    private static final List<Runnable> AFTER_PACK = new ArrayList<>();
+    private static CompletableFuture<Void> scanning = CompletableFuture.completedFuture(null);
     private static final Map<Block, float[]> MATERIALS = new ConcurrentHashMap<>();
     private static final float[] MATTE_MATERIAL = {1, 0.04f};
     private static int frame;
@@ -106,16 +107,49 @@ final class DisplayLight {
             Direction.WEST, Direction.EAST, null};
     private static volatile boolean warned;
 
+    static final class Refresh {
+        private long last = -REFRESH_TICKS;
+        private boolean dirty = true;
+        private boolean busy;
+
+        synchronized void invalidate() {
+            dirty = true;
+        }
+
+        synchronized boolean begin(long now) {
+            if (busy || !dirty || now >= last && now - last < REFRESH_TICKS) {
+                return false;
+            }
+            dirty = false;
+            busy = true;
+            last = now;
+            return true;
+        }
+
+        synchronized void finish(boolean success) {
+            busy = false;
+            dirty |= !success;
+        }
+    }
+
+    record Bounds(BlockPos min, BlockPos max) {
+        boolean intersects(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+            return min.getX() <= maxX && max.getX() >= minX && min.getY() <= maxY && max.getY() >= minY
+                    && min.getZ() <= maxZ && max.getZ() >= minZ;
+        }
+    }
+
     /** A display's faces, last found, in vertex buffers; a background look for the next ones; and its light. */
     private static final class Lit {
-        /** When it last looked; at first, long enough ago to look now (Long.MIN_VALUE overflowed the subtraction). */
-        long at = -REFRESH_TICKS;
-        volatile boolean busy;
+        final Refresh refresh = new Refresh();
+        Bounds bounds;
+        BlockPos at;
+        Direction facing;
         /** Found on the background thread, not yet uploaded (faces, water). Guarded by this. */
         @Nullable
         private Mesh[] found;
         /** Freed: what's found for it from now is freed too. Guarded by this. */
-        private boolean closed;
+        private volatile boolean closed;
         @Nullable
         VertexBuffer faces;
         @Nullable
@@ -205,7 +239,7 @@ final class DisplayLight {
 
         /** Draws {@code buffer}, its vertices in the display's block space, with the display at {@code modelView}. */
         void draw(@Nullable VertexBuffer buffer, Matrix4f modelView, Matrix4f projection) {
-            if (buffer == null || shader == null) {
+            if (closed || buffer == null || shader == null) {
                 return;
             }
             type.setupRenderState();
@@ -254,10 +288,30 @@ final class DisplayLight {
 
     static void setShader(ShaderInstance loaded) {
         shader = loaded;
+        MATERIALS.clear();
+        LIT.values().forEach(lit -> lit.refresh.invalidate());
     }
 
     static void register() {
         NeoForge.EVENT_BUS.addListener(DisplayLight::stage);
+        NeoForge.EVENT_BUS.addListener((ChunkEvent.Unload event) -> {
+            if (event.getLevel().isClientSide()) {
+                ChunkPos pos = event.getChunk().getPos();
+                chunkChanged(pos.x, pos.z);
+            }
+        });
+    }
+
+    public static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        for (Lit lit : LIT.values()) {
+            if (lit.bounds != null && lit.bounds.intersects(minX, minY, minZ, maxX, maxY, maxZ)) {
+                lit.refresh.invalidate();
+            }
+        }
+    }
+
+    public static void chunkChanged(int x, int z) {
+        blocksChanged(x << 4, Integer.MIN_VALUE, z << 4, (x << 4) + 15, Integer.MAX_VALUE, (z << 4) + 15);
     }
 
     /** How far a screen {@code width} × {@code height} blocks lights: a room a few times its size, as a real one does. */
@@ -274,22 +328,30 @@ final class DisplayLight {
         float range = range(width, height);
         long now = level.getGameTime();
         Lit lit = LIT.computeIfAbsent(display, d -> new Lit());
+        if (!display.getBlockPos().equals(lit.at) || lit.width != width || lit.height != height || lit.facing != display.facing()
+                || frame - lit.drawn > 1) {
+            lit.at = display.getBlockPos().immutable();
+            lit.bounds = bounds(display.getBlockPos(), screen, width, height, range);
+            lit.facing = display.facing();
+            lit.refresh.invalidate();
+        }
         lit.drawn = frame;
         lit.upload();
-        if (!lit.busy && (now - lit.at >= REFRESH_TICKS || now < lit.at)) {
-            lit.at = now;
-            lit.busy = true;
+        if (lit.refresh.begin(now)) {
             BlockPos at = display.getBlockPos();
-            CompletableFuture.supplyAsync(() -> faces(level, at, screen, width, height, range), Workers.LIGHT)
-                    .whenComplete((found, error) -> {
+            Bounds bounds = lit.bounds;
+            scanning = scanning.thenApplyAsync(ignored -> lit.closed ? null
+                            : faces(level, at, bounds, screen, width, height, range), Workers.LIGHT)
+                    .handle((found, error) -> {
                         if (found != null) {
                             lit.found(found);
-                        } else if (!warned) {
+                        } else if (error != null && !warned) {
                             // Once: a chunk changing mid-read can throw now and then, and only skips that look.
                             warned = true;
                             LogUtils.getLogger().warn("A display's light couldn't find the faces it reaches", error);
                         }
-                        lit.busy = false;
+                        lit.refresh.finish(error == null);
+                        return null;
                     });
         }
         // The display's block space to the screen's own: x across the picture, y up, z out of it.
@@ -311,13 +373,8 @@ final class DisplayLight {
         lit.video = video;
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
         Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
-        if (lit.specular) {
+        if (level != Minecraft.getInstance().level || !ScreenLight.afterPack(() -> lit.draw(lit.faces, modelView, projection))) {
             lit.draw(lit.faces, modelView, projection);
-        } else {
-            // A pack takes what is drawn in the world as surfaces' colour and lights it itself: at night, this light
-            // all but vanished. Added to the finished frame instead, against the world's depth (as
-            // DisplayRenderer.overdraw).
-            AFTER_PACK.add(() -> lit.draw(lit.faces, modelView, projection));
         }
         if (lit.specular && lit.water != null) {
             WATER.add(() -> lit.draw(lit.water, modelView, projection));
@@ -334,11 +391,6 @@ final class DisplayLight {
             WATER.forEach(Runnable::run);
             WATER.clear();
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
-            if (!AFTER_PACK.isEmpty()) {
-                Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
-                AFTER_PACK.forEach(Runnable::run);
-                AFTER_PACK.clear();
-            }
             WATER.clear();
             frame++;
             for (Iterator<Map.Entry<DisplayBlock.Entity, Lit>> it = LIT.entrySet().iterator(); it.hasNext(); ) {
@@ -351,23 +403,25 @@ final class DisplayLight {
         }
     }
 
-    // ponytail: runs on a background thread and reads the live client level, like vanilla's section rebuilds do; a
-    // chunk changing mid-read can throw, which just skips that refresh. Rescans everything each time; update on block
-    // changes instead if the CPU time matters.
-    private static Mesh[] faces(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height,
-                                float range) {
+    static Bounds bounds(BlockPos at, DisplayBlock.Screen screen, float width, float height, float range) {
         Vec3 lo = screen.at(-range, -range, -(float) DisplayBlock.DEPTH);
         Vec3 hi = screen.at(width + range, height + range, range);
         BlockPos min = at.offset(Mth.floor(Math.min(lo.x, hi.x)), Mth.floor(Math.min(lo.y, hi.y)),
                 Mth.floor(Math.min(lo.z, hi.z)));
         BlockPos max = at.offset(Mth.floor(Math.max(lo.x, hi.x)), Mth.floor(Math.max(lo.y, hi.y)),
                 Mth.floor(Math.max(lo.z, hi.z)));
+        return new Bounds(min, max);
+    }
+
+    // shortcut: a chunk changing during the background read can fail the scan; the next render retries it.
+    private static Mesh[] faces(Level level, BlockPos at, Bounds bounds, DisplayBlock.Screen screen, float width,
+                                float height, float range) {
         var blocks = Minecraft.getInstance().getBlockRenderer();
         RandomSource random = RandomSource.create();
         Lighting faces = new Lighting(screen, width, height, range);
         Lighting water = new Lighting(screen, width, height, range);
         try {
-            return faces(level, at, min, max, blocks, random, faces, water, screen, width, height);
+            return faces(level, at, bounds.min, bounds.max, blocks, random, faces, water, screen, width, height);
         } catch (Throwable failed) {
             faces.bytes.close();
             water.bytes.close();

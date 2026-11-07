@@ -93,6 +93,10 @@ if (providers.gradleProperty('lightingBenchmark').isPresent()) {
     neoForge.runs.client {
         gameDirectory = file('run-lighting-benchmark')
         systemProperty 'cms.lightingBenchmark', 'true'
+        systemProperty 'cms.sableLightingDemo', 'false'
+        systemProperty 'cms.lightingDisplays', providers.gradleProperty('lightingDisplays').orElse('1').get()
+        systemProperty 'cms.lightingDense', providers.gradleProperty('lightingDense').isPresent().toString()
+        systemProperty 'cms.benchmarkCapture', providers.gradleProperty('benchmarkCapture').isPresent().toString()
         jvmArgument '-Xmx3G'
     }
 }
