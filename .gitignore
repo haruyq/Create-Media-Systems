@@ -3,6 +3,7 @@ build/
 run/
 run-lighting-demo/
 run-sable-lighting-demo/
+run-lighting-benchmark/
 out/
 *.iml
 .idea/

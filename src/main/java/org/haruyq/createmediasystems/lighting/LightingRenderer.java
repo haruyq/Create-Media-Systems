@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -13,12 +14,16 @@ import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 
 import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
 import org.joml.Vector3f;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.logging.LogUtils;
 
 import dev.ryanhcode.sable.companion.SableCompanion;
@@ -44,8 +49,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
 public final class LightingRenderer implements BlockEntityRenderer<StageLightBlock.Entity> {
     private static final ResourceLocation METAL = CreateMediaSystems.id("textures/block/blu_ray_player_side.png");
@@ -53,7 +62,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final RenderType CONSOLE_FRAME = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_frame.png"));
     private static final RenderType CONSOLE_PLATE = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_plate.png"));
     private static final RenderType LIGHT = RenderType.create("create_media_systems_stage_light",
-            DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, true,
+            DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
             RenderType.CompositeState.builder()
                     .setShaderState(new RenderStateShard.ShaderStateShard(GameRenderer::getPositionColorShader))
                     .setTransparencyState(RenderStateShard.LIGHTNING_TRANSPARENCY)
@@ -68,16 +77,54 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     .createCompositeState(false));
     private static final Map<StageLightBlock.Entity, Trace> TRACES = new WeakHashMap<>();
     private static final Map<StageLightBlock.Entity, LightingMotion> MOTION = new WeakHashMap<>();
+    private static final Map<RenderType, MultiBufferSource.BufferSource> EFFECT_BUFFERS = new LinkedHashMap<>();
+    private static final MultiBufferSource EFFECTS = LightingRenderer::effectBuffer;
+    private static boolean effectsPending;
     private static final MethodHandle SHADOW_PASS = shadowMethod();
     private static boolean shaderApiFailed;
     private static final int SIDES = 16;
     private static final int RAYS = 9;
 
     public static void register(IEventBus modBus) {
+        NeoForge.EVENT_BUS.addListener((RenderFrameEvent.Pre event) -> LightingRaycast.beginFrame());
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, LightingRenderer::effects);
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), LightingRenderer::new);
             event.registerBlockEntityRenderer(CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get(), Console::new);
         });
+    }
+
+    private static void effects(RenderLevelStageEvent event) {
+        boolean entities = event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES;
+        if (!effectsPending || !entities && event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || shadowPass()) {
+            return;
+        }
+        // Finish the last video before light, while keeping light before translucent terrain and shader compositing.
+        if (entities) {
+            Minecraft.getInstance().renderBuffers().bufferSource().endLastBatch();
+        } else {
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+        }
+        RenderSystem.backupProjectionMatrix();
+        RenderSystem.setProjectionMatrix(event.getProjectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
+        Matrix4fStack view = RenderSystem.getModelViewStack();
+        view.pushMatrix();
+        view.set(event.getModelViewMatrix());
+        RenderSystem.applyModelViewMatrix();
+        try {
+            EFFECT_BUFFERS.values().forEach(MultiBufferSource.BufferSource::endBatch);
+            effectsPending = false;
+        } finally {
+            view.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.restoreProjectionMatrix();
+        }
+    }
+
+    private static VertexConsumer effectBuffer(RenderType type) {
+        effectsPending = true;
+        return EFFECT_BUFFERS.computeIfAbsent(type, ignored -> MultiBufferSource.immediate(new ByteBufferBuilder(65536)))
+                .getBuffer(type);
     }
 
     LightingRenderer(BlockEntityRendererProvider.Context context) {
@@ -186,11 +233,12 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         BeamFrame frame = new BeamFrame(lamp, origin);
         Trace trace = TRACES.computeIfAbsent(lamp, ignored -> new Trace());
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
-        VertexConsumer beam = new Output(buffers, LIGHT);
+        MultiBufferSource effects = level == Minecraft.getInstance().level ? EFFECTS : buffers;
+        VertexConsumer beam = effects == EFFECTS ? effects.getBuffer(LIGHT) : new Output(buffers, LIGHT);
         if (pattern < 2) {
             LightingIllumination.render(lamp, origin, direction,
                     Math.toRadians(pattern == 1 ? Math.min(group.spread, 2) : group.spread) / 2,
-                    group.range, strength, color, trace.intersections[SIDES], frame.rays, model, buffers);
+                    group.range, strength, color, trace.intersections[SIDES], frame.rays, model, effects);
             cone(beam, model, frame, trace, color, strength, pattern == 1);
         } else {
             boolean fixtureColor = pattern == 2 || group.mapping == 3;
@@ -427,7 +475,19 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static void clippedQuad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d,
                                     int colorA, int colorB, int aa, int ab, int ac, int ad, LightingGeometry.Plane first,
                                     LightingGeometry.Plane second, LightingGeometry.Plane third) {
-        if (first == null && second == null && third == null) {
+        int outsideFirst = LightingGeometry.outsideCorners(first, a, b, c, d);
+        if (outsideFirst == 4) {
+            return;
+        }
+        int outsideSecond = LightingGeometry.outsideCorners(second, a, b, c, d);
+        if (outsideSecond == 4) {
+            return;
+        }
+        int outsideThird = LightingGeometry.outsideCorners(third, a, b, c, d);
+        if (outsideThird == 4) {
+            return;
+        }
+        if (outsideFirst == 0 && outsideSecond == 0 && outsideThird == 0) {
             coloredVertex(out, matrix, a, colorA, aa);
             coloredVertex(out, matrix, b, colorB, ab);
             coloredVertex(out, matrix, c, colorB, ac);

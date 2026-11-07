@@ -69,7 +69,8 @@ neoForge {
 }
 
 // The lighting demo is opt-in so ordinary runClient saves are untouched.
-if (providers.gradleProperty('lightingDemo').isPresent() || providers.gradleProperty('lightingNetworkTest').isPresent()) {
+if (providers.gradleProperty('lightingDemo').isPresent() || providers.gradleProperty('lightingNetworkTest').isPresent()
+        || providers.gradleProperty('lightingBenchmark').isPresent()) {
     sourceSets.main.java.srcDir('src/lightingDemo/java')
     sourceSets.main.resources.srcDir('src/lightingDemo/resources')
     def sableLightingDemo = providers.gradleProperty('sableTests').isPresent()
@@ -84,6 +85,15 @@ if (providers.gradleProperty('lightingDemo').isPresent() || providers.gradleProp
         programArgument '1280'
         programArgument '--height'
         programArgument '800'
+    }
+}
+
+if (providers.gradleProperty('lightingBenchmark').isPresent()) {
+    sourceSets.main.java.srcDir('src/lightingBenchmark/java')
+    neoForge.runs.client {
+        gameDirectory = file('run-lighting-benchmark')
+        systemProperty 'cms.lightingBenchmark', 'true'
+        jvmArgument '-Xmx3G'
     }
 }
 

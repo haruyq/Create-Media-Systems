@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingRaycast;
 
 import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
@@ -11,6 +12,7 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3i;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -41,6 +43,82 @@ public final class LightingRaycastGameTests {
                 .clip(source.getCenter(), wall.getCenter().add(1, 0, 0));
         helper.assertTrue(hit.block().getBlockPos().equals(wall), "beam did not stop at wall: " + hit.block().getBlockPos());
         helper.succeed();
+    }
+
+    @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 20)
+    public static void displayPanelOccludesItsWholeRectangleAndClearsOnRemoval(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos display = helper.absolutePos(new BlockPos(4, 2, 4));
+        level.setBlockAndUpdate(display, CreateMediaSystems.DISPLAY.get().defaultBlockState()
+                .setValue(DisplayBlock.FACING, Direction.NORTH));
+        if (level.getBlockEntity(display) instanceof DisplayBlock.Entity entity) {
+            entity.resize(32, 16, DisplayBlock.Ratio.WIDE);
+        }
+        helper.runAfterDelay(1, () -> {
+            Vec3 target = Vec3.atLowerCornerOf(display).add(new DisplayBlock.Screen(Direction.NORTH)
+                    .at(1.5f, 0.5f, 0));
+            Vec3 from = target.add(new DisplayBlock.Screen(Direction.NORTH).out().scale(3));
+            Vec3 to = target.subtract(new DisplayBlock.Screen(Direction.NORTH).out().scale(5));
+            BlockPos nearWall = BlockPos.containing(target.add(new DisplayBlock.Screen(Direction.NORTH).out().scale(1.5)));
+            BlockPos farWall = BlockPos.containing(target.subtract(new DisplayBlock.Screen(Direction.NORTH).out().scale(4)));
+            level.setBlockAndUpdate(nearWall, Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(farWall, Blocks.STONE.defaultBlockState());
+            LightingRaycast.Hit nearHit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            helper.assertTrue(nearHit.block().getType() == HitResult.Type.BLOCK
+                            && nearHit.block().getBlockPos().equals(nearWall),
+                    "a closer wall must win before the screen: " + nearHit.block().getBlockPos());
+            level.setBlockAndUpdate(nearWall, Blocks.AIR.defaultBlockState());
+            LightingRaycast.Hit screenHit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            helper.assertTrue(screenHit.block().getType() == HitResult.Type.BLOCK
+                            && screenHit.block().getBlockPos().equals(display),
+                    "screen must occlude the full framed rectangle before the wall: " + screenHit.block().getBlockPos());
+            level.setBlockAndUpdate(display, Blocks.AIR.defaultBlockState());
+            LightingRaycast.Hit wallHit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            helper.assertTrue(wallHit.block().getType() == HitResult.Type.BLOCK
+                            && wallHit.block().getBlockPos().equals(farWall),
+                    "removed screen must no longer occlude the wall: " + wallHit.block().getBlockPos());
+            helper.succeed();
+        });
+    }
+
+    @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 100)
+    public static void enlargedDisplayOnRotatedScaledShipUsesMovedBlockEntityRegistration(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockState state = CreateMediaSystems.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING,
+                Direction.NORTH);
+        level.setBlockAndUpdate(origin, state);
+        ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),
+                new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
+        BlockPos plot = ship.getPlot().getCenterBlock();
+        helper.assertTrue(level.getBlockState(plot).is(state.getBlock()), "display was not assembled onto the ship");
+        if (level.getBlockEntity(plot) instanceof DisplayBlock.Entity entity) {
+            entity.resize(64, 16, DisplayBlock.Ratio.WIDE);
+        } else {
+            helper.assertTrue(false, "assembled display block entity was not loaded");
+            remove(ship);
+            return;
+        }
+        ship.logicalPose().scale().set(1.8, 0.7, 1.4);
+        ship.logicalPose().orientation().rotationY(0.55).rotateX(0.18);
+        update(ship);
+        helper.runAfterDelay(1, () -> {
+            DisplayBlock.Screen screen = new DisplayBlock.Screen(Direction.NORTH);
+            Vec3 local = Vec3.atLowerCornerOf(plot).add(screen.at(3.5f, 0.5f, 0));
+            Vec3 from = world(ship, local.add(screen.out().scale(3)));
+            Vec3 to = world(ship, local.subtract(screen.out().scale(5)));
+            LightingRaycast.Hit hit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            helper.assertTrue(hit.block().getType() == HitResult.Type.BLOCK
+                            && hit.block().getBlockPos().equals(plot),
+                    "moved enlarged display must occlude outside its anchor: " + hit.block().getBlockPos());
+            Vec3 tangentRight = world(ship, local.add(screen.right())).subtract(world(ship, local));
+            Vec3 tangentUp = world(ship, local.add(0, 1, 0)).subtract(world(ship, local));
+            helper.assertTrue(Math.abs(hit.normal().dot(tangentRight)) < 1e-5
+                            && Math.abs(hit.normal().dot(tangentUp)) < 1e-5,
+                    "display normal must be perpendicular to the transformed panel");
+            remove(ship);
+            helper.succeed();
+        });
     }
 
     @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 100)
@@ -242,6 +320,10 @@ public final class LightingRaycastGameTests {
         var container = SubLevelContainer.getContainer(ship.getLevel());
         var plot = ship.getPlot().plotPos;
         var origin = container.getOrigin();
-        container.removeSubLevel(plot.x - origin.x, plot.z - origin.y, SubLevelRemovalReason.REMOVED);
+        int x = plot.x - origin.x;
+        int z = plot.z - origin.y;
+        if (container.getSubLevel(x, z) == ship) {
+            container.removeSubLevel(ship, SubLevelRemovalReason.REMOVED);
+        }
     }
 }

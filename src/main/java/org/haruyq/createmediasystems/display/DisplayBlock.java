@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.lighting.LightingScreens;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -181,6 +182,12 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             super(CreateMediaSystems.DISPLAY_ENTITY.get(), pos, state);
         }
 
+        @Override
+        public void onLoad() {
+            super.onLoad();
+            LightingScreens.add(this);
+        }
+
         /** The Blu-ray player it shows. */
         public Optional<BlockPos> source() {
             return source.get(level, this::changed);
@@ -304,6 +311,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         @Override
         public void setRemoved() {
             super.setRemoved();
+            LightingScreens.remove(this);
             if (level != null && !level.isClientSide) {
                 Streams.stop(this);
             }

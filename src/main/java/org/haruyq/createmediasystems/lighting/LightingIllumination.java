@@ -2,14 +2,19 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.Function;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.joml.Matrix4f;
 
+import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import dev.ryanhcode.sable.companion.SableCompanion;
+import dev.ryanhcode.sable.companion.math.Pose3dc;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -40,7 +45,7 @@ public final class LightingIllumination {
     private static final Map<StageLightBlock.Entity, Beam> BEAMS = new WeakHashMap<>();
     private static WeakReference<Level> knownLevel = new WeakReference<>(null);
     private static final RenderType SURFACE = RenderType.create("create_media_systems_spot_surface",
-            DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS, 4096, false, true,
+            DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
             RenderType.CompositeState.builder()
                     .setShaderState(new RenderStateShard.ShaderStateShard(GameRenderer::getPositionTexColorShader))
                     .setTextureState(new RenderStateShard.TextureStateShard(InventoryMenu.BLOCK_ATLAS, false, true))
@@ -64,7 +69,7 @@ public final class LightingIllumination {
         List<Face> faces = List.of();
     }
 
-    private record Face(BlockPos pos, BlockState state, Vec3[] points, float[] uv, Vec3 normal, int tint) {
+    private record Face(BlockPos pos, BlockState state, Vec3[] points, float[] uv, double winding, int tint) {
     }
 
     static float exposure(Vec3 offset, Vec3 direction, double tangent, double range, double margin) {
@@ -134,31 +139,37 @@ public final class LightingIllumination {
         if (hit.block().getType() != HitResult.Type.BLOCK) {
             return;
         }
+        rays.cacheShapes();
         BlockPos center = hit.block().getBlockPos();
         Vec3 offset = Vec3.atLowerCornerOf(lamp.getBlockPos());
-        Vec3 impact = SableCompat.toRenderBlockSpace(level, lamp.getBlockPos(), hit.point()).subtract(offset);
+        Pose3dc lampPose = renderPose(level, lamp.getBlockPos());
         if (!center.equals(beam.center) || beam.at < beam.scanned || beam.at - beam.scanned >= 8) {
+            Vec3 impact = (lampPose == null ? hit.point() : lampPose.transformPositionInverse(hit.point())).subtract(offset);
             int radius = Mth.ceil(Math.min(8, origin.distanceTo(impact) * beam.tangent)) + 1;
             beam.faces = faces(lamp, center, radius, hit.block().getDirection().getAxis());
             beam.center = center;
             beam.scanned = beam.at;
         }
-        Vec3 worldOrigin = SableCompat.toRenderWorld(level, lamp.getBlockPos(), origin.add(offset));
-        VertexConsumer out = buffers.getBuffer(SURFACE);
+        Vec3 absoluteOrigin = origin.add(offset);
+        Vec3 worldOrigin = lampPose == null ? absoluteOrigin : lampPose.transformPosition(absoluteOrigin);
+        Map<Vec3, Boolean> visibility = new HashMap<>();
+        Function<Vec3, Boolean> unoccluded = endpoint -> visible(rays, worldOrigin, endpoint);
+        Vec3[] points = new Vec3[4];
+        Vec3[] world = new Vec3[4];
+        Vec3[] samples = new Vec3[9];
+        int[] alpha = new int[9];
+        byte[] corners = new byte[9];
+        VertexConsumer out = null;
         for (Face face : beam.faces) {
             if (!level.isLoaded(face.pos) || level.getBlockState(face.pos) != face.state) {
                 continue;
             }
-            Vec3[] points = new Vec3[4];
-            Vec3[] world = new Vec3[4];
+            Pose3dc facePose = renderPose(level, face.pos);
             for (int i = 0; i < 4; i++) {
-                world[i] = SableCompat.toRenderWorld(level, face.pos, face.points[i]);
-                points[i] = SableCompat.toRenderBlockSpace(level, lamp.getBlockPos(), world[i]).subtract(offset);
+                world[i] = facePose == null ? face.points[i] : facePose.transformPosition(face.points[i]);
+                points[i] = (lampPose == null ? world[i] : lampPose.transformPositionInverse(world[i])).subtract(offset);
             }
-            double winding = Math.signum(face.points[1].subtract(face.points[0])
-                    .cross(face.points[3].subtract(face.points[0])).dot(face.normal));
-            Vec3 normal = points[1].subtract(points[0]).cross(points[3].subtract(points[0])).normalize().scale(winding);
-            Vec3 worldNormal = world[1].subtract(world[0]).cross(world[3].subtract(world[0])).normalize().scale(winding);
+            Vec3 normal = points[1].subtract(points[0]).cross(points[3].subtract(points[0])).normalize().scale(face.winding);
             Vec3 middle = points[0].lerp(points[2], 0.5);
             Vec3 incoming = origin.subtract(middle).normalize();
             float facing = (float) Math.max(0, normal.dot(incoming));
@@ -168,13 +179,25 @@ public final class LightingIllumination {
             int r = (color >> 16 & 255) * (face.tint >> 16 & 255) / 255;
             int g = (color >> 8 & 255) * (face.tint >> 8 & 255) / 255;
             int b = (color & 255) * (face.tint & 255) / 255;
-            byte[] visibility = new byte[9];
+            Vec3 normalOffset = world[1].subtract(world[0]).cross(world[3].subtract(world[0]))
+                    .normalize().scale(face.winding).scale(0.001);
+            Arrays.fill(corners, (byte) 0);
+            for (int i = 0; i < samples.length; i++) {
+                samples[i] = sample(points, i % 3 * 0.5f, i / 3 * 0.5f);
+                float opacity = Mth.clamp(exposure(samples[i].subtract(origin), direction, beam.tangent, range, 0)
+                        * strength * facing * 3, 0, 1);
+                alpha[i] = Math.round(opacity * 255);
+            }
             for (int y = 0; y < 2; y++) {
                 for (int x = 0; x < 2; x++) {
+                    int first = y * 3 + x;
+                    if (alpha[first] == 0 && alpha[first + 1] == 0 && alpha[first + 3] == 0 && alpha[first + 4] == 0) {
+                        continue;
+                    }
                     Vec3 cell = sample(points, (x + 0.5f) / 2, (y + 0.5f) / 2);
                     if (exposure(cell.subtract(origin), direction, beam.tangent, range, 0.4) <= 0
-                            || !visible(rays, worldOrigin, sample(world, (x + 0.5f) / 2, (y + 0.5f) / 2)
-                            .add(worldNormal.scale(0.001)))) {
+                            || !visibility.computeIfAbsent(sample(world, (x + 0.5f) / 2, (y + 0.5f) / 2)
+                            .add(normalOffset), unoccluded)) {
                         continue;
                     }
                     boolean clear = true;
@@ -182,29 +205,44 @@ public final class LightingIllumination {
                         int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
                         int cy = y + (corner >= 2 ? 1 : 0);
                         int index = cy * 3 + cx;
-                        if (visibility[index] == 0) {
-                            visibility[index] = (byte) (visible(rays, worldOrigin,
-                                    sample(world, cx / 2f, cy / 2f).add(worldNormal.scale(0.001))) ? 1 : -1);
+                        if (corners[index] == 0) {
+                            corners[index] = (byte) (visibility.computeIfAbsent(sample(world, cx / 2f, cy / 2f)
+                                    .add(normalOffset), unoccluded) ? 1 : -1);
                         }
-                        clear &= visibility[index] > 0;
+                        if (corners[index] < 0) {
+                            clear = false;
+                            break;
+                        }
                     }
                     if (!clear) {
                         continue;
                     }
+                    if (out == null) {
+                        out = buffers.getBuffer(SURFACE);
+                    }
                     for (int corner = 0; corner < 4; corner++) {
-                        float u = (x + (corner == 1 || corner == 2 ? 1 : 0)) * 0.5f;
-                        float v = (y + (corner >= 2 ? 1 : 0)) * 0.5f;
-                        Vec3 point = sample(points, u, v);
-                        float alpha = Mth.clamp(exposure(point.subtract(origin), direction, beam.tangent, range, 0)
-                                * strength * facing * 3, 0, 1);
+                        int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
+                        int cy = y + (corner >= 2 ? 1 : 0);
+                        int index = cy * 3 + cx;
+                        float u = cx * 0.5f;
+                        float v = cy * 0.5f;
+                        Vec3 point = samples[index];
                         float s = Mth.lerp(v, Mth.lerp(u, face.uv[0], face.uv[2]), Mth.lerp(u, face.uv[6], face.uv[4]));
                         float t = Mth.lerp(v, Mth.lerp(u, face.uv[1], face.uv[3]), Mth.lerp(u, face.uv[7], face.uv[5]));
                         out.addVertex(matrix, (float) point.x, (float) point.y, (float) point.z)
-                                .setUv(s, t).setColor(r, g, b, Math.round(alpha * 255));
+                                .setUv(s, t).setColor(r, g, b, alpha[index]);
                     }
                 }
             }
         }
+    }
+
+    private static Pose3dc renderPose(Level level, BlockPos pos) {
+        var owner = SableCompanion.INSTANCE.getContaining(level, pos);
+        if (owner instanceof ClientSubLevelAccess client) {
+            return client.renderPose();
+        }
+        return owner == null ? null : owner.logicalPose();
     }
 
     private static Vec3 sample(Vec3[] points, float u, float v) {
@@ -255,7 +293,9 @@ public final class LightingIllumination {
                         uv[i * 2] = Float.intBitsToFloat(data[base + IQuadTransformer.UV0]);
                         uv[i * 2 + 1] = Float.intBitsToFloat(data[base + IQuadTransformer.UV0 + 1]);
                     }
-                    result.add(new Face(pos.immutable(), state, points, uv, Vec3.atLowerCornerOf(quad.getDirection().getNormal()), tint));
+                    Vec3 normal = Vec3.atLowerCornerOf(quad.getDirection().getNormal());
+                    double winding = Math.signum(points[1].subtract(points[0]).cross(points[3].subtract(points[0])).dot(normal));
+                    result.add(new Face(pos.immutable(), state, points, uv, winding, tint));
                 }
             }
         }
