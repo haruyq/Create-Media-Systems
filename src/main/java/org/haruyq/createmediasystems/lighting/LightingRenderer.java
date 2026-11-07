@@ -11,6 +11,7 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.display.ScreenLight;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 
 import org.joml.Matrix4f;
@@ -87,7 +88,18 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     public static void register(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener((RenderFrameEvent.Pre event) -> LightingRaycast.beginFrame());
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, LightingRenderer::effects);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (RenderLevelStageEvent event) -> {
+            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
+                effects(event);
+            }
+        });
+        // Before displays draw their pictures again over a shader pack's frame (DisplayRenderer.overdraw), which adds
+        // this light back onto them: drawn after, it would be added twice.
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderLevelStageEvent event) -> {
+            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+                effects(event);
+            }
+        });
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), LightingRenderer::new);
             event.registerBlockEntityRenderer(CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get(), Console::new);
@@ -123,8 +135,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     private static VertexConsumer effectBuffer(RenderType type) {
         effectsPending = true;
-        return EFFECT_BUFFERS.computeIfAbsent(type, ignored -> MultiBufferSource.immediate(new ByteBufferBuilder(65536)))
-                .getBuffer(type);
+        return ScreenLight.alsoOnScreens(type, EFFECT_BUFFERS.computeIfAbsent(type,
+                ignored -> MultiBufferSource.immediate(new ByteBufferBuilder(65536))).getBuffer(type));
     }
 
     LightingRenderer(BlockEntityRendererProvider.Context context) {

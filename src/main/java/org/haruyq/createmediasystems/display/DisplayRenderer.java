@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -29,7 +30,6 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderStateShard;
@@ -43,6 +43,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
@@ -64,6 +65,13 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     /** The glow's brightness at a Blu-ray player's 100% lighting. */
     private static final float GLOW_STRENGTH = 0.6f;
     private static ShaderInstance glowShader;
+    private static ShaderInstance overdrawShader;
+    /**
+     * What displays draw in the world, drawn by the end of block entities (see flush): Iris holds back everything else
+     * drawn with them until translucent terrain, even with no shader pack, which put pictures over stage lights' beams.
+     */
+    private static final MultiBufferSource.BufferSource PICTURES = MultiBufferSource.immediate(new ByteBufferBuilder(1536));
+    private static boolean picturesPending;
     /** Added to what's behind it, like light; the video's mipmaps are its blur. */
     private static final Function<ResourceLocation, RenderType> GLOW = Util.memoize(texture -> RenderType.create(
             "create_media_systems_display_glow", DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS, 256, false, true,
@@ -85,6 +93,18 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(CreateMediaSystems.DISPLAY_ENTITY.get(), DisplayRenderer::new));
         modBus.addListener(DisplayRenderer::registerShaders);
+        // Before stage lights add their beams (LightingRenderer.effects, at the lowest priority).
+        NeoForge.EVENT_BUS.addListener((RenderLevelStageEvent event) -> {
+            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
+                flush(event);
+            }
+        });
+        // Should any be drawn later still: before both those beams and overdraw.
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderLevelStageEvent event) -> {
+            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+                flush(event);
+            }
+        });
         NeoForge.EVENT_BUS.addListener(DisplayRenderer::overdraw);
         DisplayLight.register();
         DisplayQuillHandler.register();
@@ -97,6 +117,8 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
                     DefaultVertexFormat.POSITION_TEX_COLOR), shader -> glowShader = shader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_light"),
                     DisplayLight.FORMAT), DisplayLight::setShader);
+            event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_overdraw"),
+                    DefaultVertexFormat.POSITION_TEX), shader -> overdrawShader = shader);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -108,6 +130,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     @Override
     public void render(DisplayBlock.Entity display, float partialTick, PoseStack pose, MultiBufferSource buffers,
                        int light, int overlay) {
+        buffers = pictures(display, buffers);
         Direction facing = display.facing();
         float width = (float) display.width();
         float height = (float) display.height();
@@ -151,6 +174,35 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             glowVertex(out, matrix, screen.at(-rx, height + ry, lift), -GLOW_REACH, -GLOW_REACH, glow);
         }
         DisplayLight.render(display, screen, width, height, matrix, texture, DisplayLight.STRENGTH * lighting);
+    }
+
+    /** Where {@code display} draws: {@link #PICTURES} in the world, as drawn from the player's eyes. */
+    private static MultiBufferSource pictures(DisplayBlock.Entity display, MultiBufferSource buffers) {
+        if (display.getLevel() != Minecraft.getInstance().level || IrisCompat.shadowPass()) {
+            return buffers;
+        }
+        picturesPending = true;
+        return PICTURES;
+    }
+
+    private static void flush(RenderLevelStageEvent event) {
+        if (!picturesPending) {
+            return;
+        }
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+        }
+        RenderSystem.backupProjectionMatrix();
+        RenderSystem.setProjectionMatrix(event.getProjectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
+        Matrix4fStack view = RenderSystem.getModelViewStack();
+        view.pushMatrix();
+        view.set(event.getModelViewMatrix());
+        RenderSystem.applyModelViewMatrix();
+        PICTURES.endBatch();
+        picturesPending = false;
+        view.popMatrix();
+        RenderSystem.applyModelViewMatrix();
+        RenderSystem.restoreProjectionMatrix();
     }
 
     /** Its image on its black panel, or (without its frame) alone on the wall, see-through where the image is. */
@@ -223,17 +275,22 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
      * Tested against the world's depth, which is still there, so what stands in front of a display stays in front.
      */
     private static void overdraw(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || OVERDRAW.isEmpty()) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) {
             return;
         }
-        Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+        if (OVERDRAW.isEmpty()) {
+            ScreenLight.discard();
+            return;
+        }
         RenderSystem.backupProjectionMatrix();
         RenderSystem.setProjectionMatrix(event.getProjectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
         Matrix4fStack view = RenderSystem.getModelViewStack();
         view.pushMatrix();
         view.set(event.getModelViewMatrix());
         RenderSystem.applyModelViewMatrix();
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        // Light passing in front of the pictures, such as stage lights' beams, which drawing them again would cover.
+        RenderSystem.setShaderTexture(1, ScreenLight.draw());
+        RenderSystem.setShader(() -> overdrawShader);
         RenderSystem.setShaderColor(1, 1, 1, 1);
         // Over the pack's own drawing of the same picture: an unframed image stays see-through where it is.
         RenderSystem.enableBlend();
