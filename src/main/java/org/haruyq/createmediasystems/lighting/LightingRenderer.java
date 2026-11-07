@@ -63,9 +63,9 @@ import net.neoforged.neoforge.common.NeoForge;
 
 public final class LightingRenderer implements BlockEntityRenderer<StageLightBlock.Entity> {
     private static final ResourceLocation METAL = CreateMediaSystems.id("textures/block/blu_ray_player_side.png");
-    private static final RenderType SOLID = RenderType.entityCutoutNoCull(METAL);
-    private static final RenderType CONSOLE_FRAME = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_frame.png"));
-    private static final RenderType CONSOLE_PLATE = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_plate.png"));
+    static final RenderType SOLID = RenderType.entityCutoutNoCull(METAL);
+    static final RenderType CONSOLE_FRAME = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_frame.png"));
+    static final RenderType CONSOLE_PLATE = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/lighting_console_plate.png"));
     private static final RenderType LIGHT = RenderType.create("create_media_systems_stage_light",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
             RenderType.CompositeState.builder()
@@ -74,7 +74,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     .setCullState(RenderStateShard.NO_CULL)
                     .setWriteMaskState(RenderStateShard.COLOR_WRITE)
                     .createCompositeState(false));
-    private static final RenderType SCREEN = RenderType.create("create_media_systems_lighting_controls",
+    static final RenderType SCREEN = RenderType.create("create_media_systems_lighting_controls",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
             RenderType.CompositeState.builder()
                     .setShaderState(new RenderStateShard.ShaderStateShard(GameRenderer::getPositionColorShader))
@@ -612,11 +612,11 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 .setColor(color >> 16 & 255, color >> 8 & 255, color & 255, Mth.clamp(alpha, 0, 255));
     }
 
-    private static void quad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, int alpha) {
+    static void quad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, int alpha) {
         quad(out, matrix, a, b, c, d, color, alpha, alpha, alpha, alpha);
     }
 
-    private static void quad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color,
+    static void quad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color,
                              int aa, int ab, int ac, int ad) {
         coloredVertex(out, matrix, a, color, aa);
         coloredVertex(out, matrix, b, color, ab);
@@ -624,7 +624,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         coloredVertex(out, matrix, d, color, ad);
     }
 
-    private static void box(VertexConsumer out, Matrix4f matrix, float x0, float y0, float z0, float x1, float y1, float z1,
+    static void box(VertexConsumer out, Matrix4f matrix, float x0, float y0, float z0, float x1, float y1, float z1,
                             int color, int light) {
         if (out instanceof Output output) {
             out = output.buffers.getBuffer(output.type);
@@ -639,7 +639,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         metalQuad(out, matrix, e, f, b, a, color, light, Direction.DOWN);
     }
 
-    private static void metalQuad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, int light,
+    static void metalQuad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, int light,
                                   Direction normal) {
         Vec3[] vertices = {a, b, c, d};
         for (int i = 0; i < 4; i++) {
@@ -655,7 +655,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
      * The buffer for {@code type} asked for again each quad: another type asked for between (text, another part)
      * may have ended its batch. Everything here is drawn in whole quads, 4 vertices together.
      */
-    private static final class Output implements VertexConsumer {
+    static final class Output implements VertexConsumer {
         private final MultiBufferSource buffers;
         private final RenderType type;
         private VertexConsumer current;
@@ -748,78 +748,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     panelBorder(ink, matrix, x - 0.065f, 0.16f, x + 0.065f, 1.3f, 0.012f, 0xDDF8FF);
                 }
             }
-            for (int i = 0; i < 6; i++) {
-                float x = 1.15f + i % 3 * 0.27f;
-                float z = 0.35f + i / 3 * 0.5f;
-                int[] cueColors = {0x36C9EE, 0x9F66EF, 0xFFC75C, 0x32D999, 0xEE6C9E, 0x5C8AFF};
-                boolean active = activated != null && activated.control() == Control.PRESET && activated.index() == i;
-                boolean saved = LightingControls.customPresets(console) && console.presets[i] != null;
-                float depth = active ? -0.018f : 0;
-                int color = active ? 0xFFE3A0 : LightingControls.customPresets(console) ? saved ? 0x91D9E9 : 0x34465C : cueColors[i];
-                box(metal, matrix, x - 0.105f, height(z), z - 0.11f, x + 0.105f, height(z) + 0.05f + depth, z + 0.11f,
-                        0xAFB2C1, light);
-                panel(ink, matrix, x - 0.1f, z - 0.105f, x + 0.1f, z + 0.105f, color, depth);
-                topText(buffers, matrix, x - 0.09f, z + 0.04f, LightingControls.presetName(console, i).getString(),
-                        LightingControls.customPresets(console) && !saved && !active ? 0xE6F1FF : 0x101923, 0.18f, depth);
-                if (LightingControls.saving(console)) {
-                    panelBorder(ink, matrix, x - 0.105f, z - 0.11f, x + 0.105f, z + 0.11f, 0.01f, 0xFFC75C);
-                }
-            }
-            for (int i = 0; i < 3; i++) {
-                float x = 1.04f + i * 0.26f;
-                boolean selectedBank = i < 2 && LightingControls.customPresets(console) == (i == 1);
-                boolean saving = i == 2 && LightingControls.saving(console);
-                panel(ink, matrix, x, 1.22f, x + 0.24f, 1.48f, saving ? 0xFFC75C : selectedBank ? 0x91D9E9 : 0x24374C);
-                String key = i == 2 ? saving ? "preset_cancel" : "preset_save" : "preset_bank." + i;
-                topText(buffers, matrix, x + 0.015f, 1.39f, Component.translatable("create_media_systems.lighting." + key).getString(),
-                        saving || selectedBank ? 0x101923 : 0xE6F1FF, 0.21f, 0);
-            }
-            panel(ink, matrix, 1.85f, 0.23f, 1.91f, 1.23f, 0x0B0D14);
-            float masterZ = 0.25f + settings.master * 0.95f;
-            box(metal, matrix, 1.82f, height(masterZ), masterZ - 0.065f, 1.94f, height(masterZ) + 0.11f,
-                    masterZ + 0.065f, 0xE0E5F1, light);
-            faderCap(ink, matrix, 1.88f, masterZ, 0xF0F4FF);
-            topText(buffers, matrix, 1.82f, 1.46f, Component.translatable("create_media_systems.lighting.master_short").getString(),
-                    0xE6F1FF, 0.12f, 0);
-            int nearest = nearest(selected.colors[Math.min(settings.selectedColor, selected.colors.length - 1)]);
-            for (int row = 0; row < 8; row++) {
-                for (int col = 0; col < 8; col++) {
-                    float x0 = 2.08f + col * 0.105f;
-                    float z0 = 0.15f + (7 - row) * 0.125f;
-                    int color = LightingSettings.palette(col, row);
-                    panel(ink, matrix, x0 + 0.004f, z0 + 0.004f, x0 + 0.101f, z0 + 0.121f, color);
-                    if (row * 8 + col == nearest) {
-                        panelBorder(ink, matrix, x0, z0, x0 + 0.105f, z0 + 0.125f, 0.008f, 0xFFFFFF);
-                    }
-                }
-            }
-            int[] accents = {0xED525A, 0x56D76A, 0x4A89FF};
-            float[] values = {(selected.range - 2) / (LightingSettings.MAX_RANGE - 2), (selected.spread - 1) / 69,
-                    (selected.speed - 0.05f) / 3.95f};
-            String[] knobs = {"range", "spread", "speed"};
-            for (int i = 0; i < 3; i++) {
-                knob(metal, ink, matrix, 2.2f + i * 0.3f, 1.35f, accents[i], light,
-                        (selected.colors[settings.selectedColor] >> ((2 - i) * 8) & 255) / 255f);
-                knob(metal, ink, matrix, 3.2f + i * 0.3f, 1.35f, 0xB6C3D9, light, values[i]);
-                topText(buffers, matrix, 2.17f + i * 0.3f, 1.2f, new String[]{"R", "G", "B"}[i], accents[i], 0.06f, 0);
-                topText(buffers, matrix, 3.09f + i * 0.3f, 1.2f, Component.translatable("create_media_systems.lighting.label." + knobs[i]).getString(),
-                        0xE6F1FF, 0.22f, 0);
-            }
-            int current = selected.colors[Math.min(settings.selectedColor, selected.colors.length - 1)];
-            for (int i = 0; i < LightingSettings.COLORS; i++) {
-                float x = 0.08f + i * 0.105f;
-                monitor(ink, matrix, 2, x + 0.007f, x + 0.098f, 1.71f, 1.84f,
-                        i < selected.colorCount ? selected.colors[i] : LightingSettings.mix(selected.colors[i], 0, 0.8f));
-                if (i == settings.selectedColor) {
-                    monitorBorder(ink, matrix, 2, x, x + 0.105f, 1.70f, 1.85f, 0xFFFFFF);
-                }
-            }
-            panel(ink, matrix, 3.1f, 0.15f, 3.9f, 1.1f, 0x102532);
-            panelBorder(ink, matrix, 3.1f, 0.15f, 3.9f, 1.1f, 0.012f, 0x63DAEE);
-            float aimX = 3.5f + Mth.clamp(selected.pan / 180, -1, 1) * 0.4f;
-            float aimZ = 0.625f + Mth.clamp(selected.tilt / 85, -1, 1) * 0.475f;
-            panel(ink, matrix, aimX - 0.07f, aimZ - 0.009f, aimX + 0.07f, aimZ + 0.009f, 0x7DEBFF);
-            panel(ink, matrix, aimX - 0.009f, aimZ - 0.07f, aimX + 0.009f, aimZ + 0.07f, 0x7DEBFF);
             for (int i = 0; i < LightingSettings.GROUPS; i++) {
                 float top = 1.86f - i * (0.74f / 6);
                 monitor(ink, matrix, 0, 0.065f, 0.935f, top - 0.117f, top,
@@ -829,45 +757,123 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                         LightingText.group(settings, i).append("  ")
                                 .append(LightingText.number(Math.round(settings.groups[i].brightness * 100) + "%")), 0.76f);
             }
-            Component[] show = {
-                    LightingText.label("enabled", LightingText.on(settings.enabled)), LightingText.label("audio", LightingText.on(selected.audio)),
-                    LightingText.label("band", LightingText.mode("band", selected.audioBand)), LightingText.label("cycle", LightingText.on(selected.colorCycle)),
-                    LightingText.label("pattern", LightingText.mode("pattern", selected.pattern)),
-                    LightingText.label("sources", LightingText.text("A ", LightingText.TEXT)
-                            .append(LightingText.source(console.audioSource != null, console.hasAudio)).append("  V ")
-                            .append(LightingText.source(console.videoSource != null, console.hasVideo)))
-            };
-            for (int i = 0; i < show.length; i++) {
-                text(buffers, matrix, 1.08f, 1.845f - i * (0.74f / 6), show[i], 0.84f);
-            }
-            text(buffers, matrix, 2.08f, 1.665f, LightingText.label("count", LightingText.number(selected.colorCount)), 0.84f);
-            text(buffers, matrix, 2.08f, 1.505f, LightingText.label("mapping", LightingText.mode("mapping", selected.mapping)), 0.84f);
-            text(buffers, matrix, 2.08f, 1.345f, LightingText.label("video", LightingText.on(selected.colorMode == 1)), 0.84f);
-            monitor(ink, matrix, 2, 0.08f, 0.3f, 1.14f, 1.21f, current);
-            text(buffers, matrix, 2.36f, 1.215f, LightingText.text(String.format("#%06X", current), LightingText.readable(current)), 0.55f);
-            text(buffers, matrix, 3.08f, 1.82f, LightingText.label("motion", LightingText.mode("motion", selected.motion)), 0.84f);
-            Player target = selected.target == null ? null : console.getLevel().getPlayerByUUID(selected.target);
-            text(buffers, matrix, 3.08f, 1.68f, LightingText.label("target", LightingText.text(target == null ? "—" : target.getName(),
-                    target == null ? LightingText.MUTED : LightingText.MODE)), 0.84f);
-            text(buffers, matrix, 3.08f, 1.49f, LightingText.label("range", LightingText.number(Math.round(selected.range) + " m")), 0.84f);
-            text(buffers, matrix, 3.08f, 1.37f, LightingText.label("spread", LightingText.number(Math.round(selected.spread) + "°")), 0.84f);
-            text(buffers, matrix, 3.08f, 1.25f, LightingText.label("speed", LightingText.number(String.format(java.util.Locale.ROOT, "%.2f", selected.speed))), 0.84f);
             for (int bay = 0; bay < 4; bay++) {
                 panel(ink, matrix, bay + 0.05f, 0.015f, bay + 0.95f, 0.135f, 0x0B101C);
             }
             topText(buffers, matrix, 0.08f, 0.12f, Component.translatable("create_media_systems.lighting.group", settings.selectedGroup + 1).getString(),
                     LightingText.groupColor(settings, settings.selectedGroup), 0.84f, 0);
-            topText(buffers, matrix, 1.08f, 0.12f, Component.translatable("create_media_systems.lighting."
-                    + (LightingControls.saving(console) ? "preset_destination" : "label.preset")).getString(),
-                    LightingControls.saving(console) ? LightingText.WARNING : LightingText.MODE, 0.84f, 0);
-            topText(buffers, matrix, 2.08f, 0.12f, Component.translatable("create_media_systems.lighting.color_short", settings.selectedColor + 1).getString(),
-                    LightingText.readable(current), 0.84f, 0);
-            topText(buffers, matrix, 3.08f, 0.12f, Component.translatable("create_media_systems.lighting.aim_short").getString(), LightingText.NUMBER, 0.84f, 0);
+            // The left bay is every page's: the right three are another mod's page while one is active.
+            LightingConsolePage page = LightingConsolePage.showing(console);
+            if (page != null) {
+                page.render(console, new LightingConsoleSurface(buffers, matrix, light));
+            } else {
+                for (int i = 0; i < 6; i++) {
+                    float x = 1.15f + i % 3 * 0.27f;
+                    float z = 0.35f + i / 3 * 0.5f;
+                    int[] cueColors = {0x36C9EE, 0x9F66EF, 0xFFC75C, 0x32D999, 0xEE6C9E, 0x5C8AFF};
+                    boolean active = activated != null && activated.control() == Control.PRESET && activated.index() == i;
+                    boolean saved = LightingControls.customPresets(console) && console.presets[i] != null;
+                    float depth = active ? -0.018f : 0;
+                    int color = active ? 0xFFE3A0 : LightingControls.customPresets(console) ? saved ? 0x91D9E9 : 0x34465C : cueColors[i];
+                    box(metal, matrix, x - 0.105f, height(z), z - 0.11f, x + 0.105f, height(z) + 0.05f + depth, z + 0.11f,
+                            0xAFB2C1, light);
+                    panel(ink, matrix, x - 0.1f, z - 0.105f, x + 0.1f, z + 0.105f, color, depth);
+                    topText(buffers, matrix, x - 0.09f, z + 0.04f, LightingControls.presetName(console, i).getString(),
+                            LightingControls.customPresets(console) && !saved && !active ? 0xE6F1FF : 0x101923, 0.18f, depth);
+                    if (LightingControls.saving(console)) {
+                        panelBorder(ink, matrix, x - 0.105f, z - 0.11f, x + 0.105f, z + 0.11f, 0.01f, 0xFFC75C);
+                    }
+                }
+                for (int i = 0; i < 3; i++) {
+                    float x = 1.04f + i * 0.26f;
+                    boolean selectedBank = i < 2 && LightingControls.customPresets(console) == (i == 1);
+                    boolean saving = i == 2 && LightingControls.saving(console);
+                    panel(ink, matrix, x, 1.22f, x + 0.24f, 1.48f, saving ? 0xFFC75C : selectedBank ? 0x91D9E9 : 0x24374C);
+                    String key = i == 2 ? saving ? "preset_cancel" : "preset_save" : "preset_bank." + i;
+                    topText(buffers, matrix, x + 0.015f, 1.39f, Component.translatable("create_media_systems.lighting." + key).getString(),
+                            saving || selectedBank ? 0x101923 : 0xE6F1FF, 0.21f, 0);
+                }
+                panel(ink, matrix, 1.85f, 0.23f, 1.91f, 1.23f, 0x0B0D14);
+                float masterZ = 0.25f + settings.master * 0.95f;
+                box(metal, matrix, 1.82f, height(masterZ), masterZ - 0.065f, 1.94f, height(masterZ) + 0.11f,
+                        masterZ + 0.065f, 0xE0E5F1, light);
+                faderCap(ink, matrix, 1.88f, masterZ, 0xF0F4FF);
+                topText(buffers, matrix, 1.82f, 1.46f, Component.translatable("create_media_systems.lighting.master_short").getString(),
+                        0xE6F1FF, 0.12f, 0);
+                int nearest = nearest(selected.colors[Math.min(settings.selectedColor, selected.colors.length - 1)]);
+                for (int row = 0; row < 8; row++) {
+                    for (int col = 0; col < 8; col++) {
+                        float x0 = 2.08f + col * 0.105f;
+                        float z0 = 0.15f + (7 - row) * 0.125f;
+                        int color = LightingSettings.palette(col, row);
+                        panel(ink, matrix, x0 + 0.004f, z0 + 0.004f, x0 + 0.101f, z0 + 0.121f, color);
+                        if (row * 8 + col == nearest) {
+                            panelBorder(ink, matrix, x0, z0, x0 + 0.105f, z0 + 0.125f, 0.008f, 0xFFFFFF);
+                        }
+                    }
+                }
+                int[] accents = {0xED525A, 0x56D76A, 0x4A89FF};
+                float[] values = {(selected.range - 2) / (LightingSettings.MAX_RANGE - 2), (selected.spread - 1) / 69,
+                        (selected.speed - 0.05f) / 3.95f};
+                String[] knobs = {"range", "spread", "speed"};
+                for (int i = 0; i < 3; i++) {
+                    knob(metal, ink, matrix, 2.2f + i * 0.3f, 1.35f, accents[i], light,
+                            (selected.colors[settings.selectedColor] >> ((2 - i) * 8) & 255) / 255f);
+                    knob(metal, ink, matrix, 3.2f + i * 0.3f, 1.35f, 0xB6C3D9, light, values[i]);
+                    topText(buffers, matrix, 2.17f + i * 0.3f, 1.2f, new String[]{"R", "G", "B"}[i], accents[i], 0.06f, 0);
+                    topText(buffers, matrix, 3.09f + i * 0.3f, 1.2f, Component.translatable("create_media_systems.lighting.label." + knobs[i]).getString(),
+                            0xE6F1FF, 0.22f, 0);
+                }
+                int current = selected.colors[Math.min(settings.selectedColor, selected.colors.length - 1)];
+                for (int i = 0; i < LightingSettings.COLORS; i++) {
+                    float x = 0.08f + i * 0.105f;
+                    monitor(ink, matrix, 2, x + 0.007f, x + 0.098f, 1.71f, 1.84f,
+                            i < selected.colorCount ? selected.colors[i] : LightingSettings.mix(selected.colors[i], 0, 0.8f));
+                    if (i == settings.selectedColor) {
+                        monitorBorder(ink, matrix, 2, x, x + 0.105f, 1.70f, 1.85f, 0xFFFFFF);
+                    }
+                }
+                panel(ink, matrix, 3.1f, 0.15f, 3.9f, 1.1f, 0x102532);
+                panelBorder(ink, matrix, 3.1f, 0.15f, 3.9f, 1.1f, 0.012f, 0x63DAEE);
+                float aimX = 3.5f + Mth.clamp(selected.pan / 180, -1, 1) * 0.4f;
+                float aimZ = 0.625f + Mth.clamp(selected.tilt / 85, -1, 1) * 0.475f;
+                panel(ink, matrix, aimX - 0.07f, aimZ - 0.009f, aimX + 0.07f, aimZ + 0.009f, 0x7DEBFF);
+                panel(ink, matrix, aimX - 0.009f, aimZ - 0.07f, aimX + 0.009f, aimZ + 0.07f, 0x7DEBFF);
+                Component[] show = {
+                        LightingText.label("enabled", LightingText.on(settings.enabled)), LightingText.label("audio", LightingText.on(selected.audio)),
+                        LightingText.label("band", LightingText.mode("band", selected.audioBand)), LightingText.label("cycle", LightingText.on(selected.colorCycle)),
+                        LightingText.label("pattern", LightingText.mode("pattern", selected.pattern)),
+                        LightingText.label("sources", LightingText.text("A ", LightingText.TEXT)
+                                .append(LightingText.source(console.audioSource != null, console.hasAudio)).append("  V ")
+                                .append(LightingText.source(console.videoSource != null, console.hasVideo)))
+                };
+                for (int i = 0; i < show.length; i++) {
+                    text(buffers, matrix, 1.08f, 1.845f - i * (0.74f / 6), show[i], 0.84f);
+                }
+                text(buffers, matrix, 2.08f, 1.665f, LightingText.label("count", LightingText.number(selected.colorCount)), 0.84f);
+                text(buffers, matrix, 2.08f, 1.505f, LightingText.label("mapping", LightingText.mode("mapping", selected.mapping)), 0.84f);
+                text(buffers, matrix, 2.08f, 1.345f, LightingText.label("video", LightingText.on(selected.colorMode == 1)), 0.84f);
+                monitor(ink, matrix, 2, 0.08f, 0.3f, 1.14f, 1.21f, current);
+                text(buffers, matrix, 2.36f, 1.215f, LightingText.text(String.format("#%06X", current), LightingText.readable(current)), 0.55f);
+                text(buffers, matrix, 3.08f, 1.82f, LightingText.label("motion", LightingText.mode("motion", selected.motion)), 0.84f);
+                Player target = selected.target == null ? null : console.getLevel().getPlayerByUUID(selected.target);
+                text(buffers, matrix, 3.08f, 1.68f, LightingText.label("target", LightingText.text(target == null ? "—" : target.getName(),
+                        target == null ? LightingText.MUTED : LightingText.MODE)), 0.84f);
+                text(buffers, matrix, 3.08f, 1.49f, LightingText.label("range", LightingText.number(Math.round(selected.range) + " m")), 0.84f);
+                text(buffers, matrix, 3.08f, 1.37f, LightingText.label("spread", LightingText.number(Math.round(selected.spread) + "°")), 0.84f);
+                text(buffers, matrix, 3.08f, 1.25f, LightingText.label("speed", LightingText.number(String.format(java.util.Locale.ROOT, "%.2f", selected.speed))), 0.84f);
+                topText(buffers, matrix, 1.08f, 0.12f, Component.translatable("create_media_systems.lighting."
+                        + (LightingControls.saving(console) ? "preset_destination" : "label.preset")).getString(),
+                        LightingControls.saving(console) ? LightingText.WARNING : LightingText.MODE, 0.84f, 0);
+                topText(buffers, matrix, 2.08f, 0.12f, Component.translatable("create_media_systems.lighting.color_short", settings.selectedColor + 1).getString(),
+                        LightingText.readable(current), 0.84f, 0);
+                topText(buffers, matrix, 3.08f, 0.12f, Component.translatable("create_media_systems.lighting.aim_short").getString(), LightingText.NUMBER, 0.84f, 0);
+            }
             highlight(ink, matrix, hovered, 0x8AEAFF);
             highlight(ink, matrix, activated, 0xFFD074);
         }
 
-        private static void highlight(VertexConsumer ink, Matrix4f matrix, LightingControls.Hit hit, int color) {
+        static void highlight(VertexConsumer ink, Matrix4f matrix, LightingControls.Hit hit, int color) {
             if (hit == null) {
                 return;
             }
@@ -879,7 +885,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             }
         }
 
-        private static void deck(VertexConsumer plate, VertexConsumer frame, Matrix4f matrix, int bay, int light) {
+        static void deck(VertexConsumer plate, VertexConsumer frame, Matrix4f matrix, int bay, int light) {
             float left = bay + 0.015f;
             float right = bay + 0.985f;
             Vec3 a = new Vec3(left, height(0), 0), b = new Vec3(right, height(0), 0);
@@ -891,7 +897,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             metalQuad(frame, matrix, new Vec3(right, 0.74, 0), new Vec3(right, 0.74, 2), c, b, 0xCDD1D7, light, Direction.EAST);
         }
 
-        private static void text(MultiBufferSource buffers, Matrix4f matrix, float x, float y, Component text, float width) {
+        static void text(MultiBufferSource buffers, Matrix4f matrix, float x, float y, Component text, float width) {
             Font font = Minecraft.getInstance().font;
             float scale = Math.min(0.0105f, width / Math.max(1, font.width(text)));
             Matrix4f at = new Matrix4f(matrix).translate(x, y, (float) screenZ(y) - 0.006f)
@@ -900,7 +906,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     LightTexture.FULL_BRIGHT);
         }
 
-        private static void topText(MultiBufferSource buffers, Matrix4f matrix, float x, float z, String text, int color,
+        static void topText(MultiBufferSource buffers, Matrix4f matrix, float x, float z, String text, int color,
                                     float width, float depth) {
             Font font = Minecraft.getInstance().font;
             float scale = Math.min(0.0085f, width / Math.max(1, font.width(text)));
@@ -930,27 +936,27 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return result;
         }
 
-        private static float height(float z) {
+        static float height(float z) {
             return 0.78f + z * 0.12f;
         }
 
-        private static void faderCap(VertexConsumer out, Matrix4f matrix, float x, float z, int color) {
+        static void faderCap(VertexConsumer out, Matrix4f matrix, float x, float z, int color) {
             float y = height(z) + 0.112f;
             quad(out, matrix, new Vec3(x - 0.05f, y, z - 0.055f), new Vec3(x + 0.05f, y, z - 0.055f),
                     new Vec3(x + 0.05f, y, z + 0.055f), new Vec3(x - 0.05f, y, z + 0.055f), color, 255);
         }
 
-        private static void panel(VertexConsumer out, Matrix4f matrix, float x0, float z0, float x1, float z1, int color) {
+        static void panel(VertexConsumer out, Matrix4f matrix, float x0, float z0, float x1, float z1, int color) {
             panel(out, matrix, x0, z0, x1, z1, color, 0);
         }
 
-        private static void panel(VertexConsumer out, Matrix4f matrix, float x0, float z0, float x1, float z1, int color,
+        static void panel(VertexConsumer out, Matrix4f matrix, float x0, float z0, float x1, float z1, int color,
                                   float depth) {
             quad(out, matrix, new Vec3(x0, height(z0) + 0.075 + depth, z0), new Vec3(x1, height(z0) + 0.075 + depth, z0),
                     new Vec3(x1, height(z1) + 0.075 + depth, z1), new Vec3(x0, height(z1) + 0.075 + depth, z1), color, 255);
         }
 
-        private static void panelBorder(VertexConsumer out, Matrix4f matrix, float x0, float z0, float x1, float z1,
+        static void panelBorder(VertexConsumer out, Matrix4f matrix, float x0, float z0, float x1, float z1,
                                         float width, int color) {
             panel(out, matrix, x0, z0, x1, z0 + width, color, 0.002f);
             panel(out, matrix, x0, z1 - width, x1, z1, color, 0.002f);
@@ -958,7 +964,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             panel(out, matrix, x1 - width, z0, x1, z1, color, 0.002f);
         }
 
-        private static void knob(VertexConsumer metal, VertexConsumer ink, Matrix4f matrix, float x, float z, int accent,
+        static void knob(VertexConsumer metal, VertexConsumer ink, Matrix4f matrix, float x, float z, int accent,
                                  int light, float value) {
             float y = height(z);
             box(metal, matrix, x - 0.075f, y, z - 0.06f, x + 0.075f, y + 0.14f, z + 0.06f, 0xD4D8E3, light);
@@ -969,22 +975,22 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     new Vec3(x + 0.009, y + 0.141, z + 0.015), new Vec3(x - 0.009, y + 0.141, z + 0.015), accent, 255);
         }
 
-        private static void monitor(VertexConsumer out, Matrix4f matrix, int bay, float x0, float x1, float y0, float y1,
+        static void monitor(VertexConsumer out, Matrix4f matrix, int bay, float x0, float x1, float y0, float y1,
                                     int color) {
             monitor(out, matrix, bay, x0, x1, y0, y1, color, 0);
         }
 
-        private static void monitor(VertexConsumer out, Matrix4f matrix, int bay, float x0, float x1, float y0, float y1,
+        static void monitor(VertexConsumer out, Matrix4f matrix, int bay, float x0, float x1, float y0, float y1,
                                     int color, float depth) {
             quad(out, matrix, new Vec3(bay + x0, y0, screenZ(y0) + depth), new Vec3(bay + x1, y0, screenZ(y0) + depth),
                     new Vec3(bay + x1, y1, screenZ(y1) + depth), new Vec3(bay + x0, y1, screenZ(y1) + depth), color, 255);
         }
 
-        private static double screenZ(float y) {
+        static double screenZ(float y) {
             return 1.455 + (y - 1) * 0.4142;
         }
 
-        private static void monitorBorder(VertexConsumer out, Matrix4f matrix, int bay, float x0, float x1, float y0,
+        static void monitorBorder(VertexConsumer out, Matrix4f matrix, int bay, float x0, float x1, float y0,
                                           float y1, int color) {
             monitor(out, matrix, bay, x0, x1, y0, y0 + 0.01f, color, -0.002f);
             monitor(out, matrix, bay, x0, x1, y1 - 0.01f, y1, color, -0.002f);

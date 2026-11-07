@@ -169,6 +169,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         private BlockPos resolvedVideo;
         private boolean refreshingLinks;
         public final CompoundTag[] presets = new CompoundTag[6];
+        /** Other mods' settings for this console (see extras), by their mod id. */
+        private final CompoundTag extras = new CompoundTag();
         public boolean formed;
         public BlockPos audioSource;
         public BlockPos videoSource;
@@ -190,6 +192,17 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         }
 
         @Nullable
+        /**
+         * {@code owner}'s own settings for this console (a LightingConsolePage's, say): saved with the console, and
+         * sent to players with it on {@link #changed}. Changed on the server; the client's copy is replaced on sync.
+         */
+        public CompoundTag extras(String owner) {
+            if (!extras.contains(owner, Tag.TAG_COMPOUND)) {
+                extras.put(owner, new CompoundTag());
+            }
+            return extras.getCompound(owner);
+        }
+
         public UUID identity() {
             if (level != null && !level.isClientSide) {
                 identity = SourceLinks.identifyBlock(level, worldPosition);
@@ -567,6 +580,9 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 saved.add(preset == null ? new CompoundTag() : preset.copy());
             }
             tag.put("Presets", saved);
+            if (!extras.isEmpty()) {
+                tag.put("Extras", extras.copy());
+            }
         }
 
         @Override
@@ -601,6 +617,13 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 if (fixtures.contains(pos) && link.hasUUID("Id")) {
                     fixtureIds.put(pos, link.getUUID("Id"));
                 }
+            }
+            for (String owner : List.copyOf(extras.getAllKeys())) {
+                extras.remove(owner);
+            }
+            CompoundTag loaded = tag.getCompound("Extras");
+            for (String owner : loaded.getAllKeys()) {
+                extras.put(owner, loaded.getCompound(owner).copy());
             }
             ListTag saved = tag.getList("Presets", Tag.TAG_COMPOUND);
             for (int i = 0; i < presets.length; i++) {
