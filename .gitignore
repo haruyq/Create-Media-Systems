@@ -9,6 +9,7 @@ out/
 .idea/
 .vscode/
 
+/bin/
 libs/
 /logs/
 .yomiyasu/
