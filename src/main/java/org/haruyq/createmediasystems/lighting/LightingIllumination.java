@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import org.joml.Vector3f;
 
 import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import dev.ryanhcode.sable.companion.SableCompanion;
+import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -48,21 +50,20 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.model.IQuadTransformer;
 import net.neoforged.neoforge.client.model.data.ModelData;
 
 /**
- * A stage light's light on the block faces its beam reaches. The faces around where the beam lands are found once,
- * on a background thread (Workers), and kept in a vertex buffer, with whether each half-block cell sees the light
- * past the blocks between (traced there when found, kept until the light moves or a block changes, traced again
- * here a few a frame); each frame the GPU lights them from the beam's cone as it is
- * then (shaders/core/spot_light). A still light costs nothing a frame but its draw call. Entities in the beam are lit
- * through their light coordinates (light).
+ * A stage light's light on the block faces its beam reaches. Faces are found in the background, or in bounded
+ * steps with Sable. Their meshes and occlusion are kept until blocks or the light move; the GPU applies the
+ * current cone (shaders/core/spot_light). Entities receive light through their light coordinates (light).
  */
 public final class LightingIllumination {
     private static final Map<StageLightBlock.Entity, Beam> BEAMS = new WeakHashMap<>();
+    private static final ArrayDeque<SurfaceScan> SCANS = new ArrayDeque<>();
     private static WeakReference<Level> knownLevel = new WeakReference<>(null);
     /** POSITION_TEX_COLOR_NORMAL's layout, its own instance: Iris extends some vanilla formats by identity. */
     static final VertexFormat FORMAT = VertexFormat.builder()
@@ -90,7 +91,8 @@ public final class LightingIllumination {
      * next scan starts in the background once it has crossed half of them, to be ready before it runs out.
      */
     private static final int SCAN_MARGIN = 6;
-    /** Rays a beam may trace per frame for faces in it that it saw from elsewhere; the rest keep what they saw. */
+    private static final int SCAN_BUDGET = 1024;
+    /** Rays a beam may trace per frame for faces in it, including newly found faces. */
     private static final int REFRESH_BUDGET = 64;
     /** Rays a beam may trace per frame for faces outside it, so they're known by the time it reaches them. */
     private static final int AHEAD_BUDGET = 32;
@@ -101,6 +103,28 @@ public final class LightingIllumination {
     /** Frames a lamp may go undrawn before its buffer is freed. */
     private static final int FORGET_FRAMES = 600;
 
+    static final class TraceBudget {
+        int beam;
+        int ahead;
+
+        void reset() {
+            beam = REFRESH_BUDGET;
+            ahead = AHEAD_BUDGET;
+        }
+
+        boolean take(int count, boolean inBeam) {
+            if (count > (inBeam ? beam : ahead)) {
+                return false;
+            }
+            if (inBeam) {
+                beam -= count;
+            } else {
+                ahead -= count;
+            }
+            return true;
+        }
+    }
+
     private static final class Beam {
         Vec3 origin;
         Vec3 direction;
@@ -110,7 +134,7 @@ public final class LightingIllumination {
         long at = -1;
         /** The faces found may be out of date: blocks changed near them, or it went undrawn a while. */
         boolean stale = true;
-        /** A scan under way in the background, adopted once done (see adopt). */
+        /** A scan under way, adopted once done (see adopt). */
         CompletableFuture<Scan> scanning;
         /** The tick the lit faces were last checked to still stand; faces gone are set to null (see render). */
         long checked = Long.MIN_VALUE;
@@ -137,8 +161,7 @@ public final class LightingIllumination {
         LightingRaycast rays;
         Vec3 from;
         boolean moving;
-        int budget;
-        int ahead;
+        final TraceBudget budget = new TraceBudget();
         int face;
         int resume;
         /** The buffer no longer shows what the light sees: a cell in the beam changed (dirty), or one outside it (pending). */
@@ -185,7 +208,7 @@ public final class LightingIllumination {
             if (face.sight == 0 || face.sight == sight && !moving) {
                 return;
             }
-            if (budget <= 0) {
+            if (!budget.take(face.seen.length, true)) {
                 if (resume < 0) {
                     resume = this.face;
                 }
@@ -195,7 +218,6 @@ public final class LightingIllumination {
                 if (face.seen[i] == 0) {
                     continue;
                 }
-                budget--;
                 byte seen = (byte) (visible(rays, from, geometry.rays[i]) ? 1 : -1);
                 if (seen != face.seen[i]) {
                     face.seen[i] = seen;
@@ -205,7 +227,7 @@ public final class LightingIllumination {
             face.sight = sight;
         }
 
-        /** Traces the points of {@code face} the light hasn't yet: in the beam at once, outside it within budget. */
+        /** Traces unknown points within the beam's remaining budget. */
         void ensure(Face face, Geometry geometry, boolean inBeam) {
             if (!face.untraced) {
                 return;
@@ -214,13 +236,12 @@ public final class LightingIllumination {
                 if (face.seen[i] != 0) {
                     continue;
                 }
-                if (!inBeam && ahead <= 0) {
+                if (!budget.take(1, inBeam)) {
                     if (resume < 0) {
                         resume = this.face;
                     }
                     return;
                 }
-                ahead--;
                 if (face.sight == 0) {
                     face.sight = sight;
                 }
@@ -302,6 +323,9 @@ public final class LightingIllumination {
         }
 
         void close() {
+            if (scanning != null) {
+                scanning.cancel(false);
+            }
             if (buffer != null) {
                 buffer.close();
                 buffer = null;
@@ -314,7 +338,7 @@ public final class LightingIllumination {
         final BlockPos pos;
         final BlockState state;
         final int quad;
-        /** The model quad's own vertex data, to know it again in the next scan (see faces). */
+        /** The model quad's own vertex data, to know it again in the next scan. */
         final int[] vertices;
         /** Its corners in the world's block coordinates (a Sable sub-level's own, if on one). */
         final Vec3[] points;
@@ -451,7 +475,7 @@ public final class LightingIllumination {
         }
         Beam beam = BEAMS.computeIfAbsent(lamp, ignored -> new Beam());
         long now = level.getGameTime();
-        if (now - beam.at > 1 || now < beam.at) {
+        if (frame - beam.drawn > 1 || now < beam.at) {
             // Undrawn a while (off screen, say): blocks may have changed unseen (see sectionChanged).
             beam.sight++;
             beam.stale = true;
@@ -478,6 +502,13 @@ public final class LightingIllumination {
         }
         Vec3 absoluteOrigin = origin.add(offset);
         Vec3 from = lampPose == null ? absoluteOrigin : lampPose.transformPosition(absoluteOrigin);
+        Pose3dc targetPose = renderPose(level, center);
+        boolean moving = lampPose != null || targetPose != null
+                || rays.hasSubLevels(new AABB(from, hit.point()).inflate((radius + SCAN_MARGIN + 2) * Math.sqrt(3)));
+        if (moving != beam.moving) {
+            beam.sight++;
+        }
+        beam.moving = moving;
         if (beam.sightFrom == null || from.distanceToSqr(beam.sightFrom) >= SIGHT_TOLERANCE * SIGHT_TOLERANCE) {
             beam.sight++;
             beam.sightFrom = from;
@@ -498,28 +529,27 @@ public final class LightingIllumination {
             int scan = radius + (moved ? SCAN_MARGIN : 0);
             beam.stale = false;
             List<Face> previous = new ArrayList<>(beam.faces);
-            if (rays.hasSubLevels()) {
-                // Sable's sub-levels are looked up as the blocks are, on this thread; its faces are traced here too.
-                beam.adopt(scan(level, lamp.getBlockPos(), center, scan, axis, previous, true, null, origin, from,
-                        beam.sight));
+            if (moving) {
+                SurfaceScan job = new SurfaceScan(level, lamp.getBlockPos(), center, scan, axis, previous, true);
+                beam.scanning = job.result;
+                SCANS.addLast(job);
             } else {
                 // Off this thread, the faces new to it traced there too: the light shows the old ones till it's done.
                 LightingRaycast traced = rays.detached();
                 BlockPos at = lamp.getBlockPos();
                 long sight = beam.sight;
-                beam.scanning = CompletableFuture.supplyAsync(() -> scan(level, at, center, scan, axis, previous, false,
+                beam.scanning = CompletableFuture.supplyAsync(() -> scan(level, at, center, scan, axis, previous,
                         traced, origin, from, sight), Workers.LIGHT).exceptionally(LightingIllumination::failed);
             }
         }
-        // A Sable sub-level may have moved between the light and a point since: none is kept from another frame.
-        beam.moving = rays.hasSubLevels();
         // Once a tick, the faces in the beam are checked to still stand; the rest wait till it reaches them.
         boolean check = beam.at != beam.checked;
         // On different sub-levels (or one on none), the faces move in the lamp's space: each frame sees them anew.
+        BlockPos surface = beam.center == null ? center : beam.center;
         boolean posed = SableCompanion.INSTANCE.getContaining(level, lamp.getBlockPos())
-                != SableCompanion.INSTANCE.getContaining(level, center);
-        // Every face found is of the sub-level the centre is in, or of none (see faces).
-        Pose3dc facePose = renderPose(level, center);
+                != SableCompanion.INSTANCE.getContaining(level, surface);
+        // Every face found belongs to the scanned centre's sub-level, or to the world.
+        Pose3dc facePose = renderPose(level, surface);
         // On the same moving sub-level, only where they are in the world (to trace to) changes.
         boolean carried = posed || facePose != null;
         // A still light with every face in its beam traced has nothing to look at till something changes.
@@ -527,8 +557,7 @@ public final class LightingIllumination {
                 || !direction.equals(beam.settledDirection)) {
             beam.rays = rays;
             beam.from = from;
-            beam.budget = REFRESH_BUDGET;
-            beam.ahead = AHEAD_BUDGET;
+            beam.budget.reset();
             beam.resume = -1;
             int count = beam.faces.size();
             int start = beam.next < count ? beam.next : 0;
@@ -563,7 +592,7 @@ public final class LightingIllumination {
                 double ix = origin.x - mx, iy = origin.y - my, iz = origin.z - mz;
                 boolean inBeam = exposure(-ix, -iy, -iz, direction, beam.tangent, range, LEAD) > 0
                         && nx * ix + ny * iy + nz * iz > 0;
-                if (!inBeam && (beam.untraced == 0 || beam.ahead <= 0)) {
+                if (!inBeam && (beam.untraced == 0 || beam.budget.ahead <= 0)) {
                     continue;
                 }
                 if (face == null) {
@@ -687,6 +716,25 @@ public final class LightingIllumination {
                 it.remove();
             }
         }
+        int remaining = SCAN_BUDGET;
+        while (remaining > 0 && !SCANS.isEmpty()) {
+            SurfaceScan scan = SCANS.removeFirst();
+            if (scan.result.isCancelled()) {
+                continue;
+            }
+            int limit = Math.min(64, remaining);
+            remaining -= limit;
+            try {
+                scan.advance(limit);
+                if (scan.positions.hasNext()) {
+                    SCANS.addLast(scan);
+                } else {
+                    scan.result.complete(scan.finish());
+                }
+            } catch (RuntimeException e) {
+                scan.result.complete(failed(e));
+            }
+        }
     }
 
     /** A block in section ({@code x}, {@code y}, {@code z}) changed (LevelRendererMixin). */
@@ -730,6 +778,7 @@ public final class LightingIllumination {
     private static void forgetAll() {
         BEAMS.values().forEach(Beam::close);
         BEAMS.clear();
+        SCANS.clear();
     }
 
     private static Pose3dc renderPose(Level level, BlockPos pos) {
@@ -769,30 +818,28 @@ public final class LightingIllumination {
 
     /**
      * The faces around {@code center}, those of {@code previous} found again kept as they are (what the light saw of
-     * them with them). With {@code rays}, on a background thread, the new ones are traced from {@code from} under
-     * {@code sight}; without, the render thread traces them as they come into the beam (see Beam.ensure).
+     * them with them). The new ones are traced in the background from {@code from} under {@code sight}.
      */
     // ponytail: off the render thread it reads the live client level, as DisplayLight's scan does; a chunk changing
     // mid-read can throw, which skips that scan (failed) and tries again next frame.
     private static Scan scan(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
-                             List<Face> previous, boolean sable, LightingRaycast rays, Vec3 origin, Vec3 from,
+                             List<Face> previous, LightingRaycast rays, Vec3 origin, Vec3 from,
                              long sight) {
-        List<Face> created = new ArrayList<>();
-        List<Face> found = faces(level, lamp, center, radius, axis, previous, sable, created);
-        if (rays != null) {
-            for (Face face : created) {
-                Geometry still = face.still;
-                // Turned away from the light, a face can't be lit: as a trace to it would find, through its own block.
-                boolean facing = still.normal.dot(origin.subtract(still.middle)) > 0;
-                for (int i = 0; i < face.seen.length; i++) {
-                    face.seen[i] = (byte) (facing && visible(rays, from, still.rays[i]) ? 1 : -1);
-                }
-                face.sight = sight;
-                face.untraced = false;
+        SurfaceScan scan = new SurfaceScan(level, lamp, center, radius, axis, previous, false);
+        scan.advance(Integer.MAX_VALUE);
+        for (Face face : scan.created) {
+            Geometry still = face.still;
+            // Turned away from the light, a face can't be lit: as a trace to it would find, through its own block.
+            boolean facing = still.normal.dot(origin.subtract(still.middle)) > 0;
+            for (int i = 0; i < face.seen.length; i++) {
+                face.seen[i] = (byte) (facing && visible(rays, from, still.rays[i]) ? 1 : -1);
             }
+            face.sight = sight;
+            face.untraced = false;
         }
-        return new Scan(found, centers(found), center.immutable(), radius, axis);
+        return scan.finish();
     }
+
     private static double[] centers(List<Face> faces) {
         double[] result = new double[faces.size() * 6];
         for (int i = 0; i < faces.size(); i++) {
@@ -807,36 +854,63 @@ public final class LightingIllumination {
         return result;
     }
 
-    /**
-     * The model quads around {@code center} that a light could reach; those of {@code previous} found again are the
-     * same objects, with what the light saw of them, and those not into {@code created}. With {@code sable}, only
-     * the blocks of the sub-level the centre is in, or of none; without, there are no sub-levels to look up.
-     */
-    private static List<Face> faces(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
-                                    List<Face> previous, boolean sable, List<Face> created) {
-        Map<Key, Face> known = new HashMap<>();
-        for (Face face : previous) {
-            if (face != null) {
-                known.put(new Key(face.pos.asLong(), face.quad), face);
+    private static final class SurfaceScan {
+        final Level level;
+        final BlockPos lamp;
+        final BlockPos center;
+        final int radius;
+        final Direction.Axis axis;
+        final boolean sable;
+        final SubLevelAccess owner;
+        final Vec3 lampOffset;
+        final Map<Key, Face> known = new HashMap<>();
+        final RandomSource random = RandomSource.create(42);
+        final Iterator<BlockPos> positions;
+        final List<Face> found = new ArrayList<>();
+        final List<Face> created = new ArrayList<>();
+        final CompletableFuture<Scan> result = new CompletableFuture<>();
+
+        SurfaceScan(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
+                    List<Face> previous, boolean sable) {
+            this.level = level;
+            this.lamp = lamp;
+            this.center = center.immutable();
+            this.radius = radius;
+            this.axis = axis;
+            this.sable = sable;
+            owner = sable ? SableCompanion.INSTANCE.getContaining(level, center) : null;
+            lampOffset = Vec3.atLowerCornerOf(lamp);
+            for (Face face : previous) {
+                if (face != null) {
+                    known.put(new Key(face.pos.asLong(), face.quad), face);
+                }
+            }
+            int x = axis == Direction.Axis.X ? 2 : radius;
+            int y = axis == Direction.Axis.Y ? 2 : radius;
+            int z = axis == Direction.Axis.Z ? 2 : radius;
+            positions = BlockPos.betweenClosed(center.offset(-x, -y, -z), center.offset(x, y, z)).iterator();
+        }
+
+        void advance(int budget) {
+            for (int read = 0; read < budget && positions.hasNext(); read++) {
+                read(positions.next());
             }
         }
-        int x = axis == Direction.Axis.X ? 2 : radius;
-        int y = axis == Direction.Axis.Y ? 2 : radius;
-        int z = axis == Direction.Axis.Z ? 2 : radius;
-        var mc = Minecraft.getInstance();
-        var owner = sable ? SableCompanion.INSTANCE.getContaining(level, center) : null;
-        Vec3 lampOffset = Vec3.atLowerCornerOf(lamp);
-        RandomSource random = RandomSource.create(42);
-        List<Face> result = new ArrayList<>();
-        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-x, -y, -z), center.offset(x, y, z))) {
+
+        Scan finish() {
+            return new Scan(found, centers(found), center, radius, axis);
+        }
+
+        private void read(BlockPos pos) {
             if (!level.isLoaded(pos) || pos.equals(lamp)
                     || sable && SableCompanion.INSTANCE.getContaining(level, pos) != owner) {
-                continue;
+                return;
             }
             BlockState state = level.getBlockState(pos);
             if (state.getRenderShape() != RenderShape.MODEL) {
-                continue;
+                return;
             }
+            var mc = Minecraft.getInstance();
             var model = mc.getBlockRenderer().getBlockModel(state);
             Vec3 offset = Vec3.atLowerCornerOf(pos).add(state.getOffset(level, pos));
             int index = 0;
@@ -850,7 +924,7 @@ public final class LightingIllumination {
                     int[] data = quad.getVertices();
                     Face before = known.get(new Key(pos.asLong(), index));
                     if (before != null && before.state == state && Arrays.equals(before.vertices, data)) {
-                        result.add(before);
+                        found.add(before);
                         index++;
                         continue;
                     }
@@ -868,11 +942,10 @@ public final class LightingIllumination {
                     Vec3 normal = Vec3.atLowerCornerOf(quad.getDirection().getNormal());
                     double winding = Math.signum(points[1].subtract(points[0]).cross(points[3].subtract(points[0])).dot(normal));
                     Face face = new Face(pos.immutable(), state, index++, data, points, uv, winding, tint, lampOffset);
-                    result.add(face);
+                    found.add(face);
                     created.add(face);
                 }
             }
         }
-        return result;
     }
 }

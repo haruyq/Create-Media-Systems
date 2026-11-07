@@ -11,17 +11,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 
 /**
- * Tells stage lights which blocks changed, so they trace their light again only there (LightingIllumination). Every
- * entry point is hooked, not just setSectionDirty: Sodium overwrites setBlockDirty and the others to schedule its own
- * rebuilds, and never calls setSectionDirty for a block change.
+ * Tracks block changes through the entry points Sodium also uses. Light-only section rebuilds leave shapes intact.
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererMixin {
-    @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
-    private void create_media_systems$sectionChanged(int x, int y, int z, boolean reRenderOnMainThread, CallbackInfo ci) {
-        LightingIllumination.sectionChanged(x, y, z);
-    }
-
     @Inject(method = "setBlockDirty(Lnet/minecraft/core/BlockPos;Z)V", at = @At("HEAD"))
     private void create_media_systems$blockChanged(BlockPos pos, boolean reRenderOnMainThread, CallbackInfo ci) {
         LightingIllumination.blocksChanged(pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
@@ -31,7 +24,7 @@ abstract class LevelRendererMixin {
     @Inject(method = "setBlocksDirty(IIIIII)V", at = @At("HEAD"))
     private void create_media_systems$blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
                                                     CallbackInfo ci) {
-        LightingIllumination.blocksChanged(minX, minY, minZ, maxX, maxY, maxZ);
+        LightingIllumination.blocksChanged(minX - 1, minY - 1, minZ - 1, maxX + 1, maxY + 1, maxZ + 1);
     }
 
     @Inject(method = "setSectionDirtyWithNeighbors(III)V", at = @At("HEAD"))

@@ -407,16 +407,22 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         int lastPattern;
         float lastRange;
         float lastSpread;
+        boolean lastMoving;
 
         void update(BeamFrame frame, Vec3 forward, Vec3 right, Vec3 up,
                     int pattern, float range, float spread) {
             long now = LightingIllumination.frame();
+            Vec3 world = frame.world(frame.origin);
+            double scale = Math.max(frame.basisX.length(), Math.max(frame.basisY.length(), frame.basisZ.length()));
+            boolean moving = SableCompanion.INSTANCE.getContaining(frame.lamp) != null
+                    || frame.rays.hasSubLevels(new AABB(world, world).inflate(range * scale));
             // Off the world (a Ponder scene), or with sub-levels that move under it, every frame.
             boolean still = now - traced <= 1 && frame.lamp.getLevel() == Minecraft.getInstance().level
-                    && !frame.rays.hasSubLevels() && !LightingIllumination.blocksChanged()
+                    && !moving && !lastMoving && !LightingIllumination.blocksChanged()
                     && pattern == lastPattern && range == lastRange && spread == lastSpread
                     && frame.origin.equals(lastOrigin) && forward.equals(lastForward) && right.equals(lastRight);
             traced = now;
+            lastMoving = moving;
             if (still) {
                 return;
             }

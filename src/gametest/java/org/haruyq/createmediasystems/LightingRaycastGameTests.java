@@ -20,6 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -202,11 +203,18 @@ public final class LightingRaycastGameTests {
             loadPath(level, from, to);
             BlockPos ignored = BlockPos.containing(from).below(10);
             LightingRaycast frame = new LightingRaycast(level, ignored, false);
+            AABB nearby = new AABB(from, to).inflate(1);
+            helper.assertTrue(frame.hasSubLevels(nearby), "the ship intersects the beam's region");
+            helper.assertTrue(!frame.hasSubLevels(nearby.move(0, 1000, 0)),
+                    "a distant ship must not force an unrelated light to rescan");
             LightingRaycast.Hit before = frame.clip(from, to);
             helper.assertTrue(before.block().getBlockPos().equals(plot), "initial ship is visible to the beam");
             ship.logicalPose().position().add(8, 0, 0);
             ship.logicalPose().orientation().rotationY(1.1).rotateX(0.35);
             update(ship);
+            helper.assertTrue(frame.hasSubLevels(nearby), "the current frame keeps its captured bounds");
+            helper.assertTrue(!new LightingRaycast(level, ignored, false).hasSubLevels(nearby),
+                    "the next frame must release the region after the ship leaves");
             LightingRaycast.Hit sameFrame = frame.clip(from, to);
             helper.assertTrue(sameFrame.point().distanceTo(before.point()) < 1e-6,
                     "all rays in one frame use the same pose snapshot");

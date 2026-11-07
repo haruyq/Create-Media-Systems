@@ -332,6 +332,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
         };
         final Vlc.VideoLock lock = (opaque, planes) -> {
             synchronized (guard) {
+                missed = false;
                 writing = true;
                 planes.setPointer(0, buffers[back]);
             }
@@ -415,21 +416,24 @@ public final class VlcPlayer implements NativeAudio.Backend {
                 try {
                     upload(latest, w, h);
                 } finally {
-                    synchronized (guard) {
-                        reading = false;
-                        if (missed) {
-                            missed = false;
-                            // Still writing, VLC is already over it with a newer one, swapped in when it finishes.
-                            if (!writing) {
-                                back ^= 1;
-                                fresh = true;
-                            }
-                        }
-                        guard.notifyAll();
-                    }
+                    finishReading();
                 }
             }
             return shown();
+        }
+
+        private void finishReading() {
+            synchronized (guard) {
+                reading = false;
+                if (missed) {
+                    missed = false;
+                    if (!writing) {
+                        back ^= 1;
+                        fresh = true;
+                    }
+                }
+                guard.notifyAll();
+            }
         }
 
         /** Waits, under guard, till the render thread is done with the latest picture; false if interrupted. */

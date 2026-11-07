@@ -11,6 +11,27 @@ class LightingIlluminationTest {
     private static final Vec3 FORWARD = new Vec3(0, 0, 1);
 
     @Test
+    void newFacesAndRefreshesShareAFiniteBudget() {
+        var budget = new LightingIllumination.TraceBudget();
+        budget.reset();
+        for (int i = 0; i < 4; i++) {
+            assertTrue(budget.take(13, true));
+        }
+        assertFalse(budget.take(13, true));
+        for (int i = 0; i < 12; i++) {
+            assertTrue(budget.take(1, true));
+        }
+        assertFalse(budget.take(1, true));
+        for (int i = 0; i < 32; i++) {
+            assertTrue(budget.take(1, false));
+        }
+        assertFalse(budget.take(1, false));
+        budget.reset();
+        assertTrue(budget.take(13, true));
+        assertTrue(budget.take(1, false));
+    }
+
+    @Test
     void lightOnlyReachesTheForwardConeWithinItsRange() {
         double tangent = Math.tan(Math.toRadians(12));
         assertEquals(1, LightingIllumination.exposure(new Vec3(0, 0, 10), FORWARD, tangent, 32, 0));

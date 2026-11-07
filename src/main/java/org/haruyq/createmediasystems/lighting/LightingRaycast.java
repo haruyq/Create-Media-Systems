@@ -78,7 +78,7 @@ public final class LightingRaycast {
         this.screens = LightingScreens.snapshot(level, render);
     }
 
-    /** The same snapshot with a cache of its own, for one background thread; only where there are no sub-levels. */
+    /** A separate cache for a background scan outside the sub-levels' bounds. */
     private LightingRaycast(LightingRaycast from) {
         level = from.level;
         ignored = from.ignored;
@@ -146,9 +146,14 @@ public final class LightingRaycast {
         return best == null ? miss(toWorld, fromWorld) : best;
     }
 
-    /** Whether any Sable sub-level was there to trace: its blocks may move from one frame to the next. */
-    boolean hasSubLevels() {
-        return !subLevels.isEmpty();
+    /** Whether moving blocks could intersect this part of the world. */
+    public boolean hasSubLevels(AABB bounds) {
+        for (Snapshot snapshot : subLevels) {
+            if (snapshot.bounds.intersects(bounds)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static AABB bounds(SubLevelAccess subLevel, Pose3dc pose) {
