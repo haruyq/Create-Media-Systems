@@ -98,7 +98,9 @@ public class LightingLinkItem extends Item {
             } else if (console.bind(light, console.settings.selectedGroup)) {
                 say(player, "linked", LightingText.group(console.settings, light.group), LightingText.number(light.order + 1));
             } else if (!console.accepts(light, console.settings.selectedGroup)) {
-                say(player, "other_family", LightingText.group(console.settings, console.settings.selectedGroup));
+                int group = console.settings.selectedGroup;
+                say(player, "other_family", LightingText.group(console.settings, group),
+                        StageLightBlock.familyName(console.family(group)));
             } else {
                 say(player, "full");
             }

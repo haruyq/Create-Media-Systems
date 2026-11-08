@@ -121,7 +121,8 @@ final class LightingLinkHandler {
             }
             // A group holds one family of fixtures: say so before the click is refused.
             return picked.accepts(light, group) ? LightingText.message("hint_link", LightingText.group(picked.settings, group))
-                    : LightingText.message("other_family", LightingText.group(picked.settings, group));
+                    : LightingText.message("other_family", LightingText.group(picked.settings, group),
+                            StageLightBlock.familyName(picked.family(group)));
         }
         return LightingText.message(block instanceof VideoPlayerBlock.Entity ? "hint_video" : "hint_audio");
     }

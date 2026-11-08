@@ -14,7 +14,7 @@ import net.minecraft.world.phys.Vec3;
  * (StageLightBlock.Entity.family): while the console's selected group holds that family, the page takes over the
  * console's three right-hand bays, deck and monitors (x from 1 to 4), drawing them (render) and answering what is
  * pointed at there (hit). The left bay, the group faders and the group list, stays the console's own, so groups are
- * chosen as ever. A group holds one family only (LightingConsoleBlock.Entity.accepts), so each shows one page.
+ * chosen as ever, unless the page takes it too (ownsLeftBay). A group holds one family only (LightingConsoleBlock.Entity.accepts), so each shows one page.
  *
  * <p>Deck points are (x across, from 0 at the left to 4; z from the front edge, 0, back to 1.55), monitor points
  * (x across; y up, from 1.12 to 1.86), as LightingConsoleSurface draws them. Settings the console keeps are changed
@@ -22,6 +22,14 @@ import net.minecraft.world.phys.Vec3;
  * with the console, changed through its own packets.
  */
 public interface LightingConsolePage {
+    /**
+     * Whether this page takes the left bay too, group faders and group list, drawing and answering all four
+     * bays (x from 0 to 4): it then picks groups itself (send Control.GROUP). The console's own, if not.
+     */
+    default boolean ownsLeftBay() {
+        return false;
+    }
+
     /** Draws the page's bays. */
     void render(LightingConsoleBlock.Entity console, LightingConsoleSurface surface);
 
