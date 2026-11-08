@@ -184,6 +184,14 @@ public final class LightingIllumination {
         boolean pending;
         boolean geometryDirty = true;
         boolean resident;
+        /**
+         * Its light traced a pixel at a time through the blocks around the camera (LightingOcclusion) instead of at its
+         * faces' corners here: every face is drawn, none traced.
+         */
+        boolean gpu;
+        /** Faces in its vertex buffer (resident), whether lit or not. */
+        boolean meshed;
+        BlockPos lampPos = BlockPos.ZERO;
         final BitSet changedFaces = new BitSet();
         int[] slots = new int[0];
         int[] cells = new int[0];
@@ -214,7 +222,11 @@ public final class LightingIllumination {
             Minecraft.getInstance().getTextureManager().getTexture(InventoryMenu.BLOCK_ATLAS).setFilter(false, true);
             RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
             RenderSystem.setShaderTexture(1, resident && visibility != null ? visibility.getId() : 0);
-            shader.safeGetUniform("Masked").set(resident ? 1 : 0);
+            shader.safeGetUniform("Masked").set(resident && !gpu ? 1 : 0);
+            shader.safeGetUniform("Shadowed").set(gpu ? 1 : 0);
+            if (gpu) {
+                LightingOcclusion.bind(shader, lampPos);
+            }
             shader.safeGetUniform("Origin").set(drawOrigin);
             shader.safeGetUniform("Direction").set(drawDirection);
             shader.safeGetUniform("Tangent").set(drawTangent);
@@ -340,7 +352,7 @@ public final class LightingIllumination {
 
         /** Draws the lit faces, their vertices in the lamp's block space, with the lamp at {@code modelView}. */
         void draw(Matrix4f modelView, Matrix4f projection) {
-            if (buffer == null || empty || shader == null) {
+            if (buffer == null || (gpu ? !meshed : empty) || shader == null) {
                 return;
             }
             type.setupRenderState();
@@ -611,6 +623,16 @@ public final class LightingIllumination {
             beam.sight++;
         }
         beam.moving = moving;
+        // Still, and with the lamp and all it may light inside the grid around the camera: traced on the GPU.
+        boolean gpu = !moving && level == Minecraft.getInstance().level
+                && LightingOcclusion.covers(new AABB(from, hit.point()).inflate(radius + SCAN_MARGIN + 1));
+        if (gpu != beam.gpu) {
+            beam.gpu = gpu;
+            // What the CPU traced is out of date once it takes over again; the buffer is drawn another way.
+            beam.sight++;
+            beam.geometryDirty = true;
+        }
+        beam.lampPos = lamp.getBlockPos();
         if (beam.sightFrom == null || from.distanceToSqr(beam.sightFrom) >= SIGHT_TOLERANCE * SIGHT_TOLERANCE) {
             beam.sight++;
             beam.sightFrom = from;
@@ -647,7 +669,7 @@ public final class LightingIllumination {
                 long sight = beam.sight;
                 double tangent = beam.tangent;
                 // Rays in proportion to the surface: a floodlight's floor is traced there, not a few faces a frame.
-                int budget = SCAN_RAYS * Math.max(1, scan * scan / ((STAGE_RADIUS + 1) * (STAGE_RADIUS + 1)));
+                int budget = gpu ? 0 : SCAN_RAYS * Math.max(1, scan * scan / ((STAGE_RADIUS + 1) * (STAGE_RADIUS + 1)));
                 beam.scanning = CompletableFuture.supplyAsync(() -> scan(level, at, center, scan, axis, previous,
                         traced, origin, from, direction, tangent, range, sight, budget), Workers.LIGHT)
                         .exceptionally(LightingIllumination::failed);
@@ -665,7 +687,7 @@ public final class LightingIllumination {
         // On the same moving sub-level, only where they are in the world (to trace to) changes.
         boolean carried = posed || facePose != null;
         // A still light with every face in its beam traced has nothing to look at till something changes.
-        if (check || carried || beam.moving || beam.untraced > 0 || beam.settled != beam.sight
+        if (gpu ? check : check || carried || beam.moving || beam.untraced > 0 || beam.settled != beam.sight
                 || !direction.equals(beam.settledDirection)) {
             beam.rays = rays;
             beam.from = from;
@@ -734,9 +756,13 @@ public final class LightingIllumination {
                             continue;
                         }
                     }
-                    beam.refresh(face, geometry);
+                    if (!gpu) {
+                        beam.refresh(face, geometry);
+                    }
                 }
-                beam.ensure(face, geometry, inBeam);
+                if (!gpu) {
+                    beam.ensure(face, geometry, inBeam);
+                }
             }
             if (check) {
                 beam.checked = beam.at;
@@ -756,7 +782,7 @@ public final class LightingIllumination {
         if (beam.geometryDirty || posed || (beam.dirty || beam.pending) && beam.built != beam.at) {
             upload(beam);
         }
-        if (beam.empty) {
+        if (gpu ? !beam.meshed : beam.empty) {
             return;
         }
         beam.drawOrigin.set((float) origin.x, (float) origin.y, (float) origin.z);
@@ -814,6 +840,7 @@ public final class LightingIllumination {
             mesh = movingMesh(beam);
         }
         beam.empty = mesh == null;
+        beam.meshed = mesh != null;
         if (mesh != null) {
             if (beam.buffer == null) {
                 beam.buffer = new VertexBuffer(VertexBuffer.Usage.DYNAMIC);
@@ -928,6 +955,7 @@ public final class LightingIllumination {
         DIRTY_SECTIONS.clear();
         DIRTY_COLUMNS.clear();
         frame++;
+        LightingOcclusion.update();
         for (Iterator<Map.Entry<StageLightBlock.Entity, Beam>> it = BEAMS.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<StageLightBlock.Entity, Beam> entry = it.next();
             if (entry.getKey().isRemoved() || frame - entry.getValue().drawn > FORGET_FRAMES) {
@@ -961,6 +989,7 @@ public final class LightingIllumination {
         long key = SectionPos.asLong(x, y, z);
         DIRTY_SECTIONS.add(key);
         LightingRaycast.sectionChanged(key);
+        LightingOcclusion.sectionChanged(x, y, z);
     }
 
     /** Blocks between these corners, inclusive, changed (LevelRendererMixin). */
@@ -978,6 +1007,7 @@ public final class LightingIllumination {
     public static void chunkChanged(int x, int z) {
         DIRTY_COLUMNS.add(ChunkPos.asLong(x, z));
         LightingRaycast.chunkChanged(x, z);
+        LightingOcclusion.chunkChanged(x, z);
     }
 
     /** Whether any block changed since the last frame (see sectionChanged). */
