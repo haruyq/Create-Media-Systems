@@ -13,46 +13,57 @@ class SyncClockTest {
     @Test
     void laterStreamsOfOnePlaybackSkipToTheFirst() throws Exception {
         long asked = System.nanoTime();
-        assertEquals(0, SyncClock.start("song", 10, origin(asked, 10), 0).skipSeconds(), "the first stream plays at once");
+        assertEquals(0, SyncClock.start(null, "song", 10, origin(asked, 10), 0).skipSeconds(), "the first stream plays at once");
         Thread.sleep(300);
         // Asked for the same start but ready 0.3 s later: drop 0.3 s to line up with the first.
-        assertEquals(0.3, SyncClock.start("song", 10, origin(asked, 10), 0).skipSeconds(), 0.1);
+        assertEquals(0.3, SyncClock.start(null, "song", 10, origin(asked, 10), 0).skipSeconds(), 0.1);
         // Asked 0.05 s later (one server tick), also ready 0.3 s late.
-        assertEquals(0.25, SyncClock.start("song", 10.05, origin(asked, 10.05), 0).skipSeconds(), 0.1);
+        assertEquals(0.25, SyncClock.start(null, "song", 10.05, origin(asked, 10.05), 0).skipSeconds(), 0.1);
     }
 
     /** A speaker that asked one tick ahead of its pair (the source ticked between them) waits for it. */
     @Test
     void aStreamAheadOfTheClockWaits() {
         long asked = System.nanoTime();
-        SyncClock.start("pair", 10, origin(asked, 10), 0);
-        assertEquals(-0.05, SyncClock.start("pair", 10.05, origin(asked, 10.05), 0).skipSeconds(), 0.01);
+        SyncClock.start(null, "pair", 10, origin(asked, 10), 0);
+        assertEquals(-0.05, SyncClock.start(null, "pair", 10.05, origin(asked, 10.05), 0).skipSeconds(), 0.01);
     }
 
     /** A fresh disc's first loads take a while: streams asked for together still line up however late. */
     @Test
     void streamsAskedTogetherAreOnePlaybackHoweverLateTheyAreReady() throws Exception {
         long asked = System.nanoTime();
-        SyncClock.start("fresh", 0, origin(asked, 0), 0);
+        SyncClock.start(null, "fresh", 0, origin(asked, 0), 0);
         Thread.sleep(2_100);
-        assertEquals(2.1, SyncClock.start("fresh", 0, origin(asked, 0), 0).skipSeconds(), 0.2);
+        assertEquals(2.1, SyncClock.start(null, "fresh", 0, origin(asked, 0), 0).skipSeconds(), 0.2);
     }
 
     @Test
     void aFarOffStartIsAnotherPlayback() {
         long asked = System.nanoTime();
-        SyncClock.start("other", 0, origin(asked, 0), 0);
-        assertEquals(0, SyncClock.start("other", 120, origin(asked, 120), 0).skipSeconds(),
+        SyncClock.start(null, "other", 0, origin(asked, 0), 0);
+        assertEquals(0, SyncClock.start(null, "other", 120, origin(asked, 120), 0).skipSeconds(),
                 "a different playback must not skip");
+    }
+
+    @Test
+    void anotherSourcePlayingTheSameTrackKeepsItsOwnClock() {
+        long asked = System.nanoTime();
+        var first = new net.minecraft.core.BlockPos(1, 2, 3);
+        var second = new net.minecraft.core.BlockPos(4, 5, 6);
+        SyncClock.start(first, "shared", 30, origin(asked, 30), 7);
+        SyncClock.start(second, "shared", 0, origin(asked, 0), 8);
+        assertEquals(0, SyncClock.start(first, "shared", 30, origin(asked, 30), 7).skipSeconds(), 0.1,
+                "the first source's pair still lines up with it");
     }
 
     /** Streams ready apart start on the device clock that far apart, all mapped from one moment. */
     @Test
     void streamsStartAsFarApartAsTheyWereReady() throws Exception {
         long asked = System.nanoTime();
-        SyncClock.Start first = SyncClock.start("timed", 5, origin(asked, 5), 0);
+        SyncClock.Start first = SyncClock.start(null, "timed", 5, origin(asked, 5), 0);
         Thread.sleep(50);
-        SyncClock.Start second = SyncClock.start("timed", 5, origin(asked, 5), 0);
+        SyncClock.Start second = SyncClock.start(null, "timed", 5, origin(asked, 5), 0);
         long firstAt = first.playAt(1_000_000_000L);
         // Asked later, at a device clock reading that has moved on in coarse steps: still mapped like the first.
         long secondAt = second.playAt(1_020_000_000L);
@@ -67,10 +78,10 @@ class SyncClockTest {
     @Test
     void streamsOfOneLoadAreOnePlaybackHoweverLateTheyAsk() throws Exception {
         long asked = System.nanoTime();
-        SyncClock.start("loading", 0, origin(asked, 0), 7);
+        SyncClock.start(null, "loading", 0, origin(asked, 0), 7);
         Thread.sleep(2_100);
-        assertEquals(2.1, SyncClock.start("loading", 0, origin(System.nanoTime(), 0), 7).skipSeconds(), 0.2);
-        assertEquals(0, SyncClock.start("loading", 0, origin(System.nanoTime(), 0), 8).skipSeconds(),
+        assertEquals(2.1, SyncClock.start(null, "loading", 0, origin(System.nanoTime(), 0), 7).skipSeconds(), 0.2);
+        assertEquals(0, SyncClock.start(null, "loading", 0, origin(System.nanoTime(), 0), 8).skipSeconds(),
                 "a new load starts over");
     }
 }

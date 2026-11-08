@@ -14,11 +14,14 @@ import javax.sound.sampled.AudioFormat;
 
 import org.haruyq.createmediasystems.stream.Streams;
 
+import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.client.sounds.AudioStream;
 
 class NativeAudioTest {
+    private static final BlockPos JUKEBOX = new BlockPos(3, 64, 3);
+
     private static final URI SOURCE = URI.create("https://media.invalid/synthetic.mkv");
     private static final NativeAudio.Status VOD = new NativeAudio.Status(true, false, true, false, false);
 
@@ -120,7 +123,7 @@ class NativeAudioTest {
 
     private static AudioStream open(Supplier<NativeAudio.Backend> players, URI source, long asked, Streams.Channel channel) {
         try {
-            return NativeAudio.open(players, source, "jukebox", 0, null, 0, asked, () -> false, channel, null, s -> {});
+            return NativeAudio.open(players, source, JUKEBOX, 0, null, 0, asked, () -> false, channel, null, s -> {});
         } catch (IOException error) {
             throw new java.io.UncheckedIOException(error);
         }
@@ -161,14 +164,14 @@ class NativeAudioTest {
             players.add(player);
             return player;
         };
-        Object jukebox = "jukebox at 0 64 0";
+        BlockPos jukebox = new BlockPos(0, 64, 0);
         long asked = System.nanoTime();
         AudioStream left = NativeAudio.open(open, source, jukebox, 0, null, 0, asked, () -> false, Streams.Channel.LEFT, null, s -> {});
         // 60 s on, a server at 18 TPS says only 54 s have played.
         AudioStream right = NativeAudio.open(open, source, jukebox, 0, null, 54, asked + 60_000_000_000L,
                 () -> false, Streams.Channel.RIGHT, null, s -> {});
         // Another source playing the same disc is a playback of its own.
-        AudioStream other = NativeAudio.open(open, source, "jukebox at 9 64 9", 0, null, 54, asked + 60_000_000_000L,
+        AudioStream other = NativeAudio.open(open, source, new BlockPos(9, 64, 9), 0, null, 54, asked + 60_000_000_000L,
                 () -> false, Streams.Channel.MIX, null, s -> {});
         assertEquals(2, players.size());
         assertEquals(List.of("tap", "start", "resume", "tap"), players.get(0).actions);
@@ -401,12 +404,12 @@ class NativeAudioTest {
             return player;
         };
         long asked = System.nanoTime();
-        AudioStream left = NativeAudio.open(open, source, "jukebox", 7, null, 0, asked, () -> false,
+        AudioStream left = NativeAudio.open(open, source, JUKEBOX, 7, null, 0, asked, () -> false,
                 Streams.Channel.LEFT, null, s -> {});
-        AudioStream right = NativeAudio.open(open, source, "jukebox", 7, null, 0, asked + 3_000_000_000L,
+        AudioStream right = NativeAudio.open(open, source, JUKEBOX, 7, null, 0, asked + 3_000_000_000L,
                 () -> false, Streams.Channel.RIGHT, null, s -> {});
         assertEquals(1, players.size(), "one load, one player");
-        AudioStream restarted = NativeAudio.open(open, source, "jukebox", 8, null, 0, asked + 500_000_000L,
+        AudioStream restarted = NativeAudio.open(open, source, JUKEBOX, 8, null, 0, asked + 500_000_000L,
                 () -> false, Streams.Channel.MIX, null, s -> {});
         assertEquals(2, players.size(), "a new load is a new playback, however soon");
         left.close();

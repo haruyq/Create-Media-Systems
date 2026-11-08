@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import org.haruyq.createmediasystems.stream.Streams;
 import org.junit.jupiter.api.Test;
 
 class PcmStreamTest {
@@ -19,7 +20,8 @@ class PcmStreamTest {
                                              Consumer<String> onInterrupted) {
         AtomicBoolean first = new AtomicBoolean(true);
         return new StreamSound.PcmStream(Feed.read(java.util.UUID.randomUUID().toString(), 0,
-                offset -> first.getAndSet(false) ? source : resume.from(offset), onInterrupted));
+                offset -> first.getAndSet(false) ? source : resume.from(offset), onInterrupted), null,
+                Streams.Channel.MIX, null);
     }
 
     /** format=ogg: half a second of a 440 Hz tone (made as the API makes it) comes out as the same PCM. */

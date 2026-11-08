@@ -27,7 +27,8 @@ import net.minecraft.core.BlockPos;
  * streams of a display's playback share a player with video, whose pictures the display shows (see {@link #screen}).
  */
 public final class NativeAudio {
-    private static final long OPEN_TIMEOUT_NANOS = 90_000_000_000L;
+    /** What the server waits for its listeners to load a track (see Streams#MAX_LOAD_TICKS). */
+    private static final long OPEN_TIMEOUT_NANOS = Streams.MAX_LOAD_TICKS * 50_000_000L;
     // Let the final four 100 ms OpenAL chunks finish before returning EOF.
     private static final long END_TAIL_NANOS = 500_000_000L;
     /** Longest a player waits, ready, for the streams joining it to tap it (see Shared#allTapped). */
@@ -35,7 +36,7 @@ public final class NativeAudio {
     /** How far a playback may start off the server's position before it seeks there; seeking stalls a moment. */
     private static final long SYNC_TOLERANCE_NANOS = 300_000_000L;
     /** Longest a loaded playback waits, paused, for the server to say play: the server's barrier, and then some. */
-    private static final long GO_TIMEOUT_NANOS = 15_000_000_000L;
+    private static final long GO_TIMEOUT_NANOS = Streams.BARRIER_TICKS * 50_000_000L + 5_000_000_000L;
     /** How often a playing video on demand checks how far its player is off where it should be (see Shared#correct). */
     private static final long CHECK_NANOS = 1_000_000_000L;
     /** Before the first check: VLC takes a moment to get going after it is told to play. */
@@ -76,7 +77,7 @@ public final class NativeAudio {
      * unknown or live) once it is loaded; with {@code go}, its player then waits, paused, for the server's word to
      * play, so every listener starts it together (see Streams#started).
      */
-    static AudioStream open(URI source, @Nullable Object playback, long load, @Nullable Streams.Video video,
+    static AudioStream open(URI source, @Nullable BlockPos playback, long load, @Nullable Streams.Video video,
                             double startSeconds, long requestedAt, BooleanSupplier cancelled, Streams.Channel channel,
                             @Nullable CompletableFuture<Go> go, DoubleConsumer loaded) throws IOException {
         if (Vlc.MISSING != null) {
@@ -152,7 +153,7 @@ public final class NativeAudio {
      * Joins the player of the same playback of {@code source} on this client if there is one, else opens one from
      * {@code players} (VLC's, or a test's stand-in).
      */
-    static AudioStream open(Supplier<Backend> players, URI source, @Nullable Object playback, long load,
+    static AudioStream open(Supplier<Backend> players, URI source, @Nullable BlockPos playback, long load,
                                     @Nullable BlockPos display, double startSeconds, long requestedAt,
                                     BooleanSupplier cancelled, Streams.Channel channel,
                                     @Nullable CompletableFuture<Go> go, DoubleConsumer loaded) throws IOException {
@@ -349,7 +350,7 @@ public final class NativeAudio {
     private static final class Shared {
         final Key key;
         @Nullable
-        final Object playback;
+        final BlockPos playback;
         /** Which load of the track it plays (see Streams.Load); 0 if unknown. */
         final long load;
         final Backend owner;
@@ -369,7 +370,7 @@ public final class NativeAudio {
         /** When it last sought; on the sound thread (see correct). */
         private long seekedAt;
 
-        Shared(Key key, @Nullable Object playback, long load, Backend owner, long origin) {
+        Shared(Key key, @Nullable BlockPos playback, long load, Backend owner, long origin) {
             this.key = key;
             this.playback = playback;
             this.load = load;
@@ -388,7 +389,7 @@ public final class NativeAudio {
          * as the server's position for it lags the one we hear whenever the server falls below 20 TPS, and a fresh
          * start goes by time, so a restart is new.
          */
-        synchronized boolean join(long origin, @Nullable Object playback, long load, boolean midway) {
+        synchronized boolean join(long origin, @Nullable BlockPos playback, long load, boolean midway) {
             if (users == 0 || playing.isCompletedExceptionally() || !samePlayback(origin, playback, load, midway)) {
                 return false;
             }
@@ -396,7 +397,7 @@ public final class NativeAudio {
             return true;
         }
 
-        private boolean samePlayback(long origin, @Nullable Object playback, long load, boolean midway) {
+        private boolean samePlayback(long origin, @Nullable BlockPos playback, long load, boolean midway) {
             boolean sameSource = playback != null && playback.equals(this.playback);
             if (load != 0 && this.load != 0) {
                 return live || sameSource && load == this.load;

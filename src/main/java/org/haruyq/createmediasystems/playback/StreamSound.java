@@ -71,7 +71,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private final String track;
     /** What plays it on the server (a source block), so streams of one source share a native player; null if unknown. */
     @Nullable
-    private final Object playback;
+    private final BlockPos playback;
     /** Which load of its source's track it plays (see Streams.Load), to tell its playback by; 0 if unknown. */
     private final long load;
     private final double startSeconds;
@@ -127,7 +127,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      * "has a disc" block state only at the end of its tick, so at first the disc may not be there yet.
      * {@code started} runs once the audio is loaded and about to play.
      */
-    public StreamSound(DoubleFunction<String> urlAt, String track, @Nullable Object playback, long load,
+    public StreamSound(DoubleFunction<String> urlAt, String track, @Nullable BlockPos playback, long load,
                 double startSeconds, SoundSource source, @Nullable Supplier<Vec3> position,
                 @Nullable Supplier<Vec3> tracedFrom, BooleanSupplier present,
                 BooleanSupplier nearby, DoubleSupplier gain, @Nullable Streams.Video video, Streams.Channel channel,
@@ -308,7 +308,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 // the server was when it said to play. A fresh start plays from the top for everyone: the server
                 // holds it at 0 until a listener has it loaded (see Streams#started).
                 double catchUp = startSeconds > 0 ? (System.nanoTime() - requestedAt) / 1e9 : 0;
-                SyncClock.Start start = SyncClock.start(track, startSeconds + catchUp,
+                SyncClock.Start start = SyncClock.start(playback, track, startSeconds + catchUp,
                         requestedAt - Math.round(startSeconds * 1e9), load);
                 opened.lineUp(catchUp + start.skipSeconds(), start);
                 started.accept(0);
@@ -332,7 +332,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             // 90 s: the API may first wait out YouTube's pre-roll ad before the audio exists (see API.md).
             URI uri = URI.create(urlAt.apply(offset));
             HttpResponse<InputStream> response = HTTP.send(HttpRequest.newBuilder(uri)
-                    .timeout(Duration.ofSeconds(90)).build(), HttpResponse.BodyHandlers.ofInputStream());
+                    .timeout(Duration.ofMillis(Streams.MAX_LOAD_TICKS * 50)).build(), HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() != 200) {
                 try (InputStream body = response.body()) {
                     throw new IOException(UrlPolicy.errorDetail(response.statusCode(),
@@ -457,18 +457,10 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         private record Played(long at, long position, int bytes) {
         }
 
-        PcmStream(Feed.Reader feed) {
-            this(feed, null, Streams.Channel.MIX);
-        }
-
-        PcmStream(Feed.Reader feed, @Nullable Object playback, Streams.Channel channel) {
-            this(feed, playback, channel, null);
-        }
-
-        PcmStream(Feed.Reader feed, @Nullable Object playback, Streams.Channel channel, @Nullable String track) {
+        PcmStream(Feed.Reader feed, @Nullable BlockPos playback, Streams.Channel channel, @Nullable String track) {
             this.track = track;
             this.feed = feed;
-            this.playback = playback instanceof BlockPos pos ? pos.immutable() : null;
+            this.playback = playback == null ? null : playback.immutable();
             this.channel = channel;
             if (this.playback != null) {
                 LightingMedia.openRelay(this.playback, this);

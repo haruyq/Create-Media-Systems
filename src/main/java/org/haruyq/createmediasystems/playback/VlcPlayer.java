@@ -56,7 +56,6 @@ public final class VlcPlayer implements NativeAudio.Backend {
     private double duration;
     /** See {@link #seconds}; set as status is asked. */
     private volatile double seconds;
-    @Nullable
 
     /** The tallest picture its video plays at (0 for any); unused without video. */
     private final int maxHeight;

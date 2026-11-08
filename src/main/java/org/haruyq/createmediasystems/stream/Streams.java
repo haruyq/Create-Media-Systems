@@ -66,7 +66,7 @@ public final class Streams {
      * Longest a track waits for the rest of its listeners once one has it loaded: those slower to download it don't
      * hold everyone up for long, and catch up when they have it (see started).
      */
-    static final long BARRIER_TICKS = 10 * 20;
+    public static final long BARRIER_TICKS = 10 * 20;
     private static final long LOADING = -1;
     /**
      * Per source, how its listeners load its track (see Load). Kept by the source's identity, or its place before it
