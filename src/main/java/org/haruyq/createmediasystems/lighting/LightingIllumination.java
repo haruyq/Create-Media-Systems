@@ -54,6 +54,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -636,6 +638,8 @@ public final class LightingIllumination {
             beam.resume = -1;
             int count = beam.faces.size();
             int start = beam.next < count ? beam.next : 0;
+            long checkedColumn = Long.MIN_VALUE;
+            ChunkAccess checkedChunk = null;
             for (int n = 0; n < count; n++) {
                 int i = (start + n) % count;
                 beam.face = i;
@@ -678,14 +682,22 @@ public final class LightingIllumination {
                     geometry = face.still;
                 }
                 if (inBeam) {
-                    if (check && (!level.isLoaded(face.pos) || level.getBlockState(face.pos) != face.state)) {
-                        beam.faces.set(i, null);
-                        if (face.untraced) {
-                            beam.untraced--;
+                    if (check) {
+                        long column = ChunkPos.asLong(face.pos);
+                        if (column != checkedColumn) {
+                            checkedColumn = column;
+                            checkedChunk = level.getChunkSource().getChunk(face.pos.getX() >> 4, face.pos.getZ() >> 4,
+                                    ChunkStatus.FULL, false);
                         }
-                        beam.dirty = true;
-                        beam.changedFaces.set(i);
-                        continue;
+                        if (checkedChunk == null || checkedChunk.getBlockState(face.pos) != face.state) {
+                            beam.faces.set(i, null);
+                            if (face.untraced) {
+                                beam.untraced--;
+                            }
+                            beam.dirty = true;
+                            beam.changedFaces.set(i);
+                            continue;
+                        }
                     }
                     beam.refresh(face, geometry);
                 }
@@ -828,7 +840,8 @@ public final class LightingIllumination {
     }
 
     private static void visibility(Beam beam) {
-        boolean changed = false;
+        int first = Integer.MAX_VALUE;
+        int last = -1;
         var pixels = beam.visibility.getPixels();
         for (int i = beam.changedFaces.nextSetBit(0); i >= 0; i = beam.changedFaces.nextSetBit(i + 1)) {
             int slot = beam.slots[i];
@@ -848,11 +861,13 @@ public final class LightingIllumination {
                 beam.litCells += lit;
                 beam.cells[at] = lit;
                 pixels.setPixelRGBA(at % 256, at / 256, lit == 1 ? -1 : 0);
-                changed = true;
+                first = Math.min(first, at / 256);
+                last = Math.max(last, at / 256);
             }
         }
-        if (changed) {
-            beam.visibility.upload();
+        if (last >= first) {
+            beam.visibility.bind();
+            pixels.upload(0, 0, first, 0, first, 256, last - first + 1, false, false);
         }
         beam.empty = beam.litCells == 0;
         beam.changedFaces.clear();

@@ -20,6 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -232,13 +233,67 @@ public final class LightingRaycast {
     private BlockHitResult trace(Vec3 from, Vec3 to, Predicate<BlockPos> allowed) {
         ClipContext context = new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
                 CollisionContext.empty());
-        return BlockGetter.traverseBlocks(from, to, context, (clip, pos) -> {
-            if (pos.equals(ignored)) {
-                return null;
+        if (level.isDebug()) {
+            return BlockGetter.traverseBlocks(from, to, context, (clip, pos) -> {
+                if (pos.equals(ignored)) {
+                    return null;
+                }
+                List<AABB> boxes = cache.boxes(pos, clip, cacheShapes);
+                return boxes.isEmpty() || !allowed.test(pos) ? null : clip(boxes, clip.getFrom(), clip.getTo(), pos);
+            }, clip -> null);
+        }
+        if (from.equals(to)) {
+            return null;
+        }
+        double ax = Mth.lerp(-1e-7, from.x, to.x), ay = Mth.lerp(-1e-7, from.y, to.y), az = Mth.lerp(-1e-7, from.z, to.z);
+        double dx = Mth.lerp(-1e-7, to.x, from.x) - ax;
+        double dy = Mth.lerp(-1e-7, to.y, from.y) - ay;
+        double dz = Mth.lerp(-1e-7, to.z, from.z) - az;
+        int x = Mth.floor(ax), y = Mth.floor(ay), z = Mth.floor(az);
+        int sx = Mth.sign(dx), sy = Mth.sign(dy), sz = Mth.sign(dz);
+        double ix = sx == 0 ? Double.MAX_VALUE : sx / dx;
+        double iy = sy == 0 ? Double.MAX_VALUE : sy / dy;
+        double iz = sz == 0 ? Double.MAX_VALUE : sz / dz;
+        double tx = ix * (sx > 0 ? 1 - Mth.frac(ax) : Mth.frac(ax));
+        double ty = iy * (sy > 0 ? 1 - Mth.frac(ay) : Mth.frac(ay));
+        double tz = iz * (sz > 0 ? 1 - Mth.frac(az) : Mth.frac(az));
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        while (true) {
+            pos.set(x, y, z);
+            List<AABB> boxes = cache.boxes(pos, context, cacheShapes);
+            Section section = cache.last;
+            boolean empty = !section.missing && section.blocks == null;
+            int sectionX = x >> 4, sectionY = y >> 4, sectionZ = z >> 4;
+            while (true) {
+                if (!empty && !boxes.isEmpty() && !pos.equals(ignored) && allowed.test(pos)) {
+                    BlockHitResult hit = clip(boxes, from, to, pos);
+                    if (hit != null) {
+                        return hit;
+                    }
+                }
+                if (!(tx <= 1 || ty <= 1 || tz <= 1)) {
+                    return null;
+                }
+                if (tx < ty && tx < tz) {
+                    x += sx;
+                    tx += ix;
+                } else if (ty < tz) {
+                    y += sy;
+                    ty += iy;
+                } else {
+                    z += sz;
+                    tz += iz;
+                }
+                if (x >> 4 != sectionX || y >> 4 != sectionY || z >> 4 != sectionZ) {
+                    break;
+                }
+                // Keep vanilla's boundary order; look up the section once and skip its blocks if it's empty.
+                if (!empty) {
+                    pos.set(x, y, z);
+                    boxes = section.boxes(level, pos, context, cacheShapes);
+                }
             }
-            List<AABB> boxes = cache.boxes(pos, clip, cacheShapes);
-            return boxes.isEmpty() || !allowed.test(pos) ? null : clip(boxes, clip.getFrom(), clip.getTo(), pos);
-        }, clip -> null);
+        }
     }
 
     /**

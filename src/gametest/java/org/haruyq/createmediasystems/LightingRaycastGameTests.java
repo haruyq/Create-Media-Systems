@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingRaycast;
@@ -17,12 +18,15 @@ import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -32,6 +36,55 @@ public final class LightingRaycastGameTests {
     private static final List<ServerSubLevel> RETIRED = new ArrayList<>();
 
     private LightingRaycastGameTests() {
+    }
+
+    @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 100)
+    public static void emptySectionsKeepVanillaHitsAtBoundariesAndInsideThinShapes(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos center = new BlockPos(-128, 240, -128);
+        Random random = new Random(1708);
+        for (int x = -12; x <= -5; x++) {
+            for (int z = -12; z <= -5; z++) {
+                level.getChunk(x, z);
+            }
+        }
+        BlockState[] states = {Blocks.STONE.defaultBlockState(), Blocks.GLASS_PANE.defaultBlockState(),
+                Blocks.STONE_SLAB.defaultBlockState(), Blocks.OAK_STAIRS.defaultBlockState()};
+        List<BlockPos> targets = new ArrayList<>();
+        for (int i = 0; i < 32; i++) {
+            BlockPos target = center.offset(random.nextInt(-48, 49), random.nextInt(-32, 33), random.nextInt(-48, 49));
+            level.setBlockAndUpdate(target, states[i % states.length]);
+            targets.add(target);
+        }
+        LightingRaycast rays = new LightingRaycast(level, center.above(70), true);
+        helper.assertTrue(rays.clip(Vec3.ZERO, Vec3.ZERO).block().getType() == HitResult.Type.MISS
+                        && rays.clip(Vec3.ZERO, new Vec3(-Double.MIN_VALUE, 0, 0)).block().getType() == HitResult.Type.MISS,
+                "zero and subnormal rays must finish without a hit");
+        for (int i = 0; i < 2048; i++) {
+            Vec3 to = targets.get(i % targets.size()).getCenter();
+            Vec3 from = Vec3.atLowerCornerOf(center).add(random.nextDouble(-48, 48), random.nextDouble(-32, 32),
+                    random.nextDouble(-48, 48));
+            if (i % 4 == 0) {
+                from = to;
+                to = from.add(random.nextDouble(-20, 20), random.nextDouble(-20, 20), random.nextDouble(-20, 20));
+            } else if (i % 4 == 1) {
+                from = Vec3.atLowerCornerOf(targets.get(i % targets.size())).add(-32, 0, -32);
+                to = from.add(64, 0, 64);
+            } else if (i % 4 == 2) {
+                from = to.add(i % 3 == 0 ? -48 : 0, i % 3 == 1 ? -32 : 0, i % 3 == 2 ? -48 : 0);
+            }
+            BlockHitResult expected = level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE, CollisionContext.empty()));
+            BlockHitResult actual = rays.clip(from, to).block();
+            helper.assertTrue(actual.getType() == expected.getType(), "hit type differs on ray " + i);
+            if (expected.getType() == HitResult.Type.BLOCK) {
+                helper.assertTrue(actual.getBlockPos().equals(expected.getBlockPos())
+                                && actual.getDirection() == expected.getDirection() && actual.isInside() == expected.isInside()
+                                && actual.getLocation().distanceToSqr(expected.getLocation()) < 1e-18,
+                        "hit differs on ray " + i + ": " + from + " to " + to);
+            }
+        }
+        helper.succeed();
     }
 
     @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 20)
