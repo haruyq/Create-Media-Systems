@@ -553,6 +553,12 @@ public final class LightingIllumination {
         render(lamp, origin, direction, halfAngle, range, strength, color, hit, rays, matrix, buffers, STAGE_RADIUS);
     }
 
+    /** Whether anything within {@code reach} blocks of {@code point} (in the world) is in the camera's view now. */
+    static boolean inView(Vec3 point, double reach) {
+        var frustum = Minecraft.getInstance().levelRenderer.getFrustum();
+        return frustum == null || frustum.isVisible(new AABB(point, point).inflate(reach));
+    }
+
     /**
      * The light of {@code lamp}'s beam on the faces it reaches this frame, {@code origin} and {@code direction} in
      * its block space. {@code hit} is where the beam's middle meets a block (from {@code rays}); faces are found up
@@ -606,6 +612,11 @@ public final class LightingIllumination {
         if (beam.sightFrom == null || from.distanceToSqr(beam.sightFrom) >= SIGHT_TOLERANCE * SIGHT_TOLERANCE) {
             beam.sight++;
             beam.sightFrom = from;
+        }
+        // Nothing it lights is in view: its faces wait as they are (no scan, no trace, nothing drawn) till it is. Its
+        // sight still moves on above, so what changed meanwhile is traced again once it's back.
+        if (level == Minecraft.getInstance().level && !inView(hit.point(), radius + SCAN_MARGIN)) {
+            return;
         }
         if (beam.scanning != null && beam.scanning.isDone()) {
             Scan found = beam.scanning.getNow(null);

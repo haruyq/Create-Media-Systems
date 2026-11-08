@@ -86,6 +86,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static boolean effectsPending;
     private static final MethodHandle SHADOW_PASS = shadowMethod();
     private static boolean shaderApiFailed;
+    /** How often (in frames) a beam out of view is traced again, to see whether it has swung into view. */
+    private static final int OFF_SCREEN_FRAMES = 8;
+    /** Blocks round a beam's ends its light may still reach, for whether it is in view. */
+    private static final double OFF_SCREEN_REACH = 6;
     private static final int SIDES = 16;
     private static final int RAYS = 9;
 
@@ -296,6 +300,12 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         int pattern = lamp.laser() ? Math.max(2, group.pattern) : Math.min(1, group.pattern);
         BeamFrame frame = new BeamFrame(lamp, origin);
         Trace trace = TRACES.computeIfAbsent(lamp, ignored -> new Trace());
+        // A beam out of view (as last traced) is traced again only every few frames, often enough to see it swing
+        // back into view; meanwhile neither it nor its light is drawn, nor its light's faces looked at.
+        if (level == Minecraft.getInstance().level && !trace.inView(frame)
+                && Math.floorMod(LightingIllumination.frame() + lamp.getBlockPos().hashCode(), OFF_SCREEN_FRAMES) != 0) {
+            return;
+        }
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
         MultiBufferSource effects = level == Minecraft.getInstance().level ? EFFECTS : buffers;
         VertexConsumer beam = effects == EFFECTS && LightingBeams.available() ? null
@@ -442,6 +452,22 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         LightingGeometry.Plane[] middle = new LightingGeometry.Plane[0];
         /** The frame last traced, and from where: a light held still traces again only when a block changes. */
         long traced = -2;
+
+        /**
+         * Whether the beam as last traced, from the lamp to where it ends (and the light it casts there, a few blocks
+         * round), is in the camera's view; true before it is first traced.
+         */
+        boolean inView(BeamFrame frame) {
+            if (ends.length == 0) {
+                return true;
+            }
+            AABB bounds = new AABB(frame.world(frame.origin), frame.world(frame.origin));
+            for (Vec3 end : ends) {
+                bounds = bounds.minmax(new AABB(frame.world(end), frame.world(end)));
+            }
+            return LightingIllumination.inView(bounds.getCenter(),
+                    Math.max(bounds.getXsize(), Math.max(bounds.getYsize(), bounds.getZsize())) / 2 + OFF_SCREEN_REACH);
+        }
         Vec3 lastOrigin;
         Vec3 lastForward;
         Vec3 lastRight;
