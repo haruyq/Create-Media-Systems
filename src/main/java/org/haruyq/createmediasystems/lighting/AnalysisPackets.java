@@ -90,14 +90,6 @@ public final class AnalysisPackets {
                     .writeLong(value.clientSentNanos).writeInt(value.upstreamMillis);
         }, buf -> new Status(uuid(buf), uuid(buf), buf.readBoolean(), buf.readLong(), buf.readInt(), buf.readLong(), buf.readInt()));
 
-        public Status(UUID source, UUID session, boolean ready, long millis) {
-            this(source, session, ready, millis, -1, 0, 0);
-        }
-
-        public Status(UUID source, UUID session, boolean ready, long millis, int lagMillis) {
-            this(source, session, ready, millis, lagMillis, 0, 0);
-        }
-
         @Override
         public Type<Status> type() {
             return TYPE;

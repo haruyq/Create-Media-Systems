@@ -68,7 +68,6 @@ class AnalysisTimelineTest {
         assertEquals(0.5f, timeline.sample(200).level(), 1e-6);
 
         timeline.clearLive();
-        assertEquals(-1, timeline.liveEnd());
         assertNull(timeline.sample(200));
         assertTrue(timeline.prepared());
         assertEquals(0.5f, timeline.sample(50).level(), 1e-6);

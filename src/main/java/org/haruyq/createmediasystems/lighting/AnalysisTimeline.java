@@ -75,10 +75,6 @@ public final class AnalysisTimeline {
         return frames.isEmpty() || millis >= frames.lastKey() + AnalysisFrame.INTERVAL ? null : sample(frames, millis);
     }
 
-    public long liveEnd() {
-        return live.isEmpty() ? -1 : live.lastKey();
-    }
-
     public void clearLive() {
         live.clear();
     }

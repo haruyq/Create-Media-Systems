@@ -40,11 +40,17 @@ final class AnalysisLease {
         return true;
     }
 
-    boolean accepts(UUID player, int epoch, long next) {
-        return accepts(player, epoch, next, true);
-    }
-
     boolean accepts(UUID player, int epoch, long next, boolean prepared) {
         return player.equals(owner) && epoch == generation && next > (prepared ? sequence : liveSequence);
+    }
+
+    /** The owner's upload {@code next} (see accepts) was taken at {@code now}. */
+    void accepted(long next, boolean prepared, long now) {
+        if (prepared) {
+            sequence = next;
+        } else {
+            liveSequence = next;
+        }
+        published = now;
     }
 }

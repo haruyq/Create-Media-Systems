@@ -327,16 +327,14 @@ public final class AnalysisCoordinator {
         if (!(upload.prepared() ? timeline.publishPrepared(upload.frames()) : timeline.add(upload.frames(), false))) {
             return;
         }
+        session.lease.accepted(upload.sequence(), upload.prepared(), System.nanoTime() / 1_000_000);
         if (upload.prepared()) {
             session.receivedAt = tick;
-            session.lease.sequence = upload.sequence();
             PacketDistributor.sendToPlayer(player, new AnalysisPackets.Accepted(session.source, session.session,
                     session.lease.generation, upload.sequence()));
         } else {
             session.liveTokens--;
-            session.lease.liveSequence = upload.sequence();
         }
-        session.lease.published = System.nanoTime() / 1_000_000;
         if (!upload.prepared()) {
             for (ServerPlayer listener : player.serverLevel().players()) {
                 if (session.audience.containsKey(listener.getUUID())) {

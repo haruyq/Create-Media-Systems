@@ -45,7 +45,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -706,12 +705,6 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         @Override
         public Packet<ClientGamePacketListener> getUpdatePacket() {
             return ClientboundBlockEntityDataPacket.create(this);
-        }
-
-        public AABB getRenderBoundingBox() {
-            Direction facing = getBlockState().getValue(FACING);
-            AABB box = new AABB(worldPosition).minmax(new AABB(at(worldPosition, facing, 3, 1, 1)));
-            return SableCompat.toWorld(level, box.inflate(0.25));
         }
     }
 }

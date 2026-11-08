@@ -95,11 +95,11 @@ public final class AnalysisGameTests {
         AnalysisCoordinator.upload(fake, new AnalysisPackets.Upload(source, sessionId, 1, 0,
                 "https://example.com/next.mp4", true, List.of(frame(100, true, true))));
         helper.assertTrue(tracks.get("https://example.com/next.mp4").end() == end, "duplicate sequence was accepted");
-        AnalysisCoordinator.status(fake, new AnalysisPackets.Status(source, sessionId, true, 3_000, 600));
+        AnalysisCoordinator.status(fake, new AnalysisPackets.Status(source, sessionId, true, 3_000, 600, 0, 0));
         AnalysisDelay delay = (AnalysisDelay) get(session, "delay");
         helper.assertTrue(delay.from() == 200 && delay.to() == 750 && delay.start() >= 4_000,
                 "eligible viewer lag did not schedule a shared delay");
-        AnalysisCoordinator.status(fake, new AnalysisPackets.Status(source, sessionId, true, 3_000, 2_001));
+        AnalysisCoordinator.status(fake, new AnalysisPackets.Status(source, sessionId, true, 3_000, 2_001, 0, 0));
         helper.assertTrue(get(session, "delay").equals(delay), "invalid lag report changed the shared delay");
         player.control(VideoPlayerBlock.Action.NEXT, 0, null);
         AnalysisCoordinator.use(console);
