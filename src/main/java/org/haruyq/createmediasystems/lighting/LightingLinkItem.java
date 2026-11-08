@@ -148,7 +148,7 @@ public class LightingLinkItem extends Item {
                 && player.distanceToSqr(SableCompat.toWorld(player.level(), console.getBlockPos().getCenter())) < 128 * 128) {
             LightingSettings.Group group = console.settings.groups[console.settings.selectedGroup];
             group.target = target.getUUID();
-            group.motion = 3;
+            group.motion = LightingSettings.Group.MOTION_TRACK;
             console.changed();
             say(player, "following", target.getName().copy());
         }

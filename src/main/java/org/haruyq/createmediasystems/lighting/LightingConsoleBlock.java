@@ -29,6 +29,7 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -181,7 +182,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         private BlockPos resolvedAudio;
         private BlockPos resolvedVideo;
         private boolean refreshingLinks;
-        public final CompoundTag[] presets = new CompoundTag[6];
+        public final CompoundTag[] presets = new CompoundTag[LightingSettings.PRESETS];
         /** Other mods' settings for this console (see extras), by their mod id. */
         private final CompoundTag extras = new CompoundTag();
         public boolean formed;
@@ -663,7 +664,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             for (long pos : tag.getLongArray("Fixtures")) {
                 if (fixtures.size() < MAX_LIGHTS && !fixtures.contains(BlockPos.of(pos))) {
                     fixtures.add(BlockPos.of(pos));
-                    assignments.put(BlockPos.of(pos), index < groups.length ? Math.max(0, Math.min(5, groups[index])) : 0);
+                    assignments.put(BlockPos.of(pos), index < groups.length ? Mth.clamp(groups[index], 0, LightingSettings.GROUPS - 1) : 0);
                     families.put(BlockPos.of(pos), index < kinds.size() ? kinds.getString(index)
                             : StageLightBlock.Entity.DEFAULT_FAMILY);
                 }

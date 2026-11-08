@@ -44,44 +44,46 @@ public final class LightingPackets {
                 || change.control >= Control.values().length || !Float.isFinite(change.value)
                 || !Float.isFinite(change.other) || change.index < 0 || change.index >= 64
                 || change.control == Control.PRESET_BANK.ordinal() || change.control == Control.PRESET_SAVE.ordinal()
-                || change.control == Control.RANGE_ALL.ordinal() && Math.abs(change.value) != 1 && Math.abs(change.value) != 10
-                || change.control == Control.PRESET.ordinal() && (change.index >= 6 || change.value < 0 || change.value > 2)) {
+                || change.control == Control.RANGE_ALL.ordinal() && Math.abs(change.value) != 1
+                        && Math.abs(change.value) != LightingSettings.FAST_RANGE_STEP
+                || change.control == Control.PRESET.ordinal()
+                        && (change.index >= LightingSettings.PRESETS || change.value < 0 || change.value > 2)) {
             return false;
         }
         LightingSettings settings = console.settings;
         LightingSettings.Group group = settings.groups[change.group];
         int value = Math.round(change.value);
         switch (Control.values()[change.control]) {
-            case GROUP -> settings.selectedGroup = Mth.clamp(value, 0, LightingSettings.GROUPS - 1);
-            case BRIGHTNESS -> group.brightness = Mth.clamp(change.value, 0, 1);
-            case MASTER -> settings.master = Mth.clamp(change.value, 0, 1);
+            case GROUP -> settings.selectedGroup = value;
+            case BRIGHTNESS -> group.brightness = change.value;
+            case MASTER -> settings.master = change.value;
             case COLOR -> {
                 int slot = Mth.clamp(change.index, 0, LightingSettings.COLORS - 1);
                 group.colors[slot] = value & 0xFFFFFF;
                 group.colorCount = Math.max(group.colorCount, slot + 1);
                 settings.selectedColor = slot;
             }
-            case SLOT -> settings.selectedColor = Mth.clamp(value, 0, LightingSettings.COLORS - 1);
-            case COUNT -> group.colorCount = Mth.clamp(value, 1, LightingSettings.COLORS);
+            case SLOT -> settings.selectedColor = value;
+            case COUNT -> group.colorCount = value;
             case RGB -> {
                 int slot = Mth.clamp(change.index / 3, 0, LightingSettings.COLORS - 1);
                 int shift = (2 - change.index % 3) * 8;
                 group.colors[slot] = group.colors[slot] & ~(255 << shift) | Mth.clamp(value, 0, 255) << shift;
                 group.colorCount = Math.max(group.colorCount, slot + 1);
             }
-            case MAPPING -> group.mapping = Mth.clamp(value, 0, 3);
-            case VIDEO -> group.colorMode = Mth.clamp(value, 0, 1);
+            case MAPPING -> group.mapping = value;
+            case VIDEO -> group.colorMode = value;
             case AUDIO -> group.audio = value != 0;
-            case BAND -> group.audioBand = Mth.clamp(value, 0, 3);
-            case MOTION -> group.motion = Mth.clamp(value, 0, 3);
-            case PATTERN -> group.pattern = Mth.clamp(value, 0, 4);
-            case RANGE -> group.range = Mth.clamp(change.value, 2, LightingSettings.MAX_RANGE);
+            case BAND -> group.audioBand = value;
+            case MOTION -> group.motion = value;
+            case PATTERN -> group.pattern = value;
+            case RANGE -> group.range = change.value;
             case RANGE_ALL -> settings.shiftRange(value);
-            case SPREAD -> group.spread = Mth.clamp(change.value, 1, 70);
-            case SPEED -> group.speed = Mth.clamp(change.value, 0.05f, 4);
+            case SPREAD -> group.spread = change.value;
+            case SPEED -> group.speed = change.value;
             case AIM -> {
-                group.pan = Mth.clamp(change.value, -180, 180);
-                group.tilt = Mth.clamp(change.other, -85, 85);
+                group.pan = change.value;
+                group.tilt = change.other;
             }
             case ENABLED -> settings.enabled = value != 0;
             case CYCLE -> group.colorCycle = value != 0;
@@ -122,6 +124,7 @@ public final class LightingPackets {
                 console.hasVideo = false;
             }
         }
+        settings.normalize();
         return true;
     }
 
