@@ -457,7 +457,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         public boolean bind(StageLightBlock.Entity light, int group) {
             if (!formed || group < 0 || group >= LightingSettings.GROUPS
-                    || SableCompat.distance(level, worldPosition, light.getBlockPos()) > 128) {
+                    || SableCompat.distance(level, worldPosition, light.getBlockPos()) > SourceLinks.MAX_LINK_DISTANCE) {
                 return false;
             }
             refreshLinks();

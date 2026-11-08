@@ -72,10 +72,6 @@ public final class LightingBeams {
         sampler = GL20.glGetUniformLocation(program, "Sampler0");
     }
 
-    static boolean available() {
-        return program != 0;
-    }
-
     /**
      * Whether strips for {@code level} are drawn on the GPU now: in the client's world, with the beam program
      * loaded (it can fail to load, under some shader packs). If not, draw beams in LightingRenderer.beamBuffers.

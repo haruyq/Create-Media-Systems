@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.lighting.LightingScreens;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
@@ -271,7 +272,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
 
         /** Plays its Blu-ray player's video's sound from the screen's middle, unless a speaker plays it. */
         private void tick(ServerLevel level) {
-            if (level.getGameTime() % Streams.RELAY_TICKS != 0) {
+            if (!Streams.relayDue(level)) {
                 return;
             }
             Optional<BlockPos> linked = source();
@@ -340,7 +341,12 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
 
         @Override
         public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-            return saveCustomOnly(registries);
+            CompoundTag tag = saveCustomOnly(registries);
+            // Every client fetches the image itself: a link the server no longer allows reaches none of them.
+            if (!ServerConfig.isAllowed(image)) {
+                tag.remove("Image");
+            }
+            return tag;
         }
 
         @Override

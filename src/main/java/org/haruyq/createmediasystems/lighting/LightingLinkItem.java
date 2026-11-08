@@ -3,10 +3,10 @@ package org.haruyq.createmediasystems.lighting;
 import java.util.List;
 import java.util.UUID;
 
+import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
@@ -23,7 +23,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
 
 public class LightingLinkItem extends Item {
     public LightingLinkItem(Properties properties) {
@@ -82,7 +81,7 @@ public class LightingLinkItem extends Item {
             say(player, "pick_first");
             return;
         }
-        if (SableCompat.distance(level, console.getBlockPos(), pos) > 128
+        if (SableCompat.distance(level, console.getBlockPos(), pos) > SourceLinks.MAX_LINK_DISTANCE
                 || !SableCompat.mayInteract(level, player, console.getBlockPos())) {
             say(player, "too_far");
             return;
@@ -104,8 +103,7 @@ public class LightingLinkItem extends Item {
             } else {
                 say(player, "full");
             }
-        } else if (block instanceof VideoPlayerBlock.Entity || block instanceof DiscReaderBlock.Entity
-                || level.getBlockState(pos).is(Blocks.JUKEBOX)) {
+        } else if (block instanceof MediaSource) {
             if (block instanceof VideoPlayerBlock.Entity) {
                 console.setVideoSource(pos);
             }
@@ -145,7 +143,8 @@ public class LightingLinkItem extends Item {
     private static void follow(Player player, LivingEntity target) {
         LightingConsoleBlock.Entity console = selected(player);
         if (console != null && player.mayBuild() && SableCompat.mayInteract(player.level(), player, console.getBlockPos())
-                && player.distanceToSqr(SableCompat.toWorld(player.level(), console.getBlockPos().getCenter())) < 128 * 128) {
+                && player.distanceToSqr(SableCompat.toWorld(player.level(), console.getBlockPos().getCenter()))
+                        < SourceLinks.MAX_LINK_DISTANCE * SourceLinks.MAX_LINK_DISTANCE) {
             LightingSettings.Group group = console.settings.groups[console.settings.selectedGroup];
             group.target = target.getUUID();
             group.motion = LightingSettings.Group.MOTION_TRACK;

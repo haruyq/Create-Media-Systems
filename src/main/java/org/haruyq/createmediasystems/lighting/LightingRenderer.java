@@ -267,7 +267,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 case LightingSettings.Group.BAND_HIGH -> console.high;
                 default -> console.audioLevel;
             };
-            float floor = holdAim && !lamp.laser() ? 0.65f : 0.12f;
+            float floor = group.motion == LightingSettings.Group.MOTION_TRACK && !lamp.laser() ? 0.65f : 0.12f;
             strength *= Mth.clamp(floor + energy * 1.5f + console.pulse * 0.35f, 0, 1);
         }
         int count = console == null ? 1 : Math.max(1, console.groupSize(lamp.group));
@@ -304,8 +304,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return;
         }
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
-        MultiBufferSource effects = level == Minecraft.getInstance().level ? EFFECTS : buffers;
-        VertexConsumer beam = effects == EFFECTS && LightingBeams.available() ? null
+        MultiBufferSource effects = beamBuffers(level, buffers);
+        VertexConsumer beam = LightingBeams.available(level) ? null
                 : effects == EFFECTS ? effects.getBuffer(LIGHT) : new Output(buffers, LIGHT);
         if (pattern < LightingSettings.Group.PATTERN_LASER_RAY) {
             LightingIllumination.render(lamp, origin, direction, Math.toRadians(coneSpread(pattern, group.spread)) / 2,

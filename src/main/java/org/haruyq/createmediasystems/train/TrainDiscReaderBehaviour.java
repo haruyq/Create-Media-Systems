@@ -88,7 +88,7 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             context.data.putBoolean("Loading", true);
             LISTENERS.remove(context);
         }
-        if (due != null || now % Streams.RELAY_TICKS == 0) {
+        if (due != null || Streams.relayDue(level)) {
             relay(context, train, now);
         }
     }

@@ -46,13 +46,13 @@ public class TrainSignals extends SavedData {
         return server.overworld().getDataStorage().computeIfAbsent(FACTORY, CreateMediaSystems.MOD_ID + "_train_detectors");
     }
 
-    /** Trims and checks a typed channel name: empty (no channel) if it is too long or has control characters. */
     /** Asks this client's player for the channel of the detector or receiver at {@code pos}, now {@code channel}. */
     public static void promptChannel(BlockPos pos, String channel) {
         TextPromptScreen.open("create_media_systems.screen.channel", channel, MAX_CHANNEL_LENGTH,
                 value -> PacketDistributor.sendToServer(new SetChannel(pos, value)));
     }
 
+    /** Trims and checks a typed channel name: empty (no channel) if it is too long or has control characters. */
     public static String normalize(String channel) {
         String trimmed = channel.strip();
         return trimmed.length() <= MAX_CHANNEL_LENGTH && trimmed.codePoints().noneMatch(Character::isISOControl)

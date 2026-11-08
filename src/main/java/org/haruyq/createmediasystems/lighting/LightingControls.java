@@ -333,9 +333,7 @@ public final class LightingControls {
 
     private static void send(LightingConsoleBlock.Entity console, int group, Control control, int index,
                              float value, float other) {
-        LightingPackets.Change change = new LightingPackets.Change(console.getBlockPos(), group, control.ordinal(), index, value, other);
-        LightingPackets.apply(console, change, Minecraft.getInstance().player);
-        PacketDistributor.sendToServer(change);
+        LightingConsolePage.send(console, control, group, index, value, other);
     }
 
     private static void drag(boolean force) {

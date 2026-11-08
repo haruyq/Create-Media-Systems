@@ -37,7 +37,7 @@ public abstract class JukeboxBlockEntityMixin implements MediaSource {
     @Inject(method = "tick", at = @At("HEAD"))
     private static void create_media_systems$tickStream(Level level, BlockPos pos, BlockState state, JukeboxBlockEntity jukebox,
                                           CallbackInfo ci) {
-        if (level instanceof ServerLevel server && server.getGameTime() % Streams.RELAY_TICKS == 0) {
+        if (level instanceof ServerLevel server && Streams.relayDue(server)) {
             Jukeboxes.relay(server, jukebox);
         }
     }

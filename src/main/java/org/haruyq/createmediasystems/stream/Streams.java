@@ -220,7 +220,13 @@ public final class Streams {
     public static Source source(Level level, BlockPos pos) {
         Source source = level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media
                 ? playing(media) : null;
-        return source != null && ServerConfig.isAllowed(source.url()) ? source : null;
+        if (source == null || !ServerConfig.isAllowed(source.url())) {
+            return null;
+        }
+        // Clients fetch the next video ahead: it has to pass the same allow-list as the one playing.
+        Video video = source.video();
+        return video == null || video.next().map(ServerConfig::isAllowed).orElse(true) ? source
+                : new Source(source.url(), source.ticks(), new Video(video.player(), video.maxHeight(), Optional.empty()));
     }
 
     /** What {@code media} plays now, counted from when its listeners had it loaded (see played); null for nothing. */
@@ -257,6 +263,11 @@ public final class Streams {
     public static boolean relayedBy(Level level, BlockPos source, Class<? extends BlockEntity> kind) {
         return RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey().getLevel() == level
                 && kind.isInstance(entry.getKey()) && source.equals(entry.getValue().sound.source()));
+    }
+
+    /** Whether emitters relay at {@code level}'s tick now: all on the same ticks (see relay's game event). */
+    public static boolean relayDue(Level level) {
+        return level.getGameTime() % RELAY_TICKS == 0;
     }
 
     public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
