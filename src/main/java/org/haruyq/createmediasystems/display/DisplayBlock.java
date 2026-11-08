@@ -188,12 +188,10 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             LightingScreens.add(this);
         }
 
-        /** The Blu-ray player it shows. */
         public Optional<BlockPos> source() {
             return source.get(level, this::changed);
         }
 
-        /** Its size in blocks. */
         public double width() {
             return width / (double) UNIT;
         }
@@ -267,7 +265,6 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                     corner.add(screen.at((float) width() + margin, (float) height() + margin, front)));
         }
 
-        /** An image viewer shows an image instead of a Blu-ray player's video. */
         public boolean isImageViewer() {
             return getBlockState().getBlock() instanceof ImageViewerBlock;
         }

@@ -488,7 +488,6 @@ public final class NativeAudio {
             return tap instanceof DeviceClock.Timed timed && timed.advancesWhilePaused();
         }
 
-        /** Whether it played to its end or broke off, as opposed to being closed by whoever played it. */
         boolean done() {
             return done;
         }

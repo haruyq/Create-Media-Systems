@@ -378,7 +378,6 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         return Minecraft.getInstance().levelRenderer.getFrustum().isVisible(SableCompat.toWorld(level, box).inflate(1));
     }
 
-    /** The video a display shows as it plays here, or null. */
     @Nullable
     static VlcPlayer.Frame frame(DisplayBlock.Entity display) {
         return display.source().map(NativeAudio::screen).orElse(null);

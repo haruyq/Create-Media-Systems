@@ -219,7 +219,6 @@ public final class LightingRaycast {
         return null;
     }
 
-    /** Whether moving blocks could intersect this part of the world. */
     public boolean hasSubLevels(AABB bounds) {
         for (Snapshot snapshot : subLevels) {
             if (snapshot.bounds.intersects(bounds)) {

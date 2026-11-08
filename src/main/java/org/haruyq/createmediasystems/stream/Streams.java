@@ -247,7 +247,6 @@ public final class Streams {
         return load == null ? 0 : load.id;
     }
 
-    /** Who started {@code source}'s track (see loading), or null. */
     @Nullable
     public static UUID startedBy(BlockEntity source) {
         Load load = LOADS.get(key(source));

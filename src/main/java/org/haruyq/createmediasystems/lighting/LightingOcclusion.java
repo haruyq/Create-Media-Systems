@@ -110,12 +110,10 @@ final class LightingOcclusion {
         }
     }
 
-    /** A block in section ({@code x}, {@code y}, {@code z}) changed. */
     static void sectionChanged(int x, int y, int z) {
         changed.add(SectionPos.asLong(x, y, z));
     }
 
-    /** Chunk column ({@code x}, {@code z}) was loaded anew. */
     static void chunkChanged(int x, int z) {
         if (origin == null) {
             return;

@@ -74,7 +74,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
         return new Entity(pos, state);
     }
 
-    /** The first equalizer touching {@code pos}, if any. */
     @Nullable
     private static Entity touching(BlockGetter level, BlockPos pos) {
         return Arrays.stream(Direction.values()).map(side -> level.getBlockEntity(pos.relative(side)))
@@ -158,7 +157,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
             this.color = color;
         }
 
-        /** Fader {@code fader}'s band, on a second equalizer if {@code second}. */
         public static Band of(int fader, boolean second) {
             return values()[2 * fader + (second ? 0 : 1)];
         }

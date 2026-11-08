@@ -115,7 +115,6 @@ public final class RangeQuill {
         }
     }
 
-    /** The block entity a range quill holder may configure, or null if they can't (wrong item, too far). */
     @Nullable
     static BlockEntity quillTarget(ServerPlayer player, BlockPos pos) {
         return Reach.withQuill(player, CreateMediaSystems.RANGE_QUILL.get(), pos, BlockEntity.class);

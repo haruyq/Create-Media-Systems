@@ -97,7 +97,6 @@ final class Tools {
         return installed;
     }
 
-    /** Whether a day has passed since releases were last looked at. */
     private static boolean stale() {
         try {
             long checked = Long.parseLong(Files.readString(DIR.resolve(".checked")).trim());

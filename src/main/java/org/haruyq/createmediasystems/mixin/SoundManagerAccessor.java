@@ -6,7 +6,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 
-/** Reaches a playing sound's OpenAL source, for Sound Physics Remastered (see SoundPhysicsCompat). */
+/** Reaches the sound engine: a playing sound's OpenAL channel (ClientStreams, SoundPhysicsCompat) and its thread (StreamPump). */
 @Mixin(SoundManager.class)
 public interface SoundManagerAccessor {
     @Accessor("soundEngine")

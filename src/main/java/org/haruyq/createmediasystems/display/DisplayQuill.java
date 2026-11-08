@@ -66,7 +66,6 @@ public final class DisplayQuill {
         }
     }
 
-    /** The display a display quill holder may set up, or null if they can't (wrong item, too far). */
     @Nullable
     static DisplayBlock.Entity quillDisplay(ServerPlayer player, BlockPos pos) {
         return Reach.withQuill(player, CreateMediaSystems.DISPLAY_QUILL.get(), pos, DisplayBlock.Entity.class);

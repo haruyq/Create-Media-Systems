@@ -68,7 +68,6 @@ public final class ClientStreams {
         final long load;
         /** When the track's top was as the first of them asked (System.nanoTime), to tell a restart (see joins). */
         final long origin;
-        /** Each emitter's block, and how it sounds. */
         final Map<BlockPos, Streams.Sound> emitters = new LinkedHashMap<>();
         boolean present;
         boolean nearby;
@@ -231,7 +230,6 @@ public final class ClientStreams {
             return power > 0 ? new Vec3(cx / power, cy / power, cz / power) : null;
         }
 
-        /** The one heard loudest; null while none of them is heard. */
         @Nullable
         Vec3 loudest() {
             return loudest;
@@ -325,7 +323,6 @@ public final class ClientStreams {
                 })));
     }
 
-    /** The emitter at {@code pos} no longer plays {@code side}; the side stops with its last emitter. */
     private static void leave(Side side, BlockPos pos) {
         Group group = GROUPS.get(side);
         if (group != null && group.emitters.remove(pos) != null && group.emitters.isEmpty()) {

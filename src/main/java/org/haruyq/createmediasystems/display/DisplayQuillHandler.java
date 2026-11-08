@@ -157,7 +157,6 @@ final class DisplayQuillHandler {
         return Quill.held(CreateMediaSystems.DISPLAY_QUILL.get());
     }
 
-    /** Whether {@code display} shows the picked Blu-ray player. */
     private static boolean linked(DisplayBlock.Entity display) {
         return videoPlayer != null && display.source().filter(videoPlayer::equals).isPresent();
     }

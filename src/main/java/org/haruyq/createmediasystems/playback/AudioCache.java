@@ -201,7 +201,6 @@ final class AudioCache {
         return sha256(source.toString().getBytes(StandardCharsets.UTF_8));
     }
 
-    /** {@code bytes}' SHA-256, in hex. */
     static String sha256(byte[] bytes) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

@@ -103,7 +103,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private int age;
     /** The engine asked for its audio, which it does only once it has a channel for it (see waitingForChannel). */
     private boolean requested;
-    /** Ticks it has waited for a channel. */
     private int channelWaits;
     /** Where it plays from in the world now, asked every tick; null plays it at the listener. */
     @Nullable
@@ -237,7 +236,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         return millis < 0 ? -1 : millis + Math.round(startSeconds * 1000);
     }
 
-    /** The Blu-ray player whose video this is the sound of; null for none. */
     @Nullable
     Streams.Video video() {
         return video;
@@ -541,7 +539,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             feed.prebuffer(PREBUFFER_BYTES, System.currentTimeMillis() + 30_000);
         }
 
-        /** Why the download could not start; null if it did. */
         @Nullable
         IOException failure() {
             return feed.failure();

@@ -105,7 +105,6 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         }
     }
 
-    /** Takes hold of the fader pointed at, if any. */
     private static boolean grab() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player.isShiftKeyDown() || !(mc.hitResult instanceof BlockHitResult hit)
@@ -147,7 +146,6 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
                 .withColor(band.color), true);
     }
 
-    /** Where the crosshair crosses the equalizer's top (as onTop gives it), or null if it doesn't from here. */
     @Nullable
     private static Vec3 aim(EqualizerBlock.Entity equalizer) {
         Minecraft mc = Minecraft.getInstance();

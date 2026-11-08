@@ -991,12 +991,10 @@ public final class LightingIllumination {
         LightingOcclusion.chunkChanged(x, z);
     }
 
-    /** Whether any block changed since the last frame (see sectionChanged). */
     public static boolean blocksChanged() {
         return !DIRTY_SECTIONS.isEmpty() || !DIRTY_COLUMNS.isEmpty();
     }
 
-    /** Frames drawn so far. */
     public static long frame() {
         return frame;
     }
