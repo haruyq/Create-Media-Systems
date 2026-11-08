@@ -28,6 +28,8 @@ import net.minecraft.world.phys.Vec3;
 final class DisplayShadows implements AutoCloseable {
     private static final int WIDTH = 1024;
     private static final int RAYS_PER_FRAME = 65_536;
+    /** As display_shadow.fsh's: rays a vertex traces for whether it shares the screen's room. */
+    private static final int ROOM_RAYS = 4;
     private static ShaderInstance shader;
     private static int targetsProgram;
     private static int targetsLocation;
@@ -165,7 +167,8 @@ final class DisplayShadows implements AutoCloseable {
             return false;
         }
         int rays = targets.length / 3;
-        int count = BUDGET.take(frame, total - shaded, rays);
+        // Each vertex also traces whether it is in the screen's room (display_shadow.fsh, ROOM_RAYS).
+        int count = BUDGET.take(frame, total - shaded, rays + Math.min(rays, ROOM_RAYS));
         if (count == 0) {
             return false;
         }

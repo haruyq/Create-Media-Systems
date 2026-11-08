@@ -5,6 +5,11 @@ uniform vec3 VoxelMin;
 uniform vec3 Targets[24];
 uniform int RayCount;
 
+// Rays (to the first targets, spread over the screen) for whether a point shares the screen's room, for its bounced
+// light: from a little way out of its face, whichever way the face is turned.
+const int ROOM_RAYS = 4;
+const float ROOM_STEP = 0.6;
+
 in vec3 point;
 in vec3 normal;
 
@@ -58,5 +63,13 @@ void main() {
     }
     float seen = 1.0;
     if (rays != 0) seen = floor(float(clear) / float(rays) * 255.0) / 255.0;
-    fragColor = vec4(seen, seen, seen, 1.0);
+    // Red: how much of the screen it sees past blocks between. Green: how much of it is in the screen's room, so
+    // faces turned away still get the light bounced about it, and those behind a wall none.
+    int probes = min(RayCount, ROOM_RAYS);
+    int open = 0;
+    for (int i = 0; i < probes; i++) {
+        if (!blocked(point + normal * ROOM_STEP, Targets[i])) open += 1;
+    }
+    float room = float(open) / float(max(probes, 1));
+    fragColor = vec4(seen, room, seen, 1.0);
 }

@@ -9,7 +9,7 @@
 // - Specular: where the mirrored view ray meets the screen, the picture there blurred to the face's roughness,
 //   weighted by how much of that blur falls on the screen and by Fresnel.
 // - Bounce: some of the screen's light, its average colour, reflected about the room onto every face near enough,
-//   turned towards it or not, shaded or not.
+//   turned towards it or not, as much as it is in the screen's room (room: none behind a wall).
 // All of it seen as a camera would in a dark cinema, exposed for the room: what is near the screen saturates softly
 // (1 - exp(-x)), and the far seats still show.
 // material: roughness, F0 (above 0.5, a metal), how much of the screen the point sees past blocks between, and 1 for
@@ -30,6 +30,7 @@ in vec2 texCoord0;
 in vec4 material;
 in vec3 localPos;
 in vec3 localNormal;
+in float room;
 
 out vec4 fragColor;
 
@@ -221,7 +222,7 @@ void main() {
         vec2 size = vec2(textureSize(Sampler1, 0));
         vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
         float area = ScreenSize.x * ScreenSize.y;
-        vec3 bounce = BOUNCE * average * area / (area + PI * distanceToScreen * distanceToScreen);
+        vec3 bounce = BOUNCE * average * area / (area + PI * distanceToScreen * distanceToScreen) * room;
         vec3 direct = vec3(0.0);
         if (seen > 0.0) {
             direct = diffuse(P, N) * seen;
