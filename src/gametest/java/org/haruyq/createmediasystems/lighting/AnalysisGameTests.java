@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import net.minecraft.core.BlockPos;
@@ -34,6 +35,10 @@ public final class AnalysisGameTests {
         LightingConsoleBlock.Entity console = (LightingConsoleBlock.Entity) helper.getLevel().getBlockEntity(consolePos);
         console.videoSource = playerPos;
         AnalysisCoordinator.use(console);
+        UUID loadingSource = SourceLinks.identify(helper.getLevel(), playerPos);
+        helper.assertTrue(!(boolean) get(session(helper.getLevel(), loadingSource), "active"),
+                "lights ran on a track still loading");
+        loaded(player, console);
 
         ServerPlayer fake = FakePlayerFactory.getMinecraft(helper.getLevel());
         UUID source = SourceLinks.identify(helper.getLevel(), playerPos);
@@ -98,11 +103,19 @@ public final class AnalysisGameTests {
         helper.assertTrue(get(session, "delay").equals(delay), "invalid lag report changed the shared delay");
         player.control(VideoPlayerBlock.Action.NEXT, 0);
         AnalysisCoordinator.use(console);
+        helper.assertTrue(!(boolean) get(session, "active"), "lights ran on the next track while it loaded");
+        loaded(player, console);
         helper.assertTrue(get(session, "track").equals("https://example.com/next.mp4"), "player did not advance");
         helper.assertTrue(!get(session, "session").equals(sessionId), "track switch kept the old session");
         helper.assertTrue(tracks.get("https://example.com/next.mp4").prepared(), "track switch discarded prepared analysis");
         helper.assertTrue(get(session, "delay").equals(AnalysisDelay.INITIAL), "track switch kept the previous live delay");
         helper.succeed();
+    }
+
+    /** Nobody listens here: its track plays once it has waited as long as a track waits for its listeners. */
+    private static void loaded(VideoPlayerBlock.Entity player, LightingConsoleBlock.Entity console) {
+        put(player, "ticks", Streams.MAX_LOAD_TICKS);
+        AnalysisCoordinator.use(console);
     }
 
     private static AnalysisFrame frame(long millis, boolean audio, boolean video) {

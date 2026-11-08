@@ -272,6 +272,15 @@ public final class Streams {
         return load.playingFrom == LOADING ? 0 : ticks - load.playingFrom;
     }
 
+    /**
+     * Whether {@code source}'s track plays, its listeners having it loaded (or having had long enough); false while
+     * it loads, when its position stands at 0 (see played). True for one never waited on.
+     */
+    public static boolean loaded(BlockEntity source) {
+        Load load = LOADS.get(key(source));
+        return load == null || load.playingFrom != LOADING;
+    }
+
     /** A source block entity is known by its id, which it keeps when Sable moves it or its chunk reloads. */
     private static UUID key(BlockEntity source) {
         return source.getData(CreateMediaSystems.SOURCE_ID);

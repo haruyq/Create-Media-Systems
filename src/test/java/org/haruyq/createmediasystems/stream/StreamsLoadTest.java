@@ -40,6 +40,17 @@ class StreamsLoadTest {
     }
 
     @Test
+    void aTrackCountsAsLoadedOnlyOnceItPlays() {
+        DiscReaderBlock.Entity source = reader();
+        assertTrue(Streams.loaded(source), "never waited on");
+        Streams.loading(source);
+        Streams.played(source, 100);
+        assertFalse(Streams.loaded(source), "lights keep still while it loads");
+        Streams.played(source, Streams.MAX_LOAD_TICKS);
+        assertTrue(Streams.loaded(source));
+    }
+
+    @Test
     void aListenersLengthEndsATrackTheApiCouldNotTell() {
         Streams.Source playing = new Streams.Source("https://example.com/listener-length", 0, null);
         Streams.learnDuration(playing, 0);

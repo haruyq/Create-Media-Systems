@@ -167,7 +167,9 @@ public final class AnalysisCoordinator {
         session.touched = level.getGameTime();
         session.preferred = media.initiator();
         Streams.Source playing = Streams.playing(media);
-        boolean active = playing != null;
+        // Not while its track loads: its position stands at 0 then, and clients, running it on from each state they
+        // are sent, would play the lights the track's first half second over and over until it starts.
+        boolean active = playing != null && Streams.loaded((BlockEntity) media);
         if (active && (!playing.url().equals(session.track) || !session.active)) {
             session.restart();
         }
