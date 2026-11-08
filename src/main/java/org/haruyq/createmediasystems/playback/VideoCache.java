@@ -170,9 +170,10 @@ final class VideoCache {
         try {
             String printed;
             try {
-                printed = download(page, part, "bv*" + height + "[ext=mp4][protocol=https],ba[ext=m4a][protocol=https]");
+                printed = download(page, part, String.format(Locale.ROOT, YtDlp.SEPARATE_VIDEO, height) + ","
+                        + YtDlp.SEPARATE_AUDIO);
             } catch (IOException noSeparateFiles) {
-                printed = download(page, part, "b" + height + "[protocol=https]");
+                printed = download(page, part, String.format(Locale.ROOT, YtDlp.SINGLE_FILE, height));
             }
             JsonObject meta = new JsonObject();
             for (String line : printed.split("\\R")) {

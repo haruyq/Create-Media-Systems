@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -35,7 +36,12 @@ public final class YtDlp {
      * {@code %s} is the height cap. yt-dlp leaves out formats it has no URL for, which SABR-only ones are.
      */
     private static final String FORMAT = "bv*%1$s[protocol^=m3u8]+ba[protocol^=m3u8]/b%1$s[protocol^=m3u8]"
-            + "/bv*%1$s[ext=mp4][protocol=https]+ba[ext=m4a][protocol=https]/b%1$s[protocol=https]/bv*%1$s+ba/b%1$s/b";
+            + "/%2$s+%3$s/%4$s/bv*%1$s+ba/b%1$s/b";
+    /** Video and audio apart that VLC plays together as a local DASH manifest (see prepare); {@code %s} is the height cap. */
+    static final String SEPARATE_VIDEO = "bv*%s[ext=mp4][protocol=https]";
+    static final String SEPARATE_AUDIO = "ba[ext=m4a][protocol=https]";
+    /** One plain HTTPS file with both; {@code %s} is the height cap. */
+    static final String SINGLE_FILE = "b%s[protocol=https]";
     private static final long TIMEOUT_SECONDS = 120;
 
     private YtDlp() {
@@ -43,7 +49,10 @@ public final class YtDlp {
 
     /** {@code page}'s media, at most {@code maxHeight} tall (0 for any); fails with yt-dlp's reason. */
     static NativeMediaResolver.Prepared resolve(URI page, int maxHeight) throws IOException, InterruptedException {
-        String out = run(page, TIMEOUT_SECONDS, "-J", "-f", String.format(java.util.Locale.ROOT, FORMAT, height(maxHeight)));
+        String height = height(maxHeight);
+        String out = run(page, TIMEOUT_SECONDS, "-J", "-f", String.format(Locale.ROOT, FORMAT, height,
+                String.format(Locale.ROOT, SEPARATE_VIDEO, height), SEPARATE_AUDIO,
+                String.format(Locale.ROOT, SINGLE_FILE, height)));
         return prepare(JsonParser.parseString(out).getAsJsonObject(), maxHeight);
     }
 
