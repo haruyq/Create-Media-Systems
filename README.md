@@ -8,6 +8,8 @@
 - Create 6.0.10^
 - Java 21
 
+Modの完全な動作には、[CMS-API](https://github.com/haruyq/CMS-API)が別途必要です。  
+
 ## ビルド
 
 ```bash
