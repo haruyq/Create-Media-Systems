@@ -14,6 +14,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ByteOpenHashMap;
 import org.joml.Matrix3d;
 import org.joml.Matrix4d;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 
 import net.minecraft.client.Minecraft;
@@ -53,6 +54,8 @@ public final class LightingRaycast {
     private final List<LightingScreens.Panel> screens;
     private final Cache cache;
     private final boolean cacheShapes;
+    /** While visible traces to a point: the block whose own shape holds that point, which doesn't hide it. */
+    private BlockPos buried;
     private Vec3 visibilityOrigin;
     private Object2ByteOpenHashMap<Vec3> visibility;
 
@@ -187,10 +190,33 @@ public final class LightingRaycast {
         if (known != 0) {
             return known > 0;
         }
-        Hit hit = clip(from, to);
+        // Faces are lit as their blocks are drawn, but traced against their collision shapes: a seat's cushion can lie
+        // inside its own box, and that box would keep it dark. A point inside a shape is a model drawn apart from it,
+        // so that shape isn't what hides it; one step of a stair still shades the other.
+        buried = buried(to);
+        Hit hit;
+        try {
+            hit = clip(from, to);
+        } finally {
+            buried = null;
+        }
         boolean seen = hit.block().getType() == HitResult.Type.MISS || hit.point().distanceToSqr(to) < 1e-8;
         visibility.put(to, (byte) (seen ? 1 : -1));
         return seen;
+    }
+
+    @Nullable
+    private BlockPos buried(Vec3 point) {
+        BlockPos pos = BlockPos.containing(point);
+        ClipContext context = new ClipContext(point, point, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                CollisionContext.empty());
+        double x = point.x - pos.getX(), y = point.y - pos.getY(), z = point.z - pos.getZ();
+        for (AABB box : cache.boxes(pos, context, cacheShapes)) {
+            if (box.contains(x, y, z)) {
+                return pos;
+            }
+        }
+        return null;
     }
 
     /** Whether moving blocks could intersect this part of the world. */
@@ -235,7 +261,7 @@ public final class LightingRaycast {
                 CollisionContext.empty());
         if (level.isDebug()) {
             return BlockGetter.traverseBlocks(from, to, context, (clip, pos) -> {
-                if (pos.equals(ignored)) {
+                if (pos.equals(ignored) || pos.equals(buried)) {
                     return null;
                 }
                 List<AABB> boxes = cache.boxes(pos, clip, cacheShapes);
@@ -265,7 +291,7 @@ public final class LightingRaycast {
             boolean empty = !section.missing && section.blocks == null;
             int sectionX = x >> 4, sectionY = y >> 4, sectionZ = z >> 4;
             while (true) {
-                if (!empty && !boxes.isEmpty() && !pos.equals(ignored) && allowed.test(pos)) {
+                if (!empty && !boxes.isEmpty() && !pos.equals(ignored) && !pos.equals(buried) && allowed.test(pos)) {
                     BlockHitResult hit = clip(boxes, from, to, pos);
                     if (hit != null) {
                         return hit;

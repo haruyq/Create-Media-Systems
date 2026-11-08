@@ -109,6 +109,12 @@ public final class LightingIllumination {
     private static final double LEAD = 2;
     /** Frames a lamp may go undrawn before its buffer is freed. */
     private static final int FORGET_FRAMES = 600;
+    /**
+     * How far, in blocks, a face may stand in front of another and still be taken for the same surface (see
+     * SurfaceScan.dropHidden): past a hair's breadth (seats' shared armrests are 0.05 px apart), short of a
+     * decoration laid over a face (glow lichen stands 0.1 px off, and shows the face through it).
+     */
+    private static final double HIDE_DEPTH = 0.004;
 
     static final class TraceBudget {
         int beam;
@@ -1012,6 +1018,7 @@ public final class LightingIllumination {
                              double tangent, float range, long sight, int budget) {
         SurfaceScan scan = new SurfaceScan(level, lamp, center, radius, axis, previous, false);
         scan.advance(Integer.MAX_VALUE);
+        scan.dropHidden();
         int remaining = budget;
         for (Face face : scan.created) {
             Geometry still = face.still;
@@ -1062,6 +1069,7 @@ public final class LightingIllumination {
         final List<Face> found = new ArrayList<>();
         final List<Face> created = new ArrayList<>();
         final CompletableFuture<Scan> result = new CompletableFuture<>();
+        private boolean dropped;
 
         SurfaceScan(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
                     List<Face> previous, boolean sable) {
@@ -1091,7 +1099,95 @@ public final class LightingIllumination {
         }
 
         Scan finish() {
+            dropHidden();
             return new Scan(found, centers(found), center, radius, axis);
+        }
+
+        /**
+         * Drops faces just behind another block's face turned the same way over the same area, as neighbouring seats
+         * share an armrest modelled twice, a hair apart. Drawn, the front one hides the other; but light, drawn a
+         * little towards the camera to win over its own face, would be added on both, twice as bright.
+         */
+        void dropHidden() {
+            if (dropped) {
+                return;
+            }
+            dropped = true;
+            int count = found.size();
+            int[] axes = new int[count];
+            double[] depths = new double[count];
+            Map<Long, List<Integer>> planes = new HashMap<>();
+            for (int i = 0; i < count; i++) {
+                Face face = found.get(i);
+                Vec3[] p = face.points;
+                Vec3 normal = p[1].subtract(p[0]).cross(p[3].subtract(p[0])).normalize().scale(face.winding);
+                int axis = Math.abs(normal.x) > 0.999 ? 0 : Math.abs(normal.y) > 0.999 ? 1 : Math.abs(normal.z) > 0.999 ? 2 : -1;
+                axes[i] = axis;
+                if (axis < 0) {
+                    continue;
+                }
+                int side = normal.get(Direction.Axis.VALUES[axis]) > 0 ? 1 : 0;
+                // How far along its normal it stands: the larger, the further in front.
+                depths[i] = p[0].get(Direction.Axis.VALUES[axis]) * (side * 2 - 1);
+                axes[i] = axis * 2 + side;
+                planes.computeIfAbsent(plane(axes[i], depths[i]), k -> new ArrayList<>()).add(i);
+            }
+            boolean[] hidden = new boolean[count];
+            boolean any = false;
+            for (int i = 0; i < count; i++) {
+                if (axes[i] < 0) {
+                    continue;
+                }
+                long key = plane(axes[i], depths[i]);
+                for (long k = key; k <= key + 8 && !hidden[i]; k += 8) {
+                    for (int j : planes.getOrDefault(k, List.of())) {
+                        double ahead = depths[j] - depths[i];
+                        if (j != i && axes[j] == axes[i] && !found.get(j).pos.equals(found.get(i).pos)
+                                && (ahead > 1e-7 || Math.abs(ahead) <= 1e-7 && j < i && !hidden[j]) && ahead <= HIDE_DEPTH
+                                && covers(found.get(j).points, found.get(i).points, axes[i] / 2)) {
+                            hidden[i] = true;
+                            any = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (any) {
+                List<Face> kept = new ArrayList<>(count);
+                for (int i = 0; i < count; i++) {
+                    if (!hidden[i]) {
+                        kept.add(found.get(i));
+                    }
+                }
+                found.clear();
+                found.addAll(kept);
+                created.retainAll(new java.util.HashSet<>(kept));
+            }
+        }
+
+        /** Its axis and side ({@code axis}) and depth to {@link #HIDE_DEPTH}, so faces within it are a bucket apart. */
+        private static long plane(int axis, double depth) {
+            return (long) Math.floor(depth / HIDE_DEPTH) * 8 + axis;
+        }
+
+        /** Whether {@code front}'s corners span {@code back}'s across the face's plane, normal to {@code axis}. */
+        private static boolean covers(Vec3[] front, Vec3[] back, int axis) {
+            for (Direction.Axis across : Direction.Axis.VALUES) {
+                if (across.ordinal() == axis) {
+                    continue;
+                }
+                double frontMin = Double.MAX_VALUE, frontMax = -Double.MAX_VALUE, backMin = Double.MAX_VALUE, backMax = -Double.MAX_VALUE;
+                for (int c = 0; c < 4; c++) {
+                    frontMin = Math.min(frontMin, front[c].get(across));
+                    frontMax = Math.max(frontMax, front[c].get(across));
+                    backMin = Math.min(backMin, back[c].get(across));
+                    backMax = Math.max(backMax, back[c].get(across));
+                }
+                if (backMin < frontMin - HIDE_DEPTH || backMax > frontMax + HIDE_DEPTH) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private void read(BlockPos pos) {
