@@ -271,7 +271,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-            tooltip.add(Component.literal("    ").append(Component.translatable("block.create_media_systems.blu_ray_player")));
+            tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             List<String> playlist = playlist();
             tooltip.add(Component.literal("     ").append(state()).withStyle(ChatFormatting.GRAY));
             if (!playlist.isEmpty()) {

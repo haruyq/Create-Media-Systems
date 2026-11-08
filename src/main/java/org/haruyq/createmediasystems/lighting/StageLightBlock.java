@@ -137,8 +137,7 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
 
         /** The fixture's name, as its goggle tooltip heads it. */
         public Component fixtureName() {
-            return Component.translatable(laser() ? "block.create_media_systems.laser_projector"
-                    : "block.create_media_systems.stage_light");
+            return getBlockState().getBlock().getName();
         }
 
         @Nullable

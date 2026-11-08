@@ -8,6 +8,7 @@ import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
 
+import com.mojang.serialization.MapCodec;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 
 import net.minecraft.core.BlockPos;
@@ -20,23 +21,21 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
-import net.minecraft.world.level.block.Mirror;
-import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * Plays the track of a linked jukebox, disc reader or Blu-ray player, in sync with it, loudest in front. Its range is the
  * default radius; only its volume is set (with the range quill). Rotate it with a Create wrench.
  */
-public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
-    public static final DirectionProperty FACING = BlockStateProperties.FACING;
+public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWrenchable {
+    private static final MapCodec<SpeakerBlock> CODEC = simpleCodec(SpeakerBlock::new);
+
     public SpeakerBlock(Properties properties) {
         super(properties);
         registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH));
@@ -48,6 +47,11 @@ public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
     }
 
     @Override
+    protected MapCodec<SpeakerBlock> codec() {
+        return CODEC;
+    }
+
+    @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
     }
@@ -55,16 +59,6 @@ public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(FACING, context.getNearestLookingDirection().getOpposite());
-    }
-
-    @Override
-    protected BlockState rotate(BlockState state, Rotation rotation) {
-        return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
-    }
-
-    @Override
-    protected BlockState mirror(BlockState state, Mirror mirror) {
-        return state.setValue(FACING, mirror.mirror(state.getValue(FACING)));
     }
 
     @Override

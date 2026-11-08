@@ -40,7 +40,7 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
 
     /** The speakers' volume (0 to 1) in this block's saved data; full for readers saved before it had one. */
     static float volume(CompoundTag data) {
-        return data.contains(PercentSetting.DEFAULT_TAG) ? data.getInt(PercentSetting.DEFAULT_TAG) / 100f : 1;
+        return PercentSetting.saved(data, PercentSetting.DEFAULT_TAG) / 100f;
     }
 
     /** Takes the held announcement schedule if empty, else hands the stored one back. Returns the new content. */

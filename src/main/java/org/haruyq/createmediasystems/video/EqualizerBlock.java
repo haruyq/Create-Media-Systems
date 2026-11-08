@@ -206,7 +206,7 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-            tooltip.add(Component.literal("    ").append(Component.translatable("block.create_media_systems.equalizer")));
+            tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             for (int fader = FADERS - 1; fader >= 0; fader--) {
                 Band band = band(fader);
                 tooltip.add(Component.literal("     " + band.label + "  " + db(gains[fader])).withColor(band.color));

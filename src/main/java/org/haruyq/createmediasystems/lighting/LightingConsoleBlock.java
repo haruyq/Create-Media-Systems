@@ -572,7 +572,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
             Entity root = controller();
-            tooltip.add(Component.translatable("block.create_media_systems.lighting_console").withColor(LightingText.TEXT));
+            tooltip.add(getBlockState().getBlock().getName().withColor(LightingText.TEXT));
             if (root == null) {
                 tooltip.add(LightingText.message("assembly").withColor(LightingText.WARNING));
             } else {
