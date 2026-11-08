@@ -13,35 +13,52 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
 
+/**
+ * What the stage lights follow of the media playing here: its loudness, bands and beat, and its picture's colours,
+ * taken from the native player or the API stream that plays it. Also where in it that playback is (see clock).
+ */
 public final class LightingMedia {
     private static final Map<BlockPos, LinkedHashSet<StreamSound.PcmStream>> RELAYS = new HashMap<>();
+    /** The beat until one is heard. */
+    static final float DEFAULT_BPM = 120;
 
     private LightingMedia() {
     }
 
     public record Sample(float level, float bass, float mid, float high, float pulse, float bpm,
                          int leftColor, int rightColor, boolean audio, boolean video) {
-    }
-
-    @Nullable
-    public static Sample sample(@Nullable BlockPos audioSource, @Nullable BlockPos videoSource) {
-        return sample(audioSource, videoSource, null);
-    }
-
-    @Nullable
-    public static Sample sample(@Nullable BlockPos audioSource, @Nullable BlockPos videoSource, @Nullable String track) {
-        VlcPlayer audioPlayer = audioSource == null ? null : NativeAudio.lighting(audioSource, track);
-        VlcPlayer videoPlayer = videoSource == null ? null : NativeAudio.lighting(videoSource, track);
-        AudioFrame audio = audioPlayer == null ? null : audioPlayer.audio.lighting();
-        if (audio == null && audioSource != null) {
-            audio = relay(audioSource, track);
+        static Sample of(@Nullable AudioFrame audio, int left, int right, boolean video) {
+            return new Sample(audio == null ? 0 : audio.level, audio == null ? 0 : audio.bass,
+                    audio == null ? 0 : audio.mid, audio == null ? 0 : audio.high,
+                    audio == null ? 0 : audio.pulse, audio == null ? DEFAULT_BPM : audio.bpm,
+                    left, right, audio != null, video);
         }
-        Colors video = videoPlayer == null || videoPlayer.frame == null ? null : videoPlayer.frame.lighting();
-        return audio == null && video == null ? null : new Sample(
-                audio == null ? 0 : audio.level, audio == null ? 0 : audio.bass,
-                audio == null ? 0 : audio.mid, audio == null ? 0 : audio.high,
-                audio == null ? 0 : audio.pulse, audio == null ? 120 : audio.bpm,
-                video == null ? 0 : video.left, video == null ? 0 : video.right, audio != null, video != null);
+    }
+
+    /**
+     * Where the playback of {@code track} from the source at {@code source} is here, in ms (-1 if it doesn't play
+     * yet); whether a native player plays it, and if so whether it is live with its media still coming in.
+     */
+    public record Clock(long millis, boolean nativePlayer, boolean liveAndFlowing) {
+    }
+
+    /** The signal of {@code track} as the source at {@code source} plays it here now, or null if it doesn't. */
+    @Nullable
+    public static Sample sample(BlockPos source, String track) {
+        VlcPlayer player = NativeAudio.lighting(source, track);
+        AudioFrame audio = player == null ? null : player.audio.lighting();
+        if (audio == null) {
+            audio = relay(source, track);
+        }
+        Colors video = player == null || player.frame == null ? null : player.frame.lighting();
+        return audio == null && video == null ? null
+                : Sample.of(audio, video == null ? 0 : video.left, video == null ? 0 : video.right, video != null);
+    }
+
+    public static Clock clock(BlockPos source, String track, long now) {
+        VlcPlayer player = NativeAudio.lighting(source, track);
+        return player == null ? new Clock(ClientStreams.position(source, track), false, false)
+                : new Clock(player.time(), true, NativeAudio.lightingLive(source, track) && player.recentMedia(now));
     }
 
     record AudioFrame(long at, float level, float bass, float mid, float high, float pulse, float bpm) {
@@ -60,11 +77,6 @@ public final class LightingMedia {
                 RELAYS.remove(source);
             }
         }
-    }
-
-    @Nullable
-    static AudioFrame relay(BlockPos source) {
-        return relay(source, null);
     }
 
     @Nullable
@@ -122,7 +134,7 @@ public final class LightingMedia {
         private double high;
         private double baseline;
         private float pulse;
-        private float bpm = 120;
+        private float bpm = DEFAULT_BPM;
         private long beat;
         private float smoothedLevel;
         private float smoothedBass;
@@ -214,7 +226,7 @@ public final class LightingMedia {
             start = end = beat = 0;
             level = bass = mid = high = baseline = 0;
             pulse = smoothedLevel = smoothedBass = smoothedMid = smoothedHigh = 0;
-            bpm = 120;
+            bpm = DEFAULT_BPM;
             for (Filter filter : low) {
                 filter.clear();
             }

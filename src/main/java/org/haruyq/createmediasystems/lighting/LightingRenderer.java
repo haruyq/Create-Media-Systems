@@ -207,7 +207,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         boolean enabled = console != null && console.formed && console.settings.enabled;
         double seconds = LightingMotion.seconds(level.getGameTime(), partialTick);
         if (console != null) {
-            seconds = org.haruyq.createmediasystems.playback.AnalysisPlayback.apply(console, seconds);
+            seconds = AnalysisPlayback.apply(console, seconds);
         }
         LightingMotion motion = MOTION.computeIfAbsent(lamp, ignored -> new LightingMotion());
         float pan = group.pan;
@@ -384,17 +384,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     private static AABB renderBounds(Level level, BlockPos anchor, double margin) {
         AABB local = new AABB(anchor).inflate(margin);
-        if (level == null) {
-            return local;
-        }
-        AABB result = null;
-        for (int corner = 0; corner < 8; corner++) {
-            Vec3 point = new Vec3((corner & 1) == 0 ? local.minX : local.maxX,
-                    (corner & 2) == 0 ? local.minY : local.maxY, (corner & 4) == 0 ? local.minZ : local.maxZ);
-            Vec3 world = SableCompat.toRenderWorld(level, anchor, point);
-            result = result == null ? new AABB(world, world) : result.minmax(new AABB(world, world));
-        }
-        return result;
+        return level == null ? local : SableCompat.transform(local, point -> SableCompat.toRenderWorld(level, anchor, point));
     }
 
     private static Vec3 worldCamera(Level level, BlockPos anchor, Vec3 camera) {
@@ -779,7 +769,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             if (!console.formed || console.controller() != console || shadowPass()) {
                 return;
             }
-            org.haruyq.createmediasystems.playback.AnalysisPlayback.apply(console, 0);
+            AnalysisPlayback.apply(console, 0);
             Matrix4f matrix = new Matrix4f(pose.last().pose()).translate(0.5f, 0, 0.5f)
                     .rotateY((float) Math.toRadians(180 - console.getBlockState().getValue(LightingConsoleBlock.FACING).toYRot()))
                     .scale(-1, 1, 1)

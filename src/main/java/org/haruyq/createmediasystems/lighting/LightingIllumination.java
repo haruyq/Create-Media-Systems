@@ -20,7 +20,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
-import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
@@ -1033,11 +1032,7 @@ public final class LightingIllumination {
     }
 
     private static Pose3dc renderPose(Level level, BlockPos pos) {
-        var owner = SableCompanion.INSTANCE.getContaining(level, pos);
-        if (owner instanceof ClientSubLevelAccess client) {
-            return client.renderPose();
-        }
-        return owner == null ? null : owner.logicalPose();
+        return SableCompat.pose(level, pos, true);
     }
 
     static Vec3 sample(Vec3[] points, float u, float v, Vec3 offset) {

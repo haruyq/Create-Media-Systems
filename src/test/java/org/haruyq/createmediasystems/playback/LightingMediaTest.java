@@ -111,11 +111,11 @@ class LightingMediaTest {
         try {
             feed.prebuffer(mono.length, System.currentTimeMillis() + 5000);
             stream.queued(System.nanoTime() - 500_000_000L, 0, mono.length);
-            assertNotNull(LightingMedia.relay(source));
+            assertNotNull(LightingMedia.relay(source, null));
         } finally {
             stream.close();
         }
-        assertNull(LightingMedia.relay(source));
+        assertNull(LightingMedia.relay(source, null));
     }
 
     @Test

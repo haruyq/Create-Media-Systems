@@ -14,7 +14,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
-import org.haruyq.createmediasystems.lighting.AnalysisFrame;
+import org.haruyq.createmediasystems.client.ClientConfig;
+
+import org.jetbrains.annotations.Nullable;
 
 import com.sun.jna.Callback;
 import com.sun.jna.CallbackReference;
@@ -23,22 +25,41 @@ import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 
+/**
+ * The lights' signal over the whole of a track kept on this computer (see VideoCache), decoded ahead by VLC as fast as
+ * it can: so the lights follow it from its first frame, rather than as it plays.
+ */
 public final class CachedLightingAnalysis {
-    static final long MAX_MILLIS = AnalysisFrame.MAX_DURATION;
     private static final ThreadPoolExecutor WORKER = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(2), Thread.ofPlatform().daemon().name("CMS cached lighting").factory());
 
     private CachedLightingAnalysis() {
     }
 
-    public static CompletableFuture<List<AnalysisFrame>> analyze(NativeMediaResolver.Prepared prepared,
-                                                                 BooleanSupplier cancelled) {
-        CompletableFuture<List<AnalysisFrame>> result = new CompletableFuture<>();
+    /**
+     * {@link #analyze} of the copy of {@code track} kept here for a disc playing at most {@code discHeight} lines
+     * tall, if there is one, it isn't live and it lasts at most {@code maxMillis}; else null.
+     */
+    @Nullable
+    public static CompletableFuture<List<LightingMedia.Sample>> analyzeCached(String track, int discHeight,
+                                                                              long maxMillis, int interval) {
+        NativeMediaResolver.Prepared cached = VideoCache.get().lookup(URI.create(track), ClientConfig.maxHeight(discHeight));
+        return cached == null || cached.live() || cached.duration() > maxMillis / 1000.0 ? null
+                : analyze(cached, maxMillis, interval);
+    }
+
+    /**
+     * The signal of {@code prepared} (a local file) every {@code interval} ms, through at most its first
+     * {@code maxMillis}; cancelling the result stops the decoding.
+     */
+    static CompletableFuture<List<LightingMedia.Sample>> analyze(NativeMediaResolver.Prepared prepared, long maxMillis,
+                                                                 int interval) {
+        CompletableFuture<List<LightingMedia.Sample>> result = new CompletableFuture<>();
         try {
             List<String> options = localOptions(prepared);
             WORKER.execute(() -> {
                 try {
-                    result.complete(decode(prepared, options, () -> result.isCancelled() || cancelled.getAsBoolean()));
+                    result.complete(decode(prepared, options, new Timeline(maxMillis, interval), result::isCancelled));
                 } catch (Throwable failed) {
                     result.completeExceptionally(failed);
                 }
@@ -71,8 +92,9 @@ public final class CachedLightingAnalysis {
         }
     }
 
-    private static List<AnalysisFrame> decode(NativeMediaResolver.Prepared prepared, List<String> options,
-                                               BooleanSupplier cancelled) throws InterruptedException {
+    private static List<LightingMedia.Sample> decode(NativeMediaResolver.Prepared prepared, List<String> options,
+                                                     Timeline timeline, BooleanSupplier cancelled)
+            throws InterruptedException {
         check(cancelled);
         if (Vlc.LIB == null || Vlc.INSTANCE == null) {
             throw new IllegalStateException(Vlc.MISSING);
@@ -80,7 +102,7 @@ public final class CachedLightingAnalysis {
         if (Decoder.INSTANCE == null) {
             throw new IllegalStateException("VLC could not start the cache analyzer");
         }
-        try (Capture capture = new Capture(cancelled)) {
+        try (Capture capture = new Capture(timeline, cancelled)) {
             Pointer media = Vlc.LIB.libvlc_media_new_location(Decoder.INSTANCE, prepared.uri().toASCIIString());
             if (media == null) {
                 throw new IllegalStateException("VLC could not open the cached media");
@@ -166,7 +188,7 @@ public final class CachedLightingAnalysis {
     }
 
     private static final class Capture implements AutoCloseable {
-        final Timeline timeline = new Timeline();
+        Timeline timeline;
         final BooleanSupplier cancelled;
         final Allocate audioBuffer = (opaque, target, size) -> allocate(target, size.longValue(), true);
         final Allocate videoBuffer = (opaque, target, size) -> allocate(target, size.longValue(), false);
@@ -201,7 +223,8 @@ public final class CachedLightingAnalysis {
         private Memory audioMemory;
         private Memory videoMemory;
 
-        Capture(BooleanSupplier cancelled) {
+        Capture(Timeline timeline, BooleanSupplier cancelled) {
+            this.timeline = timeline;
             this.cancelled = cancelled;
         }
 
@@ -242,7 +265,8 @@ public final class CachedLightingAnalysis {
         }
 
         String output() {
-            return "#transcode{vcodec=RV24,width=96,height=54,fps=10,acodec=s16l,channels=2,samplerate=48000,threads=1}"
+            return "#transcode{vcodec=RV24,width=96,height=54,fps=10,acodec=s16l,channels=2,samplerate=" + Pcm.RATE
+                    + ",threads=1}"
                     + ":smem{no-time-sync,audio-prerender-callback=" + address(audioBuffer)
                     + ",audio-postrender-callback=" + address(audio) + ",video-prerender-callback=" + address(videoBuffer)
                     + ",video-postrender-callback=" + address(video) + "}";
@@ -264,6 +288,8 @@ public final class CachedLightingAnalysis {
     }
 
     static final class Timeline {
+        private final long maxMillis;
+        private final int interval;
         private final LightingMedia.Audio analyzer = new LightingMedia.Audio();
         private final TreeMap<Long, LightingMedia.AudioFrame> audio = new TreeMap<>();
         private final TreeMap<Long, int[]> video = new TreeMap<>();
@@ -271,9 +297,14 @@ public final class CachedLightingAnalysis {
         private long end;
         private long nextAudio;
 
+        Timeline(long maxMillis, int interval) {
+            this.maxMillis = maxMillis;
+            this.interval = interval;
+        }
+
         synchronized boolean beyondLimit(long pts) {
             origin = Math.min(origin, pts);
-            return pts - origin >= MAX_MILLIS * 1000;
+            return pts - origin >= maxMillis * 1000;
         }
 
         synchronized void audio(byte[] pcm, long pts) {
@@ -300,16 +331,17 @@ public final class CachedLightingAnalysis {
             end = Math.max(end, pts + 100_000);
         }
 
-        synchronized List<AnalysisFrame> finish() {
+        /** One sample every interval ms from the start. */
+        synchronized List<LightingMedia.Sample> finish() {
             if (origin == Long.MAX_VALUE || audio.isEmpty() && video.isEmpty()) {
                 throw new IllegalStateException("The cached media produced no lighting frames");
             }
-            List<AnalysisFrame> frames = new ArrayList<>();
-            long duration = Math.min(MAX_MILLIS, Math.max(1, (end - origin + 999) / 1000));
+            List<LightingMedia.Sample> samples = new ArrayList<>();
+            long duration = Math.min(maxMillis, Math.max(1, (end - origin + 999) / 1000));
             int left = 0;
             int right = 0;
             boolean previousVideo = false;
-            for (long millis = 0; millis < duration; millis += AnalysisFrame.INTERVAL) {
+            for (long millis = 0; millis < duration; millis += interval) {
                 long at = origin + millis * 1000;
                 Map.Entry<Long, LightingMedia.AudioFrame> sound = audio.floorEntry(at);
                 if (sound == null && !audio.isEmpty() && audio.firstKey() - at <= 20_000) {
@@ -322,21 +354,10 @@ public final class CachedLightingAnalysis {
                     left = previousVideo ? LightingMedia.blend(left, color.getValue()[0], 0.4f) : color.getValue()[0];
                     right = previousVideo ? LightingMedia.blend(right, color.getValue()[1], 0.4f) : color.getValue()[1];
                 }
-                frames.add(new AnalysisFrame(millis, a == null ? 0 : a.level(), a == null ? 0 : a.bass(),
-                        a == null ? 0 : a.mid(), a == null ? 0 : a.high(), a == null ? 0 : a.pulse(),
-                        a == null ? 120 : a.bpm(), visible ? left : 0, visible ? right : 0, a != null, visible));
+                samples.add(LightingMedia.Sample.of(a, visible ? left : 0, visible ? right : 0, visible));
                 previousVideo = visible;
             }
-            double phase = 0;
-            for (int i = 0; i < frames.size(); i++) {
-                AnalysisFrame frame = frames.get(i);
-                if (i > 0) {
-                    AnalysisFrame previous = frames.get(i - 1);
-                    phase += (frame.millis() - previous.millis()) / 1000.0 * previous.motionSpeed();
-                }
-                frames.set(i, frame.phase(phase));
-            }
-            return List.copyOf(frames);
+            return List.copyOf(samples);
         }
     }
 }

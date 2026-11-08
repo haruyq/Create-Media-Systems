@@ -4,11 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.WeakHashMap;
 
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.display.ImageViewerBlock;
 
-import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
-import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import net.minecraft.core.BlockPos;
@@ -41,9 +40,7 @@ public final class LightingScreens {
                     || display.isImageViewer() && !display.getBlockState().getValue(ImageViewerBlock.FRAMED)) {
                 continue;
             }
-            var sub = SableCompanion.INSTANCE.getContaining(level, display.getBlockPos());
-            Pose3dc pose = sub == null ? null : render && sub instanceof ClientSubLevelAccess client
-                    ? client.renderPose() : sub.logicalPose();
+            Pose3dc pose = SableCompat.pose(level, display.getBlockPos(), render);
             panels.add(new Panel(display.getBlockPos(), display.facing(), display.width(), display.height(), pose));
         }
         return List.copyOf(panels);
@@ -63,16 +60,7 @@ public final class LightingScreens {
             shape = Shapes.create(new AABB(offset.add(screen.at(0, 0, -(float) DisplayBlock.DEPTH)),
                     offset.add(screen.at((float) width, (float) height, 0.004f))));
             AABB local = shape.bounds();
-            AABB world = local;
-            if (this.pose != null) {
-                world = null;
-                for (int i = 0; i < 8; i++) {
-                    Vec3 corner = this.pose.transformPosition(new Vec3((i & 1) == 0 ? local.minX : local.maxX,
-                            (i & 2) == 0 ? local.minY : local.maxY, (i & 4) == 0 ? local.minZ : local.maxZ));
-                    world = world == null ? new AABB(corner, corner) : world.minmax(new AABB(corner, corner));
-                }
-            }
-            bounds = world.inflate(1e-6);
+            bounds = (this.pose == null ? local : SableCompat.transform(local, this.pose::transformPosition)).inflate(1e-6);
         }
 
         LightingRaycast.Hit clip(Vec3 from, Vec3 to) {

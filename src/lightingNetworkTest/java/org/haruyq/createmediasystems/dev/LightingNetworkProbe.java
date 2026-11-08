@@ -55,7 +55,7 @@ public final class LightingNetworkProbe {
         if (minecraft.player == null) {
             return;
         }
-        Field playingField = field("org.haruyq.createmediasystems.playback.AnalysisPlayback", "PLAYING");
+        Field playingField = field("org.haruyq.createmediasystems.lighting.AnalysisPlayback", "PLAYING");
         Map<?, ?> playing = (Map<?, ?>) playingField.get(null);
         for (Object playback : playing.values()) {
             Object state = get(playback, "state");

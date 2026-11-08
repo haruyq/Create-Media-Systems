@@ -192,7 +192,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         public float mid;
         public float high;
         public float pulse;
-        public float bpm = 120;
+        public float bpm = AnalysisFrame.DEFAULT_BPM;
         public double motionPhase;
         public int videoLeft = 0x20C0FF;
         public int videoRight = 0xA040FF;
@@ -687,39 +687,33 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             for (int i = 0; i < presets.length; i++) {
                 presets[i] = i < saved.size() && !saved.getCompound(i).isEmpty() ? saved.getCompound(i) : null;
             }
-            if (tag.contains("Signal")) {
-                CompoundTag signal = tag.getCompound("Signal");
-                audioLevel = signal.getFloat("Level");
-                bass = signal.getFloat("Bass");
-                mid = signal.getFloat("Mid");
-                high = signal.getFloat("High");
-                pulse = signal.getFloat("Pulse");
-                bpm = signal.getFloat("Bpm");
-                videoLeft = signal.getInt("Left");
-                videoRight = signal.getInt("Right");
-                hasAudio = signal.getBoolean("Audio");
-                hasVideo = signal.getBoolean("Video");
-                signalAt = signal.getLong("At");
+        }
+
+        /**
+         * The signal its audio and video sources play now (null: none), as the analysis has it at {@code gameTime}:
+         * on the server each tick, and on each client as it draws.
+         */
+        public void receive(@Nullable AnalysisFrame audio, @Nullable AnalysisFrame video, long gameTime) {
+            hasAudio = audio != null && audio.audio();
+            hasVideo = video != null && video.video();
+            audioLevel = audio == null ? 0 : audio.level();
+            bass = audio == null ? 0 : audio.bass();
+            mid = audio == null ? 0 : audio.mid();
+            high = audio == null ? 0 : audio.high();
+            pulse = audio == null ? 0 : audio.pulse();
+            bpm = audio == null ? AnalysisFrame.DEFAULT_BPM : audio.bpm();
+            if (video != null) {
+                videoLeft = video.left();
+                videoRight = video.right();
+            }
+            if (hasAudio || hasVideo) {
+                signalAt = gameTime;
             }
         }
 
         @Override
         public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-            CompoundTag tag = saveWithoutMetadata(registries);
-            CompoundTag signal = new CompoundTag();
-            signal.putFloat("Level", audioLevel);
-            signal.putFloat("Bass", bass);
-            signal.putFloat("Mid", mid);
-            signal.putFloat("High", high);
-            signal.putFloat("Pulse", pulse);
-            signal.putFloat("Bpm", bpm);
-            signal.putInt("Left", videoLeft);
-            signal.putInt("Right", videoRight);
-            signal.putBoolean("Audio", hasAudio);
-            signal.putBoolean("Video", hasVideo);
-            signal.putLong("At", signalAt);
-            tag.put("Signal", signal);
-            return tag;
+            return saveWithoutMetadata(registries);
         }
 
         @Override

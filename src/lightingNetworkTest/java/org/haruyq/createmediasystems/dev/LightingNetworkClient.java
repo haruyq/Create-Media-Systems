@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import org.haruyq.createmediasystems.lighting.AnalysisPackets;
-import org.haruyq.createmediasystems.playback.AnalysisPlayback;
+import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.playback.LightingDemoCache;
 
 import net.minecraft.client.Minecraft;

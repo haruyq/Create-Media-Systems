@@ -116,11 +116,6 @@ public final class NativeAudio {
     }
 
     @Nullable
-    static VlcPlayer lighting(BlockPos pos) {
-        return lighting(pos, null);
-    }
-
-    @Nullable
     static VlcPlayer lighting(BlockPos pos, @Nullable String track) {
         synchronized (SHARED) {
             for (Shared shared : SHARED.values()) {

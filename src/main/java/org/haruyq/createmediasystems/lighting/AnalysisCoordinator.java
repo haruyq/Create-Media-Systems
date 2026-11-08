@@ -112,23 +112,7 @@ public final class AnalysisCoordinator {
         }
         use(level, console.audioSource, console.getBlockPos());
         use(level, console.videoSource, console.getBlockPos());
-        AnalysisFrame audio = sample(level, console.audioSource);
-        AnalysisFrame video = sample(level, console.videoSource);
-        console.hasAudio = audio != null && audio.audio();
-        console.hasVideo = video != null && video.video();
-        if (console.hasAudio || console.hasVideo) {
-            console.signalAt = level.getGameTime();
-        }
-        console.audioLevel = audio == null ? 0 : audio.level();
-        console.bass = audio == null ? 0 : audio.bass();
-        console.mid = audio == null ? 0 : audio.mid();
-        console.high = audio == null ? 0 : audio.high();
-        console.pulse = audio == null ? 0 : audio.pulse();
-        console.bpm = audio == null ? 120 : audio.bpm();
-        if (video != null) {
-            console.videoLeft = video.left();
-            console.videoRight = video.right();
-        }
+        console.receive(sample(level, console.audioSource), sample(level, console.videoSource), level.getGameTime());
     }
 
     private static AnalysisFrame sample(ServerLevel level, BlockPos pos) {
@@ -283,7 +267,7 @@ public final class AnalysisCoordinator {
 
     public static void status(ServerPlayer player, AnalysisPackets.Status status) {
         Session session = session(player, status.source(), status.session());
-        if (session == null || status.millis() < 0 || status.millis() > 604_800_000
+        if (session == null || status.millis() < 0 || status.millis() > AnalysisFrame.MAX_MILLIS
                 || status.upstreamMillis() < 0 || status.upstreamMillis() > 2_000) {
             return;
         }

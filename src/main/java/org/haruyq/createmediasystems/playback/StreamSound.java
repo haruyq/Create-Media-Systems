@@ -513,7 +513,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             if (current.position < 0) {
                 lighting.clear();
                 analyzedPosition = -1;
-                return new LightingMedia.AudioFrame(now / 1000, 0, 0, 0, 0, 0, 120);
+                return new LightingMedia.AudioFrame(now / 1000, 0, 0, 0, 0, 0, LightingMedia.DEFAULT_BPM);
             }
             long position = current.position + ((now - current.at) * Pcm.BYTES_PER_SECOND / 1_000_000_000L & ~1L);
             long from = analyzedPosition;
