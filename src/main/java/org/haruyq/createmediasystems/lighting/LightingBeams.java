@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.haruyq.createmediasystems.display.ScreenLight;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -22,12 +23,18 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.level.Level;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.phys.Vec3;
 
-/** Beam strips expanded and clipped on the GPU from their corners, colours and hit planes. */
-final class LightingBeams {
+/**
+ * Beam strips expanded and clipped on the GPU from their corners, colours and hit planes, drawn with the stage
+ * lights' beams (LightingRenderer.beamType()), after block entities. Other mods' fixtures draw their beams here too
+ * (strip, while available): a strip is a quad from its near edge (a, b) to its far edge (d, c), faded along it
+ * (Fade) and cut by up to three planes (Clip), as a beam stops at the blocks it meets.
+ */
+public final class LightingBeams {
     static final VertexFormat FORMAT = VertexFormat.builder().add("Position", VertexFormatElement.POSITION).build();
     private static final int ROWS = 1024;
     private static final int FLOATS = 64;
@@ -68,6 +75,49 @@ final class LightingBeams {
 
     static boolean available() {
         return program != 0;
+    }
+
+    /**
+     * Whether strips for {@code level} are drawn on the GPU now: in the client's world, with the beam program
+     * loaded (it can fail to load, under some shader packs). If not, draw beams in LightingRenderer.beamBuffers.
+     */
+    public static boolean available(Level level) {
+        return program != 0 && level == Minecraft.getInstance().level;
+    }
+
+    /** How a strip fades along it, from its near edge to its far one. */
+    public enum Fade {
+        /** In eight steps, to a quarter: a beam's cone. */
+        CONE,
+        /** In eight steps, more gently, never quite out: a laser's sheet. */
+        SHEET,
+        /** Not at all, in one piece: a ray. */
+        SOLID
+    }
+
+    /** A plane a strip is cut at: the side its normal points to, its source's, is kept. */
+    public record Clip(Vec3 point, Vec3 normal) {
+        /** The plane through {@code point} across {@code normal}, the part toward {@code source} kept. */
+        public static Clip toward(Vec3 point, Vec3 normal, Vec3 source) {
+            LightingGeometry.Plane plane = LightingGeometry.Plane.toward(point, normal, source);
+            return new Clip(plane.point(), plane.normal());
+        }
+
+        LightingGeometry.Plane plane() {
+            return new LightingGeometry.Plane(point, normal);
+        }
+    }
+
+    /**
+     * A strip this frame: {@code a} to {@code b} its near edge, {@code d} to {@code c} its far one, in the space
+     * {@code matrix} takes into the camera's (a block entity renderer's pose); {@code colorA} along a to d,
+     * {@code colorB} along b to c; {@code alpha} at its near edge, 0 to 255; kept on the source's side of each clip
+     * (null for none). Render thread, while {@link #available(Level)}.
+     */
+    public static void strip(Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA, int colorB, Fade fade,
+                             float alpha, @Nullable Clip first, @Nullable Clip second, @Nullable Clip third) {
+        strip(matrix, a, b, c, d, colorA, colorB, fade.ordinal(), alpha, first == null ? null : first.plane(),
+                second == null ? null : second.plane(), third == null ? null : third.plane());
     }
 
     static boolean pending() {

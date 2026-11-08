@@ -1,8 +1,10 @@
 package org.haruyq.createmediasystems.lighting;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
@@ -39,6 +41,22 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public class StageLightBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final MapCodec<StageLightBlock> CODEC = simpleCodec(StageLightBlock::new);
     public static final BooleanProperty HANGING = BooleanProperty.create("hanging");
+    private static final Map<String, Component> FAMILY_NAMES = new ConcurrentHashMap<>();
+
+    /** Names {@code family} (StageLightBlock.Entity.family) as players read it, as a group of it is told apart. */
+    public static void nameFamily(String family, Component name) {
+        FAMILY_NAMES.put(family, name);
+    }
+
+    /** {@code family}'s name, as named (nameFamily); its id if not. */
+    public static Component familyName(String family) {
+        Component name = FAMILY_NAMES.get(family);
+        if (name != null) {
+            return name;
+        }
+        return family.equals(Entity.DEFAULT_FAMILY) ? Component.translatable("create_media_systems.lighting.family")
+                : Component.literal(family);
+    }
 
     public StageLightBlock(Properties properties) {
         super(properties);

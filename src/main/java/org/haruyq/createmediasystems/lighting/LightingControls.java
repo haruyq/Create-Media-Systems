@@ -384,7 +384,7 @@ public final class LightingControls {
         // Right of the left bay, another mod's page answers while it shows.
         LightingConsolePage page = LightingConsolePage.showing(console);
         Vec3 point = onMonitor ? monitor : top;
-        if (page != null && point != null && point.x >= 1) {
+        if (page != null && point != null && (point.x >= 1 || page.ownsLeftBay())) {
             LightingConsolePage.Control control = page.hit(console, point, onMonitor);
             return control == null ? null : within(new Hit(console, null, 0, point, onMonitor, control));
         }
