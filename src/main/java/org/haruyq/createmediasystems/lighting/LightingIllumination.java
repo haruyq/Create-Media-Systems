@@ -110,11 +110,13 @@ public final class LightingIllumination {
     /** Frames a lamp may go undrawn before its buffer is freed. */
     private static final int FORGET_FRAMES = 600;
     /**
-     * How far, in blocks, a face may stand in front of another and still be taken for the same surface (see
-     * SurfaceScan.dropHidden): past a hair's breadth (seats' shared armrests are 0.05 px apart), short of a
+     * How far, in blocks, a face may stand in front of another of the same outline and still be taken for the same
+     * surface (see SurfaceScan.dropHidden): past a hair's breadth (seats' shared armrests are 0.05 px apart), short of a
      * decoration laid over a face (glow lichen stands 0.1 px off, and shows the face through it).
      */
     private static final double HIDE_DEPTH = 0.004;
+    /** Ticks between checks that the faces in a beam still stand (see render). */
+    private static final int CHECK_TICKS = 10;
 
     static final class TraceBudget {
         int beam;
@@ -150,7 +152,7 @@ public final class LightingIllumination {
         /** A scan under way, adopted once done (see adopt). */
         CompletableFuture<Scan> scanning;
         /** The tick the lit faces were last checked to still stand; faces gone are set to null (see render). */
-        long checked = Long.MIN_VALUE;
+        long checked = Long.MIN_VALUE / 2;
         /**
          * What the light sees from: bumped when it moves SIGHT_TOLERANCE from sightFrom, a block changes near the
          * beam, or it went undrawn a while. Faces traced under another sight are traced again (refresh).
@@ -364,7 +366,7 @@ public final class LightingIllumination {
     }
 
     /** A block model's quad near the beam, {@code quad}th of its block's, and what the light last saw of it. */
-    private static final class Face {
+    static final class Face {
         final BlockPos pos;
         final BlockState state;
         final int quad;
@@ -651,8 +653,9 @@ public final class LightingIllumination {
                         .exceptionally(LightingIllumination::failed);
             }
         }
-        // Once a tick, the faces in the beam are checked to still stand; the rest wait till it reaches them.
-        boolean check = beam.at != beam.checked;
+        // Every few ticks, the faces in the beam are checked to still stand; the rest wait till it reaches them. Most
+        // changes are seen at once (sectionChanged); this catches those made while the light was out of view.
+        boolean check = beam.at - beam.checked >= CHECK_TICKS;
         // On different sub-levels (or one on none), the faces move in the lamp's space: each frame sees them anew.
         BlockPos surface = beam.center == null ? center : beam.center;
         boolean posed = SableCompanion.INSTANCE.getContaining(level, lamp.getBlockPos())
@@ -1084,6 +1087,65 @@ public final class LightingIllumination {
         return result;
     }
 
+    /** Which of {@code faces} lie just behind another block's face of the same outline (see SurfaceScan.dropHidden). */
+    static boolean[] hidden(List<Face> faces) {
+        int count = faces.size();
+        double[] depths = new double[count];
+        Outline[] outlines = new Outline[count];
+        Map<Outline, List<Integer>> same = new HashMap<>();
+        for (int i = 0; i < count; i++) {
+            Outline outline = Outline.of(faces.get(i));
+            if (outline != null) {
+                outlines[i] = outline;
+                // How far along its normal it stands: the larger, the further in front.
+                Direction.Axis axis = Direction.Axis.VALUES[outline.side / 2];
+                depths[i] = faces.get(i).points[0].get(axis) * (outline.side % 2 * 2 - 1);
+                same.computeIfAbsent(outline, k -> new ArrayList<>(2)).add(i);
+            }
+        }
+        boolean[] hidden = new boolean[count];
+        for (int i = 0; i < count; i++) {
+            if (outlines[i] == null) {
+                continue;
+            }
+            for (int j : same.get(outlines[i])) {
+                double ahead = depths[j] - depths[i];
+                if (j != i && !faces.get(j).pos.equals(faces.get(i).pos) && ahead <= HIDE_DEPTH
+                        && (ahead > 1e-7 || Math.abs(ahead) <= 1e-7 && j < i && !hidden[j])) {
+                    hidden[i] = true;
+                    break;
+                }
+            }
+        }
+        return hidden;
+    }
+
+    /**
+     * An axis-aligned face's side (axis × 2, +1 facing the positive way) and its outline across that axis, rounded to
+     * a 16th of a pixel: model coordinates sit on the pixel grid, so faces offset a hair from each other round alike.
+     */
+    private record Outline(int side, long minA, long maxA, long minB, long maxB) {
+        /** Null for a face not turned along an axis. */
+        static Outline of(Face face) {
+            Vec3[] p = face.points;
+            Vec3 normal = p[1].subtract(p[0]).cross(p[3].subtract(p[0])).normalize().scale(face.winding);
+            int axis = Math.abs(normal.x) > 0.999 ? 0 : Math.abs(normal.y) > 0.999 ? 1 : Math.abs(normal.z) > 0.999 ? 2 : -1;
+            if (axis < 0) {
+                return null;
+            }
+            Direction.Axis a = Direction.Axis.VALUES[(axis + 1) % 3], b = Direction.Axis.VALUES[(axis + 2) % 3];
+            double minA = Double.MAX_VALUE, maxA = -Double.MAX_VALUE, minB = Double.MAX_VALUE, maxB = -Double.MAX_VALUE;
+            for (Vec3 corner : p) {
+                minA = Math.min(minA, corner.get(a));
+                maxA = Math.max(maxA, corner.get(a));
+                minB = Math.min(minB, corner.get(b));
+                maxB = Math.max(maxB, corner.get(b));
+            }
+            return new Outline(axis * 2 + (normal.get(Direction.Axis.VALUES[axis]) > 0 ? 1 : 0), Math.round(minA * 256),
+                    Math.round(maxA * 256), Math.round(minB * 256), Math.round(maxB * 256));
+        }
+    }
+
     private static final class SurfaceScan {
         final Level level;
         final BlockPos lamp;
@@ -1136,51 +1198,20 @@ public final class LightingIllumination {
         /**
          * Drops faces just behind another block's face turned the same way over the same area, as neighbouring seats
          * share an armrest modelled twice, a hair apart. Drawn, the front one hides the other; but light, drawn a
-         * little towards the camera to win over its own face, would be added on both, twice as bright.
+         * little towards the camera to win over its own face, would be added on both, twice as bright. Faces are
+         * matched by their outline (to a 16th of a pixel), so a floor of thousands of faces in one plane costs no more
+         * than looking each up once.
          */
         void dropHidden() {
             if (dropped) {
                 return;
             }
             dropped = true;
+            boolean[] hidden = hidden(found);
             int count = found.size();
-            int[] axes = new int[count];
-            double[] depths = new double[count];
-            Map<Long, List<Integer>> planes = new HashMap<>();
-            for (int i = 0; i < count; i++) {
-                Face face = found.get(i);
-                Vec3[] p = face.points;
-                Vec3 normal = p[1].subtract(p[0]).cross(p[3].subtract(p[0])).normalize().scale(face.winding);
-                int axis = Math.abs(normal.x) > 0.999 ? 0 : Math.abs(normal.y) > 0.999 ? 1 : Math.abs(normal.z) > 0.999 ? 2 : -1;
-                axes[i] = axis;
-                if (axis < 0) {
-                    continue;
-                }
-                int side = normal.get(Direction.Axis.VALUES[axis]) > 0 ? 1 : 0;
-                // How far along its normal it stands: the larger, the further in front.
-                depths[i] = p[0].get(Direction.Axis.VALUES[axis]) * (side * 2 - 1);
-                axes[i] = axis * 2 + side;
-                planes.computeIfAbsent(plane(axes[i], depths[i]), k -> new ArrayList<>()).add(i);
-            }
-            boolean[] hidden = new boolean[count];
             boolean any = false;
-            for (int i = 0; i < count; i++) {
-                if (axes[i] < 0) {
-                    continue;
-                }
-                long key = plane(axes[i], depths[i]);
-                for (long k = key; k <= key + 8 && !hidden[i]; k += 8) {
-                    for (int j : planes.getOrDefault(k, List.of())) {
-                        double ahead = depths[j] - depths[i];
-                        if (j != i && axes[j] == axes[i] && !found.get(j).pos.equals(found.get(i).pos)
-                                && (ahead > 1e-7 || Math.abs(ahead) <= 1e-7 && j < i && !hidden[j]) && ahead <= HIDE_DEPTH
-                                && covers(found.get(j).points, found.get(i).points, axes[i] / 2)) {
-                            hidden[i] = true;
-                            any = true;
-                            break;
-                        }
-                    }
-                }
+            for (boolean h : hidden) {
+                any |= h;
             }
             if (any) {
                 List<Face> kept = new ArrayList<>(count);
@@ -1193,31 +1224,6 @@ public final class LightingIllumination {
                 found.addAll(kept);
                 created.retainAll(new java.util.HashSet<>(kept));
             }
-        }
-
-        /** Its axis and side ({@code axis}) and depth to {@link #HIDE_DEPTH}, so faces within it are a bucket apart. */
-        private static long plane(int axis, double depth) {
-            return (long) Math.floor(depth / HIDE_DEPTH) * 8 + axis;
-        }
-
-        /** Whether {@code front}'s corners span {@code back}'s across the face's plane, normal to {@code axis}. */
-        private static boolean covers(Vec3[] front, Vec3[] back, int axis) {
-            for (Direction.Axis across : Direction.Axis.VALUES) {
-                if (across.ordinal() == axis) {
-                    continue;
-                }
-                double frontMin = Double.MAX_VALUE, frontMax = -Double.MAX_VALUE, backMin = Double.MAX_VALUE, backMax = -Double.MAX_VALUE;
-                for (int c = 0; c < 4; c++) {
-                    frontMin = Math.min(frontMin, front[c].get(across));
-                    frontMax = Math.max(frontMax, front[c].get(across));
-                    backMin = Math.min(backMin, back[c].get(across));
-                    backMax = Math.max(backMax, back[c].get(across));
-                }
-                if (backMin < frontMin - HIDE_DEPTH || backMax > frontMax + HIDE_DEPTH) {
-                    return false;
-                }
-            }
-            return true;
         }
 
         private void read(BlockPos pos) {

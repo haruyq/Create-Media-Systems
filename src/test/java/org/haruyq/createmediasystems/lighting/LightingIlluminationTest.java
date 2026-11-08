@@ -2,7 +2,9 @@ package org.haruyq.createmediasystems.lighting;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,8 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
 
 import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 class LightingIlluminationTest {
@@ -67,6 +71,39 @@ class LightingIlluminationTest {
                 }
             }
         }
+    }
+
+    @Test
+    void aFaceJustBehindAnotherBlocksSameOutlineIsHidden() {
+        List<LightingIllumination.Face> faces = new ArrayList<>();
+        // Neighbouring seats' shared armrest: this seat's top, and the next one's a hair higher over the same area.
+        faces.add(top(new BlockPos(0, 0, 0), 13.501 / 16, 18.501 / 16, 11.5 / 16, 2 / 16.0, 14 / 16.0));
+        faces.add(top(new BlockPos(1, 0, 0), 13.499 / 16, 18.499 / 16, 11.55 / 16, 2 / 16.0, 14 / 16.0));
+        // A face laid over another of its own block (an overlay) is not another block's: both stay.
+        faces.add(top(new BlockPos(5, 0, 0), 5, 6, 1, 0, 1));
+        faces.add(top(new BlockPos(5, 0, 0), 5, 6, 1, 0, 1));
+        // A floor: thousands of faces in one plane, none over another.
+        for (int x = 0; x < 100; x++) {
+            for (int z = 2; z < 102; z++) {
+                faces.add(top(new BlockPos(x, 0, z), x, x + 1, 1, z, z + 1));
+            }
+        }
+        boolean[] hidden = LightingIllumination.hidden(faces);
+        assertTrue(hidden[0], "the lower armrest");
+        assertFalse(hidden[1], "the one in front");
+        assertFalse(hidden[2]);
+        assertFalse(hidden[3]);
+        for (int i = 4; i < faces.size(); i++) {
+            assertFalse(hidden[i], "floor face " + i);
+        }
+    }
+
+    /** An upward face over x0..x1 and z0..z1 at height y, of the block at {@code pos}. */
+    private static LightingIllumination.Face top(BlockPos pos, double x0, double x1, double y, double z0, double z1) {
+        Vec3[] points = {new Vec3(x0, y, z0), new Vec3(x1, y, z0), new Vec3(x1, y, z1), new Vec3(x0, y, z1)};
+        // Counter-clockwise from above, the corners' own normal points down: the winding turns it up.
+        return new LightingIllumination.Face(pos, Blocks.STONE.defaultBlockState(), 0, new int[32], points, new float[8],
+                -1, 0xFFFFFF, Vec3.ZERO);
     }
 
     @Test
