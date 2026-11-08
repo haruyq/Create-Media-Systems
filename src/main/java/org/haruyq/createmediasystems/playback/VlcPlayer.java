@@ -411,29 +411,43 @@ public final class VlcPlayer implements NativeAudio.Backend {
         /** The texture with the latest picture, uploading it first if new; null before the first. Render thread. */
         @Nullable
         public ResourceLocation texture() {
-            if (fresh) {
-                Memory latest;
-                int w, h;
-                synchronized (guard) {
-                    latest = buffers[back ^ 1];
-                    if (!fresh || latest == null) {
-                        return shown();
-                    }
-                    fresh = false;
-                    reading = true;
-                    w = width;
-                    h = height;
-                }
+            Picture latest = beginRead();
+            if (latest != null) {
                 try {
-                    upload(latest, w, h);
+                    upload(latest.pixels(), latest.width(), latest.height());
                 } finally {
-                    finishReading();
+                    endRead();
                 }
             }
             return shown();
         }
 
-        private void finishReading() {
+        /** A picture VLC finished, {@code width} by {@code height} RGBA pixels. */
+        record Picture(Memory pixels, int width, int height) {
+        }
+
+        /**
+         * The picture VLC finished since the last read, if any, kept from VLC till {@link #endRead}: VLC meanwhile
+         * writes the next into the other buffer.
+         */
+        @Nullable
+        Picture beginRead() {
+            if (!fresh) {
+                return null;
+            }
+            synchronized (guard) {
+                Memory latest = buffers[back ^ 1];
+                if (!fresh || latest == null) {
+                    return null;
+                }
+                fresh = false;
+                reading = true;
+                return new Picture(latest, width, height);
+            }
+        }
+
+        /** Done with the picture {@link #beginRead} gave; one VLC finished meanwhile becomes the next to read. */
+        void endRead() {
             synchronized (guard) {
                 reading = false;
                 if (missed) {
@@ -542,6 +556,19 @@ public final class VlcPlayer implements NativeAudio.Backend {
 
         /** The player is gone: frees the pictures now and the texture on the render thread. */
         private void close() {
+            freePictures();
+            Minecraft.getInstance().execute(() -> {
+                for (ResourceLocation each : ids) {
+                    if (each != null) {
+                        Minecraft.getInstance().getTextureManager().release(each);
+                    }
+                }
+                textureWidth = 0;
+            });
+        }
+
+        /** Frees the pictures, once the render thread is done reading one. */
+        void freePictures() {
             synchronized (guard) {
                 // Interrupted, left to JNA's cleaner: freed now, the copy under way would read freed memory.
                 boolean idle = awaitReading();
@@ -555,14 +582,6 @@ public final class VlcPlayer implements NativeAudio.Backend {
                 lightingColors = null;
                 lastPicture = 0;
             }
-            Minecraft.getInstance().execute(() -> {
-                for (ResourceLocation each : ids) {
-                    if (each != null) {
-                        Minecraft.getInstance().getTextureManager().release(each);
-                    }
-                }
-                textureWidth = 0;
-            });
         }
 
         /** Sampled through its mipmaps, so a video shown smaller than it is doesn't shimmer into noise. */

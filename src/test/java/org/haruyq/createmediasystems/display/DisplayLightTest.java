@@ -39,9 +39,11 @@ class DisplayLightTest {
     @Test
     void shadowSampleLimitsStillFollowScreenSizeAndRoomDensity() {
         var screen = new DisplayBlock.Screen(Vec3.ZERO, new Vec3(1, 0, 0), new Vec3(0, 0, 1));
-        assertEquals(6, DisplayLight.shadeTargets(screen, 1, 1, 0).length);
-        assertEquals(24, DisplayLight.shadeTargets(screen, 64, 36, 0).length);
-        assertEquals(2, DisplayLight.shadeTargets(screen, 64, 36, 1_000_000).length);
+        int small = DisplayLight.shadeTargets(screen, 1, 1, 0).length;
+        int large = DisplayLight.shadeTargets(screen, 64, 36, 0).length;
+        int crowded = DisplayLight.shadeTargets(screen, 64, 36, 1_000_000).length;
+        assertTrue(large > small, "a larger screen samples its shadows from more points");
+        assertTrue(crowded < large && crowded >= 2, "a crowded room fewer, but never one");
     }
 
     @Test

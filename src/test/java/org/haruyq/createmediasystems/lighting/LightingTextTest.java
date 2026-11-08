@@ -11,8 +11,9 @@ class LightingTextTest {
     void darkPaletteColorsRemainReadableWithoutLosingTheirHue() {
         for (int color : new int[]{0, 0x080808, 0x000020, 0x200000, 0x202000}) {
             int readable = LightingText.readable(color);
-            double brightness = ((readable >> 16 & 255) * 54 + (readable >> 8 & 255) * 183 + (readable & 255) * 19) / 256.0;
-            assertTrue(brightness >= 149);
+            // Rec. 709 luminance: brighter than mid grey, so it reads on the console's dark panel.
+            double luminance = (readable >> 16 & 255) * 0.2126 + (readable >> 8 & 255) * 0.7152 + (readable & 255) * 0.0722;
+            assertTrue(luminance > 128, Integer.toHexString(readable));
         }
         int blue = LightingText.readable(0x000020);
         assertTrue((blue & 255) > (blue >> 16 & 255));

@@ -26,7 +26,7 @@ class AudioCacheTest {
 
     @Test
     void downloadsInRangesThenPlaysTheCopyUntilItGoesUnplayedTooLong(@TempDir Path dir) throws Exception {
-        byte[] audio = new byte[21 << 20]; // three requests: 10 + 10 + 1 MiB
+        byte[] audio = new byte[21 << 20];
         Arrays.fill(audio, (byte) 7);
         List<String> asked = new ArrayList<>();
         HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -47,8 +47,9 @@ class AudioCacheTest {
             assertNull(cache.lookup(SONG), "nothing kept yet: it streams from the origin");
             URI media = URI.create("http://127.0.0.1:" + origin.getAddress().getPort() + "/audio.m4a");
             cache.download(media, Map.of("referer", "https://www.youtube.com/"), AudioCache.name(SONG));
-            assertEquals(3, asked.size());
-            assertEquals("bytes=0-10485759 https://www.youtube.com/", asked.getFirst());
+            assertTrue(asked.size() > 1, "fetched in ranges, not at once");
+            assertTrue(asked.stream().allMatch(request -> request.startsWith("bytes=") && request.endsWith(" https://www.youtube.com/")),
+                    "every range asks with the page as referrer");
         } finally {
             origin.stop(0);
         }

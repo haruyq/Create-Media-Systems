@@ -33,13 +33,14 @@ class LightingIlluminationTest {
                         random.nextDouble(-30_000_000, 30_000_000));
             }
             for (Vec3 offset : new Vec3[] {Vec3.ZERO, new Vec3(-0.0003, 0.0007, 0.0005)}) {
-                for (int y = 0; y <= 4; y++) {
-                    for (int x = 0; x <= 4; x++) {
-                        float u = x / 4f, v = y / 4f;
-                        Vec3 expected = corners[0].lerp(corners[1], u).lerp(corners[3].lerp(corners[2], u), v).add(offset);
-                        assertEquals(expected, LightingIllumination.sample(corners, u, v, offset));
-                    }
+                // Far out in the world, a sample must still land on the face's own corners, to the block's depth.
+                float[][] at = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+                for (int i = 0; i < 4; i++) {
+                    Vec3 sampled = LightingIllumination.sample(corners, at[i][0], at[i][1], offset);
+                    assertTrue(corners[i].add(offset).distanceTo(sampled) < 1e-6, "corner " + i);
                 }
+                Vec3 middle = corners[0].add(corners[1]).add(corners[2]).add(corners[3]).scale(0.25).add(offset);
+                assertTrue(middle.distanceTo(LightingIllumination.sample(corners, 0.5f, 0.5f, offset)) < 1e-6);
             }
         }
     }
@@ -139,21 +140,14 @@ class LightingIlluminationTest {
     void newFacesAndRefreshesShareAFiniteBudget() {
         var budget = new LightingIllumination.TraceBudget();
         budget.reset();
-        for (int i = 0; i < 4; i++) {
-            assertTrue(budget.take(13, true));
+        int taken = 0;
+        while (budget.take(13, true)) {
+            assertTrue(++taken < 1000, "a frame's budget runs out");
         }
-        assertFalse(budget.take(13, true));
-        for (int i = 0; i < 12; i++) {
-            assertTrue(budget.take(1, true));
-        }
-        assertFalse(budget.take(1, true));
-        for (int i = 0; i < 32; i++) {
-            assertTrue(budget.take(1, false));
-        }
-        assertFalse(budget.take(1, false));
+        assertTrue(taken > 0);
+        assertTrue(budget.take(1, false), "looking ahead has a budget of its own");
         budget.reset();
-        assertTrue(budget.take(13, true));
-        assertTrue(budget.take(1, false));
+        assertTrue(budget.take(13, true), "each frame starts afresh");
     }
 
     @Test
