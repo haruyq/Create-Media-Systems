@@ -282,7 +282,6 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             return;
         }
         if (OVERDRAW.isEmpty()) {
-            ScreenLight.discard();
             return;
         }
         RenderSystem.backupProjectionMatrix();
@@ -291,8 +290,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         view.pushMatrix();
         view.set(event.getModelViewMatrix());
         RenderSystem.applyModelViewMatrix();
-        // Light passing in front of the pictures, such as stage lights' beams, which drawing them again would cover.
-        RenderSystem.setShaderTexture(1, ScreenLight.draw());
+        // Light passing in front of the pictures, such as stage lights' beams, is added after this (ScreenLight).
         RenderSystem.setShader(() -> overdrawShader);
         RenderSystem.setShaderColor(1, 1, 1, 1);
         // Over the pack's own drawing of the same picture: an unframed image stays see-through where it is.

@@ -99,8 +99,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 effects(event);
             }
         });
-        // Before displays draw their pictures again over a shader pack's frame (DisplayRenderer.overdraw), which adds
-        // this light back onto them: drawn after, it would be added twice.
+        // Beams given after block entities. Under a shader pack this only queues them, to be added after displays
+        // draw their pictures again (see effects).
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
                 effects(event);
@@ -129,17 +129,29 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 || !entities && event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || shadowPass()) {
             return;
         }
-        // Finish the last video before light, while keeping light before translucent terrain and shader compositing.
+        // Under a shader pack, beams are added once it has finished the frame and displays have their pictures back,
+        // as the light they cast on surfaces is: the same light over all of it, a display's picture included. Through
+        // the pack they would be graded as nothing drawn after it is, so brighter over a display than beside it.
+        Matrix4f projection = new Matrix4f(event.getProjectionMatrix());
+        Matrix4f modelView = new Matrix4f(event.getModelViewMatrix());
+        if (ScreenLight.afterPack(() -> drawEffects(projection, modelView))) {
+            return;
+        }
+        // Finish the last video before light, while keeping light before translucent terrain.
         if (entities) {
             Minecraft.getInstance().renderBuffers().bufferSource().endLastBatch();
         } else {
             Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
         }
+        drawEffects(projection, modelView);
+    }
+
+    private static void drawEffects(Matrix4f projection, Matrix4f modelView) {
         RenderSystem.backupProjectionMatrix();
-        RenderSystem.setProjectionMatrix(event.getProjectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
+        RenderSystem.setProjectionMatrix(projection, VertexSorting.DISTANCE_TO_ORIGIN);
         Matrix4fStack view = RenderSystem.getModelViewStack();
         view.pushMatrix();
-        view.set(event.getModelViewMatrix());
+        view.set(modelView);
         RenderSystem.applyModelViewMatrix();
         try {
             EFFECT_BUFFERS.values().forEach(MultiBufferSource.BufferSource::endBatch);
@@ -155,8 +167,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     private static VertexConsumer effectBuffer(RenderType type) {
         effectsPending = true;
-        return ScreenLight.alsoOnScreens(type, EFFECT_BUFFERS.computeIfAbsent(type,
-                ignored -> MultiBufferSource.immediate(new ByteBufferBuilder(65536))).getBuffer(type));
+        return EFFECT_BUFFERS.computeIfAbsent(type,
+                ignored -> MultiBufferSource.immediate(new ByteBufferBuilder(65536))).getBuffer(type);
     }
 
     LightingRenderer(BlockEntityRendererProvider.Context context) {

@@ -4,7 +4,6 @@ import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.haruyq.createmediasystems.display.ScreenLight;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -185,7 +184,6 @@ public final class LightingBeams {
                 buffer.upload();
                 buffer.expand();
                 buffer.draw(view, projection);
-                ScreenLight.alsoOnScreens(() -> buffer.draw(view, projection));
                 buffer.rows = 0;
             }
         }
