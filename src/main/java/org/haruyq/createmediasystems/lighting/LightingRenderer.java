@@ -761,35 +761,38 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             }
             box(metal, matrix, -0.035f, 0.76f, 0, 0.04f, 1.08f, 2, 0xB1B3BE, light);
             box(metal, matrix, 3.96f, 0.76f, 0, 4.035f, 1.08f, 2, 0xB1B3BE, light);
-            for (int i = 0; i < 6; i++) {
-                float x = 0.12f + i * 0.145f;
-                panel(ink, matrix, x - 0.023f, 0.23f, x + 0.023f, 1.23f, 0x0B0D14);
-                float z = 0.25f + settings.groups[i].brightness * 0.95f;
-                int color = settings.groups[i].colors[0];
-                box(metal, matrix, x - 0.055f, height(z) + 0.015f, z - 0.065f,
-                        x + 0.055f, height(z) + 0.11f, z + 0.065f, color, light);
-                faderCap(ink, matrix, x, z, color);
-                topText(buffers, matrix, x - 0.035f, 1.46f, Integer.toString(i + 1), LightingText.groupColor(settings, i), 0.07f, 0);
-                if (i == settings.selectedGroup) {
-                    panelBorder(ink, matrix, x - 0.065f, 0.16f, x + 0.065f, 1.3f, 0.012f, 0xDDF8FF);
-                }
-            }
-            for (int i = 0; i < LightingSettings.GROUPS; i++) {
-                float top = 1.86f - i * (0.74f / 6);
-                monitor(ink, matrix, 0, 0.065f, 0.935f, top - 0.117f, top,
-                        i == settings.selectedGroup ? 0x234255 : 0x111B29, 0.003f);
-                monitor(ink, matrix, 0, 0.08f, 0.115f, top - 0.095f, top - 0.02f, settings.groups[i].colors[0]);
-                text(buffers, matrix, 0.14f, top - 0.015f,
-                        LightingText.group(settings, i).append("  ")
-                                .append(LightingText.number(Math.round(settings.groups[i].brightness * 100) + "%")), 0.76f);
-            }
             for (int bay = 0; bay < 4; bay++) {
                 panel(ink, matrix, bay + 0.05f, 0.015f, bay + 0.95f, 0.135f, 0x0B101C);
             }
-            topText(buffers, matrix, 0.08f, 0.12f, Component.translatable("create_media_systems.lighting.group", settings.selectedGroup + 1).getString(),
-                    LightingText.groupColor(settings, settings.selectedGroup), 0.84f, 0);
-            // The left bay is every page's: the right three are another mod's page while one is active.
+            // The left bay, group faders and group list, is the console's own, unless a page takes it too: the right
+            // three are another mod's page while one is active.
             LightingConsolePage page = LightingConsolePage.showing(console);
+            if (page == null || !page.ownsLeftBay()) {
+                for (int i = 0; i < 6; i++) {
+                    float x = 0.12f + i * 0.145f;
+                    panel(ink, matrix, x - 0.023f, 0.23f, x + 0.023f, 1.23f, 0x0B0D14);
+                    float z = 0.25f + settings.groups[i].brightness * 0.95f;
+                    int color = settings.groups[i].colors[0];
+                    box(metal, matrix, x - 0.055f, height(z) + 0.015f, z - 0.065f,
+                            x + 0.055f, height(z) + 0.11f, z + 0.065f, color, light);
+                    faderCap(ink, matrix, x, z, color);
+                    topText(buffers, matrix, x - 0.035f, 1.46f, Integer.toString(i + 1), LightingText.groupColor(settings, i), 0.07f, 0);
+                    if (i == settings.selectedGroup) {
+                        panelBorder(ink, matrix, x - 0.065f, 0.16f, x + 0.065f, 1.3f, 0.012f, 0xDDF8FF);
+                    }
+                }
+                for (int i = 0; i < LightingSettings.GROUPS; i++) {
+                    float top = 1.86f - i * (0.74f / 6);
+                    monitor(ink, matrix, 0, 0.065f, 0.935f, top - 0.117f, top,
+                            i == settings.selectedGroup ? 0x234255 : 0x111B29, 0.003f);
+                    monitor(ink, matrix, 0, 0.08f, 0.115f, top - 0.095f, top - 0.02f, settings.groups[i].colors[0]);
+                    text(buffers, matrix, 0.14f, top - 0.015f,
+                            LightingText.group(settings, i).append("  ")
+                                    .append(LightingText.number(Math.round(settings.groups[i].brightness * 100) + "%")), 0.76f);
+                }
+                topText(buffers, matrix, 0.08f, 0.12f, Component.translatable("create_media_systems.lighting.group", settings.selectedGroup + 1).getString(),
+                        LightingText.groupColor(settings, settings.selectedGroup), 0.84f, 0);
+            }
             if (page != null) {
                 page.render(console, new LightingConsoleSurface(buffers, matrix, light));
             } else {

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
@@ -53,6 +55,16 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
     public static final BooleanProperty BACK = BooleanProperty.create("back");
     public static final BooleanProperty FORMED = BooleanProperty.create("formed");
     public static final int MAX_LIGHTS = 64;
+    private static final List<Consumer<Entity>> TICKERS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Runs {@code ticker} on the server each tick for every formed console, on its root (the controller): for
+     * another mod's settings that move with time, kept in the console's extras (a fade, a timer). It runs while the
+     * console is loaded, whether or not its fixtures are.
+     */
+    public static void onTick(Consumer<Entity> ticker) {
+        TICKERS.add(ticker);
+    }
 
     public LightingConsoleBlock(Properties properties) {
         super(properties);
@@ -356,6 +368,9 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             }
             if (formed && isRoot()) {
                 AnalysisCoordinator.use(this);
+                for (Consumer<Entity> ticker : TICKERS) {
+                    ticker.accept(this);
+                }
             }
         }
 
