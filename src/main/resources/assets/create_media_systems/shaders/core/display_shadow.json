@@ -1,0 +1,14 @@
+{
+    "vertex": "create_media_systems:display_shadow",
+    "fragment": "create_media_systems:display_shadow",
+    "samplers": [],
+    "uniforms": [
+        { "name": "Size", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "VertexOffset", "type": "int", "count": 1, "values": [ 0 ] },
+        { "name": "ScreenRight", "type": "float", "count": 3, "values": [ 1.0, 0.0, 0.0 ] },
+        { "name": "ScreenOut", "type": "float", "count": 3, "values": [ 0.0, 0.0, 1.0 ] },
+        { "name": "Voxels", "type": "int", "count": 1, "values": [ 0 ] },
+        { "name": "VoxelMin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+        { "name": "RayCount", "type": "int", "count": 1, "values": [ 0 ] }
+    ]
+}

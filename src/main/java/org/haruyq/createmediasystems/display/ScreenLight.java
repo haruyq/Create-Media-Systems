@@ -34,6 +34,7 @@ public final class ScreenLight {
     private static final Map<RenderType, ByteBufferBuilder> MEMORY = new HashMap<>();
     /** This frame's light, by render type. */
     private static final Map<RenderType, BufferBuilder> KEPT = new LinkedHashMap<>();
+    private static final List<Runnable> DRAW = new ArrayList<>();
     private static final List<Runnable> AFTER_PACK = new ArrayList<>();
     /** The light alone, over black. */
     @Nullable
@@ -77,6 +78,12 @@ public final class ScreenLight {
         return VertexMultiConsumer.create(out, kept);
     }
 
+    public static void alsoOnScreens(Runnable draw) {
+        if (IrisCompat.shaderPackInUse() && !IrisCompat.shadowPass()) {
+            DRAW.add(draw);
+        }
+    }
+
     /**
      * Draws this frame's light alone over black, tested against the world's depth so what stands in front of it
      * still hides it, under the frame's camera; returns that picture's texture, then the main target is bound again.
@@ -101,6 +108,8 @@ public final class ScreenLight {
             }
         });
         KEPT.clear();
+        DRAW.forEach(Runnable::run);
+        DRAW.clear();
         main.bindWrite(true);
         return target.getColorTextureId();
     }
@@ -114,5 +123,6 @@ public final class ScreenLight {
             }
         });
         KEPT.clear();
+        DRAW.clear();
     }
 }

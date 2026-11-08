@@ -118,6 +118,8 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
                     DefaultVertexFormat.POSITION_TEX_COLOR), shader -> glowShader = shader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_light"),
                     DisplayLight.FORMAT), DisplayLight::setShader);
+            event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_shadow"),
+                    DisplayLight.FORMAT), DisplayShadows::setShader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_overdraw"),
                     DefaultVertexFormat.POSITION_TEX), shader -> overdrawShader = shader);
         } catch (IOException e) {

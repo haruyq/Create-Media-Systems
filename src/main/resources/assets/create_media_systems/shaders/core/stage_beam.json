@@ -1,0 +1,6 @@
+{
+    "vertex": "create_media_systems:stage_beam",
+    "fragment": "create_media_systems:stage_beam",
+    "samplers": [],
+    "uniforms": []
+}

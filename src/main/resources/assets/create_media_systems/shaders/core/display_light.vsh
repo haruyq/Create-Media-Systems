@@ -11,6 +11,8 @@ in vec3 Normal;
 uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
 uniform mat4 ToScreen;
+uniform sampler2D Sampler2;
+uniform int VisibilityOffset;
 
 out vec2 texCoord0;
 out vec4 material;
@@ -21,6 +23,9 @@ void main() {
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
     texCoord0 = UV0;
     material = Color;
+    int index = gl_VertexID + VisibilityOffset;
+    int width = textureSize(Sampler2, 0).x;
+    material.b = texelFetch(Sampler2, ivec2(index % width, index / width), 0).r;
     localPos = (ToScreen * vec4(Position, 1.0)).xyz;
     localNormal = Normal;
 }

@@ -90,7 +90,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final int RAYS = 9;
 
     public static void register(IEventBus modBus) {
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> LightingIllumination.forgetAll());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
+            LightingIllumination.forgetAll();
+            LightingBeams.close();
+        });
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
                 effects(event);
@@ -112,6 +115,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             try {
                 event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("spot_light"),
                         LightingIllumination.FORMAT), LightingIllumination::setShader);
+                event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("stage_beam"),
+                        LightingBeams.FORMAT), LightingBeams::setShader);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -120,7 +125,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     private static void effects(RenderLevelStageEvent event) {
         boolean entities = event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES;
-        if (!effectsPending && !LightingIllumination.pending()
+        if (!effectsPending && !LightingIllumination.pending() && !LightingBeams.pending()
                 || !entities && event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || shadowPass()) {
             return;
         }
@@ -139,6 +144,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         try {
             EFFECT_BUFFERS.values().forEach(MultiBufferSource.BufferSource::endBatch);
             effectsPending = false;
+            LightingBeams.draw();
             LightingIllumination.drawSurfaces();
         } finally {
             view.popMatrix();
@@ -280,7 +286,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         Trace trace = TRACES.computeIfAbsent(lamp, ignored -> new Trace());
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
         MultiBufferSource effects = level == Minecraft.getInstance().level ? EFFECTS : buffers;
-        VertexConsumer beam = effects == EFFECTS ? effects.getBuffer(LIGHT) : new Output(buffers, LIGHT);
+        VertexConsumer beam = effects == EFFECTS && LightingBeams.available() ? null
+                : effects == EFFECTS ? effects.getBuffer(LIGHT) : new Output(buffers, LIGHT);
         if (pattern < 2) {
             LightingIllumination.render(lamp, origin, direction,
                     Math.toRadians(pattern == 1 ? Math.min(group.spread, 2) : group.spread) / 2,
@@ -494,6 +501,15 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                              boolean narrow) {
         Vec3 origin = frame.origin;
         Vec3 center = trace.ends[SIDES];
+        if (out == null) {
+            for (int i = 0; i < SIDES; i++) {
+                int next = (i + 1) % SIDES;
+                LightingBeams.strip(matrix, origin, origin, trace.ends[next], trace.ends[i], color, color,
+                        0, strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next], trace.middle[i]);
+            }
+            ray(null, matrix, frame, center, color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
+            return;
+        }
         // Each edge's points from the lamp out, shared by the two strips either side of it.
         Vec3[][] along = new Vec3[SIDES][9];
         for (int i = 0; i < SIDES; i++) {
@@ -521,6 +537,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static void sheet(VertexConsumer out, Matrix4f matrix, Vec3 origin, Vec3 a, Vec3 b,
                               int colorA, int colorB, float strength, LightingGeometry.Plane planeA,
                               LightingGeometry.Plane planeB, LightingGeometry.Plane middle) {
+        if (out == null) {
+            LightingBeams.strip(matrix, origin, origin, b, a, colorA, colorB, 1, strength * 26, planeA, planeB, middle);
+            return;
+        }
         for (int step = 0; step < 8; step++) {
             double t0 = step / 8.0;
             double t1 = (step + 1) / 8.0;
@@ -551,6 +571,11 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         for (int layer = 2; layer >= 0; layer--) {
             Vec3 edge = side.scale(width * (1 + layer * 2));
             int alpha = Math.round(strength * (layer == 0 ? 180 : layer == 1 ? 28 : 9));
+            if (out == null) {
+                LightingBeams.strip(matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
+                        color, color, 2, alpha, center, left, right);
+                continue;
+            }
             clippedQuad(out, matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
                     color, color, alpha, alpha, alpha, alpha, center, left, right);
         }

@@ -16,6 +16,7 @@ import org.joml.Matrix3d;
 import org.joml.Matrix4d;
 import org.joml.Vector3d;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
@@ -44,6 +45,7 @@ public final class LightingRaycast {
     private static final List<AABB> EMPTY = List.of();
     private static final List<AABB> FULL = Shapes.block().toAabbs();
     private static Cache renderCache;
+    private static Scene renderScene;
     private final Level level;
     private final BlockPos ignored;
     private final List<Snapshot> subLevels;
@@ -54,6 +56,9 @@ public final class LightingRaycast {
     private Object2ByteOpenHashMap<Vec3> visibility;
 
     private record Snapshot(SubLevelAccess owner, Pose3dc pose, Matrix3d normals, AABB bounds) {
+    }
+
+    private record Scene(Level level, long frame, List<Snapshot> subLevels, List<LightingScreens.Panel> screens) {
     }
 
     public LightingRaycast(Level level, BlockPos ignored, boolean render) {
@@ -69,6 +74,17 @@ public final class LightingRaycast {
             cache = new Cache(level);
         }
         cacheShapes = render;
+        Scene scene = scene(level, render);
+        subLevels = scene.subLevels;
+        screens = scene.screens;
+    }
+
+    private static Scene scene(Level level, boolean render) {
+        boolean shared = render && level.isClientSide && level == Minecraft.getInstance().level;
+        long frame = shared ? LightingIllumination.frame() : -1;
+        if (shared && renderScene != null && renderScene.level == level && renderScene.frame == frame) {
+            return renderScene;
+        }
         List<Snapshot> snapshots = new ArrayList<>();
         for (SubLevelAccess subLevel : SableCompanion.INSTANCE.getAllIntersecting(level,
                 new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000))) {
@@ -77,8 +93,11 @@ public final class LightingRaycast {
             snapshots.add(new Snapshot(subLevel, pose, pose.bakeIntoMatrix(new Matrix4d()).normal(new Matrix3d()),
                     bounds(subLevel, pose)));
         }
-        this.subLevels = List.copyOf(snapshots);
-        this.screens = LightingScreens.snapshot(level, render);
+        Scene scene = new Scene(level, frame, List.copyOf(snapshots), LightingScreens.snapshot(level, render));
+        if (shared) {
+            renderScene = scene;
+        }
+        return scene;
     }
 
     /** A separate cache for a background scan outside the sub-levels' bounds. */
@@ -93,6 +112,11 @@ public final class LightingRaycast {
 
     LightingRaycast detached() {
         return new LightingRaycast(this);
+    }
+
+    static void forgetAll() {
+        renderCache = null;
+        renderScene = null;
     }
 
     /** A block in section {@code key} changed: its shapes are looked up again. Render thread. */

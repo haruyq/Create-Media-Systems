@@ -1,7 +1,7 @@
 package org.haruyq.createmediasystems.display;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -23,7 +23,6 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 
-import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import org.haruyq.createmediasystems.client.Workers;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderStateShard;
@@ -75,13 +74,13 @@ public final class DisplayLight {
     static final float STRENGTH = 0.7f;
     /** Ticks between looks at which faces the light reaches, at least. */
     private static final int REFRESH_TICKS = 20;
-    /** Rays from all faces' corners to the screen, at most, per look: fewer per corner in a big room. */
+    /** Chooses fewer shadow samples per vertex in a big room; DisplayShadows bounds their work per frame. */
     private static final int RAY_BUDGET = 200_000;
     /** Frames a display may go undrawn before its buffers are freed. */
     private static final int FORGET_FRAMES = 600;
     /*
-     * Per vertex, in the display's block space: x, y, z; atlas u, v; as its colour, roughness, F0, how much of the
-     * screen it sees, whether a block's face (1) or a water surface (0); its normal in the screen's space.
+     * Per vertex, in the display's block space: x, y, z; atlas u, v; as its colour, roughness, F0, unused,
+     * whether a block's face (1) or a water surface (0); its normal in the screen's space.
      */
     /** POSITION_TEX_COLOR_NORMAL's layout, its own instance: Iris extends some vanilla formats by identity. */
     static final VertexFormat FORMAT = VertexFormat.builder()
@@ -92,6 +91,7 @@ public final class DisplayLight {
             .padding(1)
             .build();
     private static ShaderInstance shader;
+    private static int shaderVersion;
     private static final Map<DisplayBlock.Entity, Lit> LIT = new HashMap<>();
     /** Water surfaces lit this frame, drawn once the water itself is (see stage). */
     private static final List<Runnable> WATER = new ArrayList<>();
@@ -147,15 +147,13 @@ public final class DisplayLight {
         Direction facing;
         /** Found on the background thread, not yet uploaded (faces, water). Guarded by this. */
         @Nullable
-        private Mesh[] found;
+        private Found found;
         /** Freed: what's found for it from now is freed too. Guarded by this. */
         private volatile boolean closed;
         @Nullable
-        VertexBuffer faces;
+        private Surface current;
         @Nullable
-        VertexBuffer water;
-        int facesHash;
-        int waterHash;
+        private Surface pending;
         int drawn;
         /** As drawn this frame. */
         final Matrix4f toScreen = new Matrix4f();
@@ -180,6 +178,7 @@ public final class DisplayLight {
             Minecraft.getInstance().getTextureManager().getTexture(InventoryMenu.BLOCK_ATLAS).setFilter(false, true);
             RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
             RenderSystem.setShaderTexture(1, video);
+            RenderSystem.setShaderTexture(2, current.shadows.texture());
             shader.safeGetUniform("ToScreen").set(toScreen);
             shader.safeGetUniform("CameraPos").set(camera.x, camera.y, camera.z);
             shader.safeGetUniform("ScreenSize").set(width, height);
@@ -189,62 +188,53 @@ public final class DisplayLight {
         }
 
         /** Found on the background thread: kept for the next upload, or freed if this light is gone. */
-        synchronized void found(Mesh[] meshes) {
+        synchronized void found(Found next) {
             if (closed) {
-                Mesh.close(meshes);
+                next.close();
                 return;
             }
             if (found != null) {
-                Mesh.close(found);
+                found.close();
             }
-            found = meshes;
+            found = next;
         }
 
-        /** Its new faces, if found, into its vertex buffers. Render thread. */
         void upload() {
-            Mesh[] next;
+            if (pending != null) {
+                return;
+            }
+            Found next;
             synchronized (this) {
                 next = found;
                 found = null;
             }
-            if (next == null) {
+            if (next != null) {
+                try (next) {
+                    if (current == null || current.hash != next.hash || current.version != shaderVersion) {
+                        pending = new Surface(next);
+                    }
+                }
+            }
+        }
+
+        void draw(int part, Matrix4f modelView, Matrix4f projection) {
+            if (closed || shader == null) {
                 return;
             }
-            faces = upload(faces, next[0], facesHash);
-            facesHash = next[0].hash;
-            water = upload(water, next[1], waterHash);
-            waterHash = next[1].hash;
-        }
-
-        /** Vertices the same as last time (nothing in the room changed) are left as they are in the buffer. */
-        @Nullable
-        private static VertexBuffer upload(@Nullable VertexBuffer buffer, Mesh mesh, int hash) {
-            try (mesh) {
-                if (buffer != null && mesh.data != null && mesh.hash == hash) {
-                    return buffer;
+            if (part == 0 && pending != null && pending.shadows.advance(frame, pending.buffers, pending.counts)) {
+                if (current != null) {
+                    current.close();
                 }
-                if (mesh.data == null) {
-                    if (buffer != null) {
-                        buffer.close();
-                    }
-                    return null;
-                }
-                VertexBuffer to = buffer != null ? buffer : new VertexBuffer(VertexBuffer.Usage.STATIC);
-                to.bind();
-                to.upload(mesh.data);
-                VertexBuffer.unbind();
-                return to;
+                current = pending;
+                pending = null;
             }
-        }
-
-        /** Draws {@code buffer}, its vertices in the display's block space, with the display at {@code modelView}. */
-        void draw(@Nullable VertexBuffer buffer, Matrix4f modelView, Matrix4f projection) {
-            if (closed || buffer == null || shader == null) {
+            if (current == null || current.buffers[part] == null) {
                 return;
             }
             type.setupRenderState();
-            buffer.bind();
-            buffer.drawWithShader(modelView, projection, shader);
+            shader.safeGetUniform("VisibilityOffset").set(part == 0 ? 0 : current.counts[0]);
+            current.buffers[part].bind();
+            current.buffers[part].drawWithShader(modelView, projection, shader);
             VertexBuffer.unbind();
             type.clearRenderState();
         }
@@ -253,15 +243,65 @@ public final class DisplayLight {
             synchronized (this) {
                 closed = true;
                 if (found != null) {
-                    Mesh.close(found);
+                    found.close();
                     found = null;
                 }
             }
-            if (faces != null) {
-                faces.close();
+            if (current != null) {
+                current.close();
             }
-            if (water != null) {
-                water.close();
+            if (pending != null) {
+                pending.close();
+            }
+        }
+    }
+
+    private record Found(Mesh[] meshes, DisplayShadows.Grid grid, Vec3[] targets, DisplayBlock.Screen screen,
+                         int hash) implements AutoCloseable {
+        @Override
+        public void close() {
+            Mesh.close(meshes);
+            grid.close();
+        }
+    }
+
+    private static final class Surface implements AutoCloseable {
+        final VertexBuffer[] buffers = new VertexBuffer[2];
+        final int[] counts = new int[2];
+        final int hash;
+        final int version = shaderVersion;
+        DisplayShadows shadows;
+
+        Surface(Found found) {
+            hash = found.hash;
+            try {
+                for (int i = 0; i < buffers.length; i++) {
+                    MeshData data = found.meshes[i].data;
+                    if (data != null) {
+                        counts[i] = data.drawState().vertexCount();
+                        buffers[i] = new VertexBuffer(VertexBuffer.Usage.STATIC);
+                        buffers[i].bind();
+                        buffers[i].upload(data);
+                    }
+                }
+                shadows = new DisplayShadows(found.grid, found.targets, found.screen, counts[0] + counts[1]);
+            } catch (Throwable error) {
+                close();
+                throw error;
+            } finally {
+                VertexBuffer.unbind();
+            }
+        }
+
+        @Override
+        public void close() {
+            for (VertexBuffer buffer : buffers) {
+                if (buffer != null) {
+                    buffer.close();
+                }
+            }
+            if (shadows != null) {
+                shadows.close();
             }
         }
     }
@@ -288,8 +328,15 @@ public final class DisplayLight {
 
     static void setShader(ShaderInstance loaded) {
         shader = loaded;
+        shaderVersion++;
         MATERIALS.clear();
-        LIT.values().forEach(lit -> lit.refresh.invalidate());
+        for (Lit lit : LIT.values()) {
+            lit.refresh.invalidate();
+            if (lit.pending != null) {
+                lit.pending.close();
+                lit.pending = null;
+            }
+        }
     }
 
     static void register() {
@@ -373,11 +420,11 @@ public final class DisplayLight {
         lit.video = video;
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
         Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
-        if (level != Minecraft.getInstance().level || !ScreenLight.afterPack(() -> lit.draw(lit.faces, modelView, projection))) {
-            lit.draw(lit.faces, modelView, projection);
+        if (level != Minecraft.getInstance().level || !ScreenLight.afterPack(() -> lit.draw(0, modelView, projection))) {
+            lit.draw(0, modelView, projection);
         }
-        if (lit.specular && lit.water != null) {
-            WATER.add(() -> lit.draw(lit.water, modelView, projection));
+        if (lit.specular && lit.current != null && lit.current.buffers[1] != null) {
+            WATER.add(() -> lit.draw(1, modelView, projection));
         }
     }
 
@@ -414,24 +461,26 @@ public final class DisplayLight {
     }
 
     // shortcut: a chunk changing during the background read can fail the scan; the next render retries it.
-    private static Mesh[] faces(Level level, BlockPos at, Bounds bounds, DisplayBlock.Screen screen, float width,
+    private static Found faces(Level level, BlockPos at, Bounds bounds, DisplayBlock.Screen screen, float width,
                                 float height, float range) {
         var blocks = Minecraft.getInstance().getBlockRenderer();
         RandomSource random = RandomSource.create();
         Lighting faces = new Lighting(screen, width, height, range);
         Lighting water = new Lighting(screen, width, height, range);
+        DisplayShadows.Grid grid = new DisplayShadows.Grid(bounds.min.subtract(at), bounds.max.subtract(at));
         try {
-            return faces(level, at, bounds.min, bounds.max, blocks, random, faces, water, screen, width, height);
+            return faces(level, at, bounds.min, bounds.max, blocks, random, faces, water, screen, width, height, grid);
         } catch (Throwable failed) {
             faces.bytes.close();
             water.bytes.close();
+            grid.close();
             throw failed;
         }
     }
 
-    private static Mesh[] faces(Level level, BlockPos at, BlockPos min, BlockPos max, BlockRenderDispatcher blocks,
+    private static Found faces(Level level, BlockPos at, BlockPos min, BlockPos max, BlockRenderDispatcher blocks,
                                 RandomSource random, Lighting faces, Lighting water, DisplayBlock.Screen screen,
-                                float width, float height) {
+                                float width, float height, DisplayShadows.Grid grid) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int minY = Math.max(min.getY(), level.getMinBuildHeight());
         int maxY = Math.min(max.getY(), level.getMaxBuildHeight() - 1);
@@ -454,7 +503,7 @@ public final class DisplayLight {
                             for (int z = z0; z <= z1; z++) {
                                 pos.set(x, y, z);
                                 if (!pos.equals(at)) {
-                                    block(level, at, pos, blocks, random, faces, water);
+                                    block(level, at, pos, blocks, random, faces, water, grid);
                                 }
                             }
                         }
@@ -462,10 +511,12 @@ public final class DisplayLight {
                 }
             }
         }
-        Shade shade = new Shade(level, at, screen, width, height, faces.size() + water.size());
-        Mesh found = faces.finish(shade);
+        Vec3[] targets = shadeTargets(screen, width, height, faces.size() + water.size());
+        Mesh found = faces.finish();
         try {
-            return new Mesh[] {found, water.finish(shade)};
+            Mesh wet = water.finish();
+            int hash = ((found.hash * 31 + wet.hash) * 31 + grid.cells.hashCode()) * 31 + Arrays.hashCode(targets);
+            return new Found(new Mesh[] {found, wet}, grid, targets, screen, hash);
         } catch (Throwable failed) {
             found.close();
             throw failed;
@@ -473,7 +524,7 @@ public final class DisplayLight {
     }
 
     private static void block(Level level, BlockPos at, BlockPos pos, BlockRenderDispatcher blocks,
-                              RandomSource random, Lighting faces, Lighting water) {
+                              RandomSource random, Lighting faces, Lighting water, DisplayShadows.Grid grid) {
         Vec3 offset = Vec3.atLowerCornerOf(pos.subtract(at));
         FluidState fluid = level.getFluidState(pos);
         if (fluid.is(FluidTags.WATER) && !level.getFluidState(pos.above()).is(FluidTags.WATER)) {
@@ -482,6 +533,9 @@ public final class DisplayLight {
             water.add(corners, new float[8], Direction.UP, 0, 0.04f, 0.02f);
         }
         BlockState state = level.getBlockState(pos);
+        if (state.canOcclude()) {
+            grid.block(pos.getX() - at.getX(), pos.getY() - at.getY(), pos.getZ() - at.getZ());
+        }
         if (state.getRenderShape() != RenderShape.MODEL) {
             return;
         }
@@ -509,7 +563,7 @@ public final class DisplayLight {
         }
     }
 
-    /** The lit faces found: their vertices, and the corners still to shade (see Shade). */
+    /** The lit faces, whose shadows are computed from the block grid once uploaded. */
     private static final class Lighting {
         private final DisplayBlock.Screen screen;
         private final float width;
@@ -517,8 +571,7 @@ public final class DisplayLight {
         private final float range;
         final ByteBufferBuilder bytes = new ByteBufferBuilder(1024 * FORMAT.getVertexSize());
         private final BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, FORMAT);
-        private final List<Vec3> points = new ArrayList<>();
-        private final List<Vec3> normals = new ArrayList<>();
+        private int count;
 
         Lighting(DisplayBlock.Screen screen, float width, float height, float range) {
             this.screen = screen;
@@ -528,7 +581,7 @@ public final class DisplayLight {
         }
 
         int size() {
-            return points.size();
+            return count;
         }
 
         /**
@@ -551,25 +604,14 @@ public final class DisplayLight {
             Vec3 n = new Vec3(normal.dot(screen.right()), normal.y, normal.dot(screen.out()));
             for (int k = 0; k < 4; k++) {
                 Vec3 p = corners[k];
-                // How much of the screen it sees (blue) is shaded in once every face is found, see finish.
                 out.addVertex((float) p.x, (float) p.y, (float) p.z).setUv(uv[2 * k], uv[2 * k + 1])
                         .setColor(roughness, f0, 1, kind).setNormal((float) n.x, (float) n.y, (float) n.z);
-                points.add(p);
-                normals.add(normal);
+                count++;
             }
         }
 
-        /** Its vertices, each shaded by how much of the screen it sees; their memory is the caller's to free. */
-        Mesh finish(Shade shade) {
+        Mesh finish() {
             MeshData mesh = out.build();
-            if (mesh != null) {
-                ByteBuffer vertices = mesh.vertexBuffer();
-                int stride = FORMAT.getVertexSize();
-                int seen = FORMAT.getOffset(VertexFormatElement.COLOR) + 2;
-                for (int i = 0; i < points.size(); i++) {
-                    vertices.put(i * stride + seen, (byte) (int) (shade.seen(points.get(i), normals.get(i)) * 255));
-                }
-            }
             return new Mesh(bytes, mesh, mesh == null ? 0 : mesh.vertexBuffer().hashCode());
         }
     }
@@ -625,95 +667,5 @@ public final class DisplayLight {
             }
         }
         return targets;
-    }
-
-    /**
-     * How much of the screen each point sees past the blocks around it: rays to points spread over the picture,
-     * through blocks that hide what's behind them (stairs and slabs as whole blocks). Per vertex, so the shade is soft
-     * across a face rather than block-edged; fewer rays per point in a big room, to keep each look to RAY_BUDGET.
-     */
-    private static final class Shade {
-        private final Level level;
-        private final BlockPos at;
-        private final Vec3[] targets;
-        private final Long2BooleanOpenHashMap opaque = new Long2BooleanOpenHashMap();
-        private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        private final Map<Vec3, Float> seen = new HashMap<>();
-
-        Shade(Level level, BlockPos at, DisplayBlock.Screen screen, float width, float height, int points) {
-            this.level = level;
-            this.at = at;
-            targets = shadeTargets(screen, width, height, points);
-        }
-
-        /** 0..1 of the screen's points {@code p}, on a face turned {@code normal}, has a clear line to. */
-        float seen(Vec3 p, Vec3 normal) {
-            return seen.computeIfAbsent(p.add(normal.scale(0.02)), from -> {
-                int rays = 0;
-                int clear = 0;
-                for (Vec3 to : targets) {
-                    if (normal.dot(to.subtract(p)) <= 0) {
-                        continue;
-                    }
-                    rays++;
-                    if (!blocked(from, to)) {
-                        clear++;
-                    }
-                }
-                return rays == 0 ? 1f : clear / (float) rays;
-            });
-        }
-
-        /** Whether a block hiding what's behind it stands between {@code from} and {@code to}, in block space (DDA). */
-        private boolean blocked(Vec3 from, Vec3 to) {
-            Vec3 d = to.subtract(from);
-            int x = Mth.floor(from.x), y = Mth.floor(from.y), z = Mth.floor(from.z);
-            int ex = Mth.floor(to.x), ey = Mth.floor(to.y), ez = Mth.floor(to.z);
-            int sx = (int) Math.signum(d.x), sy = (int) Math.signum(d.y), sz = (int) Math.signum(d.z);
-            double tx = step(from.x, d.x, x), ty = step(from.y, d.y, y), tz = step(from.z, d.z, z);
-            double dx = sx == 0 ? Double.MAX_VALUE : Math.abs(1 / d.x);
-            double dy = sy == 0 ? Double.MAX_VALUE : Math.abs(1 / d.y);
-            double dz = sz == 0 ? Double.MAX_VALUE : Math.abs(1 / d.z);
-            for (int guard = 0; guard < 1024; guard++) {
-                if (tx < ty && tx < tz) {
-                    x += sx;
-                    tx += dx;
-                } else if (ty < tz) {
-                    y += sy;
-                    ty += dy;
-                } else {
-                    z += sz;
-                    tz += dz;
-                }
-                if (Math.min(tx, Math.min(ty, tz)) > 1 || (x == ex && y == ey && z == ez)) {
-                    return false;
-                }
-                if (opaque(x, y, z)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        /** Where along {@code from + t·d}, t in 0..1, the first cell boundary from cell {@code cell} is. */
-        private static double step(double from, double d, int cell) {
-            if (d > 0) {
-                return (cell + 1 - from) / d;
-            }
-            return d < 0 ? (cell - from) / d : Double.MAX_VALUE;
-        }
-
-        private boolean opaque(int x, int y, int z) {
-            if (x == 0 && y == 0 && z == 0) {
-                return false;
-            }
-            long key = BlockPos.asLong(at.getX() + x, at.getY() + y, at.getZ() + z);
-            if (opaque.containsKey(key)) {
-                return opaque.get(key);
-            }
-            boolean blocks = level.getBlockState(cursor.set(key)).canOcclude();
-            opaque.put(key, blocks);
-            return blocks;
-        }
     }
 }

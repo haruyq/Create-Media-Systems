@@ -194,6 +194,11 @@ void main() {
     if (P.z <= 0.0) {
         discard;
     }
+    float distanceToScreen = distance(P, vec3(clamp(P.xy, vec2(0.0), ScreenSize), 0.0));
+    if (distanceToScreen >= Range) {
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
     bool water = material.a < 0.5;
     vec3 N = normalize(localNormal);
     vec3 albedo = vec3(0.0);
@@ -210,7 +215,6 @@ void main() {
         }
         albedo = texel.rgb;
     }
-    float distanceToScreen = distance(P, vec3(clamp(P.xy, vec2(0.0), ScreenSize), 0.0));
     float seen = material.b;
     vec3 light = vec3(0.0);
     if (!water) {
@@ -218,10 +222,14 @@ void main() {
         vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
         float area = ScreenSize.x * ScreenSize.y;
         vec3 bounce = BOUNCE * average * area / (area + PI * distanceToScreen * distanceToScreen);
-        light = albedo * (diffuse(P, N) * seen + bounce);
+        vec3 direct = vec3(0.0);
+        if (seen > 0.0) {
+            direct = diffuse(P, N) * seen;
+        }
+        light = albedo * (direct + bounce);
     }
     float roughness = material.r;
-    if (Specular > 0.5 && roughness < 0.75) {
+    if (Specular > 0.5 && roughness < 0.75 && seen > 0.0) {
         light += specular(P, N, roughness, material.g, albedo) * seen;
     }
     // Fading out towards the light's reach, rather than stopping at it.

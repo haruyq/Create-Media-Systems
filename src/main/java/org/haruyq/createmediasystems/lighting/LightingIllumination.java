@@ -941,6 +941,7 @@ public final class LightingIllumination {
     }
 
     static void forgetAll() {
+        LightingRaycast.forgetAll();
         BEAMS.values().forEach(Beam::close);
         BEAMS.clear();
         SCANS.clear();
