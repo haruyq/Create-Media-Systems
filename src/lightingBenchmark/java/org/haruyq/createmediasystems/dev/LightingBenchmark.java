@@ -40,7 +40,6 @@ import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -86,8 +85,8 @@ public final class LightingBenchmark {
         lighting.setAccessible(true);
         ((ScrollValueBehaviour) lighting.get(player)).setValue(mode.displayLighting());
         player.control(VideoPlayerBlock.Action.SELECT, 1);
-        level.players().forEach(LightingBenchmark::camera);
         active = new Phase(mode, System.nanoTime());
+        level.players().forEach(LightingBenchmark::camera);
         LogUtils.getLogger().info("Lighting benchmark phase {}: {} fixtures", mode.key, console.fixtures.size());
     }
 
@@ -200,10 +199,16 @@ public final class LightingBenchmark {
         console.changed();
     }
 
+    /** Where the camera looks: at the stage, or (spot_away) away from it, with every light behind. */
+    private static float yaw() {
+        Phase current = active;
+        return current != null && current.mode == Mode.SPOT_AWAY ? 0 : CAMERA_YAW;
+    }
+
     private static void camera(ServerPlayer player) {
         player.getAbilities().flying = true;
         player.onUpdateAbilities();
-        player.teleportTo(player.serverLevel(), CAMERA.x, CAMERA.y, CAMERA.z, CAMERA_YAW, CAMERA_PITCH);
+        player.teleportTo(player.serverLevel(), CAMERA.x, CAMERA.y, CAMERA.z, yaw(), CAMERA_PITCH);
         player.setDeltaMovement(Vec3.ZERO);
         selectEmpty(player.getInventory());
     }
@@ -223,7 +228,8 @@ public final class LightingBenchmark {
         LASER_HIT(true, true), LASER_CLEAR(true, false), SPOT_HIT(false, true), SPOT_CLEAR(false, false),
         LASER_MOVE(true, true), SPOT_MOVE(false, true), LASER_DEPTH(true, false), LASER_DEPTH_BACK(true, false),
         LASER_DEPTH_FRONT(true, false), OFF(false, false), STOP(false, false),
-        DISPLAY_OFF(false, true), DISPLAY_LOW(false, true), DISPLAY_HIGH(false, true), SPOT_ONLY(false, true);
+        DISPLAY_OFF(false, true), DISPLAY_LOW(false, true), DISPLAY_HIGH(false, true), SPOT_ONLY(false, true),
+        SPOT_AWAY(false, true);
 
         final boolean laser;
         final boolean hit;
@@ -252,7 +258,7 @@ public final class LightingBenchmark {
         }
 
         int motion() {
-            return this == LASER_MOVE || this == SPOT_MOVE || this == SPOT_ONLY ? 1 : 0;
+            return this == LASER_MOVE || this == SPOT_MOVE || this == SPOT_ONLY || this == SPOT_AWAY ? 1 : 0;
         }
 
         boolean fixtures() {
@@ -284,14 +290,15 @@ public final class LightingBenchmark {
         private static int queryCount;
         private static int queryFrame;
         private static boolean queryActive;
-        private static long gpuOverlayNs;
+        private static long gpuFrameNs;
 
         private Frames() {
         }
 
-        @SubscribeEvent(priority = EventPriority.HIGH)
-        public static void beforeOverlays(RenderLevelStageEvent event) {
-            if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || phase == null || phase != active
+        /** The GPU's time for a whole frame (every 8th), the stage lights' light and beams included. */
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public static void beforeFrame(RenderFrameEvent.Pre event) {
+            if (phase == null || phase != active
                     || !GL.getCapabilities().OpenGL33 || ++queryFrame % 8 != 0 || queryCount == queries.length) {
                 return;
             }
@@ -306,8 +313,8 @@ public final class LightingBenchmark {
         }
 
         @SubscribeEvent(priority = EventPriority.LOWEST)
-        public static void afterOverlays(RenderLevelStageEvent event) {
-            if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL && queryActive) {
+        public static void afterFrame(RenderFrameEvent.Post event) {
+            if (queryActive) {
                 GL33.glQueryCounter(queries[(queryHead + queryCount) % queries.length][1], GL33.GL_TIMESTAMP);
                 queryCount++;
                 queryActive = false;
@@ -337,8 +344,8 @@ public final class LightingBenchmark {
 
         private static void fixCamera(Minecraft minecraft) {
             var player = minecraft.player;
-            if (!CAMERA.equals(player.position()) || player.getYRot() != CAMERA_YAW || player.getXRot() != CAMERA_PITCH) {
-                player.moveTo(CAMERA.x, CAMERA.y, CAMERA.z, CAMERA_YAW, CAMERA_PITCH);
+            if (!CAMERA.equals(player.position()) || player.getYRot() != yaw() || player.getXRot() != CAMERA_PITCH) {
+                player.moveTo(CAMERA.x, CAMERA.y, CAMERA.z, yaw(), CAMERA_PITCH);
             }
             if (minecraft.options.getCameraType() != CameraType.FIRST_PERSON) {
                 minecraft.options.setCameraType(CameraType.FIRST_PERSON);
@@ -351,10 +358,10 @@ public final class LightingBenchmark {
             if (current == null || failed) {
                 return;
             }
-            gpuOverlayNs = -1;
+            gpuFrameNs = -1;
             while (queryCount > 0 && GL15.glGetQueryObjecti(queries[queryHead][1], GL15.GL_QUERY_RESULT_AVAILABLE) != 0) {
                 if (queryPhases[queryHead] == current) {
-                    gpuOverlayNs = GL33.glGetQueryObjectui64(queries[queryHead][1], GL15.GL_QUERY_RESULT)
+                    gpuFrameNs = GL33.glGetQueryObjectui64(queries[queryHead][1], GL15.GL_QUERY_RESULT)
                             - GL33.glGetQueryObjectui64(queries[queryHead][0], GL15.GL_QUERY_RESULT);
                 }
                 queryHead = (queryHead + 1) % queries.length;
@@ -408,7 +415,7 @@ public final class LightingBenchmark {
                 }
                 output.write("{\"wallMillis\":" + System.currentTimeMillis() + ",\"phase\":\"" + phase.mode.key
                         + "\",\"phaseStartNs\":" + phase.started + ",\"frameNs\":" + frameNs + ",\"renderNs\":"
-                        + (now - started) + ",\"gpuOverlayNs\":" + gpuOverlayNs + "}\n");
+                        + (now - started) + ",\"gpuFrameNs\":" + gpuFrameNs + "}\n");
                 if (now - nextFlush >= 0) {
                     output.flush();
                     nextFlush = now + 1_000_000_000L;
