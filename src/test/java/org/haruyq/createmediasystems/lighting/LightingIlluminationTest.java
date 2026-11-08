@@ -70,24 +70,29 @@ class LightingIlluminationTest {
     }
 
     @Test
-    void visibilityKeepsTheFourCellsAndTheirSharedCorners() {
+    void eachCornerOfACellFadesWithWhatSeesTheLampThere() {
         byte[] seen = new byte[13];
         Arrays.fill(seen, (byte) 1);
         for (int cell = 0; cell < 4; cell++) {
-            seen[9 + cell] = 0;
-            for (int other = 0; other < 4; other++) {
-                assertEquals(cell != other, LightingIllumination.cellLit(seen, other % 2, other / 2));
-            }
-            seen[9 + cell] = 1;
+            assertEquals(0xFFFFFFFF, LightingIllumination.cellCorners(seen, cell % 2, cell / 2), "all lit");
         }
+        // The face's first corner is cell (0, 0)'s first, and no other cell's.
         seen[0] = -1;
-        assertFalse(LightingIllumination.cellLit(seen, 0, 0));
-        assertTrue(LightingIllumination.cellLit(seen, 1, 0));
-        assertTrue(LightingIllumination.cellLit(seen, 0, 1));
-        assertTrue(LightingIllumination.cellLit(seen, 1, 1));
-        seen[4] = -1;
+        assertEquals(0xFFFFFF80, LightingIllumination.cellCorners(seen, 0, 0));
+        assertEquals(0xFFFFFFFF, LightingIllumination.cellCorners(seen, 1, 0));
+        // Its middle in the dark too: every corner of it gets half, the blocked one none.
+        seen[9] = -1;
+        assertEquals(0x80808000, LightingIllumination.cellCorners(seen, 0, 0));
+        // The face's middle is a corner of all four cells: the third of (0, 0), the fourth of (1, 0), the second of
+        // (0, 1) and the first of (1, 1).
+        seen[4] = 0;
+        assertEquals(0x80008000, LightingIllumination.cellCorners(seen, 0, 0));
+        assertEquals(0x80FFFFFF, LightingIllumination.cellCorners(seen, 1, 0));
+        assertEquals(0xFFFF80FF, LightingIllumination.cellCorners(seen, 0, 1));
+        assertEquals(0xFFFFFF80, LightingIllumination.cellCorners(seen, 1, 1));
+        Arrays.fill(seen, (byte) -1);
         for (int cell = 0; cell < 4; cell++) {
-            assertFalse(LightingIllumination.cellLit(seen, cell % 2, cell / 2));
+            assertEquals(0, LightingIllumination.cellCorners(seen, cell % 2, cell / 2), "none of it lit: not drawn");
         }
     }
 

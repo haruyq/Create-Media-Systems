@@ -3,7 +3,8 @@
 // A stage light's light on a block face (LightingIllumination), added to the face as it is: the beam's cone from
 // Origin along Direction, Tangent wide, Range long (the same cone as LightingIllumination.exposure), falling on the
 // face as it is turned to the light. Everything is in the lamp's block space. The vertices' colour is the face's tint,
-// its alpha how much of the light the face sees past the blocks between (shaded on the CPU, a block face at a time).
+// its alpha how much of the light gets there past the blocks between (traced on the CPU at each corner of a
+// quarter of the face, faded between them).
 // No ternaries inside expressions: Veil (with Sable) reprints this shader and drops their parentheses.
 
 uniform sampler2D Sampler0;

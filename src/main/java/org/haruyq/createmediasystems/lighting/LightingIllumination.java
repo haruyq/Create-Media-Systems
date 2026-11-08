@@ -184,7 +184,7 @@ public final class LightingIllumination {
         boolean resident;
         final BitSet changedFaces = new BitSet();
         int[] slots = new int[0];
-        byte[] cells = new byte[0];
+        int[] cells = new int[0];
         int litCells;
         DynamicTexture visibility;
         long built = Long.MIN_VALUE;
@@ -412,16 +412,31 @@ public final class LightingIllumination {
             return Geometry.of(local, world, winding);
         }
 
-        /** Whether the light reaches the whole of cell ({@code x}, {@code y}) of the 2×2 over the face. */
-        boolean lit(int x, int y) {
-            return cellLit(seen, x, y);
+        /** How much of the light reaches cell ({@code x}, {@code y}) of the 2×2 over the face (see cellCorners). */
+        int corners(int x, int y) {
+            return cellCorners(seen, x, y);
         }
     }
 
-    static boolean cellLit(byte[] seen, int x, int y) {
-        int corner = y * 3 + x;
-        return seen[9 + y * 2 + x] > 0 && seen[corner] > 0 && seen[corner + 1] > 0 && seen[corner + 3] > 0
-                && seen[corner + 4] > 0;
+    /** A corner's light from how many of it and its cell's middle see the lamp: none, one or both. */
+    private static final int[] CORNER_LIGHT = {0, 128, 255};
+    /** No cell's corners: what a cell is set to before it is first shown (see visibility). */
+    private static final int UNSET = 1;
+
+    /**
+     * How much of the light reaches cell ({@code x}, {@code y})'s four corners, a byte each in the order vertices
+     * draws them (the lowest first): from that corner and the cell's middle, so the light fades across the cell
+     * towards what blocks it instead of the half block going dark at once. 0: none of it is lit.
+     */
+    static int cellCorners(byte[] seen, int x, int y) {
+        int middle = seen[9 + y * 2 + x] > 0 ? 1 : 0;
+        int corners = 0;
+        for (int corner = 0; corner < 4; corner++) {
+            int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
+            int cy = y + (corner >= 2 ? 1 : 0);
+            corners |= CORNER_LIGHT[(seen[cy * 3 + cx] > 0 ? 1 : 0) + middle] << corner * 8;
+        }
+        return corners;
     }
 
     static byte[] vertices(Vec3[] samples, Vec3 normal, float[] uv, int tint) {
@@ -801,8 +816,8 @@ public final class LightingIllumination {
                 }
                 beam.visibility = new DynamicTexture(256, height, false);
             }
-            beam.cells = new byte[cells];
-            Arrays.fill(beam.cells, (byte) -1);
+            beam.cells = new int[cells];
+            Arrays.fill(beam.cells, UNSET);
             beam.litCells = 0;
             beam.changedFaces.set(0, beam.faces.size());
             visibility(beam);
@@ -825,7 +840,8 @@ public final class LightingIllumination {
             float nx = (float) geometry.normal.x, ny = (float) geometry.normal.y, nz = (float) geometry.normal.z;
             for (int y = 0; y < 2; y++) {
                 for (int x = 0; x < 2; x++) {
-                    if (!face.lit(x, y)) {
+                    int corners = face.corners(x, y);
+                    if (corners == 0) {
                         continue;
                     }
                     for (int corner = 0; corner < 4; corner++) {
@@ -837,7 +853,7 @@ public final class LightingIllumination {
                         float s = Mth.lerp(v, Mth.lerp(u, face.uv[0], face.uv[2]), Mth.lerp(u, face.uv[6], face.uv[4]));
                         float t = Mth.lerp(v, Mth.lerp(u, face.uv[1], face.uv[3]), Mth.lerp(u, face.uv[7], face.uv[5]));
                         out.addVertex((float) point.x, (float) point.y, (float) point.z).setUv(s, t)
-                                .setColor(r, g, b, 255).setNormal(nx, ny, nz);
+                                .setColor(r, g, b, corners >>> corner * 8 & 255).setNormal(nx, ny, nz);
                     }
                 }
             }
@@ -856,17 +872,20 @@ public final class LightingIllumination {
             }
             Face face = beam.faces.get(i);
             for (int cell = 0; cell < 4; cell++) {
-                byte lit = (byte) (face != null && face.lit(cell % 2, cell / 2) ? 1 : 0);
+                int corners = face == null ? 0 : face.corners(cell % 2, cell / 2);
                 int at = slot + cell;
-                if (beam.cells[at] == lit) {
+                if (beam.cells[at] == corners) {
                     continue;
                 }
-                if (beam.cells[at] == 1) {
+                if (beam.cells[at] != 0 && beam.cells[at] != UNSET) {
                     beam.litCells--;
                 }
-                beam.litCells += lit;
-                beam.cells[at] = lit;
-                pixels.setPixelRGBA(at % 256, at / 256, lit == 1 ? -1 : 0);
+                if (corners != 0) {
+                    beam.litCells++;
+                }
+                beam.cells[at] = corners;
+                // A byte a corner, red first: spot_light.vsh reads each vertex's own.
+                pixels.setPixelRGBA(at % 256, at / 256, corners);
                 first = Math.min(first, at / 256);
                 last = Math.max(last, at / 256);
             }
