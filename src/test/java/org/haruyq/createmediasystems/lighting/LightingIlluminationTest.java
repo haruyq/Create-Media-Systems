@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
+import org.haruyq.createmediasystems.client.SurfaceLight;
+
 import org.junit.jupiter.api.Test;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -52,11 +54,11 @@ class LightingIlluminationTest {
         float[] uv = {0.125f, 0.125f, 0.875f, 0.125f, 0.875f, 0.875f, 0.125f, 0.875f};
         float[] texels = {0.125f, 0.5f, 0.875f};
         byte[] packed = LightingIllumination.vertices(samples, normal, uv, 0x3F81C2);
-        int stride = LightingIllumination.FORMAT.getVertexSize();
+        int stride = SurfaceLight.FORMAT.getVertexSize();
         assertEquals(28, stride);
         assertEquals(stride * 16, packed.length);
         try (var memory = new ByteBufferBuilder(packed.length)) {
-            var out = new BufferBuilder(memory, VertexFormat.Mode.QUADS, LightingIllumination.FORMAT);
+            var out = new BufferBuilder(memory, VertexFormat.Mode.QUADS, SurfaceLight.FORMAT);
             for (int i : new int[] {0, 1, 4, 3, 1, 2, 5, 4, 3, 4, 7, 6, 4, 5, 8, 7}) {
                 Vec3 point = samples[i];
                 out.addVertex((float) point.x, (float) point.y, (float) point.z).setUv(texels[i % 3], texels[i / 3])

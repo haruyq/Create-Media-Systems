@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import org.haruyq.createmediasystems.client.SurfaceLight;
+import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.playback.NativeAudio;
@@ -117,9 +119,9 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_glow"),
                     DefaultVertexFormat.POSITION_TEX_COLOR), shader -> glowShader = shader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_light"),
-                    DisplayLight.FORMAT), DisplayLight::setShader);
+                    SurfaceLight.FORMAT), DisplayLight::setShader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_shadow"),
-                    DisplayLight.FORMAT), DisplayShadows::setShader);
+                    SurfaceLight.FORMAT), DisplayShadows::setShader);
             event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("display_overdraw"),
                     DefaultVertexFormat.POSITION_TEX), shader -> overdrawShader = shader);
         } catch (IOException e) {

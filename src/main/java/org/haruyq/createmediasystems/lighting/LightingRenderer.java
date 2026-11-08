@@ -2,15 +2,14 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import org.haruyq.createmediasystems.client.SurfaceLight;
+import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.display.ScreenLight;
@@ -27,7 +26,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
-import com.mojang.logging.LogUtils;
 
 import dev.ryanhcode.sable.companion.SableCompanion;
 
@@ -53,7 +51,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
@@ -83,8 +80,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final Map<RenderType, MultiBufferSource.BufferSource> EFFECT_BUFFERS = new LinkedHashMap<>();
     private static final MultiBufferSource EFFECTS = LightingRenderer::effectBuffer;
     private static boolean effectsPending;
-    private static final MethodHandle SHADOW_PASS = shadowMethod();
-    private static boolean shaderApiFailed;
     /** How often (in frames) a beam out of view is traced again, to see whether it has swung into view. */
     private static final int OFF_SCREEN_FRAMES = 8;
     /** Blocks round a beam's ends its light may still reach, for whether it is in view. */
@@ -117,7 +112,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         modBus.addListener((RegisterShadersEvent event) -> {
             try {
                 event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("spot_light"),
-                        LightingIllumination.FORMAT), LightingIllumination::setShader);
+                        SurfaceLight.FORMAT), LightingIllumination::setShader);
                 event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("stage_beam"),
                         LightingBeams.FORMAT), LightingBeams::setShader);
             } catch (IOException e) {
@@ -335,32 +330,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         }
     }
 
-    private static MethodHandle shadowMethod() {
-        if (!ModList.get().isLoaded("iris")) {
-            return null;
-        }
-        try {
-            Object api = Class.forName("net.irisshaders.iris.api.v0.IrisApi").getMethod("getInstance").invoke(null);
-            return MethodHandles.publicLookup().findVirtual(api.getClass(), "isRenderingShadowPass",
-                    MethodType.methodType(boolean.class)).bindTo(api);
-        } catch (ReflectiveOperationException | LinkageError e) {
-            LogUtils.getLogger().warn("Iris's shadow-pass API changed; stage lighting draws without its shadow-pass guard", e);
-            return null;
-        }
-    }
-
     /** Whether a shader pack is drawing its shadow map: fixtures then draw their bodies only, no light. */
     public static boolean shadowPass() {
-        if (SHADOW_PASS == null || shaderApiFailed) {
-            return false;
-        }
-        try {
-            return (boolean) SHADOW_PASS.invoke();
-        } catch (Throwable e) {
-            shaderApiFailed = true;
-            LogUtils.getLogger().warn("Iris's shadow-pass API failed; stage lighting draws without its shadow-pass guard", e);
-            return false;
-        }
+        return IrisCompat.shadowPass();
     }
 
     @Override
@@ -541,7 +513,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             for (int i = 0; i < SIDES; i++) {
                 int next = (i + 1) % SIDES;
                 LightingBeams.strip(matrix, origin, origin, trace.ends[next], trace.ends[i], color, color,
-                        0, strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next], trace.middle[i]);
+                        LightingBeams.Fade.CONE, strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next],
+                        trace.middle[i]);
             }
             ray(null, matrix, frame, center, color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
             return;
@@ -574,7 +547,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                               int colorA, int colorB, float strength, LightingGeometry.Plane planeA,
                               LightingGeometry.Plane planeB, LightingGeometry.Plane middle) {
         if (out == null) {
-            LightingBeams.strip(matrix, origin, origin, b, a, colorA, colorB, 1, strength * 26, planeA, planeB, middle);
+            LightingBeams.strip(matrix, origin, origin, b, a, colorA, colorB, LightingBeams.Fade.SHEET, strength * 26,
+                    planeA, planeB, middle);
             return;
         }
         for (int step = 0; step < 8; step++) {
@@ -609,7 +583,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             int alpha = Math.round(strength * (layer == 0 ? 180 : layer == 1 ? 28 : 9));
             if (out == null) {
                 LightingBeams.strip(matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
-                        color, color, 2, alpha, center, left, right);
+                        color, color, LightingBeams.Fade.SOLID, alpha, center, left, right);
                 continue;
             }
             clippedQuad(out, matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
