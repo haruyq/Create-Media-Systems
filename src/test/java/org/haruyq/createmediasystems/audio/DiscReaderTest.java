@@ -17,7 +17,7 @@ class DiscReaderTest {
                 CreateMediaSystems.DISC_READER.get().defaultBlockState());
         ItemStack disc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
         disc.set(CreateMediaSystems.URL.get(), "https://example.com/a.mp3");
-        reader.insert(disc);
+        reader.insert(disc, null);
         assertNotNull(reader.nowPlaying(), "an inserted disc plays");
 
         reader.power(true);

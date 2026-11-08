@@ -6,7 +6,7 @@ import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.lighting.LightingScreens;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -284,9 +284,9 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 lighting = Math.round(videoPlayer.lighting() * 100);
                 changed();
             }
-            Streams.relay(level, this, new Streams.Sound(center(), Optional.empty(), Streams.Channel.MIX, linked.orElse(worldPosition)),
-                    new JukeboxSettings(Optional.empty(), videoPlayer == null || videoPlayer.silenced(level.getGameTime())
-                            ? 0 : videoPlayer.volume()));
+            boolean speakers = linked.isPresent() && Streams.relayedBy(level, linked.get(), SpeakerBlock.Entity.class);
+            Streams.relay(level, this, linked, center(), Optional.empty(), Streams.Channel.MIX,
+                    videoPlayer == null || speakers ? 0 : 1);
         }
 
         @Override

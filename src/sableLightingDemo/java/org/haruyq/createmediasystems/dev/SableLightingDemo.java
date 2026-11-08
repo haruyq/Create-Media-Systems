@@ -337,7 +337,7 @@ public final class SableLightingDemo {
                     && level.getBlockEntity(plot.offset(0, 1, 2)) instanceof LightingConsoleBlock.Entity aboard) {
                 ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
                 disc.set(CreateMediaSystems.PLAYLIST.get(), List.copyOf(ground.playlist()));
-                player.insert(disc);
+                player.insert(disc, null);
                 speaker.configure(level, playerPos, 1, Streams.Channel.MIX);
                 aboard.setAudioSource(playerPos);
                 aboard.setVideoSource(playerPos);

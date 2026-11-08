@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
-import java.util.UUID;
 
 import org.haruyq.createmediasystems.lighting.AnalysisFrame;
 import org.haruyq.createmediasystems.lighting.AnalysisTimeline;

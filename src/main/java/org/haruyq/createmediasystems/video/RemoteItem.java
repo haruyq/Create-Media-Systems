@@ -155,11 +155,7 @@ public class RemoteItem extends Item {
             player.displayClientMessage(Component.translatable("create_media_systems.remote.missing").withStyle(ChatFormatting.RED), true);
             return;
         }
-        VideoPlayerBlock.Action action = VideoPlayerBlock.Action.byId(payload.action());
-        if (action != VideoPlayerBlock.Action.VOLUME && action != VideoPlayerBlock.Action.STOP) {
-            videoPlayer.initiator = player.getUUID();
-        }
-        videoPlayer.control(action, payload.value());
+        videoPlayer.control(VideoPlayerBlock.Action.byId(payload.action()), payload.value(), player);
     }
 
     public static void registerPayloads(PayloadRegistrar registrar) {

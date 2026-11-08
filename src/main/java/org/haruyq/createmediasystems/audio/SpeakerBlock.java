@@ -3,8 +3,6 @@ package org.haruyq.createmediasystems.audio;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
-import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -117,19 +115,9 @@ public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
             }
         }
 
-        /** Plays its source's track, at our volume times the source's (see MediaSource#volume). */
         private void relay(ServerLevel level, BlockState state) {
-            Optional<BlockPos> linked = source();
-            Streams.Source playing = linked.map(pos -> Streams.source(level, pos)).orElse(null);
-            float sourceVolume = 1;
-            if (playing != null && level.getBlockEntity(linked.get()) instanceof MediaSource media) {
-                media.playedBySpeaker(level.getGameTime());
-                sourceVolume = media.volume();
-            }
             Direction facing = state.getValue(FACING);
-            Streams.relay(level, this, new Streams.Sound(mouth(worldPosition, facing), Optional.of(facing), channel,
-                            linked.orElse(worldPosition)),
-                    new JukeboxSettings(Optional.empty(), volume * sourceVolume));
+            Streams.relay(level, this, source(), mouth(worldPosition, facing), Optional.of(facing), channel, volume);
         }
 
         @Override

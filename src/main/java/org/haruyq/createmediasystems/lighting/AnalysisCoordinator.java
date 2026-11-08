@@ -52,6 +52,8 @@ public final class AnalysisCoordinator {
         final Map<String, AnalysisTimeline> tracks = new LinkedHashMap<>();
         final Set<BlockPos> consoles = new HashSet<>();
         BlockPos pos;
+        /** The load of its source's track it follows (see Streams#loadId): a new one starts it over. */
+        long load;
         UUID preferred;
         String track = "";
         String next = "";
@@ -104,18 +106,6 @@ public final class AnalysisCoordinator {
         }
     }
 
-    public static void restart(BlockEntity source) {
-        if (source.getLevel() instanceof ServerLevel level) {
-            Map<UUID, Session> sessions = LEVELS.get(level);
-            if (sessions != null) {
-                Session session = sessions.get(SourceLinks.identify(level, source.getBlockPos()));
-                if (session != null) {
-                    session.restart();
-                }
-            }
-        }
-    }
-
     public static void use(LightingConsoleBlock.Entity console) {
         if (!(console.getLevel() instanceof ServerLevel level)) {
             return;
@@ -161,15 +151,20 @@ public final class AnalysisCoordinator {
         if (!sessions.containsKey(id) && sessions.size() >= 32) {
             return;
         }
+        BlockEntity source = (BlockEntity) media;
         Session session = sessions.computeIfAbsent(id, ignored -> new Session(id, pos.immutable()));
+        if (session.load != Streams.loadId(source)) {
+            session.load = Streams.loadId(source);
+            session.restart();
+        }
         session.pos = pos.immutable();
         session.consoles.add(console.immutable());
         session.touched = level.getGameTime();
-        session.preferred = media.initiator();
+        session.preferred = Streams.startedBy(source);
         Streams.Source playing = Streams.playing(media);
         // Not while its track loads: its position stands at 0 then, and clients, running it on from each state they
         // are sent, would play the lights the track's first half second over and over until it starts.
-        boolean active = playing != null && Streams.loaded((BlockEntity) media);
+        boolean active = playing != null && Streams.loaded(source);
         if (active && (!playing.url().equals(session.track) || !session.active)) {
             session.restart();
         }

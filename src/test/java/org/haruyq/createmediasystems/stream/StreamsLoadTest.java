@@ -16,7 +16,7 @@ class StreamsLoadTest {
     @Test
     void aTrackWaitsForItsListenersToLoadIt() {
         DiscReaderBlock.Entity source = reader();
-        Streams.loading(source);
+        Streams.loading(source, null);
         assertEquals(0, Streams.played(source, 100), "still loading: nothing played yet");
         // Nobody had it loaded in time: it plays on from there.
         assertEquals(0, Streams.played(source, Streams.MAX_LOAD_TICKS));
@@ -26,7 +26,7 @@ class StreamsLoadTest {
     @Test
     void aSourceReloadedWithItsChunkKeepsItsLoadingTime() {
         DiscReaderBlock.Entity before = reader();
-        Streams.loading(before);
+        Streams.loading(before, null);
         Streams.played(before, Streams.MAX_LOAD_TICKS);
         // Its chunk was unloaded and loaded again: a new block entity, loaded from what the old one saved.
         DiscReaderBlock.Entity after = reader();
@@ -43,7 +43,7 @@ class StreamsLoadTest {
     void aTrackCountsAsLoadedOnlyOnceItPlays() {
         DiscReaderBlock.Entity source = reader();
         assertTrue(Streams.loaded(source), "never waited on");
-        Streams.loading(source);
+        Streams.loading(source, null);
         Streams.played(source, 100);
         assertFalse(Streams.loaded(source), "lights keep still while it loads");
         Streams.played(source, Streams.MAX_LOAD_TICKS);

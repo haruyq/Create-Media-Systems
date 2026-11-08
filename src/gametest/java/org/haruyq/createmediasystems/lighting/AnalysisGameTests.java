@@ -31,7 +31,7 @@ public final class AnalysisGameTests {
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) helper.getLevel().getBlockEntity(playerPos);
         ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
         disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://example.com/current.mp4", "https://example.com/next.mp4"));
-        player.insert(disc);
+        player.insert(disc, null);
         LightingConsoleBlock.Entity console = (LightingConsoleBlock.Entity) helper.getLevel().getBlockEntity(consolePos);
         console.videoSource = playerPos;
         AnalysisCoordinator.use(console);
@@ -101,7 +101,7 @@ public final class AnalysisGameTests {
                 "eligible viewer lag did not schedule a shared delay");
         AnalysisCoordinator.status(fake, new AnalysisPackets.Status(source, sessionId, true, 3_000, 2_001));
         helper.assertTrue(get(session, "delay").equals(delay), "invalid lag report changed the shared delay");
-        player.control(VideoPlayerBlock.Action.NEXT, 0);
+        player.control(VideoPlayerBlock.Action.NEXT, 0, null);
         AnalysisCoordinator.use(console);
         helper.assertTrue(!(boolean) get(session, "active"), "lights ran on the next track while it loaded");
         loaded(player, console);

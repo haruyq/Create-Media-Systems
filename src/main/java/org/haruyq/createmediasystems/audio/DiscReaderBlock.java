@@ -40,7 +40,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity reader && reader.disc.isEmpty()) {
-            reader.insert(stack.split(1));
+            reader.insert(stack.split(1), player);
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
     }
@@ -50,7 +50,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
                                                BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity reader && !reader.disc.isEmpty()) {
             player.getInventory().placeItemBackInInventory(reader.disc);
-            reader.insert(ItemStack.EMPTY);
+            reader.insert(ItemStack.EMPTY, player);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
@@ -104,11 +104,11 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         }
 
         /** A new disc (or none) starts from the beginning; speakers notice the restart on their next check. */
-        void insert(ItemStack stack) {
+        public void insert(ItemStack stack, @Nullable Player by) {
             disc = stack;
             ticks = 0;
             playing = !stack.isEmpty();
-            Streams.loading(this);
+            Streams.loading(this, by);
             // A signal already on doesn't count as turning on later.
             powered = level != null && level.hasNeighborSignal(worldPosition);
             setChanged();
@@ -123,7 +123,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
             if (on && !playing && !disc.isEmpty()) {
                 ticks = 0;
                 playing = true;
-                Streams.loading(this);
+                Streams.loading(this, null);
             } else if (!on) {
                 playing = false;
             }
