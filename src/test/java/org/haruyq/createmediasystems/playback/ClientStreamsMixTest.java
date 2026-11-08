@@ -30,7 +30,8 @@ class ClientStreamsMixTest {
         assertEquals(0.5, mix.gain(), 1e-9, "√(0.3² + 0.4²)");
         Vec3 to = mix.at().subtract(EAR);
         assertTrue(to.z > to.x, "towards the louder one");
-        assertEquals(10, to.length(), 1e-9, "as far as they are");
+        assertEquals(0, to.distanceTo(new Vec3(3.6, 0, 6.4)), 1e-9, "at their middle, weighted by power");
+        assertEquals(new Vec3(0, 64, 10), mix.loudest());
         assertTrue(mix.radius() > 0, "two directions are heard wider than one");
     }
 
@@ -45,6 +46,20 @@ class ClientStreamsMixTest {
         assertEquals(0, narrow.at().x, 1e-9, "from its middle");
         assertTrue(wide.spread() > narrow.spread());
         assertTrue(wide.spread() < Math.PI, "still in front");
+    }
+
+    @Test
+    void aWallIsNeverHeardFromBehindIt() {
+        // Their mean direction, as far as they are on average, was up to 3 blocks behind such a wall.
+        for (int x = -25; x <= 25; x += 5) {
+            for (int z = 1; z <= 30; z += 3) {
+                ClientStreams.Mix mix = new ClientStreams.Mix(new Vec3(x, 64, -z));
+                for (int i = -10; i <= 10; i++) {
+                    mix.add(new Vec3(i, 64, 0.5), Math.max(0, 1 - Math.hypot(i - x, 0.5 + z) / 48));
+                }
+                assertTrue(mix.at().z <= 0.5 + 1e-9, "from (" + x + ", " + -z + "): " + mix.at());
+            }
+        }
     }
 
     @Test

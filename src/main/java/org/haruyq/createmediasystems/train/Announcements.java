@@ -34,7 +34,7 @@ final class Announcements {
                 () -> {
                     Vec3 at = speaker(payload.carriages(), speakers);
                     return at == null ? last[0] : (last[0] = at);
-                }, () -> true, () -> carriage(payload.carriages()) != null,
+                }, null, () -> true, () -> carriage(payload.carriages()) != null,
                 () -> speaker(payload.carriages(), speakers) == null ? 0 : payload.volume(), null, Streams.Channel.MIX,
                 seconds -> Minecraft.getInstance().execute(() -> PacketDistributor.sendToServer(
                         new TrainDiscReaderBehaviour.StartedAnnouncement(payload.channel())))));

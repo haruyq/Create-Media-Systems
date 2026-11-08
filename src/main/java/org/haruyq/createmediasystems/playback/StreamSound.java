@@ -108,6 +108,9 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     /** Where it plays from in the world now, asked every tick; null plays it at the listener. */
     @Nullable
     private final Supplier<Vec3> position;
+    /** Where Sound Physics traces it from (see SoundPhysicsCompat); null for where it plays from. */
+    @Nullable
+    private final Supplier<Vec3> tracedFrom;
     // Written on the main thread (release) and the IO pool (open); volatile so whichever runs second sees the other.
     private volatile boolean released;
     @Nullable
@@ -126,7 +129,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      * {@code started} runs once the audio is loaded and about to play.
      */
     public StreamSound(DoubleFunction<String> urlAt, String track, @Nullable Object playback, long load,
-                double startSeconds, SoundSource source, @Nullable Supplier<Vec3> position, BooleanSupplier present,
+                double startSeconds, SoundSource source, @Nullable Supplier<Vec3> position,
+                @Nullable Supplier<Vec3> tracedFrom, BooleanSupplier present,
                 BooleanSupplier nearby, DoubleSupplier gain, @Nullable Streams.Video video, Streams.Channel channel,
                 DoubleConsumer started) {
         super(CreateMediaSystems.STREAM.get(), source, SoundInstance.createUnseededRandom());
@@ -144,6 +148,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         go = playback == null ? null : new CompletableFuture<>();
         attenuation = Attenuation.NONE;
         this.position = position;
+        this.tracedFrom = tracedFrom;
         relative = position == null;
         follow();
         volume = 0;
@@ -170,7 +175,9 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         follow();
         // Positional streams only: Sound Physics leaves sounds at the listener alone.
         if (!relative && SoundPhysicsCompat.available() && ticksPlayed++ % SoundPhysicsCompat.INTERVAL_TICKS == 0) {
-            soundPhysics.update(this, new Vec3(x, y, z));
+            Vec3 at = new Vec3(x, y, z);
+            Vec3 from = tracedFrom == null ? null : tracedFrom.get();
+            soundPhysics.update(this, from == null ? at : from, at);
         }
     }
 
@@ -212,7 +219,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     StreamSound again() {
         double playedSeconds = (System.nanoTime() - requestedAt) / 1e9;
         StreamSound again = new StreamSound(urlAt, track, playback, load, startSeconds + playedSeconds, getSource(),
-                position, present, nearby, gain, video, channel, started);
+                position, tracedFrom, present, nearby, gain, video, channel, started);
         again.volume = volume;
         return again;
     }

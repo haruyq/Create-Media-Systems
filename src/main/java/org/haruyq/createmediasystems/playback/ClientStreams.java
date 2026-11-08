@@ -75,6 +75,12 @@ public final class ClientStreams {
         double gain;
         @Nullable
         Vec3 at;
+        /**
+         * Where Sound Physics traces it from: its loudest emitter. Traced from {@link #at}, between them, the ray
+         * passed through the emitters themselves and what they stand on, and it was muffled by their own blocks.
+         */
+        @Nullable
+        Vec3 tracedFrom;
         /** How wide it is heard (see Mix#radius). */
         double radius;
         /** The stream last given a radius (a restarted one is a new OpenAL source), and that radius. */
@@ -126,6 +132,7 @@ public final class ClientStreams {
             gain = mix.gain();
             Vec3 heard = mix.at();
             at = heard != null ? heard : first != null ? first : at;
+            tracedFrom = mix.loudest() != null ? mix.loudest() : at;
             radius = heard != null ? mix.radius() : 0;
         }
 
@@ -157,18 +164,24 @@ public final class ClientStreams {
 
     /**
      * Emitters of one side, heard from {@code listener} as one stream: as loud as their sound powers summed (they
-     * play the same samples, from different places), from the direction they are heard from, weighted by that power,
-     * and as wide as they spread around the listener. One speaker is heard where it is, a wall in front over its
+     * play the same samples, from different places), from their middle, weighted by that power, and as wide as they
+     * spread around the listener. One speaker is heard where it is, a wall in front over its
      * width, and standing among a side's speakers, from all around. A stereo pair's sides stay two streams.
      */
     static final class Mix {
         private final Vec3 listener;
         private double power;
-        /** Power-weighted sums of the directions from the listener (unit vectors) and the distances. */
+        /** Power-weighted sums of the directions from the listener (unit vectors). */
         private double dx;
         private double dy;
         private double dz;
-        private double distance;
+        /** Power-weighted sums of where they are. */
+        private double cx;
+        private double cy;
+        private double cz;
+        @Nullable
+        private Vec3 loudest;
+        private double loudestPower;
 
         Mix(Vec3 listener) {
             this.listener = listener;
@@ -179,7 +192,13 @@ public final class ClientStreams {
             Vec3 to = at.subtract(listener);
             double length = to.length();
             power += p;
-            distance += p * length;
+            cx += p * at.x;
+            cy += p * at.y;
+            cz += p * at.z;
+            if (p > loudestPower) {
+                loudest = at;
+                loudestPower = p;
+            }
             // One at the listener's head is all around it: no direction, so it widens the rest.
             if (length > 1e-3) {
                 dx += p * to.x / length;
@@ -202,17 +221,20 @@ public final class ClientStreams {
         }
 
         /**
-         * Where to play it from: their mean direction, as far as they are on average. Null while none of them is
-         * heard; at the listener when they are evenly all around.
+         * Where to play it from: their middle, which is among them, so never behind them. Their mean direction, as
+         * far as they are on average, was: before a wall, its speakers are further on average than the wall is, and
+         * it played from up to 3 blocks behind it, where Sound Physics heard it through the wall. Null while none of
+         * them is heard; at the listener when they are evenly all around.
          */
         @Nullable
         Vec3 at() {
-            if (power <= 0) {
-                return null;
-            }
-            double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            double far = distance / power;
-            return length < 1e-6 ? listener : listener.add(dx / length * far, dy / length * far, dz / length * far);
+            return power > 0 ? new Vec3(cx / power, cy / power, cz / power) : null;
+        }
+
+        /** The one heard loudest; null while none of them is heard. */
+        @Nullable
+        Vec3 loudest() {
+            return loudest;
         }
 
         /**
@@ -229,11 +251,10 @@ public final class ClientStreams {
          */
         double radius() {
             double spread = spread();
-            double far = power > 0 ? distance / power : 0;
             Vec3 at = at();
             double d = at == null ? 0 : at.distanceTo(listener);
             if (d < 1e-3) {
-                return Math.max(far, 1); // at the listener: any radius is all around
+                return 1; // at the listener: any radius is all around
             }
             return spread <= Math.PI ? d * Math.sin(spread / 2) : d * Math.PI / Math.max(2 * Math.PI - spread, Math.PI / 16);
         }
@@ -292,6 +313,7 @@ public final class ClientStreams {
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
         play(side, new StreamSound(apiStream(payload.url(), payload.startSeconds(), side.channel()), payload.url(),
                 side.source(), payload.load(), payload.startSeconds(), SoundSource.RECORDS, () -> fresh.at,
+                () -> fresh.tracedFrom,
                 () -> fresh.present, () -> fresh.nearby, () -> fresh.gain, payload.video().orElse(null), side.channel(),
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
                 seconds -> Minecraft.getInstance().execute(() -> fresh.emitters.keySet().stream().findFirst()
