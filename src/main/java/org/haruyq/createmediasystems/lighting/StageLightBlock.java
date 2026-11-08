@@ -7,7 +7,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,7 +33,6 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -137,8 +135,7 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
 
         /** The fixture's name, as its goggle tooltip heads it. */
         public Component fixtureName() {
-            return Component.translatable(laser() ? "block.create_media_systems.laser_projector"
-                    : "block.create_media_systems.stage_light");
+            return getBlockState().getBlock().getName();
         }
 
         @Nullable
@@ -245,10 +242,6 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         @Override
         public Packet<ClientGamePacketListener> getUpdatePacket() {
             return ClientboundBlockEntityDataPacket.create(this);
-        }
-
-        public AABB getRenderBoundingBox() {
-            return SableCompat.toWorld(level, new AABB(worldPosition).inflate(LightingSettings.MAX_RANGE + 1));
         }
     }
 }

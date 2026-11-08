@@ -84,7 +84,7 @@ public final class LightingBenchmark {
         var lighting = VideoPlayerBlock.Entity.class.getDeclaredField("lighting");
         lighting.setAccessible(true);
         ((ScrollValueBehaviour) lighting.get(player)).setValue(mode.displayLighting());
-        player.control(VideoPlayerBlock.Action.SELECT, 1);
+        player.control(VideoPlayerBlock.Action.SELECT, 1, null);
         active = new Phase(mode, System.nanoTime());
         level.players().forEach(LightingBenchmark::camera);
         LogUtils.getLogger().info("Lighting benchmark phase {}: {} fixtures", mode.key, console.fixtures.size());

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Workers;
 import org.haruyq.createmediasystems.display.ScreenLight;
@@ -20,7 +21,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
-import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
@@ -31,13 +31,11 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -59,7 +57,6 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.model.IQuadTransformer;
 import net.neoforged.neoforge.client.model.data.ModelData;
 
 /**
@@ -71,14 +68,6 @@ public final class LightingIllumination {
     private static final Map<StageLightBlock.Entity, Beam> BEAMS = new HashMap<>();
     private static final ArrayDeque<SurfaceScan> SCANS = new ArrayDeque<>();
     private static WeakReference<Level> knownLevel = new WeakReference<>(null);
-    /** POSITION_TEX_COLOR_NORMAL's layout, its own instance: Iris extends some vanilla formats by identity. */
-    static final VertexFormat FORMAT = VertexFormat.builder()
-            .add("Position", VertexFormatElement.POSITION)
-            .add("UV0", VertexFormatElement.UV0)
-            .add("Color", VertexFormatElement.COLOR)
-            .add("Normal", VertexFormatElement.NORMAL)
-            .padding(1)
-            .build();
     private static ShaderInstance shader;
     /** This frame's lit surfaces in the world, drawn with the beams (LightingRenderer.effects). */
     private static final List<Runnable> SURFACES = new ArrayList<>();
@@ -86,7 +75,7 @@ public final class LightingIllumination {
     private static final LongOpenHashSet DIRTY_SECTIONS = new LongOpenHashSet();
     private static final LongOpenHashSet DIRTY_COLUMNS = new LongOpenHashSet();
     /** Vertices built on the render thread, in native memory, till uploaded. */
-    private static final ByteBufferBuilder SCRATCH = new ByteBufferBuilder(FORMAT.getVertexSize() * 4096);
+    private static final ByteBufferBuilder SCRATCH = new ByteBufferBuilder(SurfaceLight.FORMAT.getVertexSize() * 4096);
     private static long frame;
 
     private LightingIllumination() {
@@ -208,15 +197,7 @@ public final class LightingIllumination {
         float drawTangent;
         float drawRange;
         float drawStrength;
-        final RenderType type = RenderType.create("create_media_systems_spot_light", FORMAT, VertexFormat.Mode.QUADS,
-                256, false, false, RenderType.CompositeState.builder()
-                        .setShaderState(new RenderStateShard.ShaderStateShard(() -> shader))
-                        .setTextureState(new RenderStateShard.EmptyTextureStateShard(this::setup, () -> {
-                        }))
-                        .setTransparencyState(RenderStateShard.LIGHTNING_TRANSPARENCY)
-                        .setWriteMaskState(RenderStateShard.COLOR_WRITE)
-                        .setLayeringState(RenderStateShard.POLYGON_OFFSET_LAYERING)
-                        .createCompositeState(false));
+        final RenderType type = SurfaceLight.type("create_media_systems_spot_light", () -> shader, this::setup);
 
         private void setup() {
             Minecraft.getInstance().getTextureManager().getTexture(InventoryMenu.BLOCK_ATLAS).setFilter(false, true);
@@ -391,7 +372,7 @@ public final class LightingIllumination {
         final int tint;
         /** As the lamp sees it with nothing moving (see geometry). */
         final Geometry still;
-        /** Packed FORMAT vertices, reused when the next scan keeps this face. */
+        /** Packed SurfaceLight.FORMAT vertices, reused when the next scan keeps this face. */
         final byte[] mesh;
         /** As this frame saw it, with sub-levels where they are: still, unless the lamp and face are on different ones. */
         Geometry shown;
@@ -454,7 +435,7 @@ public final class LightingIllumination {
     }
 
     static byte[] vertices(Vec3[] samples, Vec3 normal, float[] uv, int tint) {
-        ByteBuffer out = ByteBuffer.allocate(FORMAT.getVertexSize() * 16).order(ByteOrder.nativeOrder());
+        ByteBuffer out = ByteBuffer.allocate(SurfaceLight.FORMAT.getVertexSize() * 16).order(ByteOrder.nativeOrder());
         byte nx = (byte) (Mth.clamp((float) normal.x, -1, 1) * 127);
         byte ny = (byte) (Mth.clamp((float) normal.y, -1, 1) * 127);
         byte nz = (byte) (Mth.clamp((float) normal.z, -1, 1) * 127);
@@ -826,14 +807,14 @@ public final class LightingIllumination {
             mesh = null;
             if (cells > 0) {
                 int count = cells * 4;
-                int bytes = count * FORMAT.getVertexSize();
+                int bytes = count * SurfaceLight.FORMAT.getVertexSize();
                 ByteBuffer out = MemoryUtil.memByteBuffer(SCRATCH.reserve(bytes), bytes);
                 for (Face face : beam.faces) {
                     if (face != null) {
                         out.put(face.mesh);
                     }
                 }
-                mesh = new MeshData(SCRATCH.build(), new MeshData.DrawState(FORMAT, count, cells * 6,
+                mesh = new MeshData(SCRATCH.build(), new MeshData.DrawState(SurfaceLight.FORMAT, count, cells * 6,
                         VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(count)));
             }
         } else {
@@ -871,7 +852,7 @@ public final class LightingIllumination {
     }
 
     private static MeshData movingMesh(Beam beam) {
-        BufferBuilder out = new BufferBuilder(SCRATCH, VertexFormat.Mode.QUADS, FORMAT);
+        BufferBuilder out = new BufferBuilder(SCRATCH, VertexFormat.Mode.QUADS, SurfaceLight.FORMAT);
         for (Face face : beam.faces) {
             if (face == null) {
                 continue;
@@ -1010,12 +991,10 @@ public final class LightingIllumination {
         LightingOcclusion.chunkChanged(x, z);
     }
 
-    /** Whether any block changed since the last frame (see sectionChanged). */
     public static boolean blocksChanged() {
         return !DIRTY_SECTIONS.isEmpty() || !DIRTY_COLUMNS.isEmpty();
     }
 
-    /** Frames drawn so far. */
     public static long frame() {
         return frame;
     }
@@ -1033,11 +1012,7 @@ public final class LightingIllumination {
     }
 
     private static Pose3dc renderPose(Level level, BlockPos pos) {
-        var owner = SableCompanion.INSTANCE.getContaining(level, pos);
-        if (owner instanceof ClientSubLevelAccess client) {
-            return client.renderPose();
-        }
-        return owner == null ? null : owner.logicalPose();
+        return SableCompat.pose(level, pos, true);
     }
 
     static Vec3 sample(Vec3[] points, float u, float v, Vec3 offset) {
@@ -1286,14 +1261,7 @@ public final class LightingIllumination {
                     int tint = quad.isTinted() ? mc.getBlockColors().getColor(state, level, pos, quad.getTintIndex()) : 0xFFFFFF;
                     Vec3[] points = new Vec3[4];
                     float[] uv = new float[8];
-                    for (int i = 0; i < 4; i++) {
-                        int base = i * IQuadTransformer.STRIDE;
-                        points[i] = offset.add(Float.intBitsToFloat(data[base + IQuadTransformer.POSITION]),
-                                Float.intBitsToFloat(data[base + IQuadTransformer.POSITION + 1]),
-                                Float.intBitsToFloat(data[base + IQuadTransformer.POSITION + 2]));
-                        uv[i * 2] = Float.intBitsToFloat(data[base + IQuadTransformer.UV0]);
-                        uv[i * 2 + 1] = Float.intBitsToFloat(data[base + IQuadTransformer.UV0 + 1]);
-                    }
+                    SurfaceLight.read(quad, offset, points, uv);
                     Vec3 normal = Vec3.atLowerCornerOf(quad.getDirection().getNormal());
                     double winding = Math.signum(points[1].subtract(points[0]).cross(points[3].subtract(points[0])).dot(normal));
                     Face face = new Face(pos.immutable(), state, index++, data, points, uv, winding, tint, lampOffset);

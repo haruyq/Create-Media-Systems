@@ -2,6 +2,8 @@ package org.haruyq.createmediasystems.lighting;
 
 public record AnalysisDelay(int from, int to, long start) {
     public static final AnalysisDelay INITIAL = new AnalysisDelay(200, 200, 0);
+    /** Longest delay, and longest lag it makes up for. */
+    public static final int MAX_MILLIS = 2000;
 
     public double at(long millis) {
         double amount = Math.clamp((millis - start) / 2000.0, 0, 1);
@@ -9,10 +11,10 @@ public record AnalysisDelay(int from, int to, long start) {
     }
 
     public AnalysisDelay increase(int lagMillis, long millis) {
-        if (lagMillis < 0 || lagMillis > 2000 || millis < start + 2000) {
+        if (lagMillis < 0 || lagMillis > MAX_MILLIS || millis < start + 2000) {
             return this;
         }
-        int target = Math.min(2000, (lagMillis + 150 + 49) / 50 * 50);
+        int target = Math.min(MAX_MILLIS, (lagMillis + 150 + 49) / 50 * 50);
         return target > to + 50 ? new AnalysisDelay(to, target, millis + 1000) : this;
     }
 }

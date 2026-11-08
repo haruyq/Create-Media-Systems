@@ -41,6 +41,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -65,7 +66,7 @@ public final class Streams {
      * Longest a track waits for the rest of its listeners once one has it loaded: those slower to download it don't
      * hold everyone up for long, and catch up when they have it (see started).
      */
-    static final long BARRIER_TICKS = 10 * 20;
+    public static final long BARRIER_TICKS = 10 * 20;
     private static final long LOADING = -1;
     /**
      * Per source, how its listeners load its track (see Load). Kept by the source's identity, or its place before it
@@ -91,6 +92,9 @@ public final class Streams {
          * playback, however far apart they arrive (see PlayAtBlock#load). Never 0, which means unknown.
          */
         final long id = ++lastLoadId;
+        /** The player who started it (or the track before it, which it follows on from); null for none. */
+        @Nullable
+        final UUID startedBy;
         /** The tick count since the track started at which it began to play; LOADING while it loads. */
         long playingFrom = LOADING;
         /** The players it was sent to while it loaded, whom it waits for. */
@@ -102,6 +106,10 @@ public final class Streams {
         final Map<ServerPlayer, Set<BlockPos>> ready = new HashMap<>();
         /** The tick count at which the first of them had it loaded; LOADING until then. */
         long firstReadyAt = LOADING;
+
+        Load(@Nullable UUID startedBy) {
+            this.startedBy = startedBy;
+        }
     }
 
     /** One emitter's stream: who has it, and what was sent, to notice the source or the emitter's sound changing. */
@@ -212,7 +220,13 @@ public final class Streams {
     public static Source source(Level level, BlockPos pos) {
         Source source = level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media
                 ? playing(media) : null;
-        return source != null && ServerConfig.isAllowed(source.url()) ? source : null;
+        if (source == null || !ServerConfig.isAllowed(source.url())) {
+            return null;
+        }
+        // Clients fetch the next video ahead: it has to pass the same allow-list as the one playing.
+        Video video = source.video();
+        return video == null || video.next().map(ServerConfig::isAllowed).orElse(true) ? source
+                : new Source(source.url(), source.ticks(), new Video(video.player(), video.maxHeight(), Optional.empty()));
     }
 
     /** What {@code media} plays now, counted from when its listeners had it loaded (see played); null for nothing. */
@@ -223,11 +237,37 @@ public final class Streams {
                 : new Source(source.url(), played((BlockEntity) media, source.ticks()), source.video());
     }
 
-    /** {@code source} starts its track from the top: its position waits until its listeners have it (see Load). */
-    public static void loading(BlockEntity source) {
+    /**
+     * {@code source} starts its track from the top: its position waits until its listeners have it (see Load).
+     * {@code by} is the player who started it; null when it follows on from the one before (who started that stays).
+     */
+    public static void loading(BlockEntity source, @Nullable Player by) {
         source.setChanged();
-        LOADS.put(key(source), new Load());
-        org.haruyq.createmediasystems.lighting.AnalysisCoordinator.restart(source);
+        Load previous = LOADS.get(key(source));
+        LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy));
+    }
+
+    /** Which load of its track {@code source} plays (see Load#id); 0 for one never loaded since the server started. */
+    public static long loadId(BlockEntity source) {
+        Load load = LOADS.get(key(source));
+        return load == null ? 0 : load.id;
+    }
+
+    @Nullable
+    public static UUID startedBy(BlockEntity source) {
+        Load load = LOADS.get(key(source));
+        return load == null ? null : load.startedBy;
+    }
+
+    /** Whether an emitter that {@code kind} matches relays the source at {@code source} now. */
+    public static boolean relayedBy(Level level, BlockPos source, Class<? extends BlockEntity> kind) {
+        return RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey().getLevel() == level
+                && kind.isInstance(entry.getKey()) && source.equals(entry.getValue().sound.source()));
+    }
+
+    /** Whether emitters relay at {@code level}'s tick now: all on the same ticks (see relay's game event). */
+    public static boolean relayDue(Level level) {
+        return level.getGameTime() % RELAY_TICKS == 0;
     }
 
     public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
@@ -404,6 +444,19 @@ public final class Streams {
                         load == null ? 0 : load.id));
             }
         }
+    }
+
+    /**
+     * {@link #relay} for an emitter linked to the source at {@code link}, at {@code volume} times the source's own (see
+     * MediaSource#volume). An unlinked one points at its own place, where no source plays.
+     */
+    public static void relay(ServerLevel level, BlockEntity emitter, Optional<BlockPos> link, Vec3 origin,
+                             Optional<Direction> facing, Channel channel, float volume) {
+        BlockPos source = link.orElse(emitter.getBlockPos());
+        float sourceVolume = level.isLoaded(source) && level.getBlockEntity(source) instanceof MediaSource media
+                ? media.volume() : 1;
+        relay(level, emitter, new Sound(origin, facing, channel, source),
+                new JukeboxSettings(Optional.empty(), volume * sourceVolume));
     }
 
     private static boolean hears(ServerLevel level, BlockPos pos, Sound sound, JukeboxSettings settings,

@@ -22,7 +22,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -266,7 +265,7 @@ public final class LightingControls {
                 change(hit, Control.GROUP, 0, hit.index, 0);
             }
             if (hit.control == Control.RANGE && mc.player.isShiftKeyDown()) {
-                step *= 10;
+                step *= LightingSettings.FAST_RANGE_STEP;
             }
             adjust(hit, step);
             feedback(hit, "hover", label(hit), scope(hit), value(hit));
@@ -302,12 +301,13 @@ public final class LightingControls {
                         + step * (Minecraft.getInstance().player.isShiftKeyDown() ? 1 : 8);
                 index += settings.selectedColor * 3;
             }
-            case MAPPING -> value = Math.floorMod(group.mapping + step, 4);
-            case VIDEO -> value = 1 - group.colorMode;
+            case MAPPING -> value = Math.floorMod(group.mapping + step, LightingSettings.Group.MAPPINGS);
+            case VIDEO -> value = group.colorMode == LightingSettings.Group.COLORS_VIDEO
+                    ? LightingSettings.Group.COLORS_OWN : LightingSettings.Group.COLORS_VIDEO;
             case AUDIO -> value = group.audio ? 0 : 1;
-            case BAND -> value = Math.floorMod(group.audioBand + step, 4);
-            case MOTION -> value = Math.floorMod(group.motion + step, 4);
-            case PATTERN -> value = Math.floorMod(group.pattern + step, 5);
+            case BAND -> value = Math.floorMod(group.audioBand + step, LightingSettings.Group.BANDS);
+            case MOTION -> value = Math.floorMod(group.motion + step, LightingSettings.Group.MOTIONS);
+            case PATTERN -> value = Math.floorMod(group.pattern + step, LightingSettings.Group.PATTERNS);
             case RANGE -> {
                 if (controlDown()) {
                     change(hit, Control.RANGE_ALL, 0, step, 0);
@@ -333,9 +333,7 @@ public final class LightingControls {
 
     private static void send(LightingConsoleBlock.Entity console, int group, Control control, int index,
                              float value, float other) {
-        LightingPackets.Change change = new LightingPackets.Change(console.getBlockPos(), group, control.ordinal(), index, value, other);
-        LightingPackets.apply(console, change, Minecraft.getInstance().player);
-        PacketDistributor.sendToServer(change);
+        LightingConsolePage.send(console, control, group, index, value, other);
     }
 
     private static void drag(boolean force) {
@@ -556,7 +554,7 @@ public final class LightingControls {
             case PATTERN -> LightingText.mode("pattern", g.pattern);
             case MOTION -> LightingText.mode("motion", g.motion);
             case BAND -> LightingText.mode("band", g.audioBand);
-            case VIDEO -> LightingText.on(g.colorMode == 1);
+            case VIDEO -> LightingText.on(g.colorMode == LightingSettings.Group.COLORS_VIDEO);
             case AUDIO -> LightingText.on(g.audio);
             case ENABLED -> LightingText.on(s.enabled);
             case CYCLE -> LightingText.on(g.colorCycle);

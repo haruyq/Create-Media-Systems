@@ -7,7 +7,14 @@ public record AnalysisFrame(long millis, float level, float bass, float mid, flo
                             int left, int right, boolean audio, boolean video, double motionPhase) {
     public static final int INTERVAL = 100;
     public static final int MAX_FRAMES = 72_001;
+    /** Longest track analysed ahead (see CachedLightingAnalysis). */
     public static final long MAX_DURATION = 7_200_000;
+    /** Furthest into a track (a week) a position is believed: past it, a clock or packet is wrong. */
+    public static final long MAX_MILLIS = 604_800_000;
+    public static final float MIN_BPM = 30;
+    public static final float MAX_BPM = 240;
+    /** The beat a console shows with no audio. */
+    public static final float DEFAULT_BPM = 120;
     public static final StreamCodec<ByteBuf, AnalysisFrame> CODEC = StreamCodec.of((buf, frame) -> {
         buf.writeLong(frame.millis).writeFloat(frame.level).writeFloat(frame.bass).writeFloat(frame.mid)
                 .writeFloat(frame.high).writeFloat(frame.pulse).writeFloat(frame.bpm).writeInt(frame.left)
@@ -29,8 +36,8 @@ public record AnalysisFrame(long millis, float level, float bass, float mid, flo
     }
 
     public boolean valid() {
-        return millis >= 0 && millis <= 604_800_000 && unit(level) && unit(bass) && unit(mid) && unit(high)
-                && unit(pulse) && Float.isFinite(bpm) && bpm >= 30 && bpm <= 240
+        return millis >= 0 && millis <= MAX_MILLIS && unit(level) && unit(bass) && unit(mid) && unit(high)
+                && unit(pulse) && Float.isFinite(bpm) && bpm >= MIN_BPM && bpm <= MAX_BPM
                 && Double.isFinite(motionPhase) && Math.abs(motionPhase) <= 1_000_000_000
                 && (left & 0xFF000000) == 0 && (right & 0xFF000000) == 0;
     }

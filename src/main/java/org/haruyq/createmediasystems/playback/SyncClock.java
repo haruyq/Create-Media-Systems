@@ -3,6 +3,10 @@ package org.haruyq.createmediasystems.playback;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.jetbrains.annotations.Nullable;
+
+import net.minecraft.core.BlockPos;
+
 /**
  * Lines up separately requested streams of one playback, e.g. a jukebox and its speakers, or a left and right
  * speaker. Each opens its own API stream and they become ready at slightly different moments, which a stereo
@@ -13,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 final class SyncClock {
     /** Requested starts further than this from the clock are a different playback of the same track. */
     static final double SAME_PLAYBACK_SECONDS = 2;
-    // ponytail: never evicted, one clock per track played since start; drop a track's clock once no stream of it is open if that grows.
+    // ponytail: never evicted, one clock per source and track played since start; drop a track's clock once no stream of it is open if that grows.
     private static final Map<String, Clock> CLOCKS = new ConcurrentHashMap<>();
 
     private static final class Clock {
@@ -75,9 +79,10 @@ final class SyncClock {
      * alone decides, as while a track loads every stream of it asks for 0 s, so a speaker that came 2 s after its
      * pair (walking into its range, chunks loading in after a rejoin) started the track over, seconds behind it.
      */
-    static Start start(String track, double startSeconds, long origin, long load) {
+    static Start start(@Nullable BlockPos source, String track, double startSeconds, long origin, long load) {
         long now = System.nanoTime();
-        Clock clock = CLOCKS.get(track);
+        String key = source + " " + track;
+        Clock clock = CLOCKS.get(key);
         if (clock != null) {
             double skip = clock.positionAt(now) - startSeconds;
             if (clock.times(skip, origin, load)) {
@@ -85,7 +90,7 @@ final class SyncClock {
             }
         }
         clock = new Clock(startSeconds, now, origin, load);
-        CLOCKS.put(track, clock);
+        CLOCKS.put(key, clock);
         return new Start(0, clock, now);
     }
 }

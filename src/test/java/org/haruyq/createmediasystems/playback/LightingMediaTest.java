@@ -83,7 +83,7 @@ class LightingMediaTest {
         }
         Feed.Reader feed = Feed.read(UUID.randomUUID().toString(), 0,
                 offset -> new ByteArrayInputStream(mono), reason -> fail(reason));
-        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed);
+        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, null, Streams.Channel.MIX, null);
         try {
             feed.prebuffer(mono.length, System.currentTimeMillis() + 5000);
             long at = START * 1000;
@@ -107,15 +107,15 @@ class LightingMediaTest {
         Feed.Reader feed = Feed.read(UUID.randomUUID().toString(), 0,
                 offset -> new ByteArrayInputStream(mono), reason -> fail(reason));
         BlockPos source = new BlockPos(12, 34, 56);
-        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, source, Streams.Channel.MIX);
+        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, source, Streams.Channel.MIX, null);
         try {
             feed.prebuffer(mono.length, System.currentTimeMillis() + 5000);
             stream.queued(System.nanoTime() - 500_000_000L, 0, mono.length);
-            assertNotNull(LightingMedia.relay(source));
+            assertNotNull(LightingMedia.relay(source, null));
         } finally {
             stream.close();
         }
-        assertNull(LightingMedia.relay(source));
+        assertNull(LightingMedia.relay(source, null));
     }
 
     @Test

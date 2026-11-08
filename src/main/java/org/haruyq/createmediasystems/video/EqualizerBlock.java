@@ -74,7 +74,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
         return new Entity(pos, state);
     }
 
-    /** The first equalizer touching {@code pos}, if any. */
     @Nullable
     private static Entity touching(BlockGetter level, BlockPos pos) {
         return Arrays.stream(Direction.values()).map(side -> level.getBlockEntity(pos.relative(side)))
@@ -158,7 +157,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
             this.color = color;
         }
 
-        /** Fader {@code fader}'s band, on a second equalizer if {@code second}. */
         public static Band of(int fader, boolean second) {
             return values()[2 * fader + (second ? 0 : 1)];
         }
@@ -206,7 +204,7 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-            tooltip.add(Component.literal("    ").append(Component.translatable("block.create_media_systems.equalizer")));
+            tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             for (int fader = FADERS - 1; fader >= 0; fader--) {
                 Band band = band(fader);
                 tooltip.add(Component.literal("     " + band.label + "  " + db(gains[fader])).withColor(band.color));

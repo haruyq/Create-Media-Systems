@@ -30,7 +30,6 @@ public interface LightingConsolePage {
         return false;
     }
 
-    /** Draws the page's bays. */
     void render(LightingConsoleBlock.Entity console, LightingConsoleSurface surface);
 
     /** What is at {@code point} on the deck, or on the monitors if {@code monitor}; null for nothing. */

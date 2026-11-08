@@ -16,6 +16,8 @@ import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.display.DisplayQuill;
 import org.haruyq.createmediasystems.display.ImageViewerBlock;
+import org.haruyq.createmediasystems.lighting.AnalysisCoordinator;
+import org.haruyq.createmediasystems.lighting.AnalysisPackets;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.LightingLinkItem;
 import org.haruyq.createmediasystems.lighting.LightingMonitorBlock;
@@ -239,7 +241,7 @@ public class CreateMediaSystems {
         modBus.addListener(CreateMediaSystems::setup);
         modBus.addListener(CreateMediaSystems::registerPayloads);
         NeoForge.EVENT_BUS.addListener(TrainSignals::onServerTick);
-        org.haruyq.createmediasystems.lighting.AnalysisCoordinator.register();
+        AnalysisCoordinator.register();
     }
 
     public static ResourceLocation id(String path) {
@@ -289,7 +291,7 @@ public class CreateMediaSystems {
         DisplayQuill.registerPayloads(registrar);
         ImageViewerBlock.registerPayloads(registrar);
         LightingPackets.register(registrar);
-        org.haruyq.createmediasystems.lighting.AnalysisPackets.register(registrar);
+        AnalysisPackets.register(registrar);
     }
 
 }

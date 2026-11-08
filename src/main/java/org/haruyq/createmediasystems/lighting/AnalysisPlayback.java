@@ -1,6 +1,6 @@
-package org.haruyq.createmediasystems.playback;
+package org.haruyq.createmediasystems.lighting;
 
-import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,13 +8,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-import org.haruyq.createmediasystems.client.ClientConfig;
-import org.haruyq.createmediasystems.lighting.AnalysisClock;
-import org.haruyq.createmediasystems.lighting.AnalysisDelay;
-import org.haruyq.createmediasystems.lighting.AnalysisFrame;
-import org.haruyq.createmediasystems.lighting.AnalysisPackets;
-import org.haruyq.createmediasystems.lighting.AnalysisTimeline;
-import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
+import org.haruyq.createmediasystems.playback.CachedLightingAnalysis;
+import org.haruyq.createmediasystems.playback.LightingMedia;
 
 import com.mojang.logging.LogUtils;
 
@@ -26,6 +21,10 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+/**
+ * Client side of the lighting analysis (see AnalysisCoordinator): follows each source's session, and while this
+ * player is its owner, sends the signal of the media playing here, ahead from a kept copy where it can.
+ */
 public final class AnalysisPlayback {
     private static final Map<UUID, Playback> PLAYING = new HashMap<>();
     private static ClientLevel level;
@@ -39,7 +38,7 @@ public final class AnalysisPlayback {
         final Map<String, Integer> uploaded = new HashMap<>();
         final Map<String, List<AnalysisFrame>> prepared = new LinkedHashMap<>();
         final AnalysisClock sharedClock = new AnalysisClock();
-        volatile CompletableFuture<List<AnalysisFrame>> job;
+        volatile CompletableFuture<List<LightingMedia.Sample>> job;
         String jobTrack;
         long received;
         long sequence;
@@ -89,10 +88,10 @@ public final class AnalysisPlayback {
         }
 
         boolean updateClock(long now) {
-            VlcPlayer player = NativeAudio.lighting(state.pos(), state.track());
-            long millis = player == null ? ClientStreams.position(state.pos(), state.track()) : player.time();
+            LightingMedia.Clock clock = LightingMedia.clock(state.pos(), state.track(), now);
+            long millis = clock.millis();
             if (millis < 0) {
-                return player != null && localAt != 0 && now - clockReadAt < 2_000_000_000L;
+                return clock.nativePlayer() && localAt != 0 && now - clockReadAt < 2_000_000_000L;
             }
             clockReadAt = now;
             if (localAt == 0 || millis != localMillis) {
@@ -102,8 +101,7 @@ public final class AnalysisPlayback {
                 localAt = now;
                 progressAt = now;
             }
-            return now - progressAt < 5_000_000_000L
-                    || player != null && NativeAudio.lightingLive(state.pos(), state.track()) && player.recentMedia(now);
+            return now - progressAt < 5_000_000_000L || clock.liveAndFlowing();
         }
     }
 
@@ -120,7 +118,7 @@ public final class AnalysisPlayback {
 
     public static void state(AnalysisPackets.State state) {
         checkLevel();
-        if (level == null || state.millis() < 0 || state.millis() > 604_800_000) {
+        if (level == null || state.millis() < 0 || state.millis() > AnalysisFrame.MAX_MILLIS) {
             return;
         }
         Playback playback = PLAYING.get(state.source());
@@ -169,7 +167,7 @@ public final class AnalysisPlayback {
                 .add(batch.frames(), batch.prepared());
         if (accepted && !batch.prepared() && !batch.frames().isEmpty()) {
             long lag = playback.samplePosition() - batch.frames().getLast().millis();
-            playback.lagMillis = lag >= 0 && lag <= 2000 ? (int) lag : -1;
+            playback.lagMillis = lag >= 0 && lag <= AnalysisDelay.MAX_MILLIS ? (int) lag : -1;
             playback.lagAt = System.nanoTime();
         }
         if (accepted && batch.prepared() && !batch.frames().isEmpty()) {
@@ -249,11 +247,9 @@ public final class AnalysisPlayback {
             }
             playback.liveSentAt = now;
             if (timeline == null || timeline.samplePrepared(position) == null) {
-                LightingMedia.Sample sample = LightingMedia.sample(state.pos(), state.pos(), state.track());
+                LightingMedia.Sample sample = LightingMedia.sample(state.pos(), state.track());
                 if (sample != null) {
-                    AnalysisFrame frame = new AnalysisFrame(position, sample.level(), sample.bass(), sample.mid(), sample.high(),
-                            sample.pulse(), Math.clamp(sample.bpm(), 30, 240), sample.leftColor(), sample.rightColor(),
-                            sample.audio(), sample.video());
+                    AnalysisFrame frame = frame(position, sample);
                     List<AnalysisFrame> prepared = playback.prepared.get(state.track());
                     double phase = prepared == null ? Double.NaN : AnalysisTimeline.phaseAt(prepared, position);
                     if (!Double.isFinite(phase)) {
@@ -273,7 +269,7 @@ public final class AnalysisPlayback {
     private static void prepare(Playback playback, long now) {
         if (playback.job != null && playback.job.isDone()) {
             try {
-                List<AnalysisFrame> frames = playback.job.join();
+                List<AnalysisFrame> frames = frames(playback.job.join());
                 if (!frames.isEmpty()) {
                     if (playback.jobTrack.equals(playback.state.track())) {
                         long position = playback.position();
@@ -297,18 +293,38 @@ public final class AnalysisPlayback {
                 continue;
             }
             try {
-                NativeMediaResolver.Prepared cached = VideoCache.get().lookup(URI.create(track),
-                        ClientConfig.maxHeight(playback.state.height()));
-                if (cached == null || cached.live() || cached.duration() > AnalysisFrame.MAX_DURATION / 1000.0) {
+                var job = CachedLightingAnalysis.analyzeCached(track, playback.state.height(),
+                        AnalysisFrame.MAX_DURATION, AnalysisFrame.INTERVAL);
+                if (job == null) {
                     continue;
                 }
                 playback.jobTrack = track;
-                playback.job = CachedLightingAnalysis.analyze(cached, () -> false);
+                playback.job = job;
                 return;
             } catch (RuntimeException failed) {
                 playback.retryAt = now + 60_000_000_000L;
             }
         }
+    }
+
+    private static AnalysisFrame frame(long millis, LightingMedia.Sample sample) {
+        return new AnalysisFrame(millis, sample.level(), sample.bass(), sample.mid(), sample.high(), sample.pulse(),
+                Math.clamp(sample.bpm(), AnalysisFrame.MIN_BPM, AnalysisFrame.MAX_BPM), sample.leftColor(),
+                sample.rightColor(), sample.audio(), sample.video());
+    }
+
+    /** Frames of {@code samples} taken every INTERVAL from the start, their motion phase run on from 0. */
+    private static List<AnalysisFrame> frames(List<LightingMedia.Sample> samples) {
+        List<AnalysisFrame> frames = new ArrayList<>(samples.size());
+        double phase = 0;
+        for (LightingMedia.Sample sample : samples) {
+            AnalysisFrame frame = frame((long) frames.size() * AnalysisFrame.INTERVAL, sample);
+            if (!frames.isEmpty()) {
+                phase += AnalysisFrame.INTERVAL / 1000.0 * frames.getLast().motionSpeed();
+            }
+            frames.add(frame.phase(phase));
+        }
+        return List.copyOf(frames);
     }
 
     private static double phaseAt(Playback playback, long position) {
@@ -356,27 +372,11 @@ public final class AnalysisPlayback {
     public static double apply(LightingConsoleBlock.Entity console, double fallbackSeconds) {
         Playback audio = find(console.audioSource);
         Playback video = find(console.videoSource);
-        AnalysisFrame a = sample(audio);
-        AnalysisFrame v = sample(video);
-        console.hasAudio = a != null && a.audio();
-        console.hasVideo = v != null && v.video();
-        console.audioLevel = a == null ? 0 : a.level();
-        console.bass = a == null ? 0 : a.bass();
-        console.mid = a == null ? 0 : a.mid();
-        console.high = a == null ? 0 : a.high();
-        console.pulse = a == null ? 0 : a.pulse();
-        console.bpm = a == null ? 120 : a.bpm();
+        console.receive(sample(audio), sample(video), console.getLevel().getGameTime());
         AnalysisTimeline timeline = audio == null ? null : audio.tracks.get(audio.state.track());
         long position = audio == null ? 0 : audio.samplePosition();
         double phase = timeline == null ? Double.NaN : timeline.phaseAt(position, audio.delay(position));
         console.motionPhase = Double.isFinite(phase) ? phase : audio == null ? fallbackSeconds : audio.samplePosition() / 1000.0;
-        if (v != null) {
-            console.videoLeft = v.left();
-            console.videoRight = v.right();
-        }
-        if (console.hasAudio || console.hasVideo) {
-            console.signalAt = console.getLevel().getGameTime();
-        }
         Playback clock = audio == null ? video : audio;
         return clock == null ? fallbackSeconds : clock.samplePosition() / 1000.0;
     }

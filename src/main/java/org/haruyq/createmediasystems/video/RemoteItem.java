@@ -57,7 +57,6 @@ public class RemoteItem extends Item {
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
     }
 
-    /** The remote in {@code player}'s main hand, else what is in their off hand. */
     static ItemStack held(Player player) {
         return player.getMainHandItem().is(CreateMediaSystems.REMOTE.get()) ? player.getMainHandItem() : player.getOffhandItem();
     }
@@ -134,7 +133,6 @@ public class RemoteItem extends Item {
         }
     }
 
-    /** A button of the remote in hand, for the Blu-ray player it is paired with, if that is within the server's range. */
     static void remoteControl(ServerPlayer player, RemoteControl payload) {
         ItemStack remote = held(player);
         GlobalPos target = remote.is(CreateMediaSystems.REMOTE.get()) ? RemoteItem.target(player.level(), remote) : null;
@@ -155,11 +153,7 @@ public class RemoteItem extends Item {
             player.displayClientMessage(Component.translatable("create_media_systems.remote.missing").withStyle(ChatFormatting.RED), true);
             return;
         }
-        VideoPlayerBlock.Action action = VideoPlayerBlock.Action.byId(payload.action());
-        if (action != VideoPlayerBlock.Action.VOLUME && action != VideoPlayerBlock.Action.STOP) {
-            videoPlayer.initiator = player.getUUID();
-        }
-        videoPlayer.control(action, payload.value());
+        videoPlayer.control(VideoPlayerBlock.Action.byId(payload.action()), payload.value(), player);
     }
 
     public static void registerPayloads(PayloadRegistrar registrar) {

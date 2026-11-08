@@ -47,13 +47,11 @@ public final class Quill {
         });
     }
 
-    /** Whether the player holds {@code quill} in their main hand, with no screen open. */
     public static boolean held(Item quill) {
         Minecraft mc = Minecraft.getInstance();
         return mc.level != null && mc.player != null && mc.screen == null && mc.player.getMainHandItem().is(quill);
     }
 
-    /** The block the player points at within a quill's reach, or null. */
     @Nullable
     public static BlockHitResult pointedAt() {
         Minecraft mc = Minecraft.getInstance();
@@ -61,7 +59,6 @@ public final class Quill {
         return trace != null && trace.getType() == HitResult.Type.BLOCK ? trace : null;
     }
 
-    /** Says {@code key} above the hotbar. */
     public static void status(String key, Object... args) {
         Minecraft.getInstance().player.displayClientMessage(Component.translatable(key, args), true);
     }

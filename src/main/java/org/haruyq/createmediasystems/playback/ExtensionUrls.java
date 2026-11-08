@@ -35,8 +35,13 @@ final class ExtensionUrls {
 
     static boolean matches(URI uri) {
         refresh();
+        return matches(known.urls(), uri);
+    }
+
+    /** Whether {@code uri} is one of the pages {@code urls} (see use) names. */
+    static boolean matches(List<Pattern> urls, URI uri) {
         String url = uri.toString();
-        return known.urls().stream().anyMatch(p -> p.matcher(url).matches());
+        return urls.stream().anyMatch(p -> p.matcher(url).matches());
     }
 
     /** Fetches the patterns again in the background if the API changed or they are older than REFRESH_NANOS. */
@@ -82,10 +87,5 @@ final class ExtensionUrls {
             return List.of();
         }
         return List.copyOf(urls);
-    }
-
-    /** For tests: route by {@code body} as if the API at "" had answered it. */
-    static void useForTest(String body) {
-        known = new Known("", use(body), System.nanoTime());
     }
 }

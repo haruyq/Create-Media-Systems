@@ -47,7 +47,7 @@ final class VlcAudio {
     private static final int MAX_QUEUED_BYTES = Pcm.BYTES_PER_SECOND * 5;
 
     private final List<Stream> streams = new CopyOnWriteArrayList<>();
-    /** What every stream hears it through; set by the player (see VlcPlayer#equalize). */
+    /** What every stream hears it through; set through NativeAudio#equalize. */
     final Equalizer equalizer = new Equalizer();
     private final LightingMedia.Audio lighting = new LightingMedia.Audio();
     private volatile long lightingUntil;

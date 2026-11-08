@@ -37,7 +37,6 @@ final class Feed {
     private static final Map<String, Feed> SHARED = new HashMap<>();
 
     private final String key;
-    /** Where in the track the download starts. */
     private final double startSeconds;
     // One chunk more than both: the pump writes a whole chunk once under AHEAD_BYTES (see write).
     private final byte[] ring = new byte[AHEAD_BYTES + BEHIND_BYTES + CHUNK_BYTES];
@@ -224,7 +223,6 @@ final class Feed {
             this.onInterrupted = onInterrupted;
         }
 
-        /** Bytes ready to read now. */
         int available() {
             synchronized (Feed.this) {
                 return (int) Math.max(0, received - position);
@@ -246,7 +244,6 @@ final class Feed {
             }
         }
 
-        /** Up to {@code max} of the bytes ready now. */
         byte[] read(int max) {
             synchronized (Feed.this) {
                 byte[] bytes = new byte[(int) Math.min(max, Math.max(0, received - position))];

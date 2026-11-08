@@ -4,9 +4,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.lighting.LightingScreens;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -188,12 +189,10 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             LightingScreens.add(this);
         }
 
-        /** The Blu-ray player it shows. */
         public Optional<BlockPos> source() {
             return source.get(level, this::changed);
         }
 
-        /** Its size in blocks. */
         public double width() {
             return width / (double) UNIT;
         }
@@ -267,14 +266,13 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                     corner.add(screen.at((float) width() + margin, (float) height() + margin, front)));
         }
 
-        /** An image viewer shows an image instead of a Blu-ray player's video. */
         public boolean isImageViewer() {
             return getBlockState().getBlock() instanceof ImageViewerBlock;
         }
 
         /** Plays its Blu-ray player's video's sound from the screen's middle, unless a speaker plays it. */
         private void tick(ServerLevel level) {
-            if (level.getGameTime() % Streams.RELAY_TICKS != 0) {
+            if (!Streams.relayDue(level)) {
                 return;
             }
             Optional<BlockPos> linked = source();
@@ -284,9 +282,9 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 lighting = Math.round(videoPlayer.lighting() * 100);
                 changed();
             }
-            Streams.relay(level, this, new Streams.Sound(center(), Optional.empty(), Streams.Channel.MIX, linked.orElse(worldPosition)),
-                    new JukeboxSettings(Optional.empty(), videoPlayer == null || videoPlayer.silenced(level.getGameTime())
-                            ? 0 : videoPlayer.volume()));
+            boolean speakers = linked.isPresent() && Streams.relayedBy(level, linked.get(), SpeakerBlock.Entity.class);
+            Streams.relay(level, this, linked, center(), Optional.empty(), Streams.Channel.MIX,
+                    videoPlayer == null || speakers ? 0 : 1);
         }
 
         @Override
@@ -343,7 +341,12 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
 
         @Override
         public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-            return saveCustomOnly(registries);
+            CompoundTag tag = saveCustomOnly(registries);
+            // Every client fetches the image itself: a link the server no longer allows reaches none of them.
+            if (!ServerConfig.isAllowed(image)) {
+                tag.remove("Image");
+            }
+            return tag;
         }
 
         @Override

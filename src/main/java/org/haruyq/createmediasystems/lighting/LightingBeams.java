@@ -72,10 +72,6 @@ public final class LightingBeams {
         sampler = GL20.glGetUniformLocation(program, "Sampler0");
     }
 
-    static boolean available() {
-        return program != 0;
-    }
-
     /**
      * Whether strips for {@code level} are drawn on the GPU now: in the client's world, with the beam program
      * loaded (it can fail to load, under some shader packs). If not, draw beams in LightingRenderer.beamBuffers.
@@ -84,7 +80,7 @@ public final class LightingBeams {
         return program != 0 && level == Minecraft.getInstance().level;
     }
 
-    /** How a strip fades along it, from its near edge to its far one. */
+    /** How a strip fades along it, from its near edge to its far one; stage_beam.vsh's modes, in order. */
     public enum Fade {
         /** In eight steps, to a quarter: a beam's cone. */
         CONE,
@@ -115,7 +111,7 @@ public final class LightingBeams {
      */
     public static void strip(Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA, int colorB, Fade fade,
                              float alpha, @Nullable Clip first, @Nullable Clip second, @Nullable Clip third) {
-        strip(matrix, a, b, c, d, colorA, colorB, fade.ordinal(), alpha, first == null ? null : first.plane(),
+        strip(matrix, a, b, c, d, colorA, colorB, fade, alpha, first == null ? null : first.plane(),
                 second == null ? null : second.plane(), third == null ? null : third.plane());
     }
 
@@ -124,7 +120,7 @@ public final class LightingBeams {
     }
 
     static void strip(Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA, int colorB,
-                      int mode, float alpha, LightingGeometry.Plane first, LightingGeometry.Plane second,
+                      Fade fade, float alpha, LightingGeometry.Plane first, LightingGeometry.Plane second,
                       LightingGeometry.Plane third) {
         long now = LightingIllumination.frame();
         if (frame != now) {
@@ -150,7 +146,7 @@ public final class LightingBeams {
         plane(data, at + 24, third);
         color(data, at + 28, colorA);
         color(data, at + 32, colorB);
-        data.put(at + 36, mode).put(at + 37, alpha);
+        data.put(at + 36, fade.ordinal()).put(at + 37, alpha);
         matrix.get(at + 40, data);
         pending = true;
     }

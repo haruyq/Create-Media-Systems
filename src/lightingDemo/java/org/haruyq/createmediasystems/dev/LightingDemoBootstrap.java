@@ -188,7 +188,7 @@ public final class LightingDemoBootstrap {
                 }
                 disc.set(CreateMediaSystems.PLAYLIST.get(), List.of(mediaUrl, next));
             }
-            player.insert(disc);
+            player.insert(disc, null);
             console.videoSource = playerPos.immutable();
             if (level.getBlockEntity(speakerPos) instanceof SpeakerBlock.Entity speaker) {
                 speaker.configure(level, playerPos, 1, org.haruyq.createmediasystems.stream.Streams.Channel.MIX);

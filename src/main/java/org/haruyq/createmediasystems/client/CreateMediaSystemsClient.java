@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.client;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.RangeQuillHandler;
 import org.haruyq.createmediasystems.display.DisplayRenderer;
+import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.LightingControls;
 import org.haruyq.createmediasystems.lighting.LightingRenderer;
 import org.haruyq.createmediasystems.playback.ClientStreams;
@@ -22,7 +23,7 @@ public class CreateMediaSystemsClient {
         ClientConfig.register(container);
         modBus.addListener((FMLClientSetupEvent event) -> PonderIndex.addPlugin(new CreateMediaSystemsPonder()));
         ClientStreams.register(modBus);
-        org.haruyq.createmediasystems.playback.AnalysisPlayback.register();
+        AnalysisPlayback.register();
         RangeQuillHandler.register();
         DisplayRenderer.register(modBus);
         EqualizerFaders.register(modBus);

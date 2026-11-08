@@ -1,7 +1,6 @@
 package org.haruyq.createmediasystems.train;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.client.TextPromptScreen;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -27,7 +26,6 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /** Outputs redstone 15 to every side while a train is over any train detector on its channel. Empty hand: set the channel. */
 public class TrainSignalReceiverBlock extends Block implements EntityBlock {
@@ -57,8 +55,7 @@ public class TrainSignalReceiverBlock extends Block implements EntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
         if (level.isClientSide && level.getBlockEntity(pos) instanceof Entity receiver) {
-            TextPromptScreen.open("create_media_systems.screen.channel", receiver.channel, TrainSignals.MAX_CHANNEL_LENGTH,
-                    value -> PacketDistributor.sendToServer(new TrainSignals.SetChannel(pos, value)));
+            TrainSignals.promptChannel(pos, receiver.channel);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

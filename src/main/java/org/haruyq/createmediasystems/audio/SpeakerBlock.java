@@ -3,13 +3,12 @@ package org.haruyq.createmediasystems.audio;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
-import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
 
+import com.mojang.serialization.MapCodec;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 
 import net.minecraft.core.BlockPos;
@@ -22,6 +21,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -29,16 +29,15 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * Plays the track of a linked jukebox, disc reader or Blu-ray player, in sync with it, loudest in front. Its range is the
  * default radius; only its volume is set (with the range quill). Rotate it with a Create wrench.
  */
-public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
-    public static final DirectionProperty FACING = BlockStateProperties.FACING;
+public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWrenchable {
+    private static final MapCodec<SpeakerBlock> CODEC = simpleCodec(SpeakerBlock::new);
+
     public SpeakerBlock(Properties properties) {
         super(properties);
         registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH));
@@ -47,6 +46,11 @@ public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
     /** Where the sound comes from: the middle of the front face. */
     public static Vec3 mouth(BlockPos pos, Direction facing) {
         return pos.getCenter().add(Vec3.atLowerCornerOf(facing.getNormal()).scale(0.5));
+    }
+
+    @Override
+    protected MapCodec<SpeakerBlock> codec() {
+        return CODEC;
     }
 
     @Override
@@ -112,24 +116,14 @@ public class SpeakerBlock extends Block implements EntityBlock, IWrenchable {
         }
 
         private void tick(ServerLevel level, BlockState state) {
-            if (level.getGameTime() % Streams.RELAY_TICKS == 0) {
+            if (Streams.relayDue(level)) {
                 relay(level, state);
             }
         }
 
-        /** Plays its source's track, at our volume times the source's (see MediaSource#volume). */
         private void relay(ServerLevel level, BlockState state) {
-            Optional<BlockPos> linked = source();
-            Streams.Source playing = linked.map(pos -> Streams.source(level, pos)).orElse(null);
-            float sourceVolume = 1;
-            if (playing != null && level.getBlockEntity(linked.get()) instanceof MediaSource media) {
-                media.playedBySpeaker(level.getGameTime());
-                sourceVolume = media.volume();
-            }
             Direction facing = state.getValue(FACING);
-            Streams.relay(level, this, new Streams.Sound(mouth(worldPosition, facing), Optional.of(facing), channel,
-                            linked.orElse(worldPosition)),
-                    new JukeboxSettings(Optional.empty(), volume * sourceVolume));
+            Streams.relay(level, this, source(), mouth(worldPosition, facing), Optional.of(facing), channel, volume);
         }
 
         @Override

@@ -30,7 +30,7 @@ final class RemoteScreen extends Screen {
     }
 
     private RemoteScreen(GlobalPos target) {
-        super(Component.translatable("item.create_media_systems.remote"));
+        super(CreateMediaSystems.REMOTE.get().getDescription());
         this.target = target;
     }
 

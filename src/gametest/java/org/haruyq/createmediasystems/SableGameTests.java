@@ -50,7 +50,7 @@ public class SableGameTests {
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(origin);
         ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
         disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://example.com/test.mp4"));
-        player.insert(disc);
+        player.insert(disc, null);
         CompoundTag legacy = new CompoundTag();
         legacy.put("Source", NbtUtils.writeBlockPos(origin));
         ((DisplayBlock.Entity) level.getBlockEntity(origin.east())).loadWithComponents(legacy, level.registryAccess());

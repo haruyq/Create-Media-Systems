@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.video;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.PercentSetting;
@@ -80,8 +79,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && videoPlayer.cd.isEmpty()) {
-            videoPlayer.initiator = player.getUUID();
-            videoPlayer.insert(stack.split(1));
+            videoPlayer.insert(stack.split(1), player);
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
     }
@@ -91,7 +89,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                                                BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && !videoPlayer.cd.isEmpty()) {
             player.getInventory().placeItemBackInInventory(videoPlayer.cd);
-            videoPlayer.insert(ItemStack.EMPTY);
+            videoPlayer.insert(ItemStack.EMPTY, player);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
@@ -131,18 +129,12 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     }
 
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, MediaSource {
-        /** A Blu-ray player's displays stay quiet this long after a linked speaker last played it. */
-        private static final long HELD_TICKS = 4 * Streams.RELAY_TICKS;
-
         private ItemStack cd = ItemStack.EMPTY;
         /** The playlist entry playing (or paused, or stopped at). */
         private int index;
         private long ticks;
         private boolean playing;
         private boolean paused;
-        public UUID initiator;
-        /** When a linked speaker last played it (game time); not saved. */
-        private long heldAt = Long.MIN_VALUE / 2;
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
 
@@ -166,16 +158,9 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
         }
 
-        @Override
-        public UUID initiator() {
-            return initiator;
-        }
-
         public int index() {
             return index;
         }
-
-
 
         /** Its remote or wrench turns all of its speakers and displays up or down. */
         @Override
@@ -199,33 +184,22 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                     : null;
         }
 
-        /**
-         * A linked speaker plays it now, so its displays keep quiet (see HELD_TICKS); one that can't play it (host not
-         * allowed) leaves them their sound.
-         */
-        @Override
-        public void playedBySpeaker(long gameTime) {
-            heldAt = gameTime;
-        }
-
-        /** Whether its displays keep quiet, speakers playing it. */
-        public boolean silenced(long gameTime) {
-            return gameTime - heldAt < HELD_TICKS;
-        }
-
-        /** A new disc (or none) plays its first video. */
-        public void insert(ItemStack stack) {
+        /** A new disc (or none) put in by {@code by} plays its first video. */
+        public void insert(ItemStack stack, @Nullable Player by) {
             cd = stack;
             if (stack.isEmpty()) {
                 playing = false;
                 changed();
             } else {
-                play(0);
+                play(0, by);
             }
         }
 
-        /** Plays entry {@code entry} from the top, if the playlist has it; its displays and speakers start over. */
-        private void play(int entry) {
+        /**
+         * Plays entry {@code entry} from the top, if the playlist has it, as {@code by} asked (null: the one before
+         * ended); its displays and speakers start over.
+         */
+        private void play(int entry, @Nullable Player by) {
             if (entry < 0 || entry >= playlist().size()) {
                 return;
             }
@@ -233,16 +207,16 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             ticks = 0;
             playing = true;
             paused = false;
-            Streams.loading(this);
+            Streams.loading(this, by);
             changed();
         }
 
-        /** {@code action} from a remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
-        public void control(Action action, int value) {
+        /** {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
+        public void control(Action action, int value, @Nullable Player by) {
             switch (action) {
                 case PLAY_PAUSE -> {
                     if (!playing) {
-                        play(index);
+                        play(index, by);
                     } else {
                         paused = !paused;
                         changed();
@@ -254,9 +228,9 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                     ticks = 0;
                     changed();
                 }
-                case PREVIOUS -> play(Math.max(index - 1, 0));
-                case NEXT -> play(index + 1);
-                case SELECT -> play(value - 1);
+                case PREVIOUS -> play(Math.max(index - 1, 0), by);
+                case NEXT -> play(index + 1, by);
+                case SELECT -> play(value - 1, by);
                 case VOLUME -> volume.setValue(Mth.clamp(value, 0, 100));
             }
         }
@@ -272,7 +246,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             Streams.Source source = Streams.playing(this);
             if (ticks % Streams.RELAY_TICKS == 0 && source != null && Streams.endedAt(source)) {
                 if (index + 1 < playlist().size()) {
-                    play(index + 1);
+                    play(index + 1, null);
                 } else {
                     playing = false;
                     changed();
@@ -297,7 +271,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-            tooltip.add(Component.literal("    ").append(Component.translatable("block.create_media_systems.blu_ray_player")));
+            tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             List<String> playlist = playlist();
             tooltip.add(Component.literal("     ").append(state()).withStyle(ChatFormatting.GRAY));
             if (!playlist.isEmpty()) {
@@ -327,9 +301,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tag.putLong("Ticks", ticks);
             tag.putBoolean("Playing", playing);
             tag.putBoolean("Paused", paused);
-            if (initiator != null) {
-                tag.putUUID("Initiator", initiator);
-            }
         }
 
         @Override
@@ -340,7 +311,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             ticks = tag.getLong("Ticks");
             playing = tag.getBoolean("Playing");
             paused = tag.getBoolean("Paused");
-            initiator = tag.hasUUID("Initiator") ? tag.getUUID("Initiator") : null;
         }
     }
 }

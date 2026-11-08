@@ -38,47 +38,12 @@ class LightingMotionTest {
     }
 
     @Test
-    void speedAndAudioChangesKeepTheCurrentPhaseAndEaseIntoTheNewVelocity() {
-        LightingMotion motion = new LightingMotion();
-        double before = motion.phase(5000, 1, 0.35f);
-        assertEquals(before, motion.phase(5000, 4, 1.2f));
-        double first = motion.phase(5000 + 1 / 120.0, 4, 1.2f);
-        double next = motion.phase(5000 + 2 / 120.0, 4, 1.2f);
-        assertTrue(first - before > 0 && first - before < 0.005);
-        assertTrue(next - first > first - before && next - first < 4.8 / 120);
-    }
-
-    @Test
-    void audioDrivenPhaseDoesNotDependOnFrameRate() {
-        assertEquals(phase(20), phase(120), 0.000001);
-    }
-
-    @Test
-    void allFixturesShareOnePhaseWithoutAdvancingItTwicePerFrame() {
-        LightingMotion motion = new LightingMotion();
-        motion.phase(50, 1, 1);
-        double phase = motion.phase(50.01, 1, 1);
-        assertEquals(phase, motion.phase(50.01, 1, 1));
-        assertEquals(phase, motion.phase(1, 1, 1));
-        assertEquals(phase + 0.01, motion.phase(1.01, 1, 1), 0.000001);
-    }
-
-    @Test
     void preservesSubTickMotionInLongRunningWorlds() {
         long ticks = 100_000_000;
         double before = LightingMotion.seconds(ticks, 0.25f);
         double after = LightingMotion.seconds(ticks, 0.5f);
         assertEquals(0.0125, after - before, 0.00000001);
         assertEquals(0.0125, LightingMotion.seconds(ticks + 1, 0) - LightingMotion.seconds(ticks, 0.75f), 0.00000001);
-    }
-
-    private double phase(int frames) {
-        LightingMotion motion = new LightingMotion();
-        double value = motion.phase(0, 1, 0.35f);
-        for (int frame = 1; frame <= frames; frame++) {
-            value = motion.phase(frame / (double) frames, 4, 1.2f);
-        }
-        return value;
     }
 
     private LightingMotion.Angles follow(int frames) {

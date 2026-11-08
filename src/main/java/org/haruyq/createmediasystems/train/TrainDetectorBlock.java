@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.client.TextPromptScreen;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -29,7 +28,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Train detector: placed onto a track like Create's Train Observer (right-click the track first). While a train is
@@ -45,8 +43,7 @@ public class TrainDetectorBlock extends Block implements IBE<TrainDetectorBlock.
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
         if (level.isClientSide && level.getBlockEntity(pos) instanceof Entity detector) {
-            TextPromptScreen.open("create_media_systems.screen.channel", detector.channel, TrainSignals.MAX_CHANNEL_LENGTH,
-                    value -> PacketDistributor.sendToServer(new TrainSignals.SetChannel(pos, value)));
+            TrainSignals.promptChannel(pos, detector.channel);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

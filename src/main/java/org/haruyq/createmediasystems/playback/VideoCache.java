@@ -170,9 +170,10 @@ final class VideoCache {
         try {
             String printed;
             try {
-                printed = download(page, part, "bv*" + height + "[ext=mp4][protocol=https],ba[ext=m4a][protocol=https]");
+                printed = download(page, part, String.format(Locale.ROOT, YtDlp.SEPARATE_VIDEO, height) + ","
+                        + YtDlp.SEPARATE_AUDIO);
             } catch (IOException noSeparateFiles) {
-                printed = download(page, part, "b" + height + "[protocol=https]");
+                printed = download(page, part, String.format(Locale.ROOT, YtDlp.SINGLE_FILE, height));
             }
             JsonObject meta = new JsonObject();
             for (String line : printed.split("\\R")) {
@@ -192,13 +193,30 @@ final class VideoCache {
             if (!meta.has("video")) {
                 throw new IOException("yt-dlp downloaded no video");
             }
-            Path temp = dir.resolve(name + ".meta.part");
-            Files.writeString(temp, meta.toString());
-            Files.move(temp, dir.resolve(name + ".meta"), StandardCopyOption.REPLACE_EXISTING,
-                    StandardCopyOption.ATOMIC_MOVE);
+            writeMeta(name, meta);
         } finally {
             FileUtils.deleteQuietly(part.toFile());
         }
+    }
+
+    /** Keeps a copy of {@code video} (sound included) as {@code page}'s at most {@code maxHeight} tall, {@code seconds} long. */
+    void keep(URI page, int maxHeight, Path video, double seconds) throws IOException {
+        String name = name(ProviderUrls.canonical(page), maxHeight);
+        Files.createDirectories(dir);
+        String kept = name + ".video" + extension(video);
+        Files.copy(video, dir.resolve(kept), StandardCopyOption.REPLACE_EXISTING);
+        JsonObject meta = new JsonObject();
+        meta.addProperty("video", kept);
+        meta.addProperty("duration", seconds);
+        writeMeta(name, meta);
+    }
+
+    /** The meta file goes last, whole at once: a copy counts as kept only once all of it is there. */
+    private void writeMeta(String name, JsonObject meta) throws IOException {
+        Path temp = dir.resolve(name + ".meta.part");
+        Files.writeString(temp, meta.toString());
+        Files.move(temp, dir.resolve(name + ".meta"), StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE);
     }
 
     private String download(URI page, Path into, String format) throws IOException, InterruptedException {

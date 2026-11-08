@@ -30,7 +30,6 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -111,12 +110,10 @@ final class LightingOcclusion {
         }
     }
 
-    /** A block in section ({@code x}, {@code y}, {@code z}) changed. */
     static void sectionChanged(int x, int y, int z) {
         changed.add(SectionPos.asLong(x, y, z));
     }
 
-    /** Chunk column ({@code x}, {@code z}) was loaded anew. */
     static void chunkChanged(int x, int z) {
         if (origin == null) {
             return;

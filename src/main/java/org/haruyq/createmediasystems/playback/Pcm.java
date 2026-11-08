@@ -11,7 +11,6 @@ final class Pcm {
     private Pcm() {
     }
 
-    /** Bytes in {@code seconds} of it, rounded to a whole sample. */
     static long bytes(double seconds) {
         return Math.round(seconds * BYTES_PER_SECOND / 2) * 2;
     }

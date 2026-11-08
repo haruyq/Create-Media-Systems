@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.dev;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,7 +31,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -122,13 +120,11 @@ public final class SpeakerStressServer {
 
         ItemStack readerDisc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
         readerDisc.set(CreateMediaSystems.URL.get(), url("reader"));
-        Method insert = DiscReaderBlock.Entity.class.getDeclaredMethod("insert", ItemStack.class);
-        insert.setAccessible(true);
-        insert.invoke(level.getBlockEntity(DISC_READER), readerDisc);
+        ((DiscReaderBlock.Entity) level.getBlockEntity(DISC_READER)).insert(readerDisc, null);
 
         ItemStack bluRay = new ItemStack(CreateMediaSystems.BLU_RAY.get());
         bluRay.set(CreateMediaSystems.PLAYLIST.get(), List.of(url("bluray")));
-        ((VideoPlayerBlock.Entity) level.getBlockEntity(BLU_RAY)).insert(bluRay);
+        ((VideoPlayerBlock.Entity) level.getBlockEntity(BLU_RAY)).insert(bluRay, null);
     }
 
     private static void wall(ServerLevel level, BlockPos source, java.util.function.IntFunction<BlockPos> at, Direction facing) {

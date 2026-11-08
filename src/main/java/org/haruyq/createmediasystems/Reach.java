@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 
 /** How far a player reaches the blocks they work, checked by the server and aimed at by the client alike. */
 public final class Reach {
@@ -15,7 +16,11 @@ public final class Reach {
     private Reach() {
     }
 
-    /** The {@code type} block entity at {@code pos} if {@code player} reaches it from within {@code reach}, else null. */
+    @Nullable
+    public static <T> T withQuill(Player player, Item quill, BlockPos pos, Class<T> type) {
+        return player.getMainHandItem().is(quill) ? blockEntity(player, pos, QUILL, type) : null;
+    }
+
     @Nullable
     public static <T> T blockEntity(Player player, BlockPos pos, double reach, Class<T> type) {
         return player.level().isLoaded(pos) && player.position().distanceToSqr(SableCompat.toWorld(player.level(), pos.getCenter())) <= reach * reach

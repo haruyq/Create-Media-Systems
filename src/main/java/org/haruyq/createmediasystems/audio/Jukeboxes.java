@@ -31,7 +31,7 @@ public final class Jukeboxes {
     /** The disc changed: current listeners stop now, and everyone in range gets the new disc (if any). */
     public static void restart(ServerLevel level, JukeboxBlockEntity jukebox) {
         Streams.stop(jukebox);
-        Streams.loading(jukebox);
+        Streams.loading(jukebox, null);
         relay(level, jukebox);
     }
 

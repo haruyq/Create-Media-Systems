@@ -52,6 +52,8 @@ public final class AnalysisCoordinator {
         final Map<String, AnalysisTimeline> tracks = new LinkedHashMap<>();
         final Set<BlockPos> consoles = new HashSet<>();
         BlockPos pos;
+        /** The load of its source's track it follows (see Streams#loadId): a new one starts it over. */
+        long load;
         UUID preferred;
         String track = "";
         String next = "";
@@ -104,41 +106,13 @@ public final class AnalysisCoordinator {
         }
     }
 
-    public static void restart(BlockEntity source) {
-        if (source.getLevel() instanceof ServerLevel level) {
-            Map<UUID, Session> sessions = LEVELS.get(level);
-            if (sessions != null) {
-                Session session = sessions.get(SourceLinks.identify(level, source.getBlockPos()));
-                if (session != null) {
-                    session.restart();
-                }
-            }
-        }
-    }
-
     public static void use(LightingConsoleBlock.Entity console) {
         if (!(console.getLevel() instanceof ServerLevel level)) {
             return;
         }
         use(level, console.audioSource, console.getBlockPos());
         use(level, console.videoSource, console.getBlockPos());
-        AnalysisFrame audio = sample(level, console.audioSource);
-        AnalysisFrame video = sample(level, console.videoSource);
-        console.hasAudio = audio != null && audio.audio();
-        console.hasVideo = video != null && video.video();
-        if (console.hasAudio || console.hasVideo) {
-            console.signalAt = level.getGameTime();
-        }
-        console.audioLevel = audio == null ? 0 : audio.level();
-        console.bass = audio == null ? 0 : audio.bass();
-        console.mid = audio == null ? 0 : audio.mid();
-        console.high = audio == null ? 0 : audio.high();
-        console.pulse = audio == null ? 0 : audio.pulse();
-        console.bpm = audio == null ? 120 : audio.bpm();
-        if (video != null) {
-            console.videoLeft = video.left();
-            console.videoRight = video.right();
-        }
+        console.receive(sample(level, console.audioSource), sample(level, console.videoSource), level.getGameTime());
     }
 
     private static AnalysisFrame sample(ServerLevel level, BlockPos pos) {
@@ -161,15 +135,20 @@ public final class AnalysisCoordinator {
         if (!sessions.containsKey(id) && sessions.size() >= 32) {
             return;
         }
+        BlockEntity source = (BlockEntity) media;
         Session session = sessions.computeIfAbsent(id, ignored -> new Session(id, pos.immutable()));
+        if (session.load != Streams.loadId(source)) {
+            session.load = Streams.loadId(source);
+            session.restart();
+        }
         session.pos = pos.immutable();
         session.consoles.add(console.immutable());
         session.touched = level.getGameTime();
-        session.preferred = media.initiator();
+        session.preferred = Streams.startedBy(source);
         Streams.Source playing = Streams.playing(media);
         // Not while its track loads: its position stands at 0 then, and clients, running it on from each state they
         // are sent, would play the lights the track's first half second over and over until it starts.
-        boolean active = playing != null && Streams.loaded((BlockEntity) media);
+        boolean active = playing != null && Streams.loaded(source);
         if (active && (!playing.url().equals(session.track) || !session.active)) {
             session.restart();
         }
@@ -288,7 +267,7 @@ public final class AnalysisCoordinator {
 
     public static void status(ServerPlayer player, AnalysisPackets.Status status) {
         Session session = session(player, status.source(), status.session());
-        if (session == null || status.millis() < 0 || status.millis() > 604_800_000
+        if (session == null || status.millis() < 0 || status.millis() > AnalysisFrame.MAX_MILLIS
                 || status.upstreamMillis() < 0 || status.upstreamMillis() > 2_000) {
             return;
         }
@@ -348,16 +327,14 @@ public final class AnalysisCoordinator {
         if (!(upload.prepared() ? timeline.publishPrepared(upload.frames()) : timeline.add(upload.frames(), false))) {
             return;
         }
+        session.lease.accepted(upload.sequence(), upload.prepared(), System.nanoTime() / 1_000_000);
         if (upload.prepared()) {
             session.receivedAt = tick;
-            session.lease.sequence = upload.sequence();
             PacketDistributor.sendToPlayer(player, new AnalysisPackets.Accepted(session.source, session.session,
                     session.lease.generation, upload.sequence()));
         } else {
             session.liveTokens--;
-            session.lease.liveSequence = upload.sequence();
         }
-        session.lease.published = System.nanoTime() / 1_000_000;
         if (!upload.prepared()) {
             for (ServerPlayer listener : player.serverLevel().players()) {
                 if (session.audience.containsKey(listener.getUUID())) {

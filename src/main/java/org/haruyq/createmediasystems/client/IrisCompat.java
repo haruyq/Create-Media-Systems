@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.display;
+package org.haruyq.createmediasystems.client;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -11,7 +11,7 @@ import com.mojang.logging.LogUtils;
 import net.neoforged.fml.ModList;
 
 /** Whether an Iris shader pack is on, asked through Iris' API by reflection: no dependency, and false without Iris. */
-final class IrisCompat {
+public final class IrisCompat {
     private static final boolean LOADED = ModList.get().isLoaded("iris");
     @Nullable
     private static final MethodHandle IN_USE = LOADED ? api("isShaderPackInUse") : null;
@@ -22,12 +22,12 @@ final class IrisCompat {
     private IrisCompat() {
     }
 
-    static boolean shaderPackInUse() {
+    public static boolean shaderPackInUse() {
         return ask(IN_USE);
     }
 
     /** Whether the pack is drawing its shadow map now, from the sun rather than the player's eyes. */
-    static boolean shadowPass() {
+    public static boolean shadowPass() {
         return ask(SHADOW_PASS);
     }
 
@@ -39,7 +39,7 @@ final class IrisCompat {
             return (boolean) question.invoke();
         } catch (Throwable e) {
             failed = true;
-            LogUtils.getLogger().warn("Iris's API failed; displays draw as without a shader pack", e);
+            LogUtils.getLogger().warn("Iris's API failed; CMS draws as without a shader pack", e);
             return false;
         }
     }
@@ -51,7 +51,7 @@ final class IrisCompat {
             return MethodHandles.publicLookup().findVirtual(api.getClass(), method,
                     MethodType.methodType(boolean.class)).bindTo(api);
         } catch (ReflectiveOperationException | LinkageError e) {
-            LogUtils.getLogger().warn("Iris is installed but its API changed; displays draw as without a shader pack", e);
+            LogUtils.getLogger().warn("Iris is installed but its API changed; CMS draws as without a shader pack", e);
             return null;
         }
     }

@@ -257,7 +257,6 @@ public final class RangeQuillHandler {
         }
     }
 
-    /** {@code world} in the picked source's block space; as it is while none is picked. */
     private static Vec3 toSource(Vec3 world) {
         return source == null ? world : SableCompat.toBlockSpace(Minecraft.getInstance().level, source, world);
     }

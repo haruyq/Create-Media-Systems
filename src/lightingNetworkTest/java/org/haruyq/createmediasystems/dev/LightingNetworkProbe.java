@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
-import java.util.UUID;
 
 import org.haruyq.createmediasystems.lighting.AnalysisFrame;
 import org.haruyq.createmediasystems.lighting.AnalysisTimeline;
@@ -56,7 +55,7 @@ public final class LightingNetworkProbe {
         if (minecraft.player == null) {
             return;
         }
-        Field playingField = field("org.haruyq.createmediasystems.playback.AnalysisPlayback", "PLAYING");
+        Field playingField = field("org.haruyq.createmediasystems.lighting.AnalysisPlayback", "PLAYING");
         Map<?, ?> playing = (Map<?, ?>) playingField.get(null);
         for (Object playback : playing.values()) {
             Object state = get(playback, "state");

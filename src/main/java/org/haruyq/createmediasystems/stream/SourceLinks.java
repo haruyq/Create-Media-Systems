@@ -100,7 +100,7 @@ public final class SourceLinks extends SavedData {
     }
 
     private static SourceLinks get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(new Factory<>(SourceLinks::new, SourceLinks::load), "create_media_systems_sources");
+        return level.getDataStorage().computeIfAbsent(new Factory<>(SourceLinks::new, SourceLinks::load), CreateMediaSystems.MOD_ID + "_sources");
     }
 
     @Nullable

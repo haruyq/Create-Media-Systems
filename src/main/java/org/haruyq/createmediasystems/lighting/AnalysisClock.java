@@ -9,7 +9,7 @@ public final class AnalysisClock {
 
     public void receive(long now, long sent, long serverMillis) {
         long roundTrip = now - sent;
-        if (sent <= lastSent || roundTrip < 0 || roundTrip > 4_000_000_000L || serverMillis < -1 || serverMillis > 604_800_000) {
+        if (sent <= lastSent || roundTrip < 0 || roundTrip > 4_000_000_000L || serverMillis < -1 || serverMillis > AnalysisFrame.MAX_MILLIS) {
             return;
         }
         double oneWay = roundTrip / 2_000_000.0;

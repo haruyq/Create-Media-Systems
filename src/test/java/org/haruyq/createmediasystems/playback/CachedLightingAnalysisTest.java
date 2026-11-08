@@ -1,15 +1,11 @@
 package org.haruyq.createmediasystems.playback;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,72 +31,37 @@ class CachedLightingAnalysisTest {
                 new NativeMediaResolver.Prepared(video, true)));
     }
 
+    private static final long MAX_MILLIS = 7_200_000;
+    private static final int INTERVAL = 100;
+
     @Test
     void mergesSeparateTrackTimestampsWithoutAdvancingDelayedAudioOrVideo() {
-        CachedLightingAnalysis.Timeline timeline = new CachedLightingAnalysis.Timeline();
+        CachedLightingAnalysis.Timeline timeline = new CachedLightingAnalysis.Timeline(MAX_MILLIS, INTERVAL);
         timeline.video(1_000_000, 0xff0000, 0x0000ff);
         timeline.video(1_100_000, 0xff0000, 0x0000ff);
         timeline.video(1_200_000, 0x00ff00, 0x0000ff);
         timeline.audio(tone(0.5), 1_300_000);
-        var frames = timeline.finish();
-        assertEquals(8, frames.size());
-        for (int i = 0; i < frames.size(); i++) {
-            assertEquals(i * 100, frames.get(i).millis());
-        }
-        assertFalse(frames.get(0).audio());
-        assertFalse(frames.get(2).audio());
-        assertTrue(frames.get(3).audio());
-        assertTrue(frames.get(4).bass() > frames.get(4).high() * 2);
-        assertEquals(0xff0000, frames.get(0).left());
-        assertEquals(0x0000ff, frames.get(0).right());
-        assertNotEquals(0x00ff00, frames.get(2).left(), "color transitions are smoothed");
-        assertFalse(frames.get(6).video(), "an ended video track must not leave colors available forever");
+        var samples = timeline.finish();
+        assertEquals(8, samples.size(), "one every 100 ms through the end of the audio");
+        assertFalse(samples.get(0).audio());
+        assertFalse(samples.get(2).audio());
+        assertTrue(samples.get(3).audio());
+        assertTrue(samples.get(4).bass() > samples.get(4).high() * 2);
+        assertEquals(0xff0000, samples.get(0).leftColor());
+        assertEquals(0x0000ff, samples.get(0).rightColor());
+        assertNotEquals(0x00ff00, samples.get(2).leftColor(), "color transitions are smoothed");
+        assertFalse(samples.get(6).video(), "an ended video track must not leave colors available forever");
     }
 
     @Test
-    void boundsLongMediaAndCancelsBeforeLoadingVlc() throws Exception {
-        CachedLightingAnalysis.Timeline timeline = new CachedLightingAnalysis.Timeline();
+    void boundsLongMedia() {
+        CachedLightingAnalysis.Timeline timeline = new CachedLightingAnalysis.Timeline(MAX_MILLIS, INTERVAL);
         assertFalse(timeline.beyondLimit(5_000_000));
-        assertFalse(timeline.beyondLimit(5_000_000 + CachedLightingAnalysis.MAX_MILLIS * 1000 - 1));
-        assertTrue(timeline.beyondLimit(5_000_000 + CachedLightingAnalysis.MAX_MILLIS * 1000));
+        assertFalse(timeline.beyondLimit(5_000_000 + MAX_MILLIS * 1000 - 1));
+        assertTrue(timeline.beyondLimit(5_000_000 + MAX_MILLIS * 1000));
         timeline.video(5_000_000, 0xffffff, 0xffffff);
-        timeline.video(5_000_000 + CachedLightingAnalysis.MAX_MILLIS * 1000, 0xffffff, 0xffffff);
-        var frames = timeline.finish();
-        assertEquals(72_000, frames.size());
-        assertEquals(CachedLightingAnalysis.MAX_MILLIS - 100, frames.getLast().millis());
-        var prepared = new NativeMediaResolver.Prepared(Files.createFile(temp.resolve("cancelled.mp4")).toUri(), false);
-        assertThrows(CancellationException.class, () -> CachedLightingAnalysis.analyze(prepared, () -> true).join());
-    }
-
-    @Test
-    void decodesLocalNativeFixtureWithMediaRelativeTimestamps() throws Exception {
-        String fixture = System.getProperty("cms.analysis.fixture", System.getenv("CMS_ANALYSIS_FIXTURE"));
-        assumeTrue(fixture != null && !fixture.isBlank());
-        String slave = System.getProperty("cms.analysis.audio", System.getenv("CMS_ANALYSIS_AUDIO"));
-        List<String> options = slave == null || slave.isBlank() ? List.of()
-                : List.of(":input-slave=" + Path.of(slave).toUri().toASCIIString());
-        var prepared = new NativeMediaResolver.Prepared(Path.of(fixture).toUri(), false, null, 0, options);
-        var frames = CachedLightingAnalysis.analyze(prepared, () -> false).get(2, TimeUnit.MINUTES);
-        assertTrue(frames.size() >= 20, "use a fixture with at least two seconds of audio and video");
-        assertEquals(0, frames.getFirst().millis());
-        for (int i = 0; i < frames.size(); i++) {
-            assertEquals(i * 100, frames.get(i).millis());
-        }
-        assertTrue(frames.stream().anyMatch(frame -> frame.audio() && frame.level() > 0.01f));
-        assertTrue(frames.stream().anyMatch(frame -> frame.video() && (frame.left() != 0 || frame.right() != 0)));
-        String duration = System.getProperty("cms.analysis.duration", System.getenv("CMS_ANALYSIS_DURATION"));
-        if (duration != null && !duration.isBlank()) {
-            assertEquals(Double.parseDouble(duration) * 1000, frames.getLast().millis(), 1500);
-        }
-        long cancelAt = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(50);
-        var pending = CachedLightingAnalysis.analyze(prepared, () -> System.nanoTime() >= cancelAt);
-        try {
-            pending.get(10, TimeUnit.SECONDS);
-            fail("Native analysis ignored cancellation");
-        } catch (CancellationException expected) {
-        } catch (ExecutionException expected) {
-            assertInstanceOf(CancellationException.class, expected.getCause());
-        }
+        timeline.video(5_000_000 + MAX_MILLIS * 1000, 0xffffff, 0xffffff);
+        assertEquals(MAX_MILLIS / INTERVAL, timeline.finish().size());
     }
 
     private static byte[] tone(double seconds) {

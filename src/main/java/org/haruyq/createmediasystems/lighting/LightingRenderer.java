@@ -2,15 +2,14 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import org.haruyq.createmediasystems.client.SurfaceLight;
+import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.display.ScreenLight;
@@ -27,7 +26,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
-import com.mojang.logging.LogUtils;
 
 import dev.ryanhcode.sable.companion.SableCompanion;
 
@@ -45,7 +43,6 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -54,7 +51,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
@@ -84,8 +80,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final Map<RenderType, MultiBufferSource.BufferSource> EFFECT_BUFFERS = new LinkedHashMap<>();
     private static final MultiBufferSource EFFECTS = LightingRenderer::effectBuffer;
     private static boolean effectsPending;
-    private static final MethodHandle SHADOW_PASS = shadowMethod();
-    private static boolean shaderApiFailed;
     /** How often (in frames) a beam out of view is traced again, to see whether it has swung into view. */
     private static final int OFF_SCREEN_FRAMES = 8;
     /** Blocks round a beam's ends its light may still reach, for whether it is in view. */
@@ -118,7 +112,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         modBus.addListener((RegisterShadersEvent event) -> {
             try {
                 event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("spot_light"),
-                        LightingIllumination.FORMAT), LightingIllumination::setShader);
+                        SurfaceLight.FORMAT), LightingIllumination::setShader);
                 event.registerShader(new ShaderInstance(event.getResourceProvider(), CreateMediaSystems.id("stage_beam"),
                         LightingBeams.FORMAT), LightingBeams::setShader);
             } catch (IOException e) {
@@ -208,16 +202,16 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         boolean enabled = console != null && console.formed && console.settings.enabled;
         double seconds = LightingMotion.seconds(level.getGameTime(), partialTick);
         if (console != null) {
-            seconds = org.haruyq.createmediasystems.playback.AnalysisPlayback.apply(console, seconds);
+            seconds = AnalysisPlayback.apply(console, seconds);
         }
         LightingMotion motion = MOTION.computeIfAbsent(lamp, ignored -> new LightingMotion());
         float pan = group.pan;
         float tilt = group.tilt;
         double phase = (group.audio && console != null && console.audioSource != null ? console.motionPhase : seconds)
                 * group.speed + lamp.order * 0.35;
-        if (group.motion == 1) {
+        if (group.motion == LightingSettings.Group.MOTION_SWEEP) {
             pan += (float) Math.sin(phase) * 55;
-        } else if (group.motion == 2) {
+        } else if (group.motion == LightingSettings.Group.MOTION_CIRCLE) {
             pan += (float) Math.sin(phase) * 48;
             tilt += (float) Math.cos(phase) * 22;
         }
@@ -227,8 +221,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         if (hanging) {
             base.rotateZ((float) Math.PI);
         }
-        boolean holdAim = group.motion == 3;
-        if (group.motion == 3 && group.target != null) {
+        boolean holdAim = group.motion == LightingSettings.Group.MOTION_TRACK;
+        if (holdAim && group.target != null) {
             Player target = level.getPlayerByUUID(group.target);
             if (target != null) {
                 holdAim = false;
@@ -268,12 +262,12 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         float strength = enabled ? console.settings.master * group.brightness : 0;
         if (group.audio && console != null && console.hasAudio && level.getGameTime() - console.signalAt < 30) {
             float energy = switch (group.audioBand) {
-                case 1 -> console.bass;
-                case 2 -> console.mid;
-                case 3 -> console.high;
+                case LightingSettings.Group.BAND_BASS -> console.bass;
+                case LightingSettings.Group.BAND_MID -> console.mid;
+                case LightingSettings.Group.BAND_HIGH -> console.high;
                 default -> console.audioLevel;
             };
-            float floor = group.motion == 3 && !lamp.laser() ? 0.65f : 0.12f;
+            float floor = group.motion == LightingSettings.Group.MOTION_TRACK && !lamp.laser() ? 0.65f : 0.12f;
             strength *= Mth.clamp(floor + energy * 1.5f + console.pulse * 0.35f, 0, 1);
         }
         int count = console == null ? 1 : Math.max(1, console.groupSize(lamp.group));
@@ -281,7 +275,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         int color = LightingSettings.color(group, lamp.order, count, seconds,
                 console == null ? 0 : console.videoLeft, console == null ? 0 : console.videoRight,
                 video);
-        if (group.mapping == 3 && !(group.colorMode == 1 && video)) {
+        if (group.mapping == LightingSettings.Group.MAPPING_PER_FIXTURE
+                && !(group.colorMode == LightingSettings.Group.COLORS_VIDEO && video)) {
             color = group.colors[Math.floorMod(lamp.individualColor, group.colorCount)];
         }
         VertexConsumer screen = new Output(buffers, SCREEN);
@@ -297,7 +292,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         Vec3 direction = vector(head, new Vec3(0, 0, -1)).normalize();
         Vec3 right = vector(head, new Vec3(1, 0, 0)).normalize();
         Vec3 up = vector(head, new Vec3(0, 1, 0)).normalize();
-        int pattern = lamp.laser() ? Math.max(2, group.pattern) : Math.min(1, group.pattern);
+        // A laser draws only laser patterns, a light only a spot or beam.
+        int pattern = lamp.laser() ? Math.max(LightingSettings.Group.PATTERN_LASER_RAY, group.pattern)
+                : Math.min(LightingSettings.Group.PATTERN_BEAM, group.pattern);
         BeamFrame frame = new BeamFrame(lamp, origin);
         Trace trace = TRACES.computeIfAbsent(lamp, ignored -> new Trace());
         // A beam out of view (as last traced) is traced again only every few frames, often enough to see it swing
@@ -307,58 +304,35 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return;
         }
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
-        MultiBufferSource effects = level == Minecraft.getInstance().level ? EFFECTS : buffers;
-        VertexConsumer beam = effects == EFFECTS && LightingBeams.available() ? null
+        MultiBufferSource effects = beamBuffers(level, buffers);
+        VertexConsumer beam = LightingBeams.available(level) ? null
                 : effects == EFFECTS ? effects.getBuffer(LIGHT) : new Output(buffers, LIGHT);
-        if (pattern < 2) {
-            LightingIllumination.render(lamp, origin, direction,
-                    Math.toRadians(pattern == 1 ? Math.min(group.spread, 2) : group.spread) / 2,
+        if (pattern < LightingSettings.Group.PATTERN_LASER_RAY) {
+            LightingIllumination.render(lamp, origin, direction, Math.toRadians(coneSpread(pattern, group.spread)) / 2,
                     group.range, strength, color, trace.intersections[SIDES], frame.rays, model, effects);
-            cone(beam, model, frame, trace, color, strength, pattern == 1);
+            cone(beam, model, frame, trace, color, strength, pattern == LightingSettings.Group.PATTERN_BEAM);
         } else {
-            boolean fixtureColor = pattern == 2 || group.mapping == 3;
+            boolean fixtureColor = pattern == LightingSettings.Group.PATTERN_LASER_RAY
+                    || group.mapping == LightingSettings.Group.MAPPING_PER_FIXTURE;
             for (int i = 0; i < trace.ends.length; i++) {
                 int rayColor = fixtureColor ? color : LightingSettings.color(group, i, trace.ends.length, seconds,
                         console.videoLeft, console.videoRight, video);
-                if (pattern == 4 && i + 1 < trace.ends.length) {
+                if (pattern == LightingSettings.Group.PATTERN_LASER_SHEET && i + 1 < trace.ends.length) {
                     int nextColor = fixtureColor ? color : LightingSettings.color(group, i + 1, trace.ends.length, seconds,
                             console.videoLeft, console.videoRight, video);
                     sheet(beam, model, origin, trace.ends[i], trace.ends[i + 1], rayColor, nextColor, strength,
                             trace.planes[i], trace.planes[i + 1], trace.middle[i]);
                 }
-                if (pattern != 4 || i == 0 || i == trace.ends.length - 1) {
+                if (pattern != LightingSettings.Group.PATTERN_LASER_SHEET || i == 0 || i == trace.ends.length - 1) {
                     ray(beam, model, frame, trace.ends[i], rayColor, strength, 0.012f, trace.planes[i]);
                 }
             }
         }
     }
 
-    private static MethodHandle shadowMethod() {
-        if (!ModList.get().isLoaded("iris")) {
-            return null;
-        }
-        try {
-            Object api = Class.forName("net.irisshaders.iris.api.v0.IrisApi").getMethod("getInstance").invoke(null);
-            return MethodHandles.publicLookup().findVirtual(api.getClass(), "isRenderingShadowPass",
-                    MethodType.methodType(boolean.class)).bindTo(api);
-        } catch (ReflectiveOperationException | LinkageError e) {
-            LogUtils.getLogger().warn("Iris's shadow-pass API changed; stage lighting draws without its shadow-pass guard", e);
-            return null;
-        }
-    }
-
     /** Whether a shader pack is drawing its shadow map: fixtures then draw their bodies only, no light. */
     public static boolean shadowPass() {
-        if (SHADOW_PASS == null || shaderApiFailed) {
-            return false;
-        }
-        try {
-            return (boolean) SHADOW_PASS.invoke();
-        } catch (Throwable e) {
-            shaderApiFailed = true;
-            LogUtils.getLogger().warn("Iris's shadow-pass API failed; stage lighting draws without its shadow-pass guard", e);
-            return false;
-        }
+        return IrisCompat.shadowPass();
     }
 
     @Override
@@ -383,19 +357,14 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         return renderBounds(lamp.getLevel(), lamp.getBlockPos(), LightingSettings.MAX_RANGE + 1);
     }
 
+    /** The spread (degrees) a cone of {@code pattern} opens to: a beam's is held narrow. */
+    private static double coneSpread(int pattern, double spread) {
+        return pattern == LightingSettings.Group.PATTERN_BEAM ? Math.min(spread, 2) : spread;
+    }
+
     private static AABB renderBounds(Level level, BlockPos anchor, double margin) {
         AABB local = new AABB(anchor).inflate(margin);
-        if (level == null) {
-            return local;
-        }
-        AABB result = null;
-        for (int corner = 0; corner < 8; corner++) {
-            Vec3 point = new Vec3((corner & 1) == 0 ? local.minX : local.maxX,
-                    (corner & 2) == 0 ? local.minY : local.maxY, (corner & 4) == 0 ? local.minZ : local.maxZ);
-            Vec3 world = SableCompat.toRenderWorld(level, anchor, point);
-            result = result == null ? new AABB(world, world) : result.minmax(new AABB(world, world));
-        }
-        return result;
+        return level == null ? local : SableCompat.transform(local, point -> SableCompat.toRenderWorld(level, anchor, point));
     }
 
     private static Vec3 worldCamera(Level level, BlockPos anchor, Vec3 camera) {
@@ -499,24 +468,25 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             lastPattern = pattern;
             lastRange = range;
             lastSpread = spread;
-            int count = pattern < 2 ? SIDES + 1 : pattern == 2 ? 1 : RAYS;
+            boolean cone = pattern < LightingSettings.Group.PATTERN_LASER_RAY;
+            int count = cone ? SIDES + 1 : pattern == LightingSettings.Group.PATTERN_LASER_RAY ? 1 : RAYS;
             if (ends.length != count) {
                 ends = new Vec3[count];
                 directions = new Vec3[count];
                 intersections = new LightingRaycast.Hit[count];
                 planes = new LightingGeometry.Plane[count];
             }
-            int sectors = pattern < 2 ? SIDES : pattern == 4 ? RAYS - 1 : 0;
+            int sectors = cone ? SIDES : pattern == LightingSettings.Group.PATTERN_LASER_SHEET ? RAYS - 1 : 0;
             if (middle.length != sectors) {
                 middle = new LightingGeometry.Plane[sectors];
             }
-            double tangent = Math.tan(Math.toRadians(pattern == 1 ? Math.min(spread, 2) : spread) / 2);
+            double tangent = Math.tan(Math.toRadians(coneSpread(pattern, spread)) / 2);
             for (int i = 0; i < count; i++) {
                 Vec3 aim = forward;
-                if (pattern < 2 && i < SIDES) {
+                if (cone && i < SIDES) {
                     double angle = Math.PI * 2 * i / SIDES;
                     aim = forward.add(right.scale(Math.cos(angle) * tangent)).add(up.scale(Math.sin(angle) * tangent)).normalize();
-                } else if (pattern >= 3) {
+                } else if (pattern >= LightingSettings.Group.PATTERN_LASER_FAN) {
                     double angle = Math.toRadians(Math.max(8, spread)) * (i / (double) (count - 1) - 0.5);
                     aim = forward.scale(Math.cos(angle)).add(right.scale(Math.sin(angle))).normalize();
                 }
@@ -528,7 +498,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 planes[i] = frame.plane(hit);
             }
             for (int i = 0; i < sectors; i++) {
-                int next = pattern < 2 ? (i + 1) % SIDES : i + 1;
+                int next = cone ? (i + 1) % SIDES : i + 1;
                 Vec3 aim = directions[i].add(directions[next]).normalize();
                 middle[i] = frame.plane(frame.clip(frame.origin, frame.origin.add(aim.scale(range))));
             }
@@ -543,7 +513,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             for (int i = 0; i < SIDES; i++) {
                 int next = (i + 1) % SIDES;
                 LightingBeams.strip(matrix, origin, origin, trace.ends[next], trace.ends[i], color, color,
-                        0, strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next], trace.middle[i]);
+                        LightingBeams.Fade.CONE, strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next],
+                        trace.middle[i]);
             }
             ray(null, matrix, frame, center, color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
             return;
@@ -576,7 +547,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                               int colorA, int colorB, float strength, LightingGeometry.Plane planeA,
                               LightingGeometry.Plane planeB, LightingGeometry.Plane middle) {
         if (out == null) {
-            LightingBeams.strip(matrix, origin, origin, b, a, colorA, colorB, 1, strength * 26, planeA, planeB, middle);
+            LightingBeams.strip(matrix, origin, origin, b, a, colorA, colorB, LightingBeams.Fade.SHEET, strength * 26,
+                    planeA, planeB, middle);
             return;
         }
         for (int step = 0; step < 8; step++) {
@@ -611,7 +583,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             int alpha = Math.round(strength * (layer == 0 ? 180 : layer == 1 ? 28 : 9));
             if (out == null) {
                 LightingBeams.strip(matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
-                        color, color, 2, alpha, center, left, right);
+                        color, color, LightingBeams.Fade.SOLID, alpha, center, left, right);
                 continue;
             }
             clippedQuad(out, matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
@@ -780,7 +752,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             if (!console.formed || console.controller() != console || shadowPass()) {
                 return;
             }
-            org.haruyq.createmediasystems.playback.AnalysisPlayback.apply(console, 0);
+            AnalysisPlayback.apply(console, 0);
             Matrix4f matrix = new Matrix4f(pose.last().pose()).translate(0.5f, 0, 0.5f)
                     .rotateY((float) Math.toRadians(180 - console.getBlockState().getValue(LightingConsoleBlock.FACING).toYRot()))
                     .scale(-1, 1, 1)
@@ -919,7 +891,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 }
                 text(buffers, matrix, 2.08f, 1.665f, LightingText.label("count", LightingText.number(selected.colorCount)), 0.84f);
                 text(buffers, matrix, 2.08f, 1.505f, LightingText.label("mapping", LightingText.mode("mapping", selected.mapping)), 0.84f);
-                text(buffers, matrix, 2.08f, 1.345f, LightingText.label("video", LightingText.on(selected.colorMode == 1)), 0.84f);
+                text(buffers, matrix, 2.08f, 1.345f, LightingText.label("video",
+                        LightingText.on(selected.colorMode == LightingSettings.Group.COLORS_VIDEO)), 0.84f);
                 monitor(ink, matrix, 2, 0.08f, 0.3f, 1.14f, 1.21f, current);
                 text(buffers, matrix, 2.36f, 1.215f, LightingText.text(String.format("#%06X", current), LightingText.readable(current)), 0.55f);
                 text(buffers, matrix, 3.08f, 1.82f, LightingText.label("motion", LightingText.mode("motion", selected.motion)), 0.84f);

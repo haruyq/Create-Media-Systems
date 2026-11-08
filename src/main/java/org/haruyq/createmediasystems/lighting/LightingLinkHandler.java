@@ -2,9 +2,9 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.client.Quill;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
@@ -15,7 +15,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -105,8 +104,7 @@ final class LightingLinkHandler {
                             LightingText.number(picked.fixtures.size()));
         }
         var block = level.getBlockEntity(pos);
-        boolean media = block instanceof VideoPlayerBlock.Entity || block instanceof DiscReaderBlock.Entity
-                || state.is(Blocks.JUKEBOX);
+        boolean media = block instanceof MediaSource;
         if (!media && !(block instanceof StageLightBlock.Entity)) {
             return null;
         }

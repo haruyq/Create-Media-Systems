@@ -4,7 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
+import org.haruyq.createmediasystems.SableCompat;
+
 import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.BoundingBox3d;
@@ -92,8 +93,7 @@ public final class LightingRaycast {
         List<Snapshot> snapshots = new ArrayList<>();
         for (SubLevelAccess subLevel : SableCompanion.INSTANCE.getAllIntersecting(level,
                 new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000))) {
-            Pose3d pose = new Pose3d(render && subLevel instanceof ClientSubLevelAccess client
-                    ? client.renderPose() : subLevel.logicalPose());
+            Pose3d pose = new Pose3d(SableCompat.pose(subLevel, render));
             snapshots.add(new Snapshot(subLevel, pose, pose.bakeIntoMatrix(new Matrix4d()).normal(new Matrix3d()),
                     bounds(subLevel, pose)));
         }
@@ -219,7 +219,6 @@ public final class LightingRaycast {
         return null;
     }
 
-    /** Whether moving blocks could intersect this part of the world. */
     public boolean hasSubLevels(AABB bounds) {
         for (Snapshot snapshot : subLevels) {
             if (snapshot.bounds.intersects(bounds)) {
@@ -232,14 +231,8 @@ public final class LightingRaycast {
     private static AABB bounds(SubLevelAccess subLevel, Pose3dc pose) {
         var box = subLevel.boundingBox();
         Pose3d logical = new Pose3d(subLevel.logicalPose());
-        AABB result = null;
-        for (int corner = 0; corner < 8; corner++) {
-            Vec3 world = new Vec3((corner & 1) == 0 ? box.minX() : box.maxX(),
-                    (corner & 2) == 0 ? box.minY() : box.maxY(), (corner & 4) == 0 ? box.minZ() : box.maxZ());
-            Vec3 at = pose.transformPosition(logical.transformPositionInverse(world));
-            result = result == null ? new AABB(at, at) : result.minmax(new AABB(at, at));
-        }
-        return result.inflate(0.001);
+        return SableCompat.transform(new AABB(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()),
+                world -> pose.transformPosition(logical.transformPositionInverse(world))).inflate(0.001);
     }
 
     private Hit result(BlockHitResult hit, Snapshot snapshot) {

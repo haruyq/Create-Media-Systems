@@ -23,6 +23,11 @@ public final class PercentSetting {
     private PercentSetting() {
     }
 
+    /** The setting saved under {@code tag} in {@code data}: 100 if none is. */
+    public static int saved(CompoundTag data, String tag) {
+        return data.contains(tag) ? data.getInt(tag) : 100;
+    }
+
     /** A value from 0 to 100%, 100 at first, set with a wrench on {@code box}. */
     public static ScrollValueBehaviour create(SmartBlockEntity entity, String key, CenteredSideValueBoxTransform box) {
         return create(entity, key, box, ScrollValueBehaviour.TYPE, DEFAULT_TAG);
@@ -57,7 +62,7 @@ public final class PercentSetting {
 
             @Override
             public void read(CompoundTag nbt, HolderLookup.Provider registries, boolean clientPacket) {
-                value = nbt.contains(tag) ? nbt.getInt(tag) : 100;
+                value = saved(nbt, tag);
             }
         };
         value.between(0, 100);

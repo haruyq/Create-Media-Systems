@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.playback;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.lang.reflect.Field;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
@@ -18,8 +17,7 @@ class VlcFrameTest {
             pictures.picture(2);
             assertEquals(1, reading.getInt(0));
             pictures.finish();
-            assertEquals(2, pictures.latest());
-            assertTrue((boolean) field("fresh").get(pictures.frame));
+            assertEquals(2, pictures.latest(), "the picture that came while reading is the next read");
         }
     }
 
@@ -47,15 +45,8 @@ class VlcFrameTest {
                     pictures.finish();
                 }
                 assertEquals(3, pictures.latest(), "reader finishes at step " + finishAt);
-                assertTrue((boolean) field("fresh").get(pictures.frame));
             }
         }
-    }
-
-    private static Field field(String name) throws Exception {
-        Field field = VlcPlayer.Frame.class.getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
     }
 
     private static final class Pictures implements AutoCloseable {
@@ -90,31 +81,27 @@ class VlcFrameTest {
             frame.display.invoke(null, null);
         }
 
-        Pointer read() throws Exception {
-            field("fresh").set(frame, false);
-            field("reading").set(frame, true);
-            return front();
+        /** Starts reading the latest picture, as the render thread does. */
+        Pointer read() {
+            VlcPlayer.Frame.Picture picture = frame.beginRead();
+            assertNotNull(picture, "a new picture to read");
+            return picture.pixels();
         }
 
-        Pointer front() throws Exception {
-            return ((Memory[]) field("buffers").get(frame))[(int) field("back").get(frame) ^ 1];
+        /** The next picture read, read whole. */
+        int latest() {
+            int value = read().getInt(0);
+            frame.endRead();
+            return value;
         }
 
-        int latest() throws Exception {
-            return front().getInt(0);
-        }
-
-        void finish() throws Exception {
-            var method = VlcPlayer.Frame.class.getDeclaredMethod("finishReading");
-            method.setAccessible(true);
-            method.invoke(frame);
+        void finish() {
+            frame.endRead();
         }
 
         @Override
-        public void close() throws Exception {
-            for (Memory buffer : (Memory[]) field("buffers").get(frame)) {
-                buffer.close();
-            }
+        public void close() {
+            frame.freePictures();
             planes.close();
         }
     }

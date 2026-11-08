@@ -88,12 +88,11 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             context.data.putBoolean("Loading", true);
             LISTENERS.remove(context);
         }
-        if (due != null || now % Streams.RELAY_TICKS == 0) {
+        if (due != null || Streams.relayDue(level)) {
             relay(context, train, now);
         }
     }
 
-    /** Sends the playing announcement to riders who don't have it yet, at its current position. */
     private static void relay(MovementContext context, Train train, long now) {
         String url = context.data.getString("Playing");
         if (url.isEmpty()) {
@@ -129,7 +128,6 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         return train.id + "/" + context.localPos.asLong();
     }
 
-    /** The playing announcement is loaded: it counts as playing from {@code now}. */
     private static void loaded(MovementContext context, long now) {
         context.data.remove("Loading");
         context.data.putLong("PlayingSince", now);
@@ -291,7 +289,6 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
     private record ParsedSchedule(CompoundTag item, @Nullable Schedule schedule) {
     }
 
-    /** Players aboard any carriage, seated or standing (see {@link #aboard}). */
     private static Set<ServerPlayer> passengers(Train train) {
         return carriages(train).filter(entity -> entity.level() instanceof ServerLevel)
                 .flatMap(entity -> ((ServerLevel) entity.level()).players().stream().filter(p -> aboard(entity, p)))
@@ -331,7 +328,6 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         return carriages(train).map(CarriageContraptionEntity::getId).toList();
     }
 
-    /** The train's carriage entities that are loaded. */
     private static Stream<CarriageContraptionEntity> carriages(Train train) {
         return train.carriages.stream().map(Carriage::anyAvailableEntity).filter(Objects::nonNull);
     }

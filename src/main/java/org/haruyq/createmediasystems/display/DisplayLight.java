@@ -21,11 +21,11 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
 
+import org.haruyq.createmediasystems.client.SurfaceLight;
+import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.Workers;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
@@ -51,7 +51,6 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.client.model.IQuadTransformer;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.Tags;
@@ -82,14 +81,6 @@ public final class DisplayLight {
      * Per vertex, in the display's block space: x, y, z; atlas u, v; as its colour, roughness, F0, unused,
      * whether a block's face (1) or a water surface (0); its normal in the screen's space.
      */
-    /** POSITION_TEX_COLOR_NORMAL's layout, its own instance: Iris extends some vanilla formats by identity. */
-    static final VertexFormat FORMAT = VertexFormat.builder()
-            .add("Position", VertexFormatElement.POSITION)
-            .add("UV0", VertexFormatElement.UV0)
-            .add("Color", VertexFormatElement.COLOR)
-            .add("Normal", VertexFormatElement.NORMAL)
-            .padding(1)
-            .build();
     private static ShaderInstance shader;
     private static int shaderVersion;
     private static final Map<DisplayBlock.Entity, Lit> LIT = new HashMap<>();
@@ -164,15 +155,7 @@ public final class DisplayLight {
         float strength;
         boolean specular;
         ResourceLocation video;
-        final RenderType type = RenderType.create("create_media_systems_display_light", FORMAT,
-                VertexFormat.Mode.QUADS, 256, false, false, RenderType.CompositeState.builder()
-                        .setShaderState(new RenderStateShard.ShaderStateShard(() -> shader))
-                        .setTextureState(new RenderStateShard.EmptyTextureStateShard(this::setup, () -> {
-                        }))
-                        .setTransparencyState(RenderStateShard.LIGHTNING_TRANSPARENCY)
-                        .setWriteMaskState(RenderStateShard.COLOR_WRITE)
-                        .setLayeringState(RenderStateShard.POLYGON_OFFSET_LAYERING)
-                        .createCompositeState(false));
+        final RenderType type = SurfaceLight.type("create_media_systems_display_light", () -> shader, this::setup);
 
         private void setup() {
             Minecraft.getInstance().getTextureManager().getTexture(InventoryMenu.BLOCK_ATLAS).setFilter(false, true);
@@ -547,17 +530,9 @@ public final class DisplayLight {
             }
             random.setSeed(42);
             for (BakedQuad quad : model.getQuads(state, side, random, ModelData.EMPTY, null)) {
-                int[] data = quad.getVertices();
                 Vec3[] corners = new Vec3[4];
                 float[] uv = new float[8];
-                for (int k = 0; k < 4; k++) {
-                    int base = k * IQuadTransformer.STRIDE;
-                    corners[k] = offset.add(Float.intBitsToFloat(data[base + IQuadTransformer.POSITION]),
-                            Float.intBitsToFloat(data[base + IQuadTransformer.POSITION + 1]),
-                            Float.intBitsToFloat(data[base + IQuadTransformer.POSITION + 2]));
-                    uv[2 * k] = Float.intBitsToFloat(data[base + IQuadTransformer.UV0]);
-                    uv[2 * k + 1] = Float.intBitsToFloat(data[base + IQuadTransformer.UV0 + 1]);
-                }
+                SurfaceLight.read(quad, offset, corners, uv);
                 faces.add(corners, uv, quad.getDirection(), 1, material[0], material[1]);
             }
         }
@@ -569,8 +544,8 @@ public final class DisplayLight {
         private final float width;
         private final float height;
         private final float range;
-        final ByteBufferBuilder bytes = new ByteBufferBuilder(1024 * FORMAT.getVertexSize());
-        private final BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, FORMAT);
+        final ByteBufferBuilder bytes = new ByteBufferBuilder(1024 * SurfaceLight.FORMAT.getVertexSize());
+        private final BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, SurfaceLight.FORMAT);
         private int count;
 
         Lighting(DisplayBlock.Screen screen, float width, float height, float range) {
