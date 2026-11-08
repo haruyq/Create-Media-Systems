@@ -635,6 +635,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
 
     /** A stream couldn't start: shown above the hotbar. */
     private static void reportFailure(String reason) {
+        // The overlay is gone in seconds; a stalled playlist is looked into from the log.
+        LogUtils.getLogger().warn("CMS stream failed: {}", reason);
         Reports.show(Component.translatable("create_media_systems.stream.failed", reason), true);
     }
 }

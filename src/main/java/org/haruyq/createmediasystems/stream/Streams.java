@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -121,6 +122,8 @@ public final class Streams {
 
     // ponytail: never evicted, one double per distinct URL played since start; add an LRU if that grows.
     private static final Map<String, Double> DURATIONS = new ConcurrentHashMap<>();
+    /** How long a track whose /info failed waits before it is asked about again (see duration). */
+    static final long INFO_RETRY_SECONDS = 60;
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(10))
@@ -292,10 +295,18 @@ public final class Streams {
         Level level = player.level();
         BlockEntity emitter = level.isLoaded(pos) ? level.getBlockEntity(pos) : null;
         Relay relay = emitter == null ? null : RELAYS.get(emitter);
-        if (relay == null || !relay.listeners.contains(player)) {
+        if (relay == null) {
             return;
         }
         BlockPos sourcePos = relay.sound.source();
+        if (!relay.listeners.contains(player)) {
+            // That emitter lost this player (out of its range) while another of the source's still has them: the
+            // length they tell is still the only one there may be for a track the API can't tell.
+            if (listeners(player.serverLevel(), sourcePos).contains(player)) {
+                learnDuration(source(level, sourcePos), duration);
+            }
+            return;
+        }
         Load load = loadOf(level, sourcePos);
         boolean loading = load != null && load.playingFrom == LOADING;
         if (loading) {
@@ -303,11 +314,19 @@ public final class Streams {
         }
         // Counts it as played so far, which plays it now if this player was the last it waited for.
         Source playing = source(level, sourcePos);
-        if (playing != null && duration > 0 && Double.valueOf(UNKNOWN).equals(DURATIONS.get(playing.url()))) {
-            DURATIONS.put(playing.url(), (double) duration);
-        }
+        learnDuration(playing, duration);
         if (playing != null && !loading) {
             PacketDistributor.sendToPlayer(player, new StreamPackets.SyncAtBlock(pos, playing.ticks() / 20f));
+        }
+    }
+
+    /**
+     * A listener's VLC says {@code playing}'s track is {@code duration} seconds long (0 if it can't tell): that stands
+     * unless the API has told a length already. Also while its /info waits to be asked again (see duration).
+     */
+    static void learnDuration(@Nullable Source playing, double duration) {
+        if (playing != null && duration > 0) {
+            DURATIONS.compute(playing.url(), (url, known) -> known != null && known > 0 ? known : duration);
         }
     }
 
@@ -399,7 +418,11 @@ public final class Streams {
             return cached;
         }
         info(url).exceptionally(e -> {
-            LogUtils.getLogger().warn("Audio API /info failed for {}: {}", url, e.getMessage());
+            LogUtils.getLogger().warn("Audio API /info failed for {}: {}; asking again in {}s", url, e.getMessage(),
+                    INFO_RETRY_SECONDS);
+            // Else a Blu-ray player, disc reader or jukebox waits on it forever, unless a listener tells its length.
+            CompletableFuture.delayedExecutor(INFO_RETRY_SECONDS, TimeUnit.SECONDS)
+                    .execute(() -> DURATIONS.remove(url, UNKNOWN));
             return null;
         });
         return UNKNOWN;

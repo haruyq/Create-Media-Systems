@@ -1,6 +1,8 @@
 package org.haruyq.createmediasystems.stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
@@ -35,6 +37,17 @@ class StreamsLoadTest {
     @Test
     void aSourceNotStartedHereCountsEveryTick() {
         assertEquals(1234, Streams.played(reader(), 1234), "e.g. one already playing when the world loaded");
+    }
+
+    @Test
+    void aListenersLengthEndsATrackTheApiCouldNotTell() {
+        Streams.Source playing = new Streams.Source("https://example.com/listener-length", 0, null);
+        Streams.learnDuration(playing, 0);
+        Streams.learnDuration(playing, 100);
+        assertFalse(Streams.endedAt(playing.url(), 1999));
+        assertTrue(Streams.endedAt(playing.url(), 2000), "100 s at 20 ticks a second");
+        Streams.learnDuration(playing, 300);
+        assertTrue(Streams.endedAt(playing.url(), 2000), "the first length known stands");
     }
 
     private static DiscReaderBlock.Entity reader() {

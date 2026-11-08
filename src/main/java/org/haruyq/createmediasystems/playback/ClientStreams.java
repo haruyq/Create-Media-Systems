@@ -310,14 +310,19 @@ public final class ClientStreams {
         fresh.emitters.put(pos, sound);
         fresh.update();
         GROUPS.put(side, fresh);
+        LogUtils.getLogger().info("CMS stream {} plays {} from {}s (load {})", side, payload.url(), payload.startSeconds(),
+                payload.load());
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
         play(side, new StreamSound(apiStream(payload.url(), payload.startSeconds(), side.channel()), payload.url(),
                 side.source(), payload.load(), payload.startSeconds(), SoundSource.RECORDS, () -> fresh.at,
                 () -> fresh.tracedFrom,
                 () -> fresh.present, () -> fresh.nearby, () -> fresh.gain, payload.video().orElse(null), side.channel(),
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
-                seconds -> Minecraft.getInstance().execute(() -> fresh.emitters.keySet().stream().findFirst()
-                        .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(at, (float) seconds))))));
+                seconds -> Minecraft.getInstance().execute(() -> {
+                    LogUtils.getLogger().info("CMS stream {} loaded, {}s long (0: unknown)", side, seconds);
+                    fresh.emitters.keySet().stream().findFirst()
+                            .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(at, (float) seconds)));
+                })));
     }
 
     /** The emitter at {@code pos} no longer plays {@code side}; the side stops with its last emitter. */
