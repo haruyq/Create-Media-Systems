@@ -1,11 +1,16 @@
 package org.haruyq.createmediasystems.video;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.PercentSetting;
+import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -25,6 +30,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
@@ -137,6 +144,13 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private boolean paused;
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
+        /** How much of the video playing each listener has kept, 0..1, as they told (see ClientStreams#reportDownloads). */
+        private final Map<ServerPlayer, Float> downloads = new HashMap<>();
+        /** Their average, in percent, as goggles show it; -1 while none has told. Not saved. */
+        private int downloaded = -1;
+        /** How many it is the average of, and how many of them have all of it. */
+        private int downloaders;
+        private int finished;
 
         public Entity(BlockPos pos, BlockState state) {
             super(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
@@ -207,6 +221,10 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             ticks = 0;
             playing = true;
             paused = false;
+            downloads.clear();
+            downloaded = -1;
+            downloaders = 0;
+            finished = 0;
             Streams.loading(this, by);
             changed();
         }
@@ -254,6 +272,35 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
         }
 
+        /**
+         * {@code player} has {@code payload.downloaded()} of the video the Blu-ray player at {@code payload.pos()}
+         * plays kept: counted while they listen to it and it still plays that video.
+         */
+        public static void downloaded(ServerPlayer player, StreamPackets.DownloadedAtBlock payload) {
+            ServerLevel level = player.serverLevel();
+            if (level.isLoaded(payload.pos()) && level.getBlockEntity(payload.pos()) instanceof Entity videoPlayer
+                    && Streams.listeners(level, payload.pos()).contains(player)) {
+                videoPlayer.downloaded(player, payload.url(), payload.downloaded());
+            }
+        }
+
+        void downloaded(ServerPlayer player, String url, float fraction) {
+            List<String> playlist = playlist();
+            if (!playing || index >= playlist.size() || !playlist.get(index).equals(url)) {
+                return;
+            }
+            downloads.put(player, Mth.clamp(fraction, 0, 1));
+            downloads.keySet().removeIf(ServerPlayer::isRemoved);
+            int average = (int) (downloads.values().stream().mapToDouble(Float::doubleValue).average().orElse(0) * 100);
+            int done = (int) downloads.values().stream().filter(each -> each >= 1).count();
+            if (average != downloaded || downloads.size() != downloaders || done != finished) {
+                downloaded = average;
+                downloaders = downloads.size();
+                finished = done;
+                changed();
+            }
+        }
+
         /** Saved, and sent to clients for remotes and goggles. */
         private void changed() {
             setChanged();
@@ -280,11 +327,34 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                 tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
                         .withStyle(ChatFormatting.DARK_GRAY));
             }
+            if (playing && !paused && level != null && level.isClientSide) {
+                NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
+                if (progress != null) {
+                    tooltip.add(Component.literal("     ").append(progress.loading()
+                            ? Component.translatable("create_media_systems.video_player.loading")
+                            : Component.translatable("create_media_systems.video_player.position", clock(progress.seconds())
+                            + (progress.length() > 0 ? " / " + clock(progress.length()) : ""))).withStyle(ChatFormatting.GRAY));
+                }
+            }
+            if (playing && downloaded >= 0) {
+                // Several listeners: their average, then how many of them have all of it.
+                tooltip.add(Component.literal("     ")
+                        .append(Component.translatable("create_media_systems.video_player.downloaded", downloaded))
+                        .append(downloaders > 1 ? "  " + finished + "/" + downloaders : "")
+                        .withStyle(ChatFormatting.GRAY));
+            }
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.volume_value",
                     volume.getValue())).withStyle(ChatFormatting.GRAY));
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.lighting_value",
                     lighting.getValue())).withStyle(ChatFormatting.GRAY));
             return true;
+        }
+
+        /** {@code seconds} as m:ss, or h:mm:ss from an hour. */
+        static String clock(double seconds) {
+            long s = (long) seconds;
+            return s >= 3600 ? String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+                    : String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
         }
 
         private static String shorten(String url) {
@@ -301,6 +371,11 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tag.putLong("Ticks", ticks);
             tag.putBoolean("Playing", playing);
             tag.putBoolean("Paused", paused);
+            if (clientPacket) {
+                tag.putInt("Downloaded", downloaded);
+                tag.putInt("Downloaders", downloaders);
+                tag.putInt("Finished", finished);
+            }
         }
 
         @Override
@@ -311,6 +386,11 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             ticks = tag.getLong("Ticks");
             playing = tag.getBoolean("Playing");
             paused = tag.getBoolean("Paused");
+            if (clientPacket) {
+                downloaded = tag.getInt("Downloaded");
+                downloaders = tag.getInt("Downloaders");
+                finished = tag.getInt("Finished");
+            }
         }
     }
 }

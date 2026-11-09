@@ -49,6 +49,8 @@ final class VideoCache {
     private final Path dir;
     private final LongSupplier maxBytes;
     private final Set<String> queued = ConcurrentHashMap.newKeySet();
+    /** The downloads under way, by name (see Download). */
+    private final Map<String, Download> downloading = new ConcurrentHashMap<>();
 
     VideoCache(Path dir, LongSupplier maxBytes) {
         this.dir = dir;
@@ -97,6 +99,19 @@ final class VideoCache {
     }
 
     /**
+     * How much of the copy of {@code page} at most {@code maxHeight} tall is here, 0..1: all of it once kept, none
+     * while it waits its turn; -1 if it is neither kept nor on its way (the cache is off, or yt-dlp couldn't keep it).
+     */
+    double progress(URI page, int maxHeight) {
+        String name = name(ProviderUrls.canonical(page), maxHeight);
+        if (Files.exists(dir.resolve(name + ".meta"))) {
+            return 1;
+        }
+        Download download = downloading.get(name);
+        return download != null ? download.fraction() : queued.contains(name) ? 0 : -1;
+    }
+
+    /**
      * Downloads {@code page}, at most {@code maxHeight} tall (0 for any), in the background to keep it, unless it is kept
      * or on its way already.
      */
@@ -117,6 +132,7 @@ final class VideoCache {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } finally {
+                downloading.remove(name);
                 queued.remove(name);
             }
         });
@@ -170,10 +186,10 @@ final class VideoCache {
         try {
             String printed;
             try {
-                printed = download(page, part, String.format(Locale.ROOT, YtDlp.SEPARATE_VIDEO, height) + ","
+                printed = download(page, name, part, String.format(Locale.ROOT, YtDlp.SEPARATE_VIDEO, height) + ","
                         + YtDlp.SEPARATE_AUDIO);
             } catch (IOException noSeparateFiles) {
-                printed = download(page, part, String.format(Locale.ROOT, YtDlp.SINGLE_FILE, height));
+                printed = download(page, name, part, String.format(Locale.ROOT, YtDlp.SINGLE_FILE, height));
             }
             JsonObject meta = new JsonObject();
             for (String line : printed.split("\\R")) {
@@ -219,11 +235,61 @@ final class VideoCache {
                 StandardCopyOption.ATOMIC_MOVE);
     }
 
-    private String download(URI page, Path into, String format) throws IOException, InterruptedException {
-        return YtDlp.run(page, DOWNLOAD_TIMEOUT_SECONDS, "-f", format, "--match-filter", "!is_live",
+    private String download(URI page, String name, Path into, String format) throws IOException, InterruptedException {
+        Download progress = new Download();
+        downloading.put(name, progress);
+        return YtDlp.run(page, DOWNLOAD_TIMEOUT_SECONDS, progress::accept, "-f", format, "--match-filter", "!is_live",
+                "--progress", "--newline", "--progress-template", "download:" + Download.TEMPLATE,
                 "--max-filesize", Long.toString(maxBytes.getAsLong()), "--no-mtime",
                 "-o", into.resolve("%(format_id)s.%(ext)s").toString(),
                 "--print", "after_move:%(vcodec)s\t%(duration)s\t%(filepath)s");
+    }
+
+    /**
+     * How far one yt-dlp run has got, by the progress lines {@link #TEMPLATE} has it print: bytes so far over bytes in
+     * all, the files it fetches one after another (a video, then its audio) counted as each starts.
+     */
+    static final class Download {
+        static final String MARK = "CMS-PROGRESS";
+        /**
+         * Whether the file is still downloading or finished, its bytes so far, and in all; NA while yt-dlp can't tell.
+         * YouTube's files have no size up front: yt-dlp estimates it, at first as just what it has.
+         */
+        static final String TEMPLATE = MARK + " %(progress.status)s %(progress.downloaded_bytes)s"
+                + " %(progress.total_bytes,progress.total_bytes_estimate)s";
+        /** Bytes of the files done. */
+        private double done;
+        private volatile double fraction;
+
+        /** One line yt-dlp printed; any but its progress is passed over. */
+        synchronized void accept(String line) {
+            String[] fields = line.strip().split(" ");
+            if (fields.length != 4 || !fields[0].equals(MARK)) {
+                return;
+            }
+            double now = bytes(fields[2]);
+            if (fields[1].equals("finished")) {
+                // Kept where it got to: the next file, unknown yet, would read as all done.
+                done += Math.max(now, 0);
+                return;
+            }
+            double of = bytes(fields[3]);
+            if (now >= 0 && of > now) {
+                fraction = (done + now) / (done + of);
+            }
+        }
+
+        double fraction() {
+            return fraction;
+        }
+
+        private static double bytes(String text) {
+            try {
+                return Double.parseDouble(text);
+            } catch (NumberFormatException unknown) {
+                return -1; // NA
+            }
+        }
     }
 
     static double parseDuration(String text) {

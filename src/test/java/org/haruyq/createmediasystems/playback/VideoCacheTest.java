@@ -61,4 +61,22 @@ class VideoCacheTest {
         assertEquals(0, VideoCache.parseDuration("NA"));
         assertEquals(177.5, VideoCache.parseDuration("177.5"));
     }
+
+    @Test
+    void aDownloadCountsItsVideoAndThenItsAudio() {
+        VideoCache.Download download = new VideoCache.Download();
+        download.accept("[youtube] dQw4w9WgXcQ: Downloading webpage");
+        download.accept("CMS-PROGRESS downloading NA NA");
+        // As yt-dlp printed it: its first estimate is only what it has.
+        download.accept("CMS-PROGRESS downloading 712 712");
+        assertEquals(0, download.fraction(), "not all of it yet");
+        download.accept("CMS-PROGRESS downloading 450 900.0");
+        assertEquals(0.5, download.fraction(), 1e-9);
+        download.accept("CMS-PROGRESS finished 900 900");
+        // The audio after it: counted once its size is known.
+        download.accept("CMS-PROGRESS downloading 10 10");
+        assertEquals(0.5, download.fraction(), 1e-9);
+        download.accept("  CMS-PROGRESS downloading 50 100.0\r");
+        assertEquals(0.95, download.fraction(), 1e-9);
+    }
 }

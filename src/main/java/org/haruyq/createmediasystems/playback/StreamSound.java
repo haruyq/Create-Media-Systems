@@ -241,6 +241,10 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         return video;
     }
 
+    String track() {
+        return track;
+    }
+
     /** Moves to where it plays from now (a block on a moving structure, a train). */
     private void follow() {
         if (position != null) {

@@ -1,7 +1,9 @@
 package org.haruyq.createmediasystems.playback;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -11,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 
@@ -104,6 +107,12 @@ public final class YtDlp {
      * provider), returning what it printed; fails with its reason, or if it takes longer than {@code timeoutSeconds}.
      */
     static String run(URI page, long timeoutSeconds, String... options) throws IOException, InterruptedException {
+        return run(page, timeoutSeconds, line -> { }, options);
+    }
+
+    /** {@link #run}, giving {@code lines} each line yt-dlp writes, from either of its threads, as it writes it. */
+    static String run(URI page, long timeoutSeconds, Consumer<String> lines, String... options)
+            throws IOException, InterruptedException {
         Tools.Installed tools = Tools.ensure();
         // UTF-8 out, as read below: the frozen yt-dlp.exe ignores PYTHONUTF8 and would print paths (a Japanese game
         // folder) in the system code page.
@@ -126,16 +135,16 @@ public final class YtDlp {
         builder.environment().put("PYTHONIOENCODING", "utf-8");
         builder.environment().put("PYTHONUTF8", "1");
         Process process = builder.start();
-        CompletableFuture<byte[]> out = CompletableFuture.supplyAsync(() -> readAll(process.getInputStream()));
-        CompletableFuture<byte[]> err = CompletableFuture.supplyAsync(() -> readAll(process.getErrorStream()));
+        CompletableFuture<String> out = CompletableFuture.supplyAsync(() -> readLines(process.getInputStream(), lines));
+        CompletableFuture<String> err = CompletableFuture.supplyAsync(() -> readLines(process.getErrorStream(), lines));
         if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
             process.destroyForcibly();
             throw new IOException("yt-dlp took too long");
         }
         if (process.exitValue() != 0) {
-            throw new IOException(reason(new String(err.join(), StandardCharsets.UTF_8)));
+            throw new IOException(reason(err.join()));
         }
-        return new String(out.join(), StandardCharsets.UTF_8);
+        return out.join();
     }
 
     /** yt-dlp's format filter for videos at most {@code maxHeight} tall; empty for any (0). */
@@ -143,12 +152,17 @@ public final class YtDlp {
         return maxHeight > 0 ? "[height<=?" + maxHeight + "]" : "";
     }
 
-    private static byte[] readAll(InputStream in) {
-        try (in) {
-            return in.readAllBytes();
+    private static String readLines(InputStream in, Consumer<String> each) {
+        StringBuilder all = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            for (String line; (line = reader.readLine()) != null; ) {
+                each.accept(line);
+                all.append(line).append('\n');
+            }
         } catch (IOException e) {
-            return new byte[0];
+            // what was read so far
         }
+        return all.toString();
     }
 
     /** yt-dlp's last error line, which names the problem (bot check, private video) but no signed URL. */

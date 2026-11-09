@@ -147,6 +147,16 @@ final class MediaSources {
         }
     }
 
+    /** How much of the copy of {@code url} kept here for {@code video} is downloaded, 0..1; -1 if none is kept or coming. */
+    static double downloaded(String url, Streams.Video video) {
+        try {
+            URI uri = URI.create(url);
+            return resolvable(url, uri) ? VideoCache.get().progress(uri, height(video)) : -1;
+        } catch (IllegalArgumentException invalid) {
+            return -1;
+        }
+    }
+
     /**
      * Starts keeping the video at {@code url} (a disc's next) as its disc plays it, if
      * it is a page yt-dlp may fetch and the server allows.

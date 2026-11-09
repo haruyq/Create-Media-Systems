@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.playback.ClientStreams;
+import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
@@ -109,6 +110,24 @@ public final class StreamPackets {
         }
     }
 
+    /**
+     * Client → server: {@code downloaded} (0..1) of the video {@code url} the Blu-ray player at {@code pos} plays is
+     * kept on that client (see VideoPlayerBlock.Entity#downloaded).
+     */
+    public record DownloadedAtBlock(BlockPos pos, String url, float downloaded) implements CustomPacketPayload {
+        public static final Type<DownloadedAtBlock> TYPE = new Type<>(CreateMediaSystems.id("downloaded_at_block"));
+        public static final StreamCodec<ByteBuf, DownloadedAtBlock> CODEC = StreamCodec.composite(
+                BlockPos.STREAM_CODEC, DownloadedAtBlock::pos,
+                ByteBufCodecs.STRING_UTF8, DownloadedAtBlock::url,
+                ByteBufCodecs.FLOAT, DownloadedAtBlock::downloaded,
+                DownloadedAtBlock::new);
+
+        @Override
+        public Type<DownloadedAtBlock> type() {
+            return TYPE;
+        }
+    }
+
     public static void registerPayloads(PayloadRegistrar registrar) {
         registrar.playToClient(PlayAtBlock.TYPE, PlayAtBlock.CODEC, (payload, context) -> ClientStreams.play(payload));
         registrar.playToClient(RetuneAtBlock.TYPE, RetuneAtBlock.CODEC, (payload, context) -> ClientStreams.retune(payload));
@@ -116,5 +135,7 @@ public final class StreamPackets {
         registrar.playToClient(StopAtBlock.TYPE, StopAtBlock.CODEC, (payload, context) -> ClientStreams.stop(payload));
         registrar.playToServer(StartedAtBlock.TYPE, StartedAtBlock.CODEC,
                 (payload, context) -> Streams.started((ServerPlayer) context.player(), payload.pos(), payload.duration()));
+        registrar.playToServer(DownloadedAtBlock.TYPE, DownloadedAtBlock.CODEC,
+                (payload, context) -> VideoPlayerBlock.Entity.downloaded((ServerPlayer) context.player(), payload));
     }
 }

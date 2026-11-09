@@ -104,6 +104,34 @@ public final class NativeAudio {
     }
 
     /**
+     * How far into its video the Blu-ray player at {@code pos} plays here, by this computer's clock, and how long the
+     * video is (0: unknown, or live); {@code loading} while it loads here, or waits for the others to.
+     */
+    public record Progress(boolean loading, double seconds, double length) {
+    }
+
+    /** The video of the Blu-ray player at {@code pos} as it plays here (see Progress); null if it plays none here. */
+    @Nullable
+    public static Progress progress(BlockPos pos) {
+        Progress progress = null;
+        synchronized (SHARED) {
+            for (Shared shared : SHARED.values()) {
+                if (!pos.equals(shared.key.display()) || shared.playing.isCompletedExceptionally()) {
+                    continue;
+                }
+                if (!shared.playing.isDone()) {
+                    progress = new Progress(true, 0, 0); // unless the one before still plays
+                    continue;
+                }
+                double length = shared.live ? 0 : shared.owner.seconds();
+                double seconds = Math.max(0, (System.nanoTime() - shared.origin) / 1e9);
+                return new Progress(false, length > 0 ? Math.min(seconds, length) : seconds, length);
+            }
+        }
+        return progress;
+    }
+
+    /**
      * The video of the Blu-ray player at {@code pos} as it plays here (its displays show it); null if it doesn't, or
      * not yet: loaded, it waits paused on its first frame for the others, who would still see nothing.
      */

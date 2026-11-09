@@ -277,6 +277,7 @@ public final class ClientStreams {
         }));
         NeoForge.EVENT_BUS.addListener(ClientStreams::releaseFinished);
         NeoForge.EVENT_BUS.addListener(ClientStreams::resolveNext);
+        NeoForge.EVENT_BUS.addListener(ClientStreams::reportDownloads);
         if (SoundPhysicsCompat.available()) {
             LogUtils.getLogger().info("Sound Physics Remastered found: CMS streams get occlusion and reverb");
         }
@@ -414,6 +415,30 @@ public final class ClientStreams {
                 if (left >= 0 && left <= MediaSources.RESOLVE_AHEAD_SECONDS) {
                     MediaSources.resolveAhead(video.next().get(), video);
                 }
+            }
+        }
+    }
+
+    /**
+     * Once a second, tells the server how much of each Blu-ray player's video playing here is kept here (see
+     * VideoCache): its goggles show its listeners' average. Every second, not only on a change, as the server forgets
+     * what it was told whenever a track starts over.
+     */
+    private static void reportDownloads(ClientTickEvent.Post event) {
+        var level = Minecraft.getInstance().level;
+        if (level == null || level.getGameTime() % 20 != 0) {
+            return;
+        }
+        Map<BlockPos, String> told = new HashMap<>();
+        for (StreamSound sound : PLAYING.values()) {
+            Streams.Video video = sound.video();
+            if (video == null || told.putIfAbsent(video.player(), sound.track()) != null) {
+                continue;
+            }
+            double downloaded = MediaSources.downloaded(sound.track(), video);
+            if (downloaded >= 0) {
+                PacketDistributor.sendToServer(new StreamPackets.DownloadedAtBlock(video.player(), sound.track(),
+                        (float) downloaded));
             }
         }
     }
