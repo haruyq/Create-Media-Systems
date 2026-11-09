@@ -6,6 +6,7 @@ import org.haruyq.createmediasystems.display.DisplayRenderer;
 import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.LightingControls;
 import org.haruyq.createmediasystems.lighting.LightingRenderer;
+import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.train.TrainDetectorRenderer;
 import org.haruyq.createmediasystems.video.EqualizerFaders;
@@ -30,5 +31,6 @@ public class CreateMediaSystemsClient {
         TrainDetectorRenderer.register(modBus);
         LightingControls.register();
         LightingRenderer.register(modBus);
+        P2pClient.register();
     }
 }

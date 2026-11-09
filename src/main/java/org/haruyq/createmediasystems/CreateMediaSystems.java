@@ -23,6 +23,7 @@ import org.haruyq.createmediasystems.lighting.LightingLinkItem;
 import org.haruyq.createmediasystems.lighting.LightingMonitorBlock;
 import org.haruyq.createmediasystems.lighting.LightingPackets;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
+import org.haruyq.createmediasystems.p2p.P2p;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.train.AnnouncementScheduleItem;
@@ -242,6 +243,7 @@ public class CreateMediaSystems {
         modBus.addListener(CreateMediaSystems::registerPayloads);
         NeoForge.EVENT_BUS.addListener(TrainSignals::onServerTick);
         AnalysisCoordinator.register();
+        P2p.register();
     }
 
     public static ResourceLocation id(String path) {
@@ -292,6 +294,7 @@ public class CreateMediaSystems {
         ImageViewerBlock.registerPayloads(registrar);
         LightingPackets.register(registrar);
         AnalysisPackets.register(registrar);
+        P2p.registerPayloads(registrar);
     }
 
 }

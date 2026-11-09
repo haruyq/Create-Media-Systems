@@ -34,6 +34,9 @@ public final class ClientConfig {
     public static final ModConfigSpec.BooleanValue SEND_DIAGNOSTICS = BUILDER
             .comment("Send how long each display's video took to start here to the server's API, to find why it starts slowly for some: the times, this config, the Create: Media Systems and yt-dlp versions, whether YouTube cookies are set (never the cookies) and the end of logs/latest.log without chat.")
             .define("sendDiagnostics", true);
+    public static final ModConfigSpec.ConfigValue<String> SPEEDTEST_PATH = BUILDER
+            .comment("Ookla's Speedtest CLI (speedtest.net/apps/cli), a path or a name on PATH, which /cms_p2p speedtest runs to size direct P2P sessions. Install it and accept its license yourself, by running it once in a terminal: CMS never accepts it for you.")
+            .define("speedtestPath", "speedtest");
     private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {
