@@ -420,9 +420,10 @@ public final class ClientStreams {
     }
 
     /**
-     * Once a second, tells the server how much of each Blu-ray player's video playing here is kept here (see
-     * VideoCache): its goggles show its listeners' average. Every second, not only on a change, as the server forgets
-     * what it was told whenever a track starts over.
+     * Once a second, tells the server how far each Blu-ray player's video is downloaded here: all of it once it plays
+     * here (streamed, it needs no more) or is kept, else how much of its copy is (see VideoCache). Its goggles show
+     * its listeners' average while any of them waits. Every second, not only on a change, as the server forgets what
+     * it was told whenever a track starts over.
      */
     private static void reportDownloads(ClientTickEvent.Post event) {
         var level = Minecraft.getInstance().level;
@@ -435,11 +436,11 @@ public final class ClientStreams {
             if (video == null || told.putIfAbsent(video.player(), sound.track()) != null) {
                 continue;
             }
-            double downloaded = MediaSources.downloaded(sound.track(), video);
-            if (downloaded >= 0) {
-                PacketDistributor.sendToServer(new StreamPackets.DownloadedAtBlock(video.player(), sound.track(),
-                        (float) downloaded));
-            }
+            NativeAudio.Progress progress = NativeAudio.progress(video.player());
+            double downloaded = progress != null && !progress.loading() ? 1
+                    : Math.max(0, MediaSources.downloaded(sound.track(), video));
+            PacketDistributor.sendToServer(new StreamPackets.DownloadedAtBlock(video.player(), sound.track(),
+                    (float) downloaded));
         }
     }
 

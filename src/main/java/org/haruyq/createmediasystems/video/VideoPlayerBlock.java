@@ -144,7 +144,10 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private boolean paused;
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
-        /** How much of the video playing each listener has kept, 0..1, as they told (see ClientStreams#reportDownloads). */
+        /**
+         * How much of the video playing each listener has downloaded, 0..1: all of it once it plays for them or is
+         * kept (see ClientStreams#reportDownloads).
+         */
         private final Map<ServerPlayer, Float> downloads = new HashMap<>();
         /** Their average, in percent, as goggles show it; -1 while none has told. Not saved. */
         private int downloaded = -1;
@@ -273,8 +276,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /**
-         * {@code player} has {@code payload.downloaded()} of the video the Blu-ray player at {@code payload.pos()}
-         * plays kept: counted while they listen to it and it still plays that video.
+         * {@code player} has downloaded {@code payload.downloaded()} of the video the Blu-ray player at
+         * {@code payload.pos()} plays: counted while they listen to it and it still plays that video.
          */
         public static void downloaded(ServerPlayer player, StreamPackets.DownloadedAtBlock payload) {
             ServerLevel level = player.serverLevel();
@@ -326,6 +329,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                         Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
                 tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
                         .withStyle(ChatFormatting.DARK_GRAY));
+                tooltip.add(Component.empty());
             }
             if (playing && !paused && level != null && level.isClientSide) {
                 NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
@@ -336,8 +340,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                             + (progress.length() > 0 ? " / " + clock(progress.length()) : ""))).withStyle(ChatFormatting.GRAY));
                 }
             }
-            if (playing && downloaded >= 0) {
-                // Several listeners: their average, then how many of them have all of it.
+            if (playing && downloaded >= 0 && finished < downloaders) {
+                // Only while any of them waits. Several: their average, then how many have it.
                 tooltip.add(Component.literal("     ")
                         .append(Component.translatable("create_media_systems.video_player.downloaded", downloaded))
                         .append(downloaders > 1 ? "  " + finished + "/" + downloaders : "")
