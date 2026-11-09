@@ -41,7 +41,10 @@ Modの完全な動作には、[CMS-API](https://github.com/haruyq/CMS-API)が別
 Windows x64の配信元PCで、DVDドライブまたは `VIDEO_TS` / `BDMV` フォルダーを読み込み、ゲーム内のBlu-rayプレイヤー・ディスプレイ・スピーカーで再生できます。配信元がログインしている間だけ利用できます。
 
 1. 上記のP2P設定を済ませ、配信元と視聴者がそれぞれ `/cms_p2p speedtest` を実行します。
-2. 配信元にFFmpegと同じ配布物のFFprobeを用意します。DVDには `dvdvideo`（libdvdnav/libdvdread）、配信にはH.264とAC-3のエンコーダーが必要です。PATHにない場合は `cms-client.toml` の `discFfmpegPath` と `discFfprobePath` に実行ファイルの場所を設定します。視聴者にはFFmpegは不要です。
+2. 配信元では、初回の `/cms_disc load` 時にFFmpeg／FFprobeを自動取得します（Windows x64）。取得中もゲームの操作を続けられ、`/cms_disc unload` で中止できます。次回からはゲームフォルダー内の `create_media_systems/ffmpeg/` に保存したものを使うため、再ダウンロードは不要です。失敗した場合は通信状態を確認し、同じ `load` コマンドで再試行してください。視聴者にはFFmpegは不要です。
+
+   自分で用意したものを使う場合は、`cms-client.toml` の `discFfmpegPath` と `discFfprobePath` に同じ配布物の実行ファイルへのパスを設定します。DVDには `dvdvideo`（libdvdnav/libdvdread）、配信にはH.264とAC-3のエンコーダーが必要です。
+
 3. ゲーム内のDVDまたはBlu-rayアイテムをメインハンドに持ち、次のいずれかを実行します。パスには `/` を使うと入力しやすくなります。
 
    ```text
@@ -62,7 +65,9 @@ Windows x64の配信元PCで、DVDドライブまたは `VIDEO_TS` / `BDMV` フ�
 
 ディスクの動画本編を対象とし、暗号化解除、DVD/BDのメニュー操作、静止画タイトル、字幕・音声トラックの選択には対応していません。DVDはタイトル、Blu-rayはプレイリストの最初のアングル・映像・音声トラックを再生します。
 
-開発時の検証用メディアは、FFmpeg・tsMuxeR・dvdauthorを用意し、`scripts/disc_fixture.ps1` で作成できます。出力先の `bluray-long`、`bluray-short`、`dvd` をそれぞれ環境変数 `CMS_DISC_FIXTURE`、`CMS_DISC_SHORT_FIXTURE`、`CMS_DISC_DVD_FIXTURE` に指定し、`./gradlew test --tests '*.disc.*' --tests '*.p2p.DiscIntegrationTest'` を実行します。`CMS_DISC_VLC_DIR` に同梱版VLCの展開先を指定すると、配信元・受信側の実デコードと同期も検証します。これらの試験では帯域値を固定しており、Speedtestの実測は行いません。
+自動取得には[GyanのFFmpeg full sharedビルド](https://www.gyan.dev/ffmpeg/builds/)を使い、固定した版とSHA-256を確認してから展開します。配布物のライセンスとREADMEも同じ保存先に置きます。
+
+開発時の検証用メディアは、FFmpeg・tsMuxeR・dvdauthorを用意し、`scripts/disc_fixture.ps1` で作成できます。出力先の `bluray-long`、`bluray-short`、`dvd` をそれぞれ環境変数 `CMS_DISC_FIXTURE`、`CMS_DISC_SHORT_FIXTURE`、`CMS_DISC_DVD_FIXTURE` に指定し、`./gradlew test --tests '*.disc.*' --tests '*.p2p.DiscIntegrationTest'` を実行します。`CMS_DISC_VLC_DIR` に同梱版VLCの展開先を指定すると、配信元・受信側の実デコードと同期も検証します。これらの試験では帯域値を固定しており、Speedtestの実測は行いません。 自動取得そのものを検証する場合は、`CMS_FFMPEG_DOWNLOAD_TEST=1` を設定し、`./gradlew test --tests '*.disc.DiscToolsIntegrationTest'` を実行します。初回は配布元へ接続します。
 
 ## ライセンス
 

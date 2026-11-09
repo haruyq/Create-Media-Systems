@@ -111,7 +111,14 @@ public final class DiscClient {
         say("reading", false);
         reading = Thread.ofPlatform().daemon().name("CMS disc reader").start(() -> {
             try {
-                DiscSource opened = DiscSource.open(ClientConfig.DISC_FFMPEG_PATH.get(), ClientConfig.DISC_FFPROBE_PATH.get(), Path.of(path), title);
+                Path disc = Path.of(path).toRealPath();
+                var tools = DiscTools.ensure(ClientConfig.DIR.resolve("ffmpeg"), ClientConfig.DISC_FFMPEG_PATH.get(),
+                        ClientConfig.DISC_FFPROBE_PATH.get(), () -> mc.execute(() -> {
+                            if (request == generation) {
+                                say("downloading", false);
+                            }
+                        }));
+                DiscSource opened = DiscSource.open(tools.ffmpeg(), tools.ffprobe(), disc, title);
                 Transport connected = connection(owner);
                 DiscUrl url = new DiscUrl(owner, UUID.randomUUID());
                 DiscStream prepared = new DiscStream(connected, url.source(), opened, DiscClient::log);
