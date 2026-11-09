@@ -49,9 +49,9 @@ class TransportTest {
         List<String> said = new CopyOnWriteArrayList<>();
         ByteArrayOutputStream got = new ByteArrayOutputStream();
         Transport[] peers = new Transport[2];
-        Transport host = peers[0] = new Transport(P2p.Ticket.parse(P2pTest.ticket("host", HOST, "")), said::add,
+        Transport host = peers[0] = new Transport(Protocol.Ticket.parse(P2pTest.ticket("host", HOST, "")), said::add,
                 text -> forward(text, HOST, peers[1]), () -> { });
-        Transport viewer = peers[1] = new Transport(P2p.Ticket.parse(P2pTest.ticket("viewer", VIEWER, "")), new Transport.Listener() {
+        Transport viewer = peers[1] = new Transport(Protocol.Ticket.parse(P2pTest.ticket("viewer", VIEWER, "")), new Transport.Listener() {
             @Override
             public void data(UUID from, byte[] payload) {
                 assertEquals(HOST, from);
@@ -76,7 +76,9 @@ class TransportTest {
             new Random(1).nextBytes(data);
             long start = System.nanoTime();
             boolean refused = false;
+            long backlog = 0;
             for (int at = 0; at < data.length; ) {
+                backlog = Math.max(backlog, host.backlog());
                 int n = Math.min(Transport.MAX_PAYLOAD, data.length - at);
                 byte[] chunk = java.util.Arrays.copyOfRange(data, at, at + n);
                 if (host.send(chunk)) {
@@ -96,6 +98,8 @@ class TransportTest {
                 assertArrayEquals(data, got.toByteArray());
             }
             assertTrue(refused, "a full queue pushes back");
+            assertTrue(backlog > Transport.MAX_QUEUED / 2, "a full queue shows as backlog, saw " + backlog);
+            await(() -> host.backlog() == 0, 5_000);
             // 16 Mbit at 8 Mbit/s, less the first burst.
             assertTrue(seconds > 1.6, "paced at the budget, took " + seconds + " s");
 
@@ -108,6 +112,7 @@ class TransportTest {
         await(() -> host.state() == Transport.State.CLOSED && viewer.state() == Transport.State.CLOSED, 5_000);
         long received = viewer.received();
         assertFalse(host.send(new byte[1]));
+        assertEquals(0, host.backlog());
         viewer.signal(peers(HOST));
         Thread.sleep(200);
         assertEquals(received, viewer.received());
@@ -177,7 +182,7 @@ class TransportTest {
     private static Transport busyHost(Semaphore busy, List<String> said, Map<UUID, Transport.Link> links, UUID... ids)
             throws Exception {
         Transport.loadNatives(Path.of("build", "p2p-test-natives"));
-        Transport host = new Transport(P2p.Ticket.parse(P2pTest.ticket("host", HOST, "")), message -> {
+        Transport host = new Transport(Protocol.Ticket.parse(P2pTest.ticket("host", HOST, "")), message -> {
             said.add(message);
             if (message.startsWith("No peer")) {
                 try {
@@ -223,8 +228,8 @@ class TransportTest {
         Transport.loadNatives(Path.of("build", "p2p-test-natives"));
         String api = System.getenv("CMS_P2P_API_URL");
         String secret = System.getenv("CMS_P2P_SERVER_TOKEN");
-        P2p.Ticket hostTicket = P2p.Ticket.parse(post(api, "p2p/sessions", secret, "host_id", HOST));
-        P2p.Ticket viewerTicket = P2p.Ticket.parse(post(api, "p2p/sessions/" + hostTicket.sessionId() + "/peers", secret, "peer_id", VIEWER));
+        Protocol.Ticket hostTicket = Protocol.Ticket.parse(post(api, "p2p/sessions", secret, "host_id", HOST));
+        Protocol.Ticket viewerTicket = Protocol.Ticket.parse(post(api, "p2p/sessions/" + hostTicket.sessionId() + "/peers", secret, "peer_id", VIEWER));
         List<String> said = new CopyOnWriteArrayList<>();
         ByteArrayOutputStream got = new ByteArrayOutputStream();
         Transport host = Transport.open(api, hostTicket, said::add);
@@ -265,13 +270,13 @@ class TransportTest {
             viewer.close();
         }
         HttpResponse<String> deleted = P2p.HTTP.send(HttpRequest.newBuilder(
-                        P2p.endpoint(api, "p2p/sessions/" + hostTicket.sessionId(), false))
+                        Protocol.endpoint(api, "p2p/sessions/" + hostTicket.sessionId(), false))
                 .header("Authorization", "Bearer " + secret).DELETE().build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(204, deleted.statusCode());
     }
 
     private static String post(String api, String path, String secret, String idField, UUID id) throws Exception {
-        HttpResponse<String> response = P2p.HTTP.send(HttpRequest.newBuilder(P2p.endpoint(api, path, false))
+        HttpResponse<String> response = P2p.HTTP.send(HttpRequest.newBuilder(Protocol.endpoint(api, path, false))
                 .header("Authorization", "Bearer " + secret).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"" + idField + "\":\"" + id
                         + "\",\"upload_bps\":100000000,\"download_bps\":100000000}")).build(), HttpResponse.BodyHandlers.ofString());

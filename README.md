@@ -34,6 +34,8 @@ Modの完全な動作には、[CMS-API](https://github.com/haruyq/CMS-API)が別
 
 ローカルのCMS-APIに対する結合テスト: `CMS_P2P_API_URL=http://127.0.0.1:8000 CMS_P2P_SERVER_TOKEN=<秘密> ./gradlew test --tests '*.p2p.*' --rerun`
 
+このP2P通信で映像を送ってみる単体のテストアプリ: [tools/p2p-test](tools/p2p-test/README.md)
+
 ## ライセンス
 
 このプロジェクトは[MIT License](./LICENSE)で公開されています。

@@ -107,7 +107,7 @@ class P2pClientTest {
     }
 
     private static P2p.Ticket ticket(int request) {
-        return P2p.Ticket.parse(P2pTest.ticket("host", P2pTest.HOST, "")).forRequest(request);
+        return new P2p.Ticket(Protocol.Ticket.parse(P2pTest.ticket("host", P2pTest.HOST, "")), request);
     }
 
     /** Lets the {@code i}th open fail, and waits for its outcome on the game thread. */

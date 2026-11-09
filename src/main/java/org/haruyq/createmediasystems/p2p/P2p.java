@@ -1,17 +1,14 @@
 package org.haruyq.createmediasystems.p2p;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -25,10 +22,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 
 import io.netty.buffer.ByteBuf;
@@ -56,10 +50,6 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * here. The secret is CMS_P2P_SERVER_TOKEN or config/cms-p2p-server-token.txt, never the synced server config.
  */
 public final class P2p {
-    public static final int PROTOCOL = 1;
-    /** Most a peer may say it measured, in bit/s: 100 Gbps. */
-    public static final long MAX_BPS = 100_000_000_000L;
-    static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9_-]{8,128}");
     private static final Pattern TOKEN = Pattern.compile("[\\x21-\\x7e]{16,512}");
     private static final String TOKEN_ENV = "CMS_P2P_SERVER_TOKEN";
     private static final String TOKEN_FILE = "cms-p2p-server-token.txt";
@@ -126,30 +116,6 @@ public final class P2p {
         registrar.playToClient(Notice.TYPE, Notice.CODEC, (payload, context) -> P2pClient.notice(payload.message()));
     }
 
-    /**
-     * The API endpoint {@code path} under {@code apiBase}, keeping any prefix it has, as {@code ws(s)} if
-     * {@code websocket}. Only HTTPS, or HTTP to this computer, carries secrets and tickets.
-     */
-    public static URI endpoint(String apiBase, String path, boolean websocket) {
-        URI base = URI.create(apiBase.trim());
-        String scheme = base.getScheme() == null ? "" : base.getScheme().toLowerCase(Locale.ROOT);
-        if (base.getHost() == null || base.getRawUserInfo() != null || base.getRawQuery() != null
-                || base.getRawFragment() != null || !(scheme.equals("https") || scheme.equals("http") && loopback(base.getHost()))) {
-            throw new IllegalArgumentException("P2P needs an https:// API URL (or http:// to this computer)");
-        }
-        String url = UrlPolicy.api(base.toString(), path);
-        return URI.create(websocket ? (scheme.equals("https") ? "wss" : "ws") + url.substring(scheme.length()) : url);
-    }
-
-    private static boolean loopback(String host) {
-        return host.equalsIgnoreCase("localhost") || host.matches("127(\\.\\d{1,3}){3}") || host.equals("[::1]");
-    }
-
-    /** Whether {@code bps} is a measurement a peer may report. */
-    public static boolean validBps(long bps) {
-        return bps > 0 && bps <= MAX_BPS;
-    }
-
     private static void request(ServerPlayer player, Request request) {
         UUID id = player.getUUID();
         if (request.action() == Action.LEAVE) {
@@ -166,7 +132,7 @@ public final class P2p {
             notice(player, Component.translatable("create_media_systems.p2p.disabled"));
             return;
         }
-        if (!validBps(request.uploadBps()) || !validBps(request.downloadBps())) {
+        if (!Protocol.validBps(request.uploadBps()) || !Protocol.validBps(request.downloadBps())) {
             notice(player, Component.translatable("create_media_systems.p2p.speedtest.required"));
             return;
         }
@@ -208,7 +174,7 @@ public final class P2p {
      * join {@code room}) if that request still stands, else revokes it; done when the returned future is.
      */
     private static CompletableFuture<?> answered(Player player, Member member, Room room, Answer answer, Throwable error) {
-        Ticket ticket = error == null ? ticketFrom(answer, player.id(), room) : null;
+        Protocol.Ticket ticket = error == null ? ticketFrom(answer, player.id(), room) : null;
         // Still what the player waits for, and whether the room they asked to join still is.
         boolean wanted = MEMBERS.get(player.id()) == member && !player.gone().getAsBoolean() && !stopping;
         boolean live = room == null || ROOMS.get(room.host()) == room;
@@ -238,17 +204,17 @@ public final class P2p {
         if (room == null) {
             ROOMS.put(player.id(), member.room);
         }
-        player.send().accept(ticket.forRequest(member.request));
+        player.send().accept(new Ticket(ticket, member.request));
         return CompletableFuture.completedFuture(null);
     }
 
     /** The ticket the API answered for {@code player}, if it is one, for them, in {@code room} (null: hosting). */
-    private static Ticket ticketFrom(Answer answer, UUID player, Room room) {
+    private static Protocol.Ticket ticketFrom(Answer answer, UUID player, Room room) {
         if (answer.status() / 100 != 2) {
             return null;
         }
         try {
-            Ticket ticket = Ticket.parse(answer.body());
+            Protocol.Ticket ticket = Protocol.Ticket.parse(answer.body());
             boolean ours = ticket.peerId().equals(player) && ticket.host() == (room == null)
                     && ticket.hostId().equals(room == null ? player : room.host())
                     && (room == null || ticket.sessionId().equals(room.id()));
@@ -346,7 +312,7 @@ public final class P2p {
             return CompletableFuture.failedFuture(new IllegalStateException("P2P is off on this server"));
         }
         try {
-            HttpRequest request = HttpRequest.newBuilder(endpoint(ServerConfig.API_URL.get(), path, false))
+            HttpRequest request = HttpRequest.newBuilder(Protocol.endpoint(ServerConfig.API_URL.get(), path, false))
                     .timeout(Duration.ofSeconds(15))
                     .header("Authorization", "Bearer " + secret)
                     .header("Content-Type", "application/json")
@@ -403,55 +369,19 @@ public final class P2p {
         }
     }
 
-    /** Server → client: this player's own ticket to the API's signaling (see README), for their request {@code request}. */
-    public record Ticket(String sessionId, UUID peerId, UUID hostId, boolean host, String token, List<String> stunUrls,
-                         int request) implements CustomPacketPayload {
+    /** Server → client: this player's own ticket to the API's signaling, for their request {@code request}. */
+    public record Ticket(Protocol.Ticket ticket, int request) implements CustomPacketPayload {
         public static final Type<Ticket> TYPE = new Type<>(CreateMediaSystems.id("p2p_ticket"));
         static final StreamCodec<ByteBuf, Ticket> CODEC = NeoForgeStreamCodecs.composite(
-                ByteBufCodecs.stringUtf8(128), Ticket::sessionId,
-                UUIDUtil.STREAM_CODEC, Ticket::peerId,
-                UUIDUtil.STREAM_CODEC, Ticket::hostId,
-                ByteBufCodecs.BOOL, Ticket::host,
-                ByteBufCodecs.stringUtf8(512), Ticket::token,
-                ByteBufCodecs.stringUtf8(256).apply(ByteBufCodecs.list(16)), Ticket::stunUrls,
+                ByteBufCodecs.stringUtf8(128), t -> t.ticket().sessionId(),
+                UUIDUtil.STREAM_CODEC, t -> t.ticket().peerId(),
+                UUIDUtil.STREAM_CODEC, t -> t.ticket().hostId(),
+                ByteBufCodecs.BOOL, t -> t.ticket().host(),
+                ByteBufCodecs.stringUtf8(512), t -> t.ticket().token(),
+                ByteBufCodecs.stringUtf8(256).apply(ByteBufCodecs.list(16)), t -> t.ticket().stunUrls(),
                 ByteBufCodecs.VAR_INT, Ticket::request,
-                Ticket::new);
-
-        public Ticket {
-            if (!SESSION_ID.matcher(sessionId).matches() || !TOKEN.matcher(token).matches() || stunUrls.size() > 16
-                    || stunUrls.stream().anyMatch(u -> u.length() > 256 || !u.toLowerCase(Locale.ROOT).startsWith("stun:"))) {
-                throw new IllegalArgumentException("Not a valid P2P ticket");
-            }
-            stunUrls = List.copyOf(stunUrls);
-        }
-
-        /** The API's ticket JSON; fails on anything else, a TURN server included. */
-        public static Ticket parse(String json) {
-            JsonObject o = JsonParser.parseString(json).getAsJsonObject();
-            if (o.get("protocol").getAsInt() != PROTOCOL) {
-                throw new IllegalArgumentException("Unknown P2P protocol");
-            }
-            String role = o.get("role").getAsString();
-            if (!role.equals("host") && !role.equals("viewer")) {
-                throw new IllegalArgumentException("Unknown P2P role");
-            }
-            List<String> stun = new ArrayList<>();
-            JsonArray urls = o.getAsJsonArray("stun_urls");
-            for (JsonElement url : urls) {
-                stun.add(url.getAsString());
-            }
-            return new Ticket(o.get("session_id").getAsString(), UUID.fromString(o.get("peer_id").getAsString()),
-                    UUID.fromString(o.get("host_id").getAsString()), role.equals("host"), o.get("token").getAsString(), stun, 0);
-        }
-
-        Ticket forRequest(int request) {
-            return new Ticket(sessionId, peerId, hostId, host, token, stunUrls, request);
-        }
-
-        @Override
-        public String toString() {
-            return "Ticket[" + (host ? "host" : "viewer") + "]";
-        }
+                (sessionId, peerId, hostId, host, token, stunUrls, request) ->
+                        new Ticket(new Protocol.Ticket(sessionId, peerId, hostId, host, token, stunUrls), request));
 
         @Override
         public Type<Ticket> type() {

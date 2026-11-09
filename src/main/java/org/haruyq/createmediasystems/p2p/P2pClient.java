@@ -60,7 +60,7 @@ public final class P2pClient {
     };
 
     interface Opener {
-        Transport open(String api, P2p.Ticket ticket, Transport.Listener listener);
+        Transport open(String api, Protocol.Ticket ticket, Transport.Listener listener);
     }
 
     private P2pClient() {
@@ -205,7 +205,7 @@ public final class P2pClient {
                 ended(request);
             }
         });
-        CompletableFuture.supplyAsync(() -> open.open(origin, ticket, listener)).whenComplete((opened, error) -> game.execute(() -> {
+        CompletableFuture.supplyAsync(() -> open.open(origin, ticket.ticket(), listener)).whenComplete((opened, error) -> game.execute(() -> {
             if (session != request) {
                 // Left, logged out or replaced while it opened.
                 if (opened != null) {

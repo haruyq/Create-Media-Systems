@@ -26,8 +26,8 @@ public final class Speedtest {
     public static final Duration FRESH = Duration.ofHours(1);
     static final Duration TIMEOUT = Duration.ofSeconds(120);
     private static final int MAX_OUTPUT = 256 * 1024;
-    /** {@link P2p#MAX_BPS} in the CLI's bytes per second. */
-    private static final BigDecimal MAX_BYTES_PER_SECOND = BigDecimal.valueOf(P2p.MAX_BPS / 8);
+    /** {@link Protocol#MAX_BPS} in the CLI's bytes per second. */
+    private static final BigDecimal MAX_BYTES_PER_SECOND = BigDecimal.valueOf(Protocol.MAX_BPS / 8);
 
     public record Result(long downloadBps, long uploadBps, Instant measuredAt) {
         public boolean fresh(Instant now) {
@@ -126,7 +126,7 @@ public final class Speedtest {
             BigDecimal bytes = json.getAsJsonObject(direction).get("bandwidth").getAsBigDecimal();
             if (bytes.signum() > 0 && bytes.compareTo(MAX_BYTES_PER_SECOND) <= 0) {
                 long bits = bytes.multiply(BigDecimal.valueOf(8)).longValue();
-                if (P2p.validBps(bits)) {
+                if (Protocol.validBps(bits)) {
                     return bits;
                 }
             }

@@ -1,0 +1,63 @@
+plugins {
+    id 'application'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    mavenCentral()
+}
+
+// The mod's own webrtc-java version: its Transport is built and tested with exactly that one.
+def modProperties = new Properties()
+file('../../gradle.properties').withInputStream { modProperties.load(it) }
+def webrtcVersion = modProperties.getProperty('webrtc_version')
+
+// The mod's Transport and the Minecraft-free files it needs, compiled as they are.
+def sharedSources = tasks.register('sharedSources', Sync) {
+    from('../../src/main/java') {
+        include 'org/haruyq/createmediasystems/p2p/Transport.java', 'org/haruyq/createmediasystems/p2p/Protocol.java',
+                'org/haruyq/createmediasystems/stream/UrlPolicy.java'
+    }
+    into layout.buildDirectory.dir('generated/shared')
+}
+sourceSets.main.java.srcDir(sharedSources)
+
+dependencies {
+    implementation('com.google.code.gson:gson:2.10.1')
+    implementation('org.slf4j:slf4j-api:2.0.9')
+    runtimeOnly('org.slf4j:slf4j-simple:2.0.9')
+    implementation("dev.onvoid.webrtc:webrtc-java:${webrtcVersion}") { transitive = false }
+    // Its native library and licenses; webrtc-java unpacks the library from this jar itself.
+    runtimeOnly("dev.onvoid.webrtc:webrtc-java:${webrtcVersion}:windows-x86_64") { transitive = false }
+
+    testImplementation(platform('org.junit:junit-bom:5.11.4'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+application {
+    mainClass = 'org.haruyq.createmediasystems.p2ptest.P2pTestApp'
+    applicationName = 'cms-p2p-test'
+}
+
+// This repository's license (the app and the mod's Transport in it), and those of dependencies whose jars lack one.
+distributions {
+    main {
+        contents {
+            from('../../LICENSE', 'README.md')
+            from('licenses') { into 'licenses' }
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs.add '-Xlint:deprecation'
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    // The smoke test starts its own CMS-API from this checkout (see README).
+    systemProperty 'cms.apiDir', file('../../../CMS-API').absolutePath
+}

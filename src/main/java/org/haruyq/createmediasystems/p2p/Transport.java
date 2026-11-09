@@ -33,11 +33,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.haruyq.createmediasystems.stream.UrlPolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mojang.logging.LogUtils;
 
 import dev.onvoid.webrtc.CreateSessionDescriptionObserver;
 import dev.onvoid.webrtc.PeerConnectionFactory;
@@ -85,6 +86,7 @@ public final class Transport implements AutoCloseable {
     private static final byte DATA = 0, PING = 1, PONG = 2;
     private static final Pattern CANDIDATE_TYPE = Pattern.compile(" typ (\\S+)");
     private static final String LIBRARY = "webrtc-java-windows-x86_64.dll";
+    private static final Logger LOGGER = LoggerFactory.getLogger(Transport.class);
 
     public enum State {
         CONNECTING, CONNECTED, CLOSED
@@ -99,7 +101,7 @@ public final class Transport implements AutoCloseable {
         void status(String message);
     }
 
-    private final P2p.Ticket ticket;
+    private final Protocol.Ticket ticket;
     private final Listener listener;
     private final Consumer<String> signal;
     private final Runnable onClose;
@@ -115,12 +117,13 @@ public final class Transport implements AutoCloseable {
     private volatile State state = State.CONNECTING;
     private volatile long budgetBps;
     private volatile long received;
+    private volatile long backlog;
 
     /**
      * A session signalling with {@code signal}, which delivers the API's messages to {@link #signal(String)}, and
      * running {@code onClose} once it closes, however early.
      */
-    Transport(P2p.Ticket ticket, Listener listener, Consumer<String> signal, Runnable onClose) {
+    Transport(Protocol.Ticket ticket, Listener listener, Consumer<String> signal, Runnable onClose) {
         this.ticket = ticket;
         this.listener = listener;
         this.signal = signal;
@@ -137,8 +140,8 @@ public final class Transport implements AutoCloseable {
      * Connects to the API's signaling at {@code apiBase} with {@code ticket}, which goes in a header, never the URL.
      * Natives must be loaded ({@link #loadNatives}).
      */
-    public static Transport open(String apiBase, P2p.Ticket ticket, Listener listener) {
-        URI uri = P2p.endpoint(apiBase, "p2p/sessions/" + ticket.sessionId() + "/signal", true);
+    public static Transport open(String apiBase, Protocol.Ticket ticket, Listener listener) {
+        URI uri = Protocol.endpoint(apiBase, "p2p/sessions/" + ticket.sessionId() + "/signal", true);
         HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
         Socket socket = new Socket();
         Transport transport = new Transport(ticket, listener, socket::send, () -> socket.close(http));
@@ -202,6 +205,14 @@ public final class Transport implements AutoCloseable {
     /** The room's budget per viewer, in bit/s, which sending is paced at; 0 while there are no viewers. */
     public long budgetBps() {
         return budgetBps;
+    }
+
+    /**
+     * Most bytes waiting for one connected viewer, in its queue here and in WebRTC's buffer, as of the last 10 ms;
+     * 0 if none. It grows while payloads come faster than the budget or the network lets them out.
+     */
+    public long backlog() {
+        return backlog;
     }
 
     /** Bytes of payloads received. */
@@ -280,7 +291,7 @@ public final class Transport implements AutoCloseable {
                     throw new IllegalArgumentException();
                 }
                 long budget = message.get("budget_bps").getAsLong();
-                if (budget < 0 || budget > P2p.MAX_BPS) {
+                if (budget < 0 || budget > Protocol.MAX_BPS) {
                     throw new IllegalArgumentException();
                 }
                 if (budget != budgetBps && budget > 0) {
@@ -372,6 +383,7 @@ public final class Transport implements AutoCloseable {
     /** Sends what the budget allows of each queue, and gives up on peers that took too long to connect. */
     private void tick() {
         long now = System.nanoTime();
+        long most = 0;
         for (Link link : List.copyOf(links.values())) {
             if (!link.open) {
                 if (now - link.createdAt > CONNECT_TIMEOUT_NANOS) {
@@ -393,7 +405,11 @@ public final class Transport implements AutoCloseable {
                     break;
                 }
             }
+            if (!link.closed) {
+                most = Math.max(most, link.queued + link.channel.getBufferedAmount());
+            }
         }
+        backlog = most;
     }
 
     private static byte[] frame(byte type, byte[] body) {
@@ -453,6 +469,7 @@ public final class Transport implements AutoCloseable {
             return;
         }
         state = State.CLOSED;
+        backlog = 0;
         try {
             for (Link link : List.copyOf(links.values())) {
                 link.close();
@@ -482,7 +499,7 @@ public final class Transport implements AutoCloseable {
         try {
             step.run();
         } catch (RuntimeException e) {
-            LogUtils.getLogger().warn("Could not release native WebRTC", e);
+            LOGGER.warn("Could not release native WebRTC", e);
         }
     }
 
@@ -512,7 +529,7 @@ public final class Transport implements AutoCloseable {
             try {
                 task.run();
             } catch (RuntimeException | LinkageError e) {
-                LogUtils.getLogger().warn("Direct P2P failed", e);
+                LOGGER.warn("Direct P2P failed", e);
                 shutDown("Direct P2P failed: " + UrlPolicy.reason(e));
             }
         }
