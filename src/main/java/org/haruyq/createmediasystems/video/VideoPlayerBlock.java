@@ -323,7 +323,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             List<String> playlist = playlist();
-            tooltip.add(Component.literal("     ").append(state()).withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
+                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
             if (!playlist.isEmpty()) {
                 tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
                         Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
@@ -335,23 +336,31 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                 NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
                 if (progress != null) {
                     tooltip.add(Component.literal("     ").append(progress.loading()
-                            ? Component.translatable("create_media_systems.video_player.loading")
-                            : Component.translatable("create_media_systems.video_player.position", clock(progress.seconds())
-                            + (progress.length() > 0 ? " / " + clock(progress.length()) : ""))).withStyle(ChatFormatting.GRAY));
+                            ? Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW)
+                            : Component.translatable("create_media_systems.video_player.position", value(clock(progress.seconds())
+                            + (progress.length() > 0 ? " / " + clock(progress.length()) : ""), ChatFormatting.WHITE)))
+                            .withStyle(ChatFormatting.GRAY));
                 }
             }
             if (playing && downloaded >= 0 && finished < downloaders) {
                 // Only while any of them waits. Several: their average, then how many have it.
                 tooltip.add(Component.literal("     ")
-                        .append(Component.translatable("create_media_systems.video_player.downloaded", downloaded))
-                        .append(downloaders > 1 ? "  " + finished + "/" + downloaders : "")
+                        .append(Component.translatable("create_media_systems.video_player.downloaded",
+                                value(downloaded + "%", ChatFormatting.AQUA)))
+                        .append(downloaders > 1 ? value("  " + finished + "/" + downloaders, ChatFormatting.WHITE)
+                                : Component.empty())
                         .withStyle(ChatFormatting.GRAY));
             }
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.volume_value",
-                    volume.getValue())).withStyle(ChatFormatting.GRAY));
+                    value(volume.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.lighting_value",
-                    lighting.getValue())).withStyle(ChatFormatting.GRAY));
+                    value(lighting.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
             return true;
+        }
+
+        /** A value in a goggle line, set apart from its gray label. */
+        private static Component value(Object value, ChatFormatting color) {
+            return Component.literal(String.valueOf(value)).withStyle(color);
         }
 
         /** {@code seconds} as m:ss, or h:mm:ss from an hour. */
