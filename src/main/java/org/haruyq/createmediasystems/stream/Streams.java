@@ -393,8 +393,7 @@ public final class Streams {
     /**
      * The emitter plays its source's track (the source at {@code sound.source()}, if it plays one), sounding as
      * {@code sound}, at {@code settings}; emitters call this every RELAY_TICKS, and at once when something changed. Players newly in range
-     * get the stream, from where it is now; those who left are forgotten (their client stops on its own; they get it
-     * again on return). A different track, the source starting over, or a different sound starts everyone over; new
+     * get the stream, from where it is now; those who left are told to stop (they get it again on return). A different track, the source starting over, or a different sound starts everyone over; new
      * settings reach current listeners without restarting their audio.
      */
     public static void relay(ServerLevel level, BlockEntity emitter, Sound sound, JukeboxSettings settings) {
@@ -423,11 +422,13 @@ public final class Streams {
         }
         boolean retune = !settings.equals(relay.settings);
         relay.settings = settings;
-        // A relogged or respawned player is a new object, so they get a fresh stream too.
+        // A relogged or respawned player is a new object, so they get a fresh stream too. One who left is told: their
+        // client plays a side while any of its emitters is near, and an emitter never stopped, once they were back
+        // within its drop margin, kept it playing after the disc came out (silent that far, its video on screen).
         relay.listeners.removeIf(p -> {
             boolean keep = !p.isRemoved() && p.level() == level
                     && hears(level, pos, sound, settings, p, JukeboxSettings.DROP_MARGIN);
-            if (retune && !p.isRemoved()) {
+            if ((retune || !keep) && !p.isRemoved()) {
                 PacketDistributor.sendToPlayer(p, keep ? new StreamPackets.RetuneAtBlock(pos, settings)
                         : new StreamPackets.StopAtBlock(pos));
             }
