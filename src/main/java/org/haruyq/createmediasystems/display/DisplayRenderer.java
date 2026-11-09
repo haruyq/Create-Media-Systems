@@ -159,8 +159,10 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             return;
         }
         if (seen) {
-            // Under a shader pack, drawn as glowing eyes are: the pack's bloom and emissive lighting take it as a light.
-            RenderType picture = IrisCompat.shaderPackInUse() ? RenderType.eyes(texture) : RenderType.text(texture);
+            // Under a shader pack, drawn as glowing eyes are: the pack's bloom and emissive lighting take it as a light
+            // (and drawn again after it, pulled forward: see overdraw). Without, pulled forward as that is: LIFT alone
+            // left it a hair off the black panel, which showed through it in streaks for a few frames on the move.
+            RenderType picture = IrisCompat.shaderPackInUse() ? RenderType.eyes(texture) : RenderType.textPolygonOffset(texture);
             fit(display, buffers.getBuffer(picture), matrix, screen, width, height, frame.width(), frame.height(), texture, 0);
         }
         if (lighting <= 0) {
@@ -219,7 +221,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         }
         Images.Picture picture = picture(viewer);
         if (picture != null) {
-            fit(viewer, buffers.getBuffer(RenderType.text(picture.texture)), matrix, screen, width, height, picture.width,
+            fit(viewer, buffers.getBuffer(RenderType.textPolygonOffset(picture.texture)), matrix, screen, width, height, picture.width,
                     picture.height, picture.texture, framed ? 0 : -(float) DisplayBlock.DEPTH);
         }
     }
