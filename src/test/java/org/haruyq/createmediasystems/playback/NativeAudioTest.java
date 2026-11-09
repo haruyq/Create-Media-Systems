@@ -203,9 +203,10 @@ class NativeAudioTest {
         await(() -> player.actions.contains("start"));
         Thread.sleep(100);
         assertFalse(player.actions.contains("resume"), "the other listeners are still loading it");
+        assertEquals(0, player.sought, "back to the top from the frames VLC played before it paused");
         go.complete(new NativeAudio.Go(0, System.nanoTime()));
         opened.get(5, java.util.concurrent.TimeUnit.SECONDS).close();
-        assertEquals(List.of("tap", "start", "resume"), player.actions, "from the top, with everyone");
+        assertEquals(List.of("tap", "start", "seek", "resume"), player.actions, "from the top, with everyone");
     }
 
     @Test

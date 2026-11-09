@@ -103,12 +103,16 @@ public final class NativeAudio {
         return -1;
     }
 
-    /** The video of the Blu-ray player at {@code pos} as it plays here (its displays show it); null if it doesn't. */
+    /**
+     * The video of the Blu-ray player at {@code pos} as it plays here (its displays show it); null if it doesn't, or
+     * not yet: loaded, it waits paused on its first frame for the others, who would still see nothing.
+     */
     @Nullable
     public static VlcPlayer.Frame screen(BlockPos pos) {
         synchronized (SHARED) {
             for (Shared shared : SHARED.values()) {
-                if (pos.equals(shared.key.display()) && shared.owner instanceof VlcPlayer player) {
+                if (pos.equals(shared.key.display()) && shared.playing.isDone()
+                        && !shared.playing.isCompletedExceptionally() && shared.owner instanceof VlcPlayer player) {
                     return player.frame;
                 }
             }
@@ -288,6 +292,12 @@ public final class NativeAudio {
             }
             checkCancelled(cancelled);
             loaded.accept(owner.seconds());
+            boolean vod = !state.live() && state.seekable();
+            // start-paused lets VLC play a few frames before it pauses: back to the top while it waits, or whoever
+            // loads it first starts that far in.
+            if (vod && startSeconds == 0 && go != null && !go.isDone()) {
+                owner.seek(0);
+            }
             // Paused until the server says to play, and from where: the top once every listener has a fresh track
             // loaded, so a slower download doesn't leave one behind; at once, from where it is, for one already
             // playing (see Streams#started). A live stream has no place in it to agree on.
@@ -302,7 +312,6 @@ public final class NativeAudio {
             // stream, plus the time it took to load here.
             long target = told != null ? told.position(now)
                     : startSeconds > 0 ? Math.round(startSeconds * 1e9) + Math.max(0, now - requestedAt) : 0;
-            boolean vod = !state.live() && state.seekable();
             if (vod && target >= SYNC_TOLERANCE_NANOS) {
                 owner.seek(target / 1_000_000);
             }
