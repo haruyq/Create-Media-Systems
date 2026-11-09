@@ -307,5 +307,11 @@
   "create_media_systems.p2p.status.unmeasured": "Bandwidth: not measured (/cms_p2p speedtest).",
   "create_media_systems.p2p.status.measured": "Bandwidth: download %s Mbps, upload %s Mbps, measured %s min ago.",
   "create_media_systems.p2p.status.host": "Hosting (%s): %s viewer(s) connected directly, budget %s Mbps each.",
-  "create_media_systems.p2p.status.viewer": "Viewing (%s): %s direct connection(s), budget %s Mbps, %s bytes received."
+  "create_media_systems.p2p.status.viewer": "Viewing (%s): %s direct connection(s), budget %s Mbps, %s bytes received.",
+  "create_media_systems.disc_stream.hold_disc": "Hold a DVD or Blu-ray item in your main hand first.",
+  "create_media_systems.disc_stream.busy": "A disc is already being read. Use /cms_disc unload to cancel.",
+  "create_media_systems.disc_stream.reading": "Reading the unencrypted disc. Keep the DVD or Blu-ray item in your hand…",
+  "create_media_systems.disc_stream.loaded": "Disc loaded (%s seconds). Insert this item into a Blu-ray player to share it.",
+  "create_media_systems.disc_stream.unloaded": "Disc sharing stopped and its memory buffer was cleared.",
+  "create_media_systems.disc_stream.failed": "Could not load the disc: %s"
 }

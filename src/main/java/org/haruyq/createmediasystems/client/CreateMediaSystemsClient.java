@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.client;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.RangeQuillHandler;
+import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.display.DisplayRenderer;
 import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.LightingControls;
@@ -32,5 +33,6 @@ public class CreateMediaSystemsClient {
         LightingControls.register();
         LightingRenderer.register(modBus);
         P2pClient.register();
+        DiscClient.register();
     }
 }

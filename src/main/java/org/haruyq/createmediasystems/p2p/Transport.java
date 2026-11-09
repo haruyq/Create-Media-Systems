@@ -83,7 +83,7 @@ public final class Transport implements AutoCloseable {
     private static final int MAX_PENDING = 64;
     private static final long CONNECT_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(30);
     private static final long TICK_MILLIS = 10;
-    private static final byte DATA = 0, PING = 1, PONG = 2;
+    private static final byte DATA = 0, PING = 1, PONG = 2, CONTROL = 3;
     private static final Pattern CANDIDATE_TYPE = Pattern.compile(" typ (\\S+)");
     private static final String LIBRARY = "webrtc-java-windows-x86_64.dll";
     private static final Logger LOGGER = LoggerFactory.getLogger(Transport.class);
@@ -93,6 +93,7 @@ public final class Transport implements AutoCloseable {
     }
 
     public interface Listener {
+        default void control(UUID from, byte[] payload) {}
         /** {@code payload} (the receiver's own copy) from the host. */
         default void data(UUID from, byte[] payload) {
         }
@@ -202,6 +203,10 @@ public final class Transport implements AutoCloseable {
         return ticket.host();
     }
 
+    public UUID hostId() {
+        return ticket.hostId();
+    }
+
     /** The room's budget per viewer, in bit/s, which sending is paced at; 0 while there are no viewers. */
     public long budgetBps() {
         return budgetBps;
@@ -244,6 +249,31 @@ public final class Transport implements AutoCloseable {
             link.queue.add(frame);
             link.queued += frame.length;
         }
+        return true;
+    }
+
+    public synchronized boolean send(UUID peer, byte[] payload) {
+        if (payload.length > MAX_PAYLOAD) {
+            throw new IllegalArgumentException("Payload too large");
+        }
+        return ticket.host() && queue(peer, DATA, payload);
+    }
+
+    public synchronized boolean control(UUID peer, byte[] payload) {
+        if (payload.length > 256) {
+            throw new IllegalArgumentException("Control message too large");
+        }
+        return queue(peer, CONTROL, payload);
+    }
+
+    private boolean queue(UUID peer, byte type, byte[] payload) {
+        Link link = links.get(peer);
+        if (state == State.CLOSED || link == null || !link.open || link.queued + payload.length + 1 > MAX_QUEUED) {
+            return false;
+        }
+        byte[] frame = frame(type, payload);
+        link.queue.add(frame);
+        link.queued += frame.length;
         return true;
     }
 
@@ -425,6 +455,11 @@ public final class Transport implements AutoCloseable {
             return;
         }
         switch (frame[0]) {
+            case CONTROL -> {
+                if (frame.length <= 257) {
+                    listener.control(link.peer, java.util.Arrays.copyOfRange(frame, 1, frame.length));
+                }
+            }
             case DATA -> {
                 if (!ticket.host() && link.peer.equals(ticket.hostId())) {
                     byte[] payload = new byte[frame.length - 1];

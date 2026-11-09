@@ -19,4 +19,5 @@ libs/
 !/scripts/analyze_lighting_network.py
 !/scripts/prepare_lighting_network.py
 !/scripts/speaker_stress.py
+!/scripts/disc_fixture.ps1
 /docs/

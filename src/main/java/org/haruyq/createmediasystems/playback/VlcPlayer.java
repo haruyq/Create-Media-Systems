@@ -11,6 +11,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.disc.DiscClient;
+import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -59,6 +61,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
 
     /** The tallest picture its video plays at (0 for any); unused without video. */
     private final int maxHeight;
+    private double startSeconds;
     /** What its video's playback took, sent as it is released (see Diagnostics); null without video. */
     @Nullable
     final Diagnostics diagnostics;
@@ -79,6 +82,11 @@ public final class VlcPlayer implements NativeAudio.Backend {
         diagnostics = video == null ? null : new Diagnostics(video, frame, audio, maxHeight, requestedAt);
     }
 
+    VlcPlayer(@Nullable Streams.Video video, long requestedAt, double startSeconds) {
+        this(video, requestedAt);
+        this.startSeconds = startSeconds;
+    }
+
     @Override
     public net.minecraft.client.sounds.AudioStream tap(Streams.Channel channel) {
         return audio.open(channel);
@@ -90,7 +98,15 @@ public final class VlcPlayer implements NativeAudio.Backend {
         if (diagnostics != null) {
             diagnostics.resolving(source);
         }
-        NativeMediaResolver.Prepared media = MediaSources.resolve(source, frame != null, maxHeight);
+        var disc = DiscUrl.parse(source.toString());
+        NativeMediaResolver.Prepared media;
+        if (disc != null) {
+            var prepared = DiscClient.prepare(disc, startSeconds);
+            media = NativeMediaResolver.Prepared.of(prepared.uri(), false, null, prepared.duration(),
+                    java.util.List.of(":network-caching=2000"));
+        } else {
+            media = MediaSources.resolve(source, frame != null, maxHeight);
+        }
         if (diagnostics != null) {
             diagnostics.resolved(media.live());
         }

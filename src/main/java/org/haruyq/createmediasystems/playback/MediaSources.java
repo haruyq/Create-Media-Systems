@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -34,7 +35,7 @@ final class MediaSources {
 
     /** Whether {@code url} is one the server allows that goes through the resolver (and so may be kept). */
     private static boolean resolvable(String url, URI uri) {
-        return ServerConfig.isAllowed(url) && asIs(uri) == null;
+        return DiscUrl.parse(url) == null && ServerConfig.isAllowed(url) && asIs(uri) == null;
     }
 
     /** What a player opens for {@code uri} without the resolver (RTSP, an extension's page, a media file); else null. */

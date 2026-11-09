@@ -36,6 +36,34 @@ Modの完全な動作には、[CMS-API](https://github.com/haruyq/CMS-API)が別
 
 このP2P通信で映像を送ってみる単体のテストアプリ: [tools/p2p-test](tools/p2p-test/README.md)
 
+## 非暗号化DVD / Blu-rayの配信
+
+Windows x64の配信元PCで、DVDドライブまたは `VIDEO_TS` / `BDMV` フォルダーを読み込み、ゲーム内のBlu-rayプレイヤー・ディスプレイ・スピーカーで再生できます。配信元がログインしている間だけ利用できます。
+
+1. 上記のP2P設定を済ませ、配信元と視聴者がそれぞれ `/cms_p2p speedtest` を実行します。
+2. 配信元にFFmpegと同じ配布物のFFprobeを用意します。DVDには `dvdvideo`（libdvdnav/libdvdread）、配信にはH.264とAC-3のエンコーダーが必要です。PATHにない場合は `cms-client.toml` の `discFfmpegPath` と `discFfprobePath` に実行ファイルの場所を設定します。視聴者にはFFmpegは不要です。
+3. ゲーム内のDVDまたはBlu-rayアイテムをメインハンドに持ち、次のいずれかを実行します。パスには `/` を使うと入力しやすくなります。
+
+   ```text
+   /cms_disc load "E:/"
+   /cms_disc load "C:/Media/MyDisc"
+   /cms_disc load "E:/" 1
+   ```
+
+   最後の数字はDVDのタイトル番号、Blu-rayではプレイリスト番号です。省略時はDVDの既定タイトル、Blu-rayの最長の動画を選びます。Blu-rayの `00000.mpls` は `0` を指定します。読み込み完了まで同じアイテムを持ってください。
+
+4. そのアイテムをゲーム内のBlu-rayプレイヤーに入れます。視聴者は再生範囲に入ると配信元へ自動接続します。再生・一時停止・停止は既存のプレイヤー操作を使います。
+
+配信を終えるには `/cms_disc unload` を実行します。再ログイン後は再度 `load` してください。1人のクライアントで同時に共有・視聴する物理ディスクは1枚です。別の配信元へ接続すると以前のP2Pセッションから退出します。
+
+映像は1080p・60fpsを基準に、測定した帯域、実際の転送時間、エンコード速度から解像度・フレームレート・ビットレートを調整します。GPUエンコーダー（NVENC、QSV、AMF）を試し、利用できなければCPUを使います。音声は48 kHzのステレオです。回線が悪化すると画質を下げ、安定が続いてから段階的に戻します。
+
+先頭と再生位置付近を先読みし、配信元を含む視聴者の準備ができてから再生を開始します。接続できない視聴者を待ち続けないよう、開始待ちには上限があります。映像は容量制限のあるメモリバッファに置き、ディスクへの保存やCMS-APIによる映像の中継は行いません。長時間の回線断では再バッファや再接続が必要です。
+
+ディスクの動画本編を対象とし、暗号化解除、DVD/BDのメニュー操作、静止画タイトル、字幕・音声トラックの選択には対応していません。DVDはタイトル、Blu-rayはプレイリストの最初のアングル・映像・音声トラックを再生します。
+
+開発時の検証用メディアは、FFmpeg・tsMuxeR・dvdauthorを用意し、`scripts/disc_fixture.ps1` で作成できます。出力先の `bluray-long`、`bluray-short`、`dvd` をそれぞれ環境変数 `CMS_DISC_FIXTURE`、`CMS_DISC_SHORT_FIXTURE`、`CMS_DISC_DVD_FIXTURE` に指定し、`./gradlew test --tests '*.disc.*' --tests '*.p2p.DiscIntegrationTest'` を実行します。`CMS_DISC_VLC_DIR` に同梱版VLCの展開先を指定すると、配信元・受信側の実デコードと同期も検証します。これらの試験では帯域値を固定しており、Speedtestの実測は行いません。
+
 ## ライセンス
 
 このプロジェクトは[MIT License](./LICENSE)で公開されています。

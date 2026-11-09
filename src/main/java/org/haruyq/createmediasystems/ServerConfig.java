@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
@@ -75,7 +76,8 @@ public final class ServerConfig {
 
     /** Every stream a server hands to clients passes this check, whoever wrote the URL. */
     public static boolean isAllowed(String url) {
-        return url != null && UrlPolicy.isAllowed(url, ALLOWED_HOSTS.get());
+        return url != null && (DiscUrl.parse(url) != null
+                || UrlPolicy.isAllowed(url, ALLOWED_HOSTS.get()));
     }
 
     private static void registerCommand(RegisterCommandsEvent event) {

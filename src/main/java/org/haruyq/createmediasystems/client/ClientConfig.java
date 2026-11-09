@@ -37,6 +37,12 @@ public final class ClientConfig {
     public static final ModConfigSpec.ConfigValue<String> SPEEDTEST_PATH = BUILDER
             .comment("Ookla's Speedtest CLI (speedtest.net/apps/cli), a path or a name on PATH, which /cms_p2p speedtest runs to size direct P2P sessions. Install it and accept its license yourself, by running it once in a terminal: CMS never accepts it for you.")
             .define("speedtestPath", "speedtest");
+    public static final ModConfigSpec.ConfigValue<String> DISC_FFMPEG_PATH = BUILDER
+            .comment("FFmpeg executable for unencrypted DVD/Blu-ray sharing; needs dvdvideo (libdvdnav), H.264 and AC-3 support.")
+            .define("discFfmpegPath", "ffmpeg");
+    public static final ModConfigSpec.ConfigValue<String> DISC_FFPROBE_PATH = BUILDER
+            .comment("FFprobe executable from the same FFmpeg installation, used to inspect disc titles.")
+            .define("discFfprobePath", "ffprobe");
     private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {

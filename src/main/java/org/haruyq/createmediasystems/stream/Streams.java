@@ -24,6 +24,7 @@ import java.util.function.Function;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.disc.DiscUrl;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -95,6 +96,7 @@ public final class Streams {
         /** The player who started it (or the track before it, which it follows on from); null for none. */
         @Nullable
         final UUID startedBy;
+        final long barrierTicks;
         /** The tick count since the track started at which it began to play; LOADING while it loads. */
         long playingFrom = LOADING;
         /** The players it was sent to while it loaded, whom it waits for. */
@@ -107,8 +109,9 @@ public final class Streams {
         /** The tick count at which the first of them had it loaded; LOADING until then. */
         long firstReadyAt = LOADING;
 
-        Load(@Nullable UUID startedBy) {
+        Load(@Nullable UUID startedBy, long barrierTicks) {
             this.startedBy = startedBy;
+            this.barrierTicks = barrierTicks;
         }
     }
 
@@ -244,7 +247,13 @@ public final class Streams {
     public static void loading(BlockEntity source, @Nullable Player by) {
         source.setChanged();
         Load previous = LOADS.get(key(source));
-        LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy));
+        Source playing = source instanceof MediaSource media ? media.nowPlaying() : null;
+        LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy,
+                barrierTicks(playing == null ? "" : playing.url())));
+    }
+
+    public static long barrierTicks(String url) {
+        return DiscUrl.parse(url) == null ? BARRIER_TICKS : MAX_LOAD_TICKS;
     }
 
     /** Which load of its track {@code source} plays (see Load#id); 0 for one never loaded since the server started. */
@@ -297,7 +306,7 @@ public final class Streams {
             load.expected.removeIf(ServerPlayer::isRemoved);
             boolean everyone = !load.ready.isEmpty() && load.ready.keySet().containsAll(load.expected);
             if (everyone || ticks >= MAX_LOAD_TICKS
-                    || load.firstReadyAt != LOADING && ticks - load.firstReadyAt >= BARRIER_TICKS) {
+                    || load.firstReadyAt != LOADING && ticks - load.firstReadyAt >= load.barrierTicks) {
                 load.playingFrom = ticks;
                 load.ready.forEach((player, emitters) -> {
                     if (!player.isRemoved()) {
@@ -496,6 +505,9 @@ public final class Streams {
      * played, so a disc can be refused before it is written. Also fills the duration cache.
      */
     public static CompletableFuture<TrackInfo> info(String url) {
+        if (DiscUrl.parse(url) != null) {
+            return CompletableFuture.completedFuture(new TrackInfo(null, "DVD / Blu-ray"));
+        }
         URI uri;
         try {
             uri = URI.create(url.trim());

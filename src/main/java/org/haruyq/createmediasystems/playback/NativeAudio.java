@@ -35,8 +35,6 @@ public final class NativeAudio {
     private static final long TAP_WAIT_NANOS = 1_000_000_000L;
     /** How far a playback may start off the server's position before it seeks there; seeking stalls a moment. */
     private static final long SYNC_TOLERANCE_NANOS = 300_000_000L;
-    /** Longest a loaded playback waits, paused, for the server to say play: the server's barrier, and then some. */
-    private static final long GO_TIMEOUT_NANOS = Streams.BARRIER_TICKS * 50_000_000L + 5_000_000_000L;
     /** How often a playing video on demand checks how far its player is off where it should be (see Shared#correct). */
     private static final long CHECK_NANOS = 1_000_000_000L;
     /** Before the first check: VLC takes a moment to get going after it is told to play. */
@@ -83,7 +81,7 @@ public final class NativeAudio {
         if (Vlc.MISSING != null) {
             throw new IOException(Vlc.MISSING);
         }
-        return open(() -> new VlcPlayer(video, requestedAt), source, playback, load,
+        return open(() -> new VlcPlayer(video, requestedAt, startSeconds), source, playback, load,
                 video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded);
     }
 
@@ -329,7 +327,7 @@ public final class NativeAudio {
             // Paused until the server says to play, and from where: the top once every listener has a fresh track
             // loaded, so a slower download doesn't leave one behind; at once, from where it is, for one already
             // playing (see Streams#started). A live stream has no place in it to agree on.
-            long goDeadline = System.nanoTime() + GO_TIMEOUT_NANOS;
+            long goDeadline = System.nanoTime() + Streams.barrierTicks(shared.key.source().toString()) * 50_000_000L + 5_000_000_000L;
             while (go != null && !state.live() && !go.isDone() && System.nanoTime() < goDeadline) {
                 checkCancelled(cancelled);
                 sleep();

@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 
 import io.netty.buffer.ByteBuf;
@@ -96,7 +97,9 @@ public class VideoDiscItem extends Item {
         List<String> playlist = urls.stream().map(String::trim).filter(url -> !url.isEmpty())
                 .limit(disc.entries).toList();
         for (int i = 0; i < playlist.size(); i++) {
-            if (!ServerConfig.isAllowed(playlist.get(i))) {
+            var physical = DiscUrl.parse(playlist.get(i));
+            if (!ServerConfig.isAllowed(playlist.get(i)) || physical != null && !physical.owner().equals(player.getUUID())
+                    && !held.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of()).contains(playlist.get(i))) {
                 player.displayClientMessage(Component.translatable("create_media_systems.disc.rejected", i + 1)
                         .withStyle(ChatFormatting.RED), true);
                 return;

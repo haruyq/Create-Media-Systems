@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -38,9 +39,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * for a request this client no longer wants is dropped, and the server ignores a leave for one it replaced.
  */
 public final class P2pClient {
-    private static Transport transport;
+    private static volatile Transport transport;
+    private static volatile Transport.Listener media;
+    private static Consumer<Transport> changed = session -> {};
+    private static UUID joining;
     /** The request whose ticket opened {@link #transport} (or is opening it); 0 if none. */
-    private static int session;
+    private static volatile int session;
     /** The latest host or join; 0 once left. Numbers are never reused, not even on another server. */
     private static int wanted;
     private static int requests;
@@ -79,6 +83,37 @@ public final class P2pClient {
     /** This client's session, for what sends or receives over it; null if none. */
     public static Transport current() {
         return transport;
+    }
+
+    public static void media(Transport.Listener listener) {
+        media = listener;
+    }
+
+    public static void changed(Consumer<Transport> listener) {
+        changed = listener;
+    }
+
+    public static boolean connect(UUID owner) {
+        if (transport != null && transport.state() != Transport.State.CLOSED && transport.hostId().equals(owner)) {
+            return true;
+        }
+        if (owner.equals(joining)) {
+            return true;
+        }
+        var mc = Minecraft.getInstance();
+        if (mc.player == null || mc.getConnection() == null) {
+            return false;
+        }
+        PlayerInfo player = mc.getConnection().getPlayerInfo(owner);
+        if (player == null) {
+            return false;
+        }
+        boolean host = owner.equals(mc.player.getUUID());
+        if (request(host ? P2p.Action.HOST : P2p.Action.JOIN, host ? "" : player.getProfile().getName()) == 0) {
+            return false;
+        }
+        joining = owner;
+        return true;
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
@@ -171,6 +206,7 @@ public final class P2pClient {
     static void logout() {
         closeTransport();
         wanted = 0;
+        joining = null;
     }
 
     private static int status() {
@@ -193,18 +229,40 @@ public final class P2pClient {
         }
         closeTransport();
         session = request;
+        joining = ticket.ticket().hostId();
         // The API of the server that gave the ticket: it goes nowhere else, even if this client moves on while it opens.
         String origin = api.get();
-        Transport.Listener listener = message -> game.execute(() -> {
-            if (session != request) {
-                return;
+        Transport.Listener listener = new Transport.Listener() {
+            @Override
+            public void data(UUID from, byte[] payload) {
+                Transport.Listener receiver = media;
+                if (session == request && receiver != null) {
+                    receiver.data(from, payload);
+                }
             }
-            say(Component.literal(named(message)), false);
-            // A session that ended by itself (host left, connection failed) frees this player on the server too.
-            if (transport != null && transport.state() == Transport.State.CLOSED) {
-                ended(request);
+
+            @Override
+            public void control(UUID from, byte[] payload) {
+                Transport.Listener receiver = media;
+                if (session == request && receiver != null) {
+                    receiver.control(from, payload);
+                }
             }
-        });
+
+            @Override
+            public void status(String message) {
+                game.execute(() -> {
+                    if (session != request) {
+                        return;
+                    }
+                    say(Component.literal(named(message)), false);
+                    // A session that ended by itself frees this player on the server too.
+                    if (transport != null && transport.state() == Transport.State.CLOSED) {
+                        ended(request);
+                    }
+                });
+            }
+        };
         CompletableFuture.supplyAsync(() -> open.open(origin, ticket.ticket(), listener)).whenComplete((opened, error) -> game.execute(() -> {
             if (session != request) {
                 // Left, logged out or replaced while it opened.
@@ -218,6 +276,8 @@ public final class P2pClient {
                 ended(request);
             } else {
                 transport = opened;
+                joining = null;
+                changed.accept(opened);
             }
         }));
     }
@@ -232,14 +292,17 @@ public final class P2pClient {
     }
 
     static void notice(Component message) {
+        joining = null;
         say(message, true);
     }
 
     private static void closeTransport() {
         session = 0;
+        joining = null;
         if (transport != null) {
             transport.close();
             transport = null;
+            changed.accept(null);
         }
     }
 

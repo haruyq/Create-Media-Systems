@@ -307,5 +307,11 @@
   "create_media_systems.p2p.status.unmeasured": "帯域: 未測定（/cms_p2p speedtest）。",
   "create_media_systems.p2p.status.measured": "帯域: ダウンロード %s Mbps、アップロード %s Mbps（%s 分前に測定）。",
   "create_media_systems.p2p.status.host": "ホスト中（%s）: 直接接続の視聴者 %s 人、1 人あたりの予算 %s Mbps。",
-  "create_media_systems.p2p.status.viewer": "視聴中（%s）: 直接接続 %s 件、予算 %s Mbps、受信 %s バイト。"
+  "create_media_systems.p2p.status.viewer": "視聴中（%s）: 直接接続 %s 件、予算 %s Mbps、受信 %s バイト。",
+  "create_media_systems.disc_stream.hold_disc": "先にDVDまたはBlu-rayアイテムをメインハンドに持ってください。",
+  "create_media_systems.disc_stream.busy": "ディスクを読み込み中です。中止するには /cms_disc unload を実行してください。",
+  "create_media_systems.disc_stream.reading": "非暗号化ディスクを読み込んでいます。完了までDVDまたはBlu-rayアイテムを持ったままにしてください…",
+  "create_media_systems.disc_stream.loaded": "ディスクを読み込みました（%s秒）。このアイテムをBlu-rayプレイヤーに入れると配信できます。",
+  "create_media_systems.disc_stream.unloaded": "ディスクの配信を停止し、メモリ上の映像を解放しました。",
+  "create_media_systems.disc_stream.failed": "ディスクを読み込めませんでした: %s"
 }
