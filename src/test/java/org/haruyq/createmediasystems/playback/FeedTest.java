@@ -48,9 +48,11 @@ class FeedTest {
             requests.incrementAndGet();
             return new ByteArrayInputStream(new byte[1000]);
         };
-        Feed.read("song", 0, open, reason -> { }).close();
+        Feed.Reader first = Feed.read("song", 0, open, reason -> { });
+        first.prebuffer(1, System.currentTimeMillis() + 5_000);
+        first.close();
         Feed.Reader again = Feed.read("song", 0, open, reason -> { });
-        again.prebuffer(1000, System.currentTimeMillis() + 5_000);
+        again.prebuffer(1001, System.currentTimeMillis() + 5_000);
         assertEquals(2, requests.get());
         assertArrayEquals(new byte[1000], again.read(2000));
         assertTrue(again.done());
