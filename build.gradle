@@ -194,8 +194,8 @@ if (providers.gradleProperty('sableTests').isPresent()) {
 // VideoLAN's own VLC for 64-bit Windows, bundled so CMS plays media with nothing else installed (see Vlc.java).
 // Downloaded once into Gradle's cache, checked against VideoLAN's published SHA-256, and left without the parts
 // playback and lighting analysis don't use (its interfaces, scripting, network output). Other systems use their own VLC 3.
-def vlcVersion = '3.0.21'
-def vlcSha256 = 'a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843'
+def vlcVersion = '3.0.24'
+def vlcSha256 = 'fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323'
 def vlcDownload = file("${gradle.gradleUserHomeDir}/caches/create_media_systems/vlc-${vlcVersion}-win64.zip")
 def vlcResources = layout.buildDirectory.dir('generated/vlc')
 var downloadVlc = tasks.register('downloadVlc') {
