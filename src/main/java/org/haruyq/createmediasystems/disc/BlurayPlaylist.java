@@ -107,14 +107,14 @@ record BlurayPlaylist(int title, List<Clip> clips) {
     }
 
     byte[] concat(Path root) throws IOException {
-        return concat(root, 0, duration(), 0);
+        return concat(root, 0, duration(), 0, null);
     }
 
     byte[] concat(Path root, double start, double seconds) throws IOException {
-        return concat(root, start, seconds, DiscSource.SEGMENT_SECONDS);
+        return concat(root, start, seconds, DiscSource.SEGMENT_SECONDS, null);
     }
 
-    private byte[] concat(Path root, double start, double seconds, double preroll) throws IOException {
+    byte[] concat(Path root, double start, double seconds, double preroll, DiscSource.Access access) throws IOException {
         StringBuilder text = new StringBuilder("ffconcat version 1.0\n");
         double at = 0;
         for (Clip clip : clips) {
@@ -128,11 +128,11 @@ record BlurayPlaylist(int title, List<Clip> clips) {
             if (!Files.isRegularFile(path)) {
                 throw new IOException("A Blu-ray playlist clip is missing");
             }
-            String name = path.toAbsolutePath().toString().replace('\\', '/');
+            String name = access == null ? "file:" + path.toAbsolutePath().toString().replace('\\', '/') : access.media(path);
             if (name.contains("\n") || name.contains("\r")) {
                 throw new IOException("The disc path contains a newline");
             }
-            text.append("file 'file:").append(name.replace("'", "'\\''")).append("'\n")
+            text.append("file '").append(name.replace("'", "'\\''")).append("'\n")
                     .append("inpoint ").append(in - preroll).append("\noutpoint ").append(out)
                     .append("\nduration ").append(to - from).append('\n');
         }

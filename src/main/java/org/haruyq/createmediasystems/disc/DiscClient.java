@@ -112,32 +112,38 @@ public final class DiscClient {
         reading = Thread.ofPlatform().daemon().name("CMS disc reader").start(() -> {
             try {
                 Path disc = Path.of(path).toRealPath();
-                var tools = DiscTools.ensure(ClientConfig.DIR.resolve("ffmpeg"), ClientConfig.DISC_FFMPEG_PATH.get(),
-                        ClientConfig.DISC_FFPROBE_PATH.get(), () -> mc.execute(() -> {
+                DiscSource opened = DiscReaders.open(ClientConfig.DIR.resolve("ffmpeg"), ClientConfig.DISC_FFMPEG_PATH.get(),
+                        ClientConfig.DISC_FFPROBE_PATH.get(), disc, title, () -> mc.execute(() -> {
                             if (request == generation) {
                                 say("downloading", false);
                             }
                         }));
-                DiscSource opened = DiscSource.open(tools.ffmpeg(), tools.ffprobe(), disc, title);
-                Transport connected = connection(owner);
-                DiscUrl url = new DiscUrl(owner, UUID.randomUUID());
-                DiscStream prepared = new DiscStream(connected, url.source(), opened, DiscClient::log);
-                mc.execute(() -> {
-                    if (request != generation || mc.player == null || connected != P2pClient.current()) {
-                        prepared.close();
-                        return;
-                    }
-                    if (!net.minecraft.world.item.ItemStack.matches(held, mc.player.getMainHandItem())) {
-                        prepared.close();
-                        say("hold_disc", true);
-                        return;
-                    }
-                    source = opened;
-                    shared = url;
-                    stream = prepared;
-                    PacketDistributor.sendToServer(new VideoDiscItem.SetPlaylist(List.of(url.toString())));
-                    say("loaded", false, String.format(java.util.Locale.ROOT, "%.0f", opened.duration()));
-                });
+                try {
+                    Transport connected = connection(owner);
+                    DiscUrl url = new DiscUrl(owner, UUID.randomUUID());
+                    DiscStream prepared = new DiscStream(connected, url.source(), opened, DiscClient::log);
+                    mc.execute(() -> {
+                        if (request != generation || mc.player == null || connected != P2pClient.current()) {
+                            prepared.close();
+                            opened.close();
+                            return;
+                        }
+                        if (!net.minecraft.world.item.ItemStack.matches(held, mc.player.getMainHandItem())) {
+                            prepared.close();
+                            opened.close();
+                            say("hold_disc", true);
+                            return;
+                        }
+                        source = opened;
+                        shared = url;
+                        stream = prepared;
+                        PacketDistributor.sendToServer(new VideoDiscItem.SetPlaylist(List.of(url.toString())));
+                        say("loaded", false, String.format(java.util.Locale.ROOT, "%.0f", opened.duration()));
+                    });
+                } catch (IOException | RuntimeException failed) {
+                    opened.close();
+                    throw failed;
+                }
             } catch (IOException | RuntimeException failed) {
                 mc.execute(() -> {
                     if (request == generation) {
@@ -213,10 +219,12 @@ public final class DiscClient {
         DiscStream current = stream;
         stream = null;
         shared = null;
+        DiscSource loaded = source;
         source = null;
         if (current != null) {
             current.close();
         }
+        if (loaded != null) loaded.close();
     }
 
     private static void log(String message) {
