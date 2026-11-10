@@ -333,6 +333,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 if (!released) {
                     reportFailure(error instanceof IOException ? error.getMessage()
                             : "Native playback failed to initialize");
+                    // Silent here, but no longer loading: the source and its other listeners don't wait on this one.
+                    started.accept(0);
                 }
                 stop();
                 return new Silence();
@@ -356,6 +358,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             if (failed != null) {
                 LogUtils.getLogger().warn("Could not stream {}", urlAt.apply(0), failed);
                 reportFailure(UrlPolicy.reason(failed));
+                started.accept(0);
             } else {
                 // Joining mid-way (start > 0): others are already listening, so land where they are now, not where
                 // the server was when it said to play. A fresh start plays from the top for everyone: the server

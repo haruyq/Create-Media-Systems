@@ -192,7 +192,11 @@ final class NativeMediaResolver {
             media = manifest(NativeMedia.dash(response), ".mpd");
         }
         if (!audioOnly) attachSubtitles(response, options);
-        return Prepared.of(media, live, download, 0, options);
+        // The API's length: VLC has none for an HLS playlist until it has played a little, and without one a track
+        // counts as live, never sought to where its listeners are (a tape played on, a paused disc) nor kept there.
+        double duration = !live && response.has("duration") && response.get("duration").isJsonPrimitive()
+                ? response.get("duration").getAsDouble() : 0;
+        return Prepared.of(media, live, download, Double.isFinite(duration) && duration > 0 ? duration : 0, options);
     }
 
     private static URI manifest(String content, String suffix) throws IOException {

@@ -61,4 +61,15 @@ class NativeMediaTest {
         assertEquals(580,segments.get(1).getAsJsonObject().get("offset").getAsInt());
         assertEquals(2050,segments.get(1).getAsJsonObject().get("time").getAsInt());
     }
+
+    /** VLC has no length for an HLS playlist when it opens: the API's stands in, so a tape or paused disc is sought on. */
+    @Test void anHlsTrackKeepsTheApisLengthUnlessLive() throws Exception {
+        String hls = "{\"version\":1,\"mode\":\"native\",\"duration\":155,\"live\":false,\"available_at\":0,"
+                + "\"manifest\":{\"type\":\"hls\",\"content\":\"#EXTM3U\n\"},"
+                + "\"audio\":[{\"kind\":\"audio\",\"url\":\"https://media.example/a.m3u8\",\"protocol\":\"m3u8_native\"}]}";
+        JsonObject response = JsonParser.parseString(hls).getAsJsonObject();
+        assertEquals(155, NativeMediaResolver.prepare(response, true).duration());
+        response.addProperty("live", true);
+        assertEquals(0, NativeMediaResolver.prepare(response, true).duration(), "a live stream has no length to seek in");
+    }
 }
