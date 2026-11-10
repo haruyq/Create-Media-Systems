@@ -23,7 +23,7 @@ public enum Unit {
     /** How tall a stack may be: its block. */
     public static final float ROOM = 16;
     /** The made-up maker whose badge every unit carries. */
-    public static final String BRAND = "Melodia";
+    public static final String BRAND = "PIONEAR";
 
     /** What its item is called after {@code hifi_}. */
     public final String id;
