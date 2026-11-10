@@ -54,7 +54,11 @@ public final class DiscStream implements AutoCloseable {
     private volatile double duration;
     private volatile boolean closed;
     private Pending pending;
-    private String codec;
+    private volatile String codec;
+    /** For {@link #stats}: see there. */
+    private volatile int waitingIndex, lastIndex = -1, lastEncoded = -1, failures;
+    private volatile long waitingSince, lastBytes, lastNanos;
+    private volatile String lastError, lastQuality;
     /** The DVD pass segments are taken from; on the encoder thread, and closed by close. */
     private volatile DiscRun run;
     private int cachedBytes;
@@ -74,6 +78,20 @@ public final class DiscStream implements AutoCloseable {
 
     public boolean matches(Transport session, UUID id) {
         return !closed && session == transport && sourceId.equals(id);
+    }
+
+    /**
+     * What this stream did last, for the debug overlay. As viewer: the segment it waits for from the host (-1: the
+     * disc's length) and since when (0: none), the last one it got, its size and how long it took, and how many
+     * requests failed and why the last did. As host: its encoder, and the last segment it encoded and at what quality.
+     */
+    public record Stats(boolean host, int waiting, long waitingSince, int last, long lastBytes, long lastNanos,
+                        int failures, String error, String encoder, int encoded, String quality) {
+    }
+
+    public Stats stats() {
+        return new Stats(source != null, waitingIndex, waitingSince, lastIndex, lastBytes, lastNanos, failures, lastError,
+                codec, lastEncoded, lastQuality);
     }
 
     public double duration() {
@@ -214,6 +232,8 @@ public final class DiscStream implements AutoCloseable {
                         bytes = encode(index, quality);
                     }
                     adaptive.encoded(System.nanoTime() - started, available);
+                    lastQuality = quality.height() + "p" + quality.fps() + " " + quality.kbps() + " kbps";
+                    lastEncoded = index;
                     status.accept("Disc segment " + index + ": " + quality.height() + "p " + quality.fps() + " fps, " + quality.kbps() + " kbps");
                 }
                 synchronized (this) {
@@ -305,12 +325,25 @@ public final class DiscStream implements AutoCloseable {
             pending = new Pending(REQUESTS.incrementAndGet(), index);
         }
         Pending request = pending;
+        long started = System.nanoTime();
+        waitingIndex = index;
+        waitingSince = started;
         try {
             sendControl(control(1, request.id, index));
             byte[] bytes = await(request.result);
+            if (index >= 0) {
+                lastIndex = index;
+                lastBytes = bytes.length;
+                lastNanos = System.nanoTime() - started;
+            }
             sendControl(control(2, request.id, index));
             return bytes;
+        } catch (IOException failed) {
+            failures++;
+            lastError = failed.getMessage();
+            throw failed;
         } finally {
+            waitingSince = 0;
             synchronized (reception) {
                 pending = null;
             }

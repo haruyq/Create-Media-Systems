@@ -297,6 +297,8 @@
   "create_media_systems.p2p.left": "Left the P2P session.",
   "create_media_systems.p2p.host_left": "The host left before you could join.",
   "create_media_systems.p2p.none": "Not in a P2P session.",
+  "create_media_systems.p2p.debug.on": "Showing the P2P connection overlay. /cms p2p debug again hides it.",
+  "create_media_systems.p2p.debug.off": "Hid the P2P connection overlay.",
   "create_media_systems.p2p.natives_failed": "Could not start direct P2P: %s",
   "create_media_systems.p2p.status.host": "Hosting (%s): %s viewer(s) connected directly, the slowest paced at %s Mbps.",
   "create_media_systems.p2p.status.viewer": "Viewing (%s): %s direct connection(s), measured at %s Mbps, %s bytes received.",

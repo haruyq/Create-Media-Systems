@@ -158,6 +158,12 @@ public final class DiscClient {
 
     public record Prepared(URI uri, double duration) {}
 
+    /** The disc stream's {@link DiscStream#stats}, for the P2P debug overlay; null if none. */
+    public static DiscStream.Stats stats() {
+        DiscStream current = stream;
+        return current == null ? null : current.stats();
+    }
+
     public static Prepared prepare(DiscUrl url, double startSeconds) throws IOException {
         int request = generation;
         var mc = Minecraft.getInstance();

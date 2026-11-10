@@ -31,7 +31,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * {@code /cms p2p}: this client's side of direct P2P (see P2p). host, join and leave ask the server, which hands
- * back a ticket; status and ping report on the session, whose connections measure themselves (see LinkRate). Game
+ * back a ticket; status, ping and debug (see P2pOverlay) report on the session, whose connections measure themselves (see LinkRate). Game
  * thread only, but for the Transport's, which comes back to it.
  * <p>
  * Each host or join is a numbered request, and its ticket, session and leave carry that number: whatever comes
@@ -117,6 +117,11 @@ public final class P2pClient {
                         .executes(c -> request(P2p.Action.JOIN, StringArgumentType.getString(c, "host")))))
                 .then(Commands.literal("leave").executes(c -> leave()))
                 .then(Commands.literal("status").executes(c -> status()))
+                .then(Commands.literal("debug").executes(c -> {
+                    say(Component.translatable(P2pOverlay.toggle() ? "create_media_systems.p2p.debug.on"
+                            : "create_media_systems.p2p.debug.off"), false);
+                    return 1;
+                }))
                 .then(Commands.literal("ping").executes(c -> {
                     if (transport == null) {
                         say(Component.translatable("create_media_systems.p2p.none"), true);

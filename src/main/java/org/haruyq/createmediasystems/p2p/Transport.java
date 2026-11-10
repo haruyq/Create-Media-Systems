@@ -233,6 +233,21 @@ public final class Transport implements AutoCloseable {
         return received;
     }
 
+    /**
+     * One connection as of now, for the debug overlay: its ICE route, the last round trip measured on it (0 before
+     * any), its pace (host) or what the probe measured (viewer), whether that probe has answered, the bytes waiting
+     * to go out, and since when it is open.
+     */
+    public record LinkInfo(UUID peer, boolean open, String route, long rttNanos, long bps, boolean measured, long backlog,
+                           long openedAt) {
+    }
+
+    public synchronized List<LinkInfo> links() {
+        return links.values().stream().map(l -> new LinkInfo(l.peer, l.open, l.route, l.rttNanos,
+                ticket.host() ? l.rate.bps() : budgetBps, ticket.host() ? l.rate.measured() : l.probeEnded, l.backlog,
+                l.openedAt)).toList();
+    }
+
     /** Peers with an open DataChannel. */
     public synchronized List<UUID> connected() {
         return links.values().stream().filter(l -> l.open).map(l -> l.peer).toList();
@@ -291,12 +306,23 @@ public final class Transport implements AutoCloseable {
             if (links.values().stream().noneMatch(l -> l.open)) {
                 listener.status("No peer is connected directly yet.");
             }
-            for (Link link : links.values()) {
-                if (link.open) {
-                    link.sendNow(frame(PING, ByteBuffer.allocate(8).putLong(System.nanoTime()).array()));
-                }
-            }
+            ping(false);
         });
+    }
+
+    /** Pings every connected peer without reporting: the answers only update {@link LinkInfo#rttNanos}. */
+    public void measure() {
+        post(() -> ping(true));
+    }
+
+    /** A quiet ping carries a ninth byte, which the peer echoes back with the rest. */
+    private void ping(boolean quiet) {
+        for (Link link : links.values()) {
+            if (link.open && link.channel.getBufferedAmount() < MAX_QUEUED) {
+                ByteBuffer body = ByteBuffer.allocate(quiet ? 9 : 8).putLong(System.nanoTime());
+                link.sendNow(frame(PING, body.array()));
+            }
+        }
     }
 
     @Override
@@ -458,7 +484,8 @@ public final class Transport implements AutoCloseable {
                 }
             }
             if (!link.closed) {
-                most = Math.max(most, link.queued + link.channel.getBufferedAmount());
+                link.backlog = link.queued + link.channel.getBufferedAmount();
+                most = Math.max(most, link.backlog);
             }
         }
         backlog = most;
@@ -534,10 +561,14 @@ public final class Transport implements AutoCloseable {
                 }
             }
             case PONG -> {
-                if (frame.length == 9) {
-                    long sent = ByteBuffer.wrap(frame, 1, 8).getLong();
-                    listener.status(String.format(Locale.ROOT, "%s: %.1f ms over a direct %s connection", name(link.peer),
-                            (System.nanoTime() - sent) / 1e6, link.route));
+                long rtt = frame.length == 9 || frame.length == 10 ? System.nanoTime() - ByteBuffer.wrap(frame, 1, 8).getLong() : -1;
+                // A round trip under a minute; the peer echoes the time it was sent, so anything else is not one.
+                if (rtt >= 0 && rtt < 60_000_000_000L) {
+                    link.rttNanos = rtt;
+                    if (frame.length == 9) {
+                        listener.status(String.format(Locale.ROOT, "%s: %.1f ms over a direct %s connection", name(link.peer),
+                                rtt / 1e6, link.route));
+                    }
                 }
             }
             default -> { }
@@ -685,6 +716,8 @@ public final class Transport implements AutoCloseable {
         final LinkRate rate = new LinkRate();
         /** When it opened and when its probe answered (host); the probe as it comes in (viewer). */
         long openedAt, probedAt, probeFirst, probeLast, probeBytes;
+        /** The last round trip measured, and the bytes waiting for it as of the last tick (see LinkInfo). */
+        long rttNanos, backlog;
         boolean probeEnded;
         String route = "direct";
 

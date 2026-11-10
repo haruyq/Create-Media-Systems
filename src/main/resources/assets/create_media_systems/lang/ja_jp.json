@@ -297,6 +297,8 @@
   "create_media_systems.p2p.left": "P2P セッションから退出しました。",
   "create_media_systems.p2p.host_left": "参加する前にホストが退出しました。",
   "create_media_systems.p2p.none": "P2P セッションに参加していません。",
+  "create_media_systems.p2p.debug.on": "P2P接続のデバッグ表示をオンにしました。もう一度 /cms p2p debug でオフにします。",
+  "create_media_systems.p2p.debug.off": "P2P接続のデバッグ表示をオフにしました。",
   "create_media_systems.p2p.natives_failed": "直接 P2P を開始できませんでした: %s",
   "create_media_systems.p2p.status.host": "ホスト中（%s）: 直接接続の視聴者 %s 人、最も遅い接続の送信速度 %s Mbps。",
   "create_media_systems.p2p.status.viewer": "視聴中（%s）: 直接接続 %s 件、測定値 %s Mbps、受信 %s バイト。",
