@@ -78,8 +78,9 @@ public final class DiscClient {
         }
     }
 
+    /** {@code /cms disc}; the server's {@code /cms config} and {@code /cms p2p} (see P2pClient) share the root. */
     private static void commands(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("cms_disc")
+        event.getDispatcher().register(Commands.literal("cms").then(Commands.literal("disc")
                 .then(Commands.literal("load").then(Commands.argument("path", StringArgumentType.string())
                         .executes(c -> load(StringArgumentType.getString(c, "path"), -1))
                         .then(Commands.argument("title", IntegerArgumentType.integer(0, 99999))
@@ -88,7 +89,7 @@ public final class DiscClient {
                     clear();
                     say("unloaded", false);
                     return 1;
-                })));
+                }))));
     }
 
     private static int load(String path, int title) {
@@ -181,7 +182,7 @@ public final class DiscClient {
             current = stream;
             if (current == null || !current.matches(connected, url.source())) {
                 if (connected.host() && !url.equals(shared)) {
-                    throw new IOException("Load this disc again with /cms_disc load");
+                    throw new IOException("Load this disc again with /cms disc load");
                 }
                 if (current != null) {
                     current.close();
@@ -208,7 +209,7 @@ public final class DiscClient {
                 throw new IOException("Disc connection was cancelled");
             }
         }
-        throw new IOException("Could not connect directly to the disc host; check /cms_p2p status");
+        throw new IOException("Could not connect directly to the disc host; check /cms p2p status");
     }
 
     private static synchronized void clear() {

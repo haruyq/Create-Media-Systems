@@ -30,7 +30,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * {@code /cms_p2p}: this client's side of direct P2P (see P2p). host, join and leave ask the server, which hands
+ * {@code /cms p2p}: this client's side of direct P2P (see P2p). host, join and leave ask the server, which hands
  * back a ticket; status and ping report on the session, whose connections measure themselves (see LinkRate). Game
  * thread only, but for the Transport's, which comes back to it.
  * <p>
@@ -109,7 +109,8 @@ public final class P2pClient {
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("cms_p2p")
+        // A client command under the server's /cms: NeoForge hands what no client command matches (/cms config) to the server.
+        event.getDispatcher().register(Commands.literal("cms").then(Commands.literal("p2p")
                 .then(Commands.literal("host").executes(c -> request(P2p.Action.HOST, "")))
                 .then(Commands.literal("join").then(Commands.argument("host", StringArgumentType.word())
                         .suggests((c, builder) -> SharedSuggestionProvider.suggest(players(), builder))
@@ -123,7 +124,7 @@ public final class P2pClient {
                     }
                     transport.ping();
                     return 1;
-                })));
+                }))));
     }
 
     /**

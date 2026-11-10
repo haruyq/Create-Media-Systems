@@ -81,7 +81,7 @@ public final class ServerConfig {
     }
 
     private static void registerCommand(RegisterCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal(CreateMediaSystems.MOD_ID).requires(source -> source.hasPermission(2))
+        event.getDispatcher().register(Commands.literal("cms").requires(source -> source.hasPermission(2))
                 .then(Commands.literal("config")
                         .then(Commands.literal("reload").executes(c -> reload(c.getSource())))
                         .then(Commands.literal("apiUrl")

@@ -110,7 +110,7 @@ final class DiscTools {
             try (InputStream input = response.body(); var worker = Executors.newVirtualThreadPerTaskExecutor()) {
                 try {
                     if (response.statusCode() != 200 || response.headers().firstValueAsLong("Content-Length").orElse(0) > MAX_DOWNLOAD) {
-                        throw new IOException("FFmpeg download failed (HTTP " + response.statusCode() + "); retry /cms_disc load");
+                        throw new IOException("FFmpeg download failed (HTTP " + response.statusCode() + "); retry /cms disc load");
                     }
                     var copy = worker.submit(() -> {
                         MessageDigest hash = digest();
@@ -129,12 +129,12 @@ final class DiscTools {
                         return HexFormat.of().formatHex(hash.digest());
                     });
                     if (!checksum.equals(copy.get(5, TimeUnit.MINUTES))) {
-                        throw new IOException("FFmpeg download failed SHA-256 verification; retry /cms_disc load");
+                        throw new IOException("FFmpeg download failed SHA-256 verification; retry /cms disc load");
                     }
                 } catch (java.util.concurrent.ExecutionException failed) {
-                    throw new IOException("FFmpeg download failed; check your connection and retry /cms_disc load", failed.getCause());
+                    throw new IOException("FFmpeg download failed; check your connection and retry /cms disc load", failed.getCause());
                 } catch (java.util.concurrent.TimeoutException timeout) {
-                    throw new IOException("FFmpeg download timed out; retry /cms_disc load");
+                    throw new IOException("FFmpeg download timed out; retry /cms disc load");
                 } finally {
                     input.close();
                     worker.shutdownNow();
@@ -185,7 +185,7 @@ final class DiscTools {
         }
         for (String name : List.of("ffmpeg.exe", "ffprobe.exe", "LICENSE", "README.txt")) {
             if (!Files.isRegularFile(directory.resolve(name)) || Files.size(directory.resolve(name)) == 0) {
-                throw new IOException("FFmpeg archive is incomplete; retry /cms_disc load");
+                throw new IOException("FFmpeg archive is incomplete; retry /cms disc load");
             }
         }
         Files.write(directory.resolve(".complete"), files);
