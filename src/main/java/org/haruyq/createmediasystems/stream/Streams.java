@@ -141,6 +141,8 @@ public final class Streams {
 
     // ponytail: never evicted, one double per distinct URL played since start; add an LRU if that grows.
     private static final Map<String, Double> DURATIONS = new ConcurrentHashMap<>();
+    /** Tracks the API answered /info for with an error (see duration): they end at once, as nobody can play them. */
+    private static final Set<String> REFUSED = ConcurrentHashMap.newKeySet();
     /** How long a track whose /info failed waits before it is asked about again (see duration). */
     static final long INFO_RETRY_SECONDS = 60;
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -420,10 +422,13 @@ public final class Streams {
         return endedAt(source.url(), source.ticks());
     }
 
-    /** Whether {@code url} has played past its length {@code ticks} in; false while that length is unknown. */
+    /**
+     * Whether {@code url} has played past its length {@code ticks} in; false while that length is unknown. True for a
+     * track the API refused: no listener can load it either, so a deck or player moves on past it.
+     */
     public static boolean endedAt(String url, long ticks) {
         double duration = duration(url);
-        return duration > 0 && ticks >= duration * 20;
+        return REFUSED.contains(url) || duration > 0 && ticks >= duration * 20;
     }
 
     /**
@@ -519,11 +524,18 @@ public final class Streams {
             return cached;
         }
         info(url).exceptionally(e -> {
-            LogUtils.getLogger().warn("Audio API /info failed for {}: {}; asking again in {}s", url, e.getMessage(),
-                    INFO_RETRY_SECONDS);
+            Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
+            boolean refused = cause instanceof Refused;
+            if (refused) {
+                REFUSED.add(url);
+            }
+            LogUtils.getLogger().warn("Audio API /info failed for {}: {}; {}asking again in {}s", url, cause.getMessage(),
+                    refused ? "skipping it, " : "", INFO_RETRY_SECONDS);
             // Else a Blu-ray player, disc reader or jukebox waits on it forever, unless a listener tells its length.
-            CompletableFuture.delayedExecutor(INFO_RETRY_SECONDS, TimeUnit.SECONDS)
-                    .execute(() -> DURATIONS.remove(url, UNKNOWN));
+            CompletableFuture.delayedExecutor(INFO_RETRY_SECONDS, TimeUnit.SECONDS).execute(() -> {
+                REFUSED.remove(url);
+                DURATIONS.remove(url, UNKNOWN);
+            });
             return null;
         });
         return UNKNOWN;
@@ -551,7 +563,7 @@ public final class Streams {
                         .timeout(Duration.ofSeconds(60)).build(), HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() != 200) {
-                        throw new CompletionException(new IOException(UrlPolicy.errorDetail(response.statusCode(), response.body())));
+                        throw new CompletionException(new Refused(UrlPolicy.errorDetail(response.statusCode(), response.body())));
                     }
                     JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
                     TrackInfo info = new TrackInfo(optional(body, "duration", JsonElement::getAsDouble),
@@ -561,6 +573,13 @@ public final class Streams {
                     }
                     return info;
                 });
+    }
+
+    /** The API answered, with an error: the host isn't allowed, or the track can't be played (see endedAt). */
+    static final class Refused extends IOException {
+        Refused(String message) {
+            super(message);
+        }
     }
 
     @Nullable

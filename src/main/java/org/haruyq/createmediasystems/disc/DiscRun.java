@@ -69,9 +69,14 @@ final class DiscRun implements AutoCloseable {
         });
     }
 
-    /** Whether the next segment it hands over is {@code index}, at this quality and encoder. */
+    /**
+     * Whether the next segment it hands over is {@code index}, at this picture size and frame rate and encoder. A
+     * bit rate alone changing doesn't restart it: below 2 Mbps that changes with every measure of the connection, and
+     * each restart seeks again, which takes seconds and lands off the boundary.
+     */
     boolean continues(int index, DiscSource.Quality quality, String encoder) {
-        return !ended && next == index && this.quality.equals(quality) && this.encoder.equals(encoder);
+        return !ended && next == index && this.quality.height() == quality.height() && this.quality.fps() == quality.fps()
+                && this.encoder.equals(encoder);
     }
 
     /** The next segment, waiting up to 30 s for it to be encoded. */

@@ -195,7 +195,9 @@ public final class DiscStream implements AutoCloseable {
             if (!ahead && !known.ready.isDone() && work.remove(known.work)) {
                 work.addFirst(known.work);
             }
-            if (!lowerForPeer || source == null || !known.ready.isDone() || known.quality.kbps() <= quality.kbps()) {
+            // A DVD's segment again would restart its pass (see encode), so it goes as it is.
+            if (!lowerForPeer || source == null || !source.bluray() || !known.ready.isDone()
+                    || known.quality.kbps() <= quality.kbps()) {
                 return known.ready;
             }
             if (!known.ready.isCompletedExceptionally()) {
@@ -221,6 +223,8 @@ public final class DiscStream implements AutoCloseable {
                         throw new IOException("Disc sharing needs at least 0.5 Mbps per viewer");
                     }
                     long started = System.nanoTime();
+                    // A DVD pass starting (see encode) seeks first: seconds that say nothing of how fast this encodes.
+                    boolean starts = !source.bluray() && (run == null || !run.continues(index, quality, codec));
                     try {
                         bytes = encode(index, quality);
                     } catch (IOException failed) {
@@ -229,12 +233,17 @@ public final class DiscStream implements AutoCloseable {
                         }
                         codec = "libx264";
                         status.accept("Hardware encoding failed; using libx264 for this disc");
+                        starts = !source.bluray();
                         bytes = encode(index, quality);
                     }
-                    adaptive.encoded(System.nanoTime() - started, available);
-                    lastQuality = quality.height() + "p" + quality.fps() + " " + quality.kbps() + " kbps";
+                    if (!starts) {
+                        adaptive.encoded(System.nanoTime() - started, available);
+                    }
+                    DiscRun current = run;
+                    DiscSource.Quality used = source.bluray() || current == null ? quality : current.quality;
+                    lastQuality = used.height() + "p" + used.fps() + " " + used.kbps() + " kbps";
                     lastEncoded = index;
-                    status.accept("Disc segment " + index + ": " + quality.height() + "p " + quality.fps() + " fps, " + quality.kbps() + " kbps");
+                    status.accept("Disc segment " + index + ": " + used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps");
                 }
                 synchronized (this) {
                     if (closed) {

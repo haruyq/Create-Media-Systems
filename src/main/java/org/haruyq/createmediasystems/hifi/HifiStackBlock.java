@@ -208,6 +208,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
     public static final int STATIONS = 6;
     /** How many times faster than it plays a deck winds its tape. */
     static final int WIND = 30;
+    /**
+     * Ticks after switching on before the speakers play, as an amplifier's protection relay clicks in: the power
+     * switch pressed over and over starts nothing, instead of every listener loading the track each time.
+     */
+    static final int WARM_UP = 20;
 
     public static class Entity extends BlockEntity implements VideoSource, Remotable, IHaveGoggleInformation {
         /** The client's stack whose knob is held, and which: the server's word for it waits (see HifiControls). */
@@ -222,6 +227,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         private int cables;
 
         private boolean power;
+        /** Ticks left of WARM_UP; server only. */
+        private int warming;
         private Input input = Input.DISC;
         /** Knobs go from 0 to 100. */
         private int volume = 40;
@@ -517,7 +524,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         /** What its speakers play now: what the amplifier's input is set to, if that plays and is joined to it. */
         @Nullable
         private Playing audible() {
-            if (!power()) {
+            if (!power() || warming > 0) {
                 return null;
             }
             switch (input) {
@@ -625,6 +632,9 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             if (level.isClientSide) {
                 clientTick();
                 return;
+            }
+            if (warming > 0) {
+                warming--;
             }
             // Whatever is heard now that wasn't a tick ago starts for its speakers, from where it is.
             Playing playing = audible();
@@ -811,6 +821,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 return;
             } else if (control == Control.POWER) {
                 power = !power;
+                warming = power ? WARM_UP : 0;
                 click(power ? 0.9f : 0.7f);
             } else if (control == Control.DOOR_1 || control == Control.DOOR_2) {
                 // A door is opened by hand, live or not.
