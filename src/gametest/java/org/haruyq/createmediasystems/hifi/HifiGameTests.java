@@ -199,4 +199,42 @@ public class HifiGameTests {
                 "the last unit taken off takes the stack with it");
         helper.succeed();
     }
+
+    /** The remote seeks the disc playing: heard, it is loaded again from there; paused, it plays on from there. */
+    @GameTest(template = "empty")
+    public static void aRemoteSeeksTheDisc(GameTestHelper helper) {
+        HifiStackBlock.Entity stack = stack(helper, Unit.DISC_PLAYER, Unit.AMPLIFIER);
+        ServerPlayer player = player(helper);
+        hold(player, new ItemStack(CreateMediaSystems.HIFI_CABLE.get(), 2));
+        stack.press(player, Control.POWER, 0);
+        stack.press(player, Control.DISC_PLUG, 0);
+        stack.press(player, Control.LINE_IN, 0);
+        ItemStack disc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
+        disc.set(CreateMediaSystems.URL.get(), "https://example.com/hifi-seek.mp3");
+        stack.press(player, Control.TRAY, 0);
+        hold(player, disc);
+        stack.press(player, Control.TRAY, 0);
+        stack.press(player, Control.OPEN, 0);
+        helper.runAfterDelay(HifiStackBlock.WARM_UP + 5, () -> {
+            long load = Streams.loadId(stack);
+            stack.control(VideoPlayerBlock.Action.SEEK, 90, player);
+            helper.runAfterDelay(2, () -> {
+                Streams.Source heard = Streams.playing(stack);
+                helper.assertTrue(Streams.loadId(stack) != load && heard != null && heard.ticks() == 90 * 20,
+                        "heard again from 90 s, was " + (heard == null ? null : heard.ticks()));
+                stack.control(VideoPlayerBlock.Action.SEEK_BY, 10, player);
+                helper.runAfterDelay(2, () -> {
+                    helper.assertTrue(Streams.playing(stack).ticks() == 100 * 20, "ten seconds on is 100 s");
+                    stack.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
+                    stack.control(VideoPlayerBlock.Action.SEEK, 30, player);
+                    helper.assertTrue(stack.discPaused() && stack.discTicks() == 30 * 20, "paused, it waits at 30 s");
+                    stack.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
+                    helper.runAfterDelay(2, () -> {
+                        helper.assertTrue(Streams.playing(stack).ticks() == 30 * 20, "and plays on from there");
+                        helper.succeed();
+                    });
+                });
+            });
+        });
+    }
 }

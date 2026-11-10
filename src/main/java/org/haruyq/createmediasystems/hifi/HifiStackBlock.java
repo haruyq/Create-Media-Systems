@@ -783,6 +783,19 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             changed();
         }
 
+        /**
+         * The disc's track goes on from {@code to} ticks in, paused or not: as a new start of it (see restarts), heard,
+         * its listeners load it there and start together (see tick).
+         */
+        private void seekDisc(long to) {
+            List<String> playlist = playlist();
+            if (!discPlaying || track >= playlist.size()) {
+                return;
+            }
+            discTicks = Streams.seekable(playlist.get(track), to);
+            restarts[Input.DISC.ordinal()]++;
+        }
+
         private void stopDisc() {
             discPlaying = false;
             discPaused = false;
@@ -959,6 +972,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     }
                 }
                 case SELECT -> playTrack(value - 1);
+                case SEEK -> seekDisc(value * 20L);
+                case SEEK_BY -> seekDisc(discTicks + value * 20L);
                 default -> {
                 }
             }

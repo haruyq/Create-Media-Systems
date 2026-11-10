@@ -128,9 +128,12 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
 
-    /** What a remote asks of a Blu-ray player (see Entity#control). */
+    /**
+     * What a remote asks of a Blu-ray player (see Entity#control). SEEK goes to a second of the entry playing, SEEK_BY
+     * that many seconds on (or back) from where it is.
+     */
     public enum Action {
-        PLAY_PAUSE, STOP, PREVIOUS, NEXT, SELECT, VOLUME;
+        PLAY_PAUSE, STOP, PREVIOUS, NEXT, SELECT, VOLUME, SEEK, SEEK_BY;
 
         public static Action byId(int id) {
             return values()[Mth.clamp(id, 0, values().length - 1)];
@@ -142,7 +145,10 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private ItemStack cd = ItemStack.EMPTY;
         /** The playlist entry playing (or paused, or stopped at). */
         private int index;
+        /** Ticks since the entry was started or sought; Streams counts on from {@link #from} with them (see played). */
         private long ticks;
+        /** Where (ticks in) it was last sought to; 0 from the top. */
+        private long from;
         private boolean playing;
         private boolean paused;
         private ScrollValueBehaviour volume;
@@ -220,10 +226,18 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             List<String> playlist = playlist();
             DriveEmulatorBlock.Entity drive = drive();
             return index < playlist.size()
-                    ? new Streams.Source(playlist.get(index), ticks, new Streams.Video(worldPosition,
+                    ? new Streams.Source(playlist.get(index), counted(), new Streams.Video(worldPosition,
                             drive != null ? drive.disc().maxHeight : ((VideoDiscItem) cd.getItem()).maxHeight,
                             index + 1 < playlist.size() ? Optional.of(playlist.get(index + 1)) : Optional.empty()))
                     : null;
+        }
+
+        /**
+         * Its ticks as Streams counts on from them (see played): since it was started or sought, which its load adds
+         * {@link #from} to; with no load (the server restarted since), where it is.
+         */
+        private long counted() {
+            return Streams.loadId(this) == 0 ? from + ticks : ticks;
         }
 
         /** A new disc put in by {@code by} plays its first video; with none, the disc of a drive beside it does. */
@@ -247,6 +261,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
             index = entry;
             ticks = 0;
+            from = 0;
             playing = true;
             paused = false;
             downloads.clear();
@@ -273,13 +288,31 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                     playing = false;
                     paused = false;
                     ticks = 0;
+                    from = 0;
                     changed();
                 }
                 case PREVIOUS -> play(Math.max(index - 1, 0), by);
                 case NEXT -> play(index + 1, by);
                 case SELECT -> play(value - 1, by);
                 case VOLUME -> volume.setValue(Mth.clamp(value, 0, 100));
+                case SEEK -> seek(value * 20L, by);
+                case SEEK_BY -> seek(Streams.played(this, counted()) + value * 20L, by);
             }
+        }
+
+        /**
+         * The entry playing (or paused) goes on from {@code to} ticks in: every listener loads it there and they start
+         * together, as with a new entry (see Streams#loading).
+         */
+        private void seek(long to, @Nullable Player by) {
+            List<String> playlist = playlist();
+            if (!playing || index >= playlist.size()) {
+                return;
+            }
+            from = Streams.seekable(playlist.get(index), to);
+            ticks = 0;
+            Streams.loading(this, by, from, false);
+            changed();
         }
 
         @Override
@@ -418,6 +451,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
             tag.putInt("Index", index);
             tag.putLong("Ticks", ticks);
+            tag.putLong("From", from);
             tag.putBoolean("Playing", playing);
             tag.putBoolean("Paused", paused);
             if (clientPacket) {
@@ -433,6 +467,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             cd = ItemStack.parseOptional(registries, tag.getCompound("Cd"));
             index = tag.getInt("Index");
             ticks = tag.getLong("Ticks");
+            from = tag.getLong("From");
             playing = tag.getBoolean("Playing");
             paused = tag.getBoolean("Paused");
             if (clientPacket) {

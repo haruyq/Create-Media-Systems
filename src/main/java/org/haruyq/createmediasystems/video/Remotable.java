@@ -9,7 +9,10 @@ import net.minecraft.world.entity.player.Player;
 
 /** What a remote works from afar (see RemoteItem): a Blu-ray player, or a hi-fi stack's disc player and amplifier. */
 public interface Remotable {
-    /** {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
+    /**
+     * {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, the volume in percent,
+     * the second to seek to, or the seconds to seek by.
+     */
     void control(VideoPlayerBlock.Action action, int value, @Nullable Player by);
 
     /** The links of the disc in it; empty for none. */

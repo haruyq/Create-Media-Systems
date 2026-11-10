@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.video;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.playback.NativeAudio;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -18,12 +19,14 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * A remote's buttons for its Blu-ray player: previous, play/pause, stop, next, play entry N, and volume. What it shows of
- * the Blu-ray player is what this client has of it (the server checks the remote's range on every button).
+ * A remote's buttons for its Blu-ray player: previous, play/pause, stop, next, play entry N, volume, and seeking (a bar,
+ * and ten seconds back or on). What it shows of the Blu-ray player is what this client has of it (the server checks the
+ * remote's range on every button).
  */
 final class RemoteScreen extends Screen {
     private final GlobalPos target;
     private EditBox number;
+    private SeekBar seek;
 
     static void open(GlobalPos target) {
         Minecraft.getInstance().setScreen(new RemoteScreen(target));
@@ -84,6 +87,75 @@ final class RemoteScreen extends Screen {
                 send(VideoPlayerBlock.Action.VOLUME, (int) Math.round(value * 100));
             }
         });
+        addRenderableWidget(Button.builder(Component.literal("-10s"), b -> send(VideoPlayerBlock.Action.SEEK_BY, -10))
+                .bounds(left, top + 84, 30, 20).build());
+        seek = addRenderableWidget(new SeekBar(left + 34, top + 84, 132));
+        addRenderableWidget(Button.builder(Component.literal("+10s"), b -> send(VideoPlayerBlock.Action.SEEK_BY, 10))
+                .bounds(left + 170, top + 84, 30, 20).build());
+    }
+
+    /**
+     * How far into its track what it plays is, as it plays here: dragged, it seeks there for everyone. Only while it
+     * plays here with a known length; the ten-second buttons work anyway, by the server's position.
+     */
+    private static final class SeekBar extends AbstractSliderButton {
+        private double length;
+        private boolean dragging;
+
+        SeekBar(int x, int y, int width) {
+            super(x, y, width, 20, Component.empty(), 0);
+        }
+
+        void show(@Nullable NativeAudio.Progress progress) {
+            active = progress != null && !progress.loading() && progress.length() > 0;
+            if (!active) {
+                dragging = false;
+                value = 0;
+                setMessage(Component.literal("--:--"));
+                return;
+            }
+            length = progress.length();
+            if (!dragging) {
+                value = Math.min(1, progress.seconds() / length);
+            }
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Component.literal(VideoPlayerBlock.Entity.clock(value * length) + " / "
+                    + VideoPlayerBlock.Entity.clock(length)));
+        }
+
+        @Override
+        protected void applyValue() {
+        }
+
+        @Override
+        public void onClick(double mouseX, double mouseY) {
+            dragging = true;
+            super.onClick(mouseX, mouseY);
+        }
+
+        @Override
+        public void onRelease(double mouseX, double mouseY) {
+            super.onRelease(mouseX, mouseY);
+            release();
+        }
+
+        /** Let go (on it or not, see mouseReleased): seeks to where it was let go. */
+        void release() {
+            if (dragging) {
+                dragging = false;
+                send(VideoPlayerBlock.Action.SEEK, (int) (value * length));
+            }
+        }
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        seek.release();
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     private void button(int x, int y, String label, VideoPlayerBlock.Action action) {
@@ -115,6 +187,8 @@ final class RemoteScreen extends Screen {
                 url = playlist.get(index);
             }
         }
+        seek.show(url == null || videoPlayer == null ? null
+                : NativeAudio.progress(RemoteItem.held(minecraft.player).getOrDefault(CreateMediaSystems.REMOTE_TARGET.get(), target).pos(), url));
         graphics.drawCenteredString(font, status, width / 2, top - 22, 0xF0C040);
         if (url != null) {
             graphics.drawCenteredString(font, font.plainSubstrByWidth(url, 300), width / 2, top - 11, 0x909090);

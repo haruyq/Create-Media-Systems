@@ -517,6 +517,15 @@ public final class Streams {
         }
     }
 
+    /**
+     * Where a seek to {@code to} ticks into {@code url} lands: not before its top, and a second short of its end once
+     * its length is known, so it plays a moment instead of ending on the spot.
+     */
+    public static long seekable(String url, long to) {
+        double duration = duration(url);
+        return Math.max(0, duration > 0 ? Math.min(to, (long) (duration * 20) - 20) : to);
+    }
+
     /** Track length in seconds from the API; negative while loading or for live/unknown streams. */
     public static double duration(String url) {
         Double cached = DURATIONS.putIfAbsent(url, UNKNOWN);

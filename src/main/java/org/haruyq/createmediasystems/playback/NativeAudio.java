@@ -178,10 +178,22 @@ public final class NativeAudio {
     /** The video of the Blu-ray player at {@code pos} as it plays here (see Progress); null if it plays none here. */
     @Nullable
     public static Progress progress(BlockPos pos) {
+        return progress(shared -> pos.equals(shared.key.display()));
+    }
+
+    /** The same for {@code track} played by what is at {@code pos}, a video or not (a hi-fi stack's CD): for a remote. */
+    @Nullable
+    public static Progress progress(BlockPos pos, String track) {
+        return progress(shared -> (pos.equals(shared.key.display()) || pos.equals(shared.playback))
+                && shared.key.source().toString().equals(track));
+    }
+
+    @Nullable
+    private static Progress progress(java.util.function.Predicate<Shared> of) {
         Progress progress = null;
         synchronized (SHARED) {
             for (Shared shared : SHARED.values()) {
-                if (!pos.equals(shared.key.display()) || shared.playing.isCompletedExceptionally()) {
+                if (!of.test(shared) || shared.playing.isCompletedExceptionally()) {
                     continue;
                 }
                 if (!shared.playing.isDone()) {
