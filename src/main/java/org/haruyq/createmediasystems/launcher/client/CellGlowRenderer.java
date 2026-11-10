@@ -141,8 +141,14 @@ public final class CellGlowRenderer {
         var mc = Minecraft.getInstance();
         var main = mc.getMainRenderTarget();
         if (main.getDepthTextureId() < 0) return;
-        if (scene == null) scene = new TextureTarget(main.width, main.height, true, Minecraft.ON_OSX);
-        else if (scene.width != main.width || scene.height != main.height) scene.resize(main.width, main.height, Minecraft.ON_OSX);
+        // Depth blits require matching formats. Other renderers can enable packed depth/stencil on the main target.
+        if (scene == null || scene.isStencilEnabled() != main.isStencilEnabled()) {
+            if (scene != null) scene.destroyBuffers();
+            scene = new TextureTarget(main.width, main.height, true, Minecraft.ON_OSX);
+            if (main.isStencilEnabled()) scene.enableStencil();
+        } else if (scene.width != main.width || scene.height != main.height) {
+            scene.resize(main.width, main.height, Minecraft.ON_OSX);
+        }
 
         // Separate color/depth textures avoid sampling the framebuffer being written to.
         GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, main.frameBufferId);
