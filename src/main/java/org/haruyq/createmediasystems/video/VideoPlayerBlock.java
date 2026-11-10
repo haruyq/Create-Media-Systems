@@ -9,7 +9,7 @@ import java.util.Optional;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.PercentSetting;
 import org.haruyq.createmediasystems.playback.NativeAudio;
-import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.VideoSource;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -82,7 +82,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!(stack.getItem() instanceof VideoDiscItem)) {
+        // A disc with no picture (a CD, a cassette) is a hi-fi stack's.
+        if (!(stack.getItem() instanceof VideoDiscItem disc) || disc.maxHeight <= 0) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && videoPlayer.cd.isEmpty()) {
@@ -135,7 +136,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
     }
 
-    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, MediaSource {
+    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable {
         private ItemStack cd = ItemStack.EMPTY;
         /** The playlist entry playing (or paused, or stopped at). */
         private int index;
@@ -171,10 +172,12 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             behaviours.add(lighting);
         }
 
+        @Override
         public List<String> playlist() {
             return cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
         }
 
+        @Override
         public int index() {
             return index;
         }
@@ -186,6 +189,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /** How brightly its displays light their surroundings, 0..1 (0: not at all); the same for everyone. */
+        @Override
         public float lighting() {
             return lighting == null ? 1 : lighting.getValue() / 100f;
         }
@@ -233,6 +237,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /** {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
+        @Override
         public void control(Action action, int value, @Nullable Player by) {
             switch (action) {
                 case PLAY_PAUSE -> {
@@ -313,6 +318,12 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /** Empty (no disc, or none with links), stopped, paused or playing, as its remote and goggles show it. */
+        @Override
+        public float remoteVolume() {
+            return volume();
+        }
+
+        @Override
         public Component state() {
             return Component.translatable(playlist().isEmpty() ? "create_media_systems.video_player.empty"
                     : !playing ? "create_media_systems.video_player.stopped"

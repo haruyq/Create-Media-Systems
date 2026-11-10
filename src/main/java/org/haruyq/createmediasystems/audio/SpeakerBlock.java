@@ -15,6 +15,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -49,7 +52,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
     }
 
     @Override
-    protected MapCodec<SpeakerBlock> codec() {
+    protected MapCodec<? extends SpeakerBlock> codec() {
         return CODEC;
     }
 
@@ -91,7 +94,12 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         private Streams.Channel channel = Streams.Channel.MIX;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.SPEAKER_ENTITY.get(), pos, state);
+            this(CreateMediaSystems.SPEAKER_ENTITY.get(), pos, state);
+        }
+
+        /** A speaker of another kind: a hi-fi stack's. */
+        protected Entity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+            super(type, pos, state);
         }
 
         public Optional<BlockPos> source() {
@@ -112,10 +120,16 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
             this.volume = Mth.clamp(volume, 0, 1);
             this.channel = channel;
             setChanged();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
             relay(level, getBlockState());
         }
 
-        private void tick(ServerLevel level, BlockState state) {
+        /** Its source plays louder or quieter: its listeners hear that now, not at its next relay. */
+        public void refresh(ServerLevel level) {
+            relay(level, getBlockState());
+        }
+
+        public void tick(ServerLevel level, BlockState state) {
             if (Streams.relayDue(level)) {
                 relay(level, state);
             }
@@ -132,6 +146,17 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
             if (level != null && !level.isClientSide) {
                 Streams.stop(this);
             }
+        }
+
+        /** Clients know what it is linked to: a hi-fi speaker's cable is drawn to its amplifier. */
+        @Override
+        public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+            return saveWithoutMetadata(registries);
+        }
+
+        @Override
+        public Packet<ClientGamePacketListener> getUpdatePacket() {
+            return ClientboundBlockEntityDataPacket.create(this);
         }
 
         @Override

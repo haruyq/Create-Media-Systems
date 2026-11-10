@@ -4,6 +4,8 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.RangeQuillHandler;
 import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.display.DisplayRenderer;
+import org.haruyq.createmediasystems.hifi.HifiControls;
+import org.haruyq.createmediasystems.hifi.HifiRenderer;
 import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.LightingControls;
 import org.haruyq.createmediasystems.lighting.LightingRenderer;
@@ -29,6 +31,8 @@ public class CreateMediaSystemsClient {
         RangeQuillHandler.register();
         DisplayRenderer.register(modBus);
         EqualizerFaders.register(modBus);
+        HifiControls.register();
+        HifiRenderer.register(modBus);
         TrainDetectorRenderer.register(modBus);
         LightingControls.register();
         LightingRenderer.register(modBus);

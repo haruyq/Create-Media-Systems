@@ -8,6 +8,8 @@ import javax.sound.sampled.AudioFormat;
 
 import org.haruyq.createmediasystems.stream.Streams;
 
+import org.jetbrains.annotations.Nullable;
+
 import com.sun.jna.Pointer;
 
 import net.minecraft.client.sounds.AudioStream;
@@ -51,6 +53,9 @@ final class VlcAudio {
     final Equalizer equalizer = new Equalizer();
     private final LightingMedia.Audio lighting = new LightingMedia.Audio();
     private volatile long lightingUntil;
+    /** What it sounds like, for a hi-fi stack's displays: worked out only while one asks (see spectrum). */
+    private final Spectrum spectrum = new Spectrum();
+    private volatile long spectrumUntil;
     /** When VLC played its first samples (System.nanoTime); 0 before. */
     volatile long firstSamples;
     volatile long lastSamples;
@@ -94,6 +99,12 @@ final class VlcAudio {
     LightingMedia.AudioFrame lighting() {
         lightingUntil = System.nanoTime() + 2_000_000_000L;
         return lighting.sample(Vlc.LIB.libvlc_clock());
+    }
+
+    @Nullable
+    Spectrum.Frame spectrum() {
+        spectrumUntil = System.nanoTime() + 2_000_000_000L;
+        return spectrum.sample(Vlc.LIB.libvlc_clock());
     }
 
     void clearLighting() {
@@ -146,6 +157,9 @@ final class VlcAudio {
         if (lightingUntil != 0 && System.nanoTime() - lightingUntil < 0) {
             lighting.offer(stereo, count, next);
         }
+        if (spectrumUntil != 0 && System.nanoTime() - spectrumUntil < 0) {
+            spectrum.offer(stereo, count, next);
+        }
         for (Stream stream : streams) {
             stream.offer(stereo, next);
         }
@@ -153,6 +167,7 @@ final class VlcAudio {
 
     private void flush() {
         runSamples = 0;
+        spectrum.clear();
         clearLighting();
         streams.forEach(Stream::clear);
     }

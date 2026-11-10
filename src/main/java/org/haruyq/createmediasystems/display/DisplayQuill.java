@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.stream.SourceLinks;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -77,7 +77,7 @@ public final class DisplayQuill {
             return;
         }
         BlockPos source = payload.videoPlayer().orElse(null);
-        if (source != null && !SourceLinks.linkable(player, source, payload.display(), VideoPlayerBlock.Entity.class)) {
+        if (source != null && !SourceLinks.linkable(player, source, payload.display(), VideoSource.class)) {
             return;
         }
         display.link(source);

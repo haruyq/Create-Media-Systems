@@ -35,13 +35,13 @@ final class RemoteScreen extends Screen {
     }
 
     @Nullable
-    private VideoPlayerBlock.Entity videoPlayer() {
+    private Remotable videoPlayer() {
         var mc = Minecraft.getInstance();
         var level = mc.level;
         ItemStack remote = RemoteItem.held(mc.player);
         GlobalPos current = remote.getOrDefault(CreateMediaSystems.REMOTE_TARGET.get(), target);
         return level != null && level.dimension() == current.dimension() && level.isLoaded(current.pos())
-                && level.getBlockEntity(current.pos()) instanceof VideoPlayerBlock.Entity found ? found : null;
+                && level.getBlockEntity(current.pos()) instanceof Remotable found ? found : null;
     }
 
     @Override
@@ -62,9 +62,9 @@ final class RemoteScreen extends Screen {
                 send(VideoPlayerBlock.Action.SELECT, Integer.parseInt(number.getValue()));
             }
         }).bounds(left + 104, top + 28, 96, 20).build());
-        VideoPlayerBlock.Entity videoPlayer = videoPlayer();
+        Remotable videoPlayer = videoPlayer();
         addRenderableWidget(new AbstractSliderButton(left, top + 56, 200, 20, Component.empty(),
-                videoPlayer == null ? 1 : videoPlayer.volume()) {
+                videoPlayer == null ? 1 : videoPlayer.remoteVolume()) {
             {
                 updateMessage();
             }
@@ -99,7 +99,7 @@ final class RemoteScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
         int top = height / 2 - 40;
         graphics.drawCenteredString(font, title, width / 2, top - 36, 0xFFFFFF);
-        VideoPlayerBlock.Entity videoPlayer = videoPlayer();
+        Remotable videoPlayer = videoPlayer();
         Component status;
         String url = null;
         if (videoPlayer == null) {

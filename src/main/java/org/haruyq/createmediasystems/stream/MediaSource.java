@@ -4,7 +4,8 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * A block entity that owns a track and how far in it is: a vanilla jukebox with a custom disc (see
- * JukeboxBlockEntityMixin), a disc reader or a Blu-ray player. Speakers and displays link to one and play it in sync.
+ * JukeboxBlockEntityMixin), a disc reader, a Blu-ray player or a hi-fi stack. Speakers and displays link to one and
+ * play it in sync.
  */
 public interface MediaSource {
     /**

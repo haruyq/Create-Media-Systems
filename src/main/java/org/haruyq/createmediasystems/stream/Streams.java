@@ -97,6 +97,10 @@ public final class Streams {
         @Nullable
         final UUID startedBy;
         final long barrierTicks;
+        /** How far into the track it starts (ticks): 0 for the top, more for one taken up where it was left. */
+        final long offset;
+        /** Whether it plays on after a moment with nobody there to load it, instead of waiting for someone to come. */
+        final boolean unattended;
         /** The tick count since the track started at which it began to play; LOADING while it loads. */
         long playingFrom = LOADING;
         /** The players it was sent to while it loaded, whom it waits for. */
@@ -109,9 +113,11 @@ public final class Streams {
         /** The tick count at which the first of them had it loaded; LOADING until then. */
         long firstReadyAt = LOADING;
 
-        Load(@Nullable UUID startedBy, long barrierTicks) {
+        Load(@Nullable UUID startedBy, long barrierTicks, long offset, boolean unattended) {
             this.startedBy = startedBy;
             this.barrierTicks = barrierTicks;
+            this.offset = offset;
+            this.unattended = unattended;
         }
     }
 
@@ -122,6 +128,8 @@ public final class Streams {
         final Set<ServerPlayer> listeners = new HashSet<>();
         String url;
         long ticks;
+        /** Which load of its source's track it relays (see Load#id): a new one starts everyone over. */
+        long load;
         @Nullable
         JukeboxSettings settings;
 
@@ -245,11 +253,21 @@ public final class Streams {
      * {@code by} is the player who started it; null when it follows on from the one before (who started that stays).
      */
     public static void loading(BlockEntity source, @Nullable Player by) {
+        loading(source, by, 0, false);
+    }
+
+    /**
+     * The same, {@code offset} ticks into its track: a tape played on from where it was stopped, a disc from where
+     * it was paused. The source counts its ticks from 0 again (see played). {@code unattended}: with nobody there
+     * to load it, it plays on after a moment instead of waiting for someone to come, as a deck's counter runs with
+     * nobody in the room.
+     */
+    public static void loading(BlockEntity source, @Nullable Player by, long offset, boolean unattended) {
         source.setChanged();
         Load previous = LOADS.get(key(source));
         Source playing = source instanceof MediaSource media ? media.nowPlaying() : null;
         LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy,
-                barrierTicks(playing == null ? "" : playing.url())));
+                barrierTicks(playing == null ? "" : playing.url()), Math.max(0, offset), unattended));
     }
 
     public static long barrierTicks(String url) {
@@ -279,6 +297,12 @@ public final class Streams {
         return level.getGameTime() % RELAY_TICKS == 0;
     }
 
+    /** The emitters relaying the source at {@code source} now: a source tells its speakers of a new volume at once. */
+    public static java.util.List<BlockEntity> emitters(Level level, BlockPos source) {
+        return RELAYS.entrySet().stream().filter(entry -> entry.getKey().getLevel() == level
+                && source.equals(entry.getValue().sound.source())).map(Map.Entry::getKey).toList();
+    }
+
     public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
         Set<ServerPlayer> players = new HashSet<>();
         RELAYS.forEach((emitter, relay) -> {
@@ -305,20 +329,23 @@ public final class Streams {
             }
             load.expected.removeIf(ServerPlayer::isRemoved);
             boolean everyone = !load.ready.isEmpty() && load.ready.keySet().containsAll(load.expected);
-            if (everyone || ticks >= MAX_LOAD_TICKS
+            // Its emitters have had two turns to send it to whoever is near.
+            boolean nobody = load.unattended && ticks >= 2 * RELAY_TICKS && load.expected.isEmpty() && load.ready.isEmpty();
+            if (everyone || nobody || ticks >= MAX_LOAD_TICKS
                     || load.firstReadyAt != LOADING && ticks - load.firstReadyAt >= load.barrierTicks) {
                 load.playingFrom = ticks;
                 load.ready.forEach((player, emitters) -> {
                     if (!player.isRemoved()) {
                         emitters.forEach(emitter ->
-                                PacketDistributor.sendToPlayer(player, new StreamPackets.SyncAtBlock(emitter, 0)));
+                                PacketDistributor.sendToPlayer(player,
+                                        new StreamPackets.SyncAtBlock(emitter, load.offset / 20f)));
                     }
                 });
                 load.ready.clear();
                 load.expected.clear();
             }
         }
-        return load.playingFrom == LOADING ? 0 : ticks - load.playingFrom;
+        return load.offset + (load.playingFrom == LOADING ? 0 : ticks - load.playingFrom);
     }
 
     /**
@@ -409,8 +436,11 @@ public final class Streams {
         BlockPos pos = emitter.getBlockPos();
         Source playing = source(level, sound.source());
         Relay relay = RELAYS.get(emitter);
+        Load load = loadOf(level, sound.source());
+        long loadId = load == null ? 0 : load.id;
+        // A new load of the same track further in (a tape played on) is a new playback too.
         if (relay != null && (playing == null || !playing.url().equals(relay.url) || playing.ticks() < relay.ticks
-                || !sound.equals(relay.sound) || !pos.equals(relay.pos))) {
+                || relay.load != loadId || !sound.equals(relay.sound) || !pos.equals(relay.pos))) {
             stop(emitter);
             relay = null;
         }
@@ -423,6 +453,7 @@ public final class Streams {
         }
         relay.url = playing.url();
         relay.ticks = playing.ticks();
+        relay.load = loadId;
         // Wardens and sculk sensors hear it once a second (jukebox_play is no vibration), like a goat horn: a warden
         // goes to see what it is. Every other relay tick, as emitters all relay on the same ticks.
         if (settings.volume() > 0 && level.getGameTime() % (2 * RELAY_TICKS) == 0) {
@@ -443,15 +474,13 @@ public final class Streams {
             }
             return !keep;
         });
-        Load load = loadOf(level, sound.source());
         for (ServerPlayer player : level.players()) {
             if (hears(level, pos, sound, settings, player, 0) && relay.listeners.add(player)) {
                 if (load != null && load.playingFrom == LOADING) {
                     load.expected.add(player);
                 }
                 PacketDistributor.sendToPlayer(player, new StreamPackets.PlayAtBlock(playing.url(), pos,
-                        playing.ticks() / 20f, settings, sound, Optional.ofNullable(playing.video()),
-                        load == null ? 0 : load.id));
+                        playing.ticks() / 20f, settings, sound, Optional.ofNullable(playing.video()), loadId));
             }
         }
     }
