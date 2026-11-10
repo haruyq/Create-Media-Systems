@@ -311,7 +311,7 @@
   "create_media_systems.disc_stream.hold_disc": "先にDVDまたはBlu-rayアイテムをメインハンドに持ってください。",
   "create_media_systems.disc_stream.busy": "ディスクを読み込み中です。中止するには /cms_disc unload を実行してください。",
   "create_media_systems.disc_stream.downloading": "配信に必要なFFmpegとFFprobeをダウンロードしています。完了後にディスクを読み込みます。中止: /cms_disc unload",
-  "create_media_systems.disc_stream.reading": "非暗号化ディスクを読み込んでいます。完了までDVDまたはBlu-rayアイテムを持ったままにしてください…",
+  "create_media_systems.disc_stream.reading": "ディスクを読み込んでいます。完了までDVDまたはBlu-rayアイテムを持ったままにしてください…",
   "create_media_systems.disc_stream.loaded": "ディスクを読み込みました（%s秒）。このアイテムをBlu-rayプレイヤーに入れると配信できます。",
   "create_media_systems.disc_stream.unloaded": "ディスクの配信を停止し、メモリ上の映像を解放しました。",
   "create_media_systems.disc_stream.failed": "ディスクを読み込めませんでした: %s",

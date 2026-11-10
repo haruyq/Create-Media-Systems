@@ -95,10 +95,16 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         if (!bluray) {
             try (var files = Files.list(root.resolve("VIDEO_TS"))) {
                 for (Path file : files.filter(p -> p.getFileName().toString().toUpperCase(Locale.ROOT).endsWith(".VOB")).toList()) {
+                    byte[] bytes;
                     try (InputStream in = Files.newInputStream(file)) {
-                        if (scrambled(in.readNBytes(1024 * 1024))) {
-                            throw new IOException("CSS-encrypted DVDs are not supported; select an unencrypted disc");
-                        }
+                        bytes = in.readNBytes(1024 * 1024);
+                    } catch (IOException refused) {
+                        // A drive refuses CSS-scrambled sectors to anything but an authenticated reader.
+                        throw new IOException("This DVD could not be read and is likely CSS-encrypted, which needs CMS Disc Extension ("
+                                + refused.getMessage() + ")");
+                    }
+                    if (scrambled(bytes)) {
+                        throw new IOException("CSS-encrypted DVDs are not supported; select an unencrypted disc");
                     }
                 }
             }

@@ -311,7 +311,7 @@
   "create_media_systems.disc_stream.hold_disc": "Hold a DVD or Blu-ray item in your main hand first.",
   "create_media_systems.disc_stream.busy": "A disc is already being read. Use /cms_disc unload to cancel.",
   "create_media_systems.disc_stream.downloading": "Downloading FFmpeg and FFprobe for disc sharing. The disc will load afterward. Cancel: /cms_disc unload",
-  "create_media_systems.disc_stream.reading": "Reading the unencrypted disc. Keep the DVD or Blu-ray item in your hand…",
+  "create_media_systems.disc_stream.reading": "Reading the disc. Keep the DVD or Blu-ray item in your hand…",
   "create_media_systems.disc_stream.loaded": "Disc loaded (%s seconds). Insert this item into a Blu-ray player to share it.",
   "create_media_systems.disc_stream.unloaded": "Disc sharing stopped and its memory buffer was cleared.",
   "create_media_systems.disc_stream.failed": "Could not load the disc: %s",
