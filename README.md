@@ -16,9 +16,6 @@ Modの完全な動作には、[CMS-API](https://github.com/haruyq/CMS-API)が別
 ./gradlew build
 ```
 
-JEIの実装を使った表示判定の回帰試験は `./gradlew -PrecipeViewerTest test` で実行できます。
-このオプションはテスト用の依存だけを追加します。
-
 ## ライセンス
 
 このプロジェクトは[MIT License](./LICENSE)で公開されています。
