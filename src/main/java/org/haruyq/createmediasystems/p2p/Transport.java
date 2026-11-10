@@ -6,6 +6,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -163,8 +165,9 @@ public final class Transport implements AutoCloseable {
     }
 
     /**
-     * Unpacks the bundled native WebRTC into {@code dir} (unless it already is) for webrtc-java to load from there.
-     * Call before the first session; never on a dedicated server.
+     * Unpacks the bundled native WebRTC into {@code dir} (unless it already is) for webrtc-java to load from there,
+     * or into another folder if this Java can't pass {@code dir}'s path to Windows (see {@link #loadable}). Call
+     * before the first session; never on a dedicated server.
      */
     public static synchronized void loadNatives(Path dir) throws IOException {
         String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
@@ -176,20 +179,67 @@ public final class Transport implements AutoCloseable {
         try (InputStream in = resource("version")) {
             version = new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
         }
-        Path target = dir.resolve(version);
-        Path library = target.resolve(LIBRARY);
-        if (!Files.isRegularFile(library)) {
-            Files.createDirectories(target);
-            Path partial = Files.createTempFile(target, LIBRARY, ".part");
-            try (InputStream in = resource(LIBRARY)) {
-                Files.copy(in, partial, StandardCopyOption.REPLACE_EXISTING);
-                Files.move(partial, library, StandardCopyOption.ATOMIC_MOVE);
-            } finally {
-                Files.deleteIfExists(partial);
+        Charset ansi;
+        try {
+            ansi = Charset.forName(System.getProperty("sun.jnu.encoding", "UTF-8"));
+        } catch (RuntimeException unknown) {
+            ansi = StandardCharsets.US_ASCII;
+        }
+        List<Path> fallbacks = new ArrayList<>();
+        for (String variable : List.of("LOCALAPPDATA", "ProgramData")) {
+            String base = System.getenv(variable);
+            if (base != null && !base.isBlank()) {
+                fallbacks.add(Path.of(base, "create_media_systems", "webrtc"));
             }
         }
-        // webrtc-java's NativeLoader.LIBRARY_DIR_PROPERTY: loads it there, in place.
-        System.setProperty("webrtc.java.library.dir", target.toAbsolutePath().toString());
+        fallbacks.add(Path.of(System.getProperty("java.io.tmpdir"), "create_media_systems", "webrtc"));
+        IOException failed = null;
+        for (Path base : loadable(dir, ansi, fallbacks)) {
+            Path target = base.resolve(version);
+            try {
+                unpack(target);
+            } catch (IOException e) {
+                failed = e;
+                continue;
+            }
+            // webrtc-java's NativeLoader.LIBRARY_DIR_PROPERTY: loads it there, in place.
+            System.setProperty("webrtc.java.library.dir", target.toAbsolutePath().toString());
+            return;
+        }
+        throw failed != null ? failed : new IOException("This Java can't pass any folder's path to Windows for native WebRTC: "
+                + "rename the game folder in Latin letters, or set Windows' system locale (language for non-Unicode programs) to match it");
+    }
+
+    /**
+     * Of {@code preferred} and then {@code fallbacks}, those whose path this Java can pass to Windows. HotSpot hands
+     * Windows a library's path in the system's code page ({@code ansi}, sun.jnu.encoding), so a folder named in a
+     * script that code page lacks turns to "?" and the library fails to load ("Can't find dependent libraries"):
+     * an instance folder named in Japanese, on a PC whose system locale is English.
+     */
+    static List<Path> loadable(Path preferred, Charset ansi, List<Path> fallbacks) {
+        CharsetEncoder encoder = ansi.newEncoder();
+        List<Path> loadable = new ArrayList<>();
+        for (Path path : java.util.stream.Stream.concat(java.util.stream.Stream.of(preferred), fallbacks.stream()).toList()) {
+            if (encoder.canEncode(path.toAbsolutePath().toString())) {
+                loadable.add(path);
+            }
+        }
+        return loadable;
+    }
+
+    private static void unpack(Path target) throws IOException {
+        Path library = target.resolve(LIBRARY);
+        if (Files.isRegularFile(library)) {
+            return;
+        }
+        Files.createDirectories(target);
+        Path partial = Files.createTempFile(target, LIBRARY, ".part");
+        try (InputStream in = resource(LIBRARY)) {
+            Files.copy(in, partial, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(partial, library, StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+            Files.deleteIfExists(partial);
+        }
     }
 
     private static InputStream resource(String name) throws IOException {

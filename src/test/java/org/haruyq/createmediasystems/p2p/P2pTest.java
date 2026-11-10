@@ -69,4 +69,17 @@ class P2pTest {
         assertFalse(Transport.direct("candidate:3 1 udp 41885439 198.51.100.7 3478 typ relay raddr 203.0.113.5 rport 54321"));
         assertFalse(Transport.direct("candidate:4 1 udp 1 1.2.3.4 1"));
     }
+
+    @Test
+    void unpacksNativesWhereWindowsCanBeToldThePath() {
+        java.nio.file.Path japanese = java.nio.file.Path.of("C:/Users/fujit/AppData/Roaming/SBModUpdater/instances/SB発症盲目サーバー/create_media_systems/webrtc");
+        java.nio.file.Path local = java.nio.file.Path.of("C:/Users/fujit/AppData/Local/create_media_systems/webrtc");
+        java.nio.file.Path temp = java.nio.file.Path.of("C:/Users/fujit/AppData/Local/Temp/create_media_systems/webrtc");
+        assertEquals(java.util.List.of(local, temp), Transport.loadable(japanese, java.nio.charset.Charset.forName("windows-1252"),
+                java.util.List.of(local, temp)), "an English system locale can't spell the instance folder");
+        assertEquals(java.util.List.of(japanese, local), Transport.loadable(japanese, java.nio.charset.Charset.forName("MS932"),
+                java.util.List.of(local)), "a Japanese one can, and it comes first");
+        assertEquals(java.util.List.of(), Transport.loadable(japanese, java.nio.charset.StandardCharsets.US_ASCII,
+                java.util.List.of(java.nio.file.Path.of("C:/Users/藤井/AppData/Local"))));
+    }
 }

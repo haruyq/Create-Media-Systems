@@ -214,6 +214,23 @@ class TransportTest {
         return host;
     }
 
+    /**
+     * Run alone, with LOCALAPPDATA pointed somewhere to unpack into (CMS_P2P_UNSPELLABLE_DIR set): natives asked for
+     * in a folder this Java can't spell go there instead, and load. Natives load once per JVM, hence alone.
+     */
+    @Test
+    @EnabledOnOs(value = OS.WINDOWS, architectures = {"amd64", "x86_64"})
+    @EnabledIfEnvironmentVariable(named = "CMS_P2P_UNSPELLABLE_DIR", matches = ".+")
+    void loadsNativesAskedForInAFolderThisJavaCannotSpell() throws Exception {
+        Path asked = Path.of(System.getenv("CMS_P2P_UNSPELLABLE_DIR"), "한글");
+        assertFalse(java.nio.charset.Charset.forName(System.getProperty("sun.jnu.encoding")).newEncoder()
+                .canEncode(asked.toAbsolutePath().toString()), "needs a system code page without Hangul");
+        Transport.loadNatives(asked);
+        String used = System.getProperty("webrtc.java.library.dir");
+        assertTrue(used.startsWith(System.getenv("LOCALAPPDATA")), used);
+        new dev.onvoid.webrtc.PeerConnectionFactory().dispose();
+    }
+
     @Test
     void abortsASignalingSocketThatOpensAfterClosing() {
         List<String> calls = new CopyOnWriteArrayList<>();
