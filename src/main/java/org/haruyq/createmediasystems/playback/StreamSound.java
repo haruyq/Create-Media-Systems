@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayDeque;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleConsumer;
@@ -79,6 +80,17 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private final long requestedAt = System.nanoTime();
     private final BooleanSupplier present;
     private final BooleanSupplier nearby;
+    /** Individual moving CD pitch; default null leaves every other CMS stream unchanged. */
+    @Nullable private DoubleSupplier dynamicPitch;
+    @Nullable private NativeAudio.DiscClock discClock;
+    @Nullable private java.util.function.IntSupplier bassMode;
+    @Nullable private java.util.function.IntSupplier megaphoneDrive,megaphoneVolume;
+    private boolean apiOnly;
+    @Nullable private volatile AudibleAudioStream audibleClock;
+    public double audibleSeconds(){var clock=audibleClock;return clock==null?-1:clock.seconds();}
+    private volatile double requestedSeconds=-1;
+    public double requestedSeconds(){return requestedSeconds;}
+    private DoubleConsumer pcmMeter = value -> {};
     private final DoubleSupplier gain;
     /** The Blu-ray player whose video this is the sound of; null for none. */
     @Nullable
@@ -153,6 +165,19 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         volume = 0;
     }
 
+    /** The very same music stream gets Doppler pitch, not an overlaid sound effect. */
+    public void setDynamicPitch(DoubleSupplier source) { dynamicPitch = source; }
+
+    /** Keep each fired CD's decoder and server playback position independent of other shots. */
+    public void setDiscPlayback(UUID id, DoubleSupplier seconds) {
+        discClock = new NativeAudio.DiscClock(id, seconds);
+        // Moving YouTube audio must not repeatedly seek VLC's coarse network timeline.
+        if(video==null)try{apiOnly|=org.haruyq.createmediasystems.stream.ProviderUrls.youtube(URI.create(track));}catch(IllegalArgumentException ignored){}
+    }
+    public void setBassMode(java.util.function.IntSupplier mode) { bassMode = mode; }
+    public void setMegaphone(java.util.function.IntSupplier drive,java.util.function.IntSupplier volume){megaphoneDrive=drive;megaphoneVolume=volume;apiOnly=true;}
+    public void setPcmMeter(DoubleConsumer observer) { pcmMeter = observer; }
+
     /** Starts even at the silent edge of the range; the volume rises as the listener walks in. */
     @Override
     public boolean canStartSilent() {
@@ -161,6 +186,12 @@ public final class StreamSound extends AbstractTickableSoundInstance {
 
     @Override
     public void tick() {
+        if (dynamicPitch != null) {
+            double next = dynamicPitch.getAsDouble();
+            if (Double.isFinite(next)) {
+                pitch = (float) Mth.clamp(pitch + .38 * (next - pitch), .65, 1.60);
+            }
+        }
         age++;
         boolean isPresent = present.getAsBoolean();
         boolean heard = isPresent && nearby.getAsBoolean();
@@ -217,9 +248,16 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      */
     StreamSound again() {
         double playedSeconds = (System.nanoTime() - requestedAt) / 1e9;
-        StreamSound again = new StreamSound(urlAt, track, playback, load, startSeconds + playedSeconds, getSource(),
+        double resumeAt = discClock == null ? startSeconds + playedSeconds : discClock.seconds().getAsDouble();
+        StreamSound again = new StreamSound(StreamRequestTimeline.resume(urlAt,startSeconds,resumeAt), track, playback, load, resumeAt, getSource(),
                 position, tracedFrom, present, nearby, gain, video, channel, started);
         again.volume = volume;
+        again.pitch = pitch;
+        again.dynamicPitch = dynamicPitch;
+        again.discClock = discClock;
+        again.bassMode = bassMode;
+        again.megaphoneDrive=megaphoneDrive;again.megaphoneVolume=megaphoneVolume;again.apiOnly=apiOnly;
+        again.pcmMeter = pcmMeter;
         return again;
     }
 
@@ -258,7 +296,16 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     @Override
     public CompletableFuture<AudioStream> getStream(SoundBufferLibrary soundBuffers, Sound sound, boolean looping) {
         requested = true;
-        return CompletableFuture.supplyAsync(this::open, Util.nonCriticalIoPool());
+        return CompletableFuture.supplyAsync(this::open, Util.nonCriticalIoPool())
+                .thenApply(opened -> {
+                    if(opened instanceof PcmStream pcm && discClock!=null) {
+                        var clock=new AudibleAudioStream(opened,startSeconds,pcm::lastReadSeconds);audibleClock=clock;opened=clock;
+                    }
+                    if(megaphoneDrive!=null) {
+                        return new MegaphoneAudioStream(opened,megaphoneDrive,megaphoneVolume);
+                    }
+                    return bassMode == null ? opened : new BassAudioStream(opened,bassMode,pcmMeter);
+                });
     }
 
     /**
@@ -273,10 +320,10 @@ public final class StreamSound extends AbstractTickableSoundInstance {
 
     private AudioStream open() {
         // An extension's video plays through the API's relay, so a video's sound is its player's like any other.
-        if (video != null || !usesApiAudio(track)) {
+        if (!apiOnly && (video != null || !usesApiAudio(track))) {
             try {
                 AudioStream opened = NativeAudio.open(URI.create(track), playback, load, video, startSeconds,
-                        requestedAt, () -> released, channel, go, started);
+                        requestedAt, () -> released, channel, go, started, discClock);
                 direct = opened;
                 if (released) {
                     close(opened);
@@ -293,7 +340,9 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         }
         // Keyed by the request from the top of the track, which is the same for every stream of this audio whatever
         // its start: the speakers of one source share one download (see Feed).
-        PcmStream opened = new PcmStream(Feed.read(urlAt.apply(-startSeconds), startSeconds,
+        String feedKey = urlAt.apply(-startSeconds);
+        // Download bytes may be shared; each reader and each physical emitter keeps its OWN media position.
+        PcmStream opened = new PcmStream(Feed.read(feedKey, startSeconds,
                 this::request, reason -> {
                     LogUtils.getLogger().warn("Stream {} broke off: {}", urlAt.apply(0), reason);
                     ClientStreams.interrupted(this, reason);
@@ -311,10 +360,15 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 // Joining mid-way (start > 0): others are already listening, so land where they are now, not where
                 // the server was when it said to play. A fresh start plays from the top for everyone: the server
                 // holds it at 0 until a listener has it loaded (see Streams#started).
-                double catchUp = startSeconds > 0 ? (System.nanoTime() - requestedAt) / 1e9 : 0;
-                SyncClock.Start start = SyncClock.start(playback, track, startSeconds + catchUp,
-                        requestedAt - Math.round(startSeconds * 1e9), load);
-                opened.lineUp(catchUp + start.skipSeconds(), start);
+                if(discClock!=null) {
+                    // Each listener joins this physical emitter's own clock, including startup/download latency.
+                    opened.lineUp(Math.max(0,discClock.seconds().getAsDouble()-startSeconds),null);
+                } else {
+                    double catchUp = startSeconds > 0 ? (System.nanoTime() - requestedAt) / 1e9 : 0;
+                    SyncClock.Start start = SyncClock.start(playback, track, startSeconds + catchUp,
+                            requestedAt - Math.round(startSeconds * 1e9), load);
+                    opened.lineUp(catchUp + start.skipSeconds(), start);
+                }
                 started.accept(0);
             }
         }
@@ -335,6 +389,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         try {
             // 90 s: the API may first wait out YouTube's pre-roll ad before the audio exists (see API.md).
             URI uri = URI.create(urlAt.apply(offset));
+            requestedSeconds=StreamRequestTimeline.requestedPosition(uri);
             HttpResponse<InputStream> response = HTTP.send(HttpRequest.newBuilder(uri)
                     .timeout(Duration.ofMillis(Streams.MAX_LOAD_TICKS * 50)).build(), HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() != 200) {
@@ -452,6 +507,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         private long startAt;
         private long analyzedPosition = -1;
         private volatile boolean closed;
+        private volatile double lastReadSeconds=-1;
+        double lastReadSeconds(){return lastReadSeconds;}
         /** Silence to play before the audio, to wait for the others of its playback (see lineUp). */
         private long silenceBytes;
         /** When to start, to line up with the others of its playback; null for at once. */
@@ -597,6 +654,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         }
 
         private synchronized ByteBuffer buffer(byte[] pcm, long position) {
+            lastReadSeconds=position<0?-1:feed.mediaSeconds(position);
             if (playback != null && source != 0 && pcm.length > 0) {
                 int queued = DeviceClock.queuedBuffers(source);
                 long samples = 0;

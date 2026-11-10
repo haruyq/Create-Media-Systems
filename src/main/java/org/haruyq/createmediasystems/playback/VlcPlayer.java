@@ -9,6 +9,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.DoubleSupplier;
+import java.util.Locale;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.disc.DiscClient;
@@ -58,6 +60,8 @@ public final class VlcPlayer implements NativeAudio.Backend {
     private double duration;
     /** See {@link #seconds}; set as status is asked. */
     private volatile double seconds;
+    @Nullable
+    private final DoubleSupplier discPosition;
 
     /** The tallest picture its video plays at (0 for any); unused without video. */
     private final int maxHeight;
@@ -68,6 +72,16 @@ public final class VlcPlayer implements NativeAudio.Backend {
 
     /** A player of {@code video}, or of a record's audio alone if null, asked to play at {@code requestedAt}. */
     VlcPlayer(@Nullable Streams.Video video, long requestedAt) {
+        this(video, requestedAt, null);
+    }
+
+    VlcPlayer(@Nullable Streams.Video video, long requestedAt, @Nullable DoubleSupplier discPosition) {
+        this(video, requestedAt, 0, discPosition);
+    }
+
+    VlcPlayer(@Nullable Streams.Video video, long requestedAt, double startSeconds, @Nullable DoubleSupplier discPosition) {
+        this.startSeconds = startSeconds;
+        this.discPosition = discPosition;
         frame = video == null ? null : new Frame();
         var callbacks = new CallbackThreadInitializer(true, false, "CMS VLC callback");
         Native.setCallbackThreadInitializer(audio.play, callbacks);
@@ -123,6 +137,12 @@ public final class VlcPlayer implements NativeAudio.Backend {
                 for (String option : media.options()) {
                     LIB.libvlc_media_add_option(opened, option);
                 }
+                if (discPosition != null && !media.live()) {
+                    // Seeking a newly paused input and immediately resuming can race VLC's asynchronous seek.
+                    // Input start-time is applied before start-paused completes, so every CD opens at its server position.
+                    LIB.libvlc_media_add_option(opened, String.format(Locale.ROOT, ":start-time=%.3f",
+                            Math.max(0, discPosition.getAsDouble())));
+                }
                 // Paused once open, so it can seek to where the others are first (see NativeAudio#open).
                 LIB.libvlc_media_add_option(opened, ":start-paused");
                 if (frame == null) {
@@ -159,6 +179,11 @@ public final class VlcPlayer implements NativeAudio.Backend {
     @Override
     public double seconds() {
         return seconds;
+    }
+
+    @Override
+    public boolean startsAtPosition() {
+        return discPosition != null;
     }
 
     boolean recentMedia(long now) {

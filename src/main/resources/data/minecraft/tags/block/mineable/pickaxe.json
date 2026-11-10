@@ -1,5 +1,6 @@
 {
   "values": [
+    "create_media_systems:disc_cell_charger",
     "create_media_systems:train_detector",
     "create_media_systems:train_signal_receiver",
     "create_media_systems:display",

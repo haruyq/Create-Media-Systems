@@ -265,6 +265,8 @@ final class Feed {
             }
         }
 
+        double mediaSeconds(long bytes) {return startSeconds+bytes/(double)Pcm.BYTES_PER_SECOND;}
+
         @Nullable
         byte[] peek(long from, int length) {
             synchronized (Feed.this) {

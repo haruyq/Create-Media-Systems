@@ -1,0 +1,10 @@
+{
+  "type": "create_media_systems:disc_cell_upgrade",
+  "level": 6,
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "create_heavy_indusstry"
+    }
+  ]
+}

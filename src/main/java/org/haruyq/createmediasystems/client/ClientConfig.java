@@ -16,6 +16,12 @@ public final class ClientConfig {
     public static final Path DIR = FMLPaths.GAMEDIR.get().resolve(CreateMediaSystems.MOD_ID);
 
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
+    public static final ModConfigSpec.EnumValue<org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Mode> LAUNCHER_DAMAGE_NUMBERS=BUILDER
+            .comment("Weapon damage numbers: STACKING combines recent hits on the same target, FLOATING shows individual hits, BOTH shows both, OFF hides numbers.")
+            .defineEnum("launcherDamageNumbers",org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Mode.STACKING);
+    public static final ModConfigSpec.EnumValue<org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Crosshair> LAUNCHER_CROSSHAIR_FEEDBACK=BUILDER
+            .comment("X_WITH_SHIELD shows a confirmed-hit X plus Minecraft absorption shield feedback; X shows only the X; OFF hides both.")
+            .defineEnum("launcherCrosshairFeedback",org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Crosshair.X_WITH_SHIELD);
     public static final ModConfigSpec.IntValue AUDIO_CACHE_DAYS = BUILDER
             .comment("Days a record's audio (YouTube and the like) is kept on this computer after it last played, so it plays again without downloading. 0 keeps none.")
             .defineInRange("audioCacheDays", 7, 0, 365);
@@ -25,6 +31,9 @@ public final class ClientConfig {
     public static final ModConfigSpec.IntValue VIDEO_CACHE_MEGABYTES = BUILDER
             .comment("Most disk space displays' kept videos may take, in MB; the longest unplayed goes first. 0 keeps none, and fetches no video ahead.")
             .defineInRange("videoCacheMegabytes", 5120, 0, 1 << 22);
+    public static final ModConfigSpec.IntValue MAX_AUDIBLE_DISC_PROJECTIONS = BUILDER
+            .comment("Nearest projected CDs decoded at once on this computer. Every CD's server playback clock keeps running, including outside this voice budget. Returning CDs seek to their own current position.")
+            .defineInRange("maxAudibleDiscProjections", 12, 1, 64);
     private static final ModConfigSpec.IntValue MAX_VIDEO_HEIGHT = BUILDER
             .comment("Tallest video (in pixels) displays pick when a page offers several, so this computer can decode it in time (4K AV1 can't be, in software, on most). 0 picks the best there is.")
             .defineInRange("maxVideoHeight", 1080, 0, 4320);

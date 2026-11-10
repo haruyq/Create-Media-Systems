@@ -13,6 +13,13 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// Optional regression check against JEI's real crafting display predicate; never a runtime dependency.
+if (providers.gradleProperty('recipeViewerTest').isPresent()) {
+    repositories { maven { url = 'https://maven.blamejared.com'; content { includeGroup 'mezz.jei' } } }
+    sourceSets.test.java.srcDir('src/recipeViewerTest/java')
+    dependencies { testImplementation 'mezz.jei:jei-1.21.1-neoforge:19.27.0.346@jar' }
+}
+
 repositories {
     maven { url = 'https://maven.createmod.net' }
     maven { url = 'https://maven.ithundxr.dev/snapshots' }
@@ -69,6 +76,49 @@ neoForge {
 }
 
 // The lighting demo is opt-in so ordinary runClient saves are untouched.
+if (providers.gradleProperty('launcherServerTest').isPresent()) {
+    sourceSets.main.java.srcDir('src/launcherServerTest/java')
+    sourceSets.main.resources.srcDir('src/launcherServerTest/resources')
+    neoForge.runs.gameTestServer {
+        gameDirectory = file(providers.gradleProperty('launcherServerDirectory').orElse('run-launcher-server-test').get())
+        systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        jvmArgument '-Xmx2G'
+    }
+}
+
+if (providers.gradleProperty('launcherDebug').isPresent()) {
+    sourceSets.main.java.srcDir('src/launcherDebug/java')
+    neoForge.runs.client {
+        gameDirectory = file('run-launcher-debug')
+        programArguments.addAll('--username', 'DiscTester', '--width', '1280', '--height', '760')
+        jvmArgument '-Xmx3G'
+    }
+}
+
+// A tiny registry fixture verifies both branches of the optional Plant recipe without making Plant a dependency.
+if (providers.gradleProperty('cellPlantTest').isPresent()) {
+    def fixture = sourceSets.create('plantCompatFixture') {
+        java.srcDir('src/plantCompatTest/java')
+        resources.srcDir('src/plantCompatTest/resources')
+        compileClasspath = sourceSets.main.compileClasspath
+    }
+    def fixtureJar = tasks.register('plantCellCompatJar', Jar) {
+        from fixture.output
+        archiveFileName = 'cms-plant-material-fixture.jar'
+        destinationDirectory = layout.buildDirectory.dir('plant-compat-fixture')
+    }
+    neoForge.runs.gameTestServer {
+        gameDirectory = file('run-launcher-server-test-plant')
+        systemProperty 'cms.cellPlantTest', 'true'
+    }
+    tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+        dependsOn fixtureJar
+        doFirst {
+            copy { from fixtureJar.flatMap { it.archiveFile }; into file('run-launcher-server-test-plant/mods') }
+        }
+    }
+}
+
 if (providers.gradleProperty('lightingDemo').isPresent() || providers.gradleProperty('lightingNetworkTest').isPresent()
         || providers.gradleProperty('lightingBenchmark').isPresent()) {
     sourceSets.main.java.srcDir('src/lightingDemo/java')

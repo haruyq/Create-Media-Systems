@@ -82,6 +82,16 @@ public final class DeviceClock {
         return now + Math.max(0, Math.round(remaining * 1e9));
     }
 
+    /** Per-source media measurement, including vanilla disc sample rates and the actual Doppler pitch. */
+    public static long presentationTime(int source,long startAt,long queuedSamples,float rate) {
+        long now=System.nanoTime();long[] device=nowAndLatency();
+        double pitch=Math.max(.01,AL10.alGetSourcef(source,AL10.AL_PITCH));
+        double offset=AL10.alGetSourcef(source,AL11.AL_SEC_OFFSET);
+        long remaining=Math.max(0,Math.round((queuedSamples/(double)rate-offset)/pitch*1e9));
+        long schedule=device==null?0:Math.max(0,startAt-device[0]);
+        return now+schedule+remaining+(device==null?0:device[1]);
+    }
+
     /** The open device if it has everything needed, else 0. */
     private static long device() {
         long context = ALC10.alcGetCurrentContext();

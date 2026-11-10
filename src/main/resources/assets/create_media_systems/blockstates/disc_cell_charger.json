@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "charging=false": {
+      "model": "create_media_systems:block/disc_cell_charger"
+    },
+    "charging=true": {
+      "model": "create_media_systems:block/disc_cell_charger_active"
+    }
+  }
+}

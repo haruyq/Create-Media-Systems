@@ -1,0 +1,14 @@
+{
+  "parent": "minecraft:builtin/entity",
+  "gui_light": "side",
+  "textures": {
+    "particle": "create_media_systems:item/disc_launcher_icon"
+  },
+  "display": {
+    "ground": {
+      "rotation": [0, 0, 90],
+      "translation": [0, 2, 0],
+      "scale": [0.3, 0.3, 0.3]
+    }
+  }
+}
