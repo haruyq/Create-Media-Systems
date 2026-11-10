@@ -13,6 +13,9 @@
     "defaultRequire": 1
   },
   "client": [
+    "GameRendererAccessor",
+    "LauncherArmMixin",
+    "PartyBoxArmMixin",
     "ChannelAccessor",
     "ChannelMixin",
     "EntityRendererMixin",
@@ -21,6 +24,7 @@
     "SoundEngineAccessor",
     "SoundEngineMixin",
     "SoundManagerAccessor",
-    "ScheduleScreenMixin"
+    "ScheduleScreenMixin",
+    "MegaphoneArmMixin"
   ]
 }

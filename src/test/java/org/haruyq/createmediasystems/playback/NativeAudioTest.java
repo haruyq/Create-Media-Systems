@@ -44,6 +44,8 @@ class NativeAudioTest {
         Streams.Channel channel;
         boolean failStart;
         boolean failTap;
+        boolean inputPosition;
+        volatile long positionMillis = -1;
 
         @Override public AudioStream tap(Streams.Channel channel) throws IOException {
             actions.add("tap"); this.channel = channel;
@@ -57,6 +59,8 @@ class NativeAudioTest {
         @Override public NativeAudio.Status status() { return state; }
         @Override public void seek(long millis) { actions.add("seek"); sought = millis; }
         @Override public void resume() { actions.add("resume"); }
+        @Override public boolean startsAtPosition() { return inputPosition; }
+        @Override public long time() { return positionMillis; }
         @Override public void release() { releases.incrementAndGet(); }
     }
 
@@ -71,6 +75,74 @@ class NativeAudioTest {
             assertEquals(48_000, stream.getFormat().getSampleRate());
         }
         assertEquals(1, player.releases.get());
+    }
+
+    @Test
+    void rapidShotsOfTheSameSongHaveIndependentPlayersAndServerPositions() throws Exception {
+        Player first = new Player();
+        Player second = new Player();
+        long asked = System.nanoTime();
+        var a = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 27.5);
+        var b = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 1.25);
+        try (AudioStream one = NativeAudio.open(() -> first, SOURCE, null, 0, null, 0, asked,
+                () -> false, Streams.Channel.MIX, null, s -> {}, a)) {
+            try (AudioStream two = NativeAudio.open(() -> second, SOURCE, null, 0, null, 0, asked,
+                    () -> false, Streams.Channel.MIX, null, s -> {}, b)) {
+                assertEquals(27500, first.sought, "CD A follows its own server position");
+                assertEquals(1250, second.sought, "CD B must not tap A even when fired in the same tick");
+                assertEquals(1, first.actions.stream().filter("start"::equals).count());
+                assertEquals(1, second.actions.stream().filter("start"::equals).count());
+            }
+            assertEquals(0, first.releases.get(), "removing CD B does not stop CD A");
+            assertEquals(1, second.releases.get());
+        }
+        assertEquals(1, first.releases.get());
+    }
+
+    @Test
+    void rejoiningOneDiscUsesThatDiscsPlayerRatherThanTheOtherShots() throws Exception {
+        Player player = new Player();
+        long asked = System.nanoTime();
+        var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 8.0);
+        try (AudioStream one = NativeAudio.open(() -> player, SOURCE, null, 0, null, 8, asked,
+                () -> false, Streams.Channel.MIX, null, s -> {}, disc);
+             AudioStream rejoined = NativeAudio.open(() -> fail("same CD must share its own decoder"),
+                     SOURCE, null, 0, null, 8, asked + 20_000_000_000L,
+                     () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
+            assertEquals(8000, player.sought);
+            assertEquals(1, player.actions.stream().filter("start"::equals).count());
+        }
+        assertEquals(1, player.releases.get());
+    }
+
+    @Test
+    void anInputOpenedAtTheServerPositionIsNotSoughtAgainWhilePaused() throws Exception {
+        Player player = new Player();
+        player.inputPosition = true;
+        var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 45.0);
+        try (AudioStream ignored = NativeAudio.open(() -> player, SOURCE, null, 0, null, 45,
+                System.nanoTime(), () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
+            assertEquals(List.of("tap", "start", "resume"), player.actions,
+                    "Do not race VLC's input start-time with another paused seek");
+        }
+    }
+
+    @Test
+    void aDiscThatStalledWhileOpeningCatchesUpToItsOwnServerClock() throws Exception {
+        Player player = new Player();
+        player.inputPosition = true;
+        player.positionMillis = 8500;
+        var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 10.0);
+        try (AudioStream stream = NativeAudio.open(() -> player, SOURCE, null, 0, null, 10,
+                System.nanoTime(), () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
+            assertEquals(-1, player.sought, "Input start-time is not interrupted while paused");
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (player.sought < 0 && System.nanoTime() < deadline) {
+                stream.read(96);
+                Thread.sleep(20);
+            }
+            assertEquals(10000, player.sought, "A 1.5 second loading stall must catch up after playback resumes");
+        }
     }
 
     @Test

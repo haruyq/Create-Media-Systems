@@ -1,0 +1,6 @@
+{
+  "providers": [
+    { "type": "ttf", "file": "create_media_systems:barlow_condensed_semibold.ttf", "shift": [0, 0], "size": 14, "oversample": 3 },
+    { "type": "reference", "id": "minecraft:default" }
+  ]
+}

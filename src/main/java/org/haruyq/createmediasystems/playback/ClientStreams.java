@@ -45,6 +45,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * or one train disc reader's announcements (keyed by a string); different channels play at the same time.
  */
 public final class ClientStreams {
+    /** The actual PCM presentation position of a tracked horn, independent of its decoder read-ahead. */
+    public static double audibleSeconds(Object key){var sound=PLAYING.get(key);return sound==null?-1:sound.audibleSeconds();}
+    public static double requestedSeconds(Object key){var sound=PLAYING.get(key);return sound==null?-1:sound.requestedSeconds();}
     private static final Map<Object, StreamSound> PLAYING = new HashMap<>();
     /** Live settings per emitter block; RetuneAtBlock updates them without restarting the audio. */
     private static final Map<BlockPos, JukeboxSettings> SETTINGS = new HashMap<>();
@@ -383,6 +386,18 @@ public final class ClientStreams {
             previous.release();
         }
         sounds.play(sound);
+    }
+
+    /** Whether a disc-owned stream is still managed, including while its decoder is loading or retrying a channel. */
+    public static boolean contains(Object channel) { return PLAYING.containsKey(channel); }
+
+    /** Remove a disc-owned stream and release its decoder after expiry/unload. */
+    public static void stop(Object channel) {
+        StreamSound current = PLAYING.remove(channel);
+        if (current != null) {
+            Minecraft.getInstance().getSoundManager().stop(current);
+            current.release();
+        }
     }
 
     /** A playing stream broke off: posted to chat, unless {@code sound} was already replaced or stopped. */

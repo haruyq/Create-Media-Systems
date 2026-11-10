@@ -11,6 +11,16 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import org.haruyq.createmediasystems.launcher.DiscLauncherItem;
+import org.haruyq.createmediasystems.launcher.DiscLauncherReloadPacket;
+import org.haruyq.createmediasystems.launcher.DiscProjectile;
+import org.haruyq.createmediasystems.launcher.DiscCellItem;
+import org.haruyq.createmediasystems.launcher.DiscCellTier;
+import org.haruyq.createmediasystems.launcher.DiscCellMenu;
+import org.haruyq.createmediasystems.launcher.DiscCellUpgradeRecipe;
+import org.haruyq.createmediasystems.launcher.DiscCellCharger;
+import org.haruyq.createmediasystems.launcher.DiscCellChargerBlock;
+import org.haruyq.createmediasystems.launcher.ReloadGlowBlock;
 import org.haruyq.createmediasystems.audio.CustomDiscItem;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.audio.RangeQuill;
@@ -54,6 +64,8 @@ import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
 import com.simibubi.create.content.trains.graph.EdgePointType;
 import com.simibubi.create.content.trains.track.TrackTargetingBlockItem;
 
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.component.DataComponentType;
@@ -67,6 +79,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.JukeboxSong;
+import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -92,6 +105,7 @@ public class CreateMediaSystems {
     /** The mod's id before it was renamed: worlds from then name its blocks, items and data with it. */
     public static final String LEGACY_ID = "disksb";
 
+    private static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
     private static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);
     private static final DeferredRegister.DataComponents COMPONENTS = DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, MOD_ID);
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MOD_ID);
@@ -101,6 +115,31 @@ public class CreateMediaSystems {
     private static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
     private static final DeferredRegister<AttachmentType<?>> ATTACHMENTS =
             DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, MOD_ID);
+    private static final DeferredRegister<net.minecraft.world.inventory.MenuType<?>> MENUS =
+            DeferredRegister.create(Registries.MENU, MOD_ID);
+    private static final DeferredRegister<net.minecraft.world.item.crafting.RecipeSerializer<?>> RECIPE_SERIALIZERS =
+            DeferredRegister.create(Registries.RECIPE_SERIALIZER, MOD_ID);
+
+    public static final Supplier<DataComponentType<net.minecraft.nbt.CompoundTag>> PARTYBOX_STATE = COMPONENTS.registerComponentType(
+            "partybox_state", b -> b.persistent(net.minecraft.nbt.CompoundTag.CODEC).networkSynchronized(ByteBufCodecs.COMPOUND_TAG));
+    public static final Supplier<DataComponentType<net.minecraft.nbt.CompoundTag>> MEGAPHONE_STATE = COMPONENTS.registerComponentType(
+            "megaphone_state",b->b.persistent(net.minecraft.nbt.CompoundTag.CODEC).networkSynchronized(ByteBufCodecs.COMPOUND_TAG));
+    public static final DeferredItem<org.haruyq.createmediasystems.megaphone.MegaphoneItem> MEGAPHONE_WHITE = ITEMS.register("megaphone_white",
+            ()->new org.haruyq.createmediasystems.megaphone.MegaphoneItem(new Item.Properties().rarity(Rarity.UNCOMMON),false));
+    public static final DeferredItem<org.haruyq.createmediasystems.megaphone.MegaphoneItem> MEGAPHONE_BLACK = ITEMS.register("megaphone_black",
+            ()->new org.haruyq.createmediasystems.megaphone.MegaphoneItem(new Item.Properties().rarity(Rarity.UNCOMMON),true));
+    public static final Supplier<net.minecraft.world.inventory.MenuType<org.haruyq.createmediasystems.megaphone.MegaphoneMenu>> MEGAPHONE_MENU = MENUS.register("megaphone",
+            ()->net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(org.haruyq.createmediasystems.megaphone.MegaphoneMenu::new));
+    public static final DeferredItem<org.haruyq.createmediasystems.partybox.PartyBoxItem> PARTYBOX = ITEMS.register("partybox_stage_320",
+            () -> new org.haruyq.createmediasystems.partybox.PartyBoxItem(new Item.Properties().rarity(Rarity.RARE)));
+    public static final DeferredItem<org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem> PARTYBOX_BATTERY = ITEMS.register("partybox_battery",
+            () -> new org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem(new Item.Properties()));
+    public static final DeferredHolder<EntityType<?>, EntityType<org.haruyq.createmediasystems.partybox.PartyBoxEntity>> PARTYBOX_ENTITY =
+            ENTITIES.register("partybox_stage_320", () -> EntityType.Builder.<org.haruyq.createmediasystems.partybox.PartyBoxEntity>of(
+                    org.haruyq.createmediasystems.partybox.PartyBoxEntity::new, MobCategory.MISC).sized(.40f, .69f)
+                    .clientTrackingRange(10).updateInterval(1).build(MOD_ID + ":partybox_stage_320"));
+    public static final Supplier<net.minecraft.world.inventory.MenuType<org.haruyq.createmediasystems.partybox.PartyBoxMenu>> PARTYBOX_MENU =
+            MENUS.register("partybox", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(org.haruyq.createmediasystems.partybox.PartyBoxMenu::new));
 
     /** Placeholder event: every stream plays through it, the audio itself comes from {@code getStream}. */
     public static final DeferredHolder<SoundEvent, SoundEvent> STREAM =
@@ -113,6 +152,15 @@ public class CreateMediaSystems {
             SOUNDS.register("block.note_block.trumpet_weathered", SoundEvent::createVariableRangeEvent);
     public static final DeferredHolder<SoundEvent, SoundEvent> NOTE_BLOCK_TRUMPET_OXIDIZED =
             SOUNDS.register("block.note_block.trumpet_oxidized", SoundEvent::createVariableRangeEvent);
+    public static final DeferredHolder<SoundEvent, SoundEvent> DISC_FIRE_SOUND =
+            SOUNDS.register("disc_fire", () -> SoundEvent.createVariableRangeEvent(id("disc_fire")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DISC_LATCH_SOUND =
+            SOUNDS.register("disc_latch", () -> SoundEvent.createVariableRangeEvent(id("disc_latch")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DISC_INSERT_SOUND =
+            SOUNDS.register("disc_insert", () -> SoundEvent.createVariableRangeEvent(id("disc_insert")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DISC_CHARGE_SOUND =
+            SOUNDS.register("disc_charge", () -> SoundEvent.createVariableRangeEvent(id("disc_charge")));
+
     public static final ResourceKey<JukeboxSong> CUSTOM_SONG = ResourceKey.create(Registries.JUKEBOX_SONG, id("custom"));
 
     public static final Supplier<DataComponentType<String>> URL = COMPONENTS.registerComponentType("url",
@@ -129,6 +177,64 @@ public class CreateMediaSystems {
     /** The track's title from the API, shown on the disc. */
     public static final Supplier<DataComponentType<String>> TITLE = COMPONENTS.registerComponentType("title",
             b -> b.persistent(Codec.STRING).networkSynchronized(ByteBufCodecs.STRING_UTF8));
+
+    /** The disc launcher stores original individual discs, not lossy item identifiers. */
+    public static final Supplier<DataComponentType<org.haruyq.createmediasystems.launcher.DiscPlayback>> DISC_PLAYBACK =
+            COMPONENTS.registerComponentType("disc_playback", b -> b
+                    .persistent(org.haruyq.createmediasystems.launcher.DiscPlayback.CODEC)
+                    .networkSynchronized(org.haruyq.createmediasystems.launcher.DiscPlayback.STREAM_CODEC));
+    public static final Supplier<DataComponentType<List<ItemStack>>> LAUNCHER_LOADED = COMPONENTS.registerComponentType(
+            "launcher_loaded", b -> b.persistent(ItemStack.CODEC.listOf())
+                    .networkSynchronized(ItemStack.LIST_STREAM_CODEC));
+    public static final Supplier<DataComponentType<List<ItemStack>>> LAUNCHER_RESERVED = COMPONENTS.registerComponentType(
+            "launcher_reserved", b -> b.persistent(ItemStack.CODEC.listOf())
+                    .networkSynchronized(ItemStack.LIST_STREAM_CODEC));
+    public static final Supplier<DataComponentType<Long>> LAUNCHER_RELOAD_START = COMPONENTS.registerComponentType(
+            "launcher_reload_start", b -> b.persistent(Codec.LONG).networkSynchronized(ByteBufCodecs.VAR_LONG));
+    public static final Supplier<DataComponentType<Long>> LAUNCHER_SHOT_AT = COMPONENTS.registerComponentType(
+            "launcher_shot_at", b -> b.persistent(Codec.LONG).networkSynchronized(ByteBufCodecs.VAR_LONG));
+    public static final Supplier<DataComponentType<ItemContainerContents>> CELL_MASTER = COMPONENTS.registerComponentType(
+            "cell_master", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
+    public static final Supplier<DataComponentType<Integer>> CELL_ENERGY = COMPONENTS.registerComponentType(
+            "cell_energy", b -> b.persistent(Codec.INT).networkSynchronized(ByteBufCodecs.VAR_INT));
+    public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_CELL = COMPONENTS.registerComponentType(
+            "launcher_cell", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
+    public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_PENDING_CELL = COMPONENTS.registerComponentType(
+            "launcher_pending_cell", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
+    public static final Supplier<DataComponentType<Boolean>> LAUNCHER_EJECT_ONLY = COMPONENTS.registerComponentType(
+            "launcher_eject_only", b -> b.persistent(Codec.BOOL).networkSynchronized(ByteBufCodecs.BOOL));
+    public static final DeferredItem<DiscCellItem> COPPER_DISC_CELL = cell("copper", DiscCellTier.COPPER);
+    public static final DeferredItem<DiscCellItem> BRASS_DISC_CELL = cell("brass", DiscCellTier.BRASS);
+    public static final DeferredItem<DiscCellItem> DIAMOND_DISC_CELL = cell("diamond", DiscCellTier.DIAMOND);
+    public static final DeferredItem<DiscCellItem> NETHERITE_DISC_CELL = cell("netherite", DiscCellTier.NETHERITE);
+    public static final DeferredItem<DiscCellItem> RESONANT_DISC_CELL = cell("resonant", DiscCellTier.RESONANT);
+    public static final DeferredItem<DiscCellItem> CHEMI_DISC_CELL = cell("chemi", DiscCellTier.CHEMI);
+    public static final List<DeferredItem<DiscCellItem>> DISC_CELLS = List.of(COPPER_DISC_CELL, BRASS_DISC_CELL,
+            DIAMOND_DISC_CELL, NETHERITE_DISC_CELL, RESONANT_DISC_CELL, CHEMI_DISC_CELL);
+    private static DeferredItem<DiscCellItem> cell(String name, DiscCellTier tier) {
+        return ITEMS.register(name + "_disc_cell", () -> new DiscCellItem(tier, new Item.Properties()
+                .rarity(tier.level >= 5 ? Rarity.EPIC : tier.level >= 3 ? Rarity.RARE : Rarity.UNCOMMON)));
+    }
+    public static DiscCellItem cell(DiscCellTier tier) { return DISC_CELLS.get(tier.level - 1).get(); }
+    public static final Supplier<net.minecraft.world.inventory.MenuType<DiscCellMenu>> DISC_CELL_MENU =
+            MENUS.register("disc_cell", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(DiscCellMenu::new));
+    public static final Supplier<DiscCellUpgradeRecipe.Serializer> CELL_UPGRADE_RECIPE =
+            RECIPE_SERIALIZERS.register("disc_cell_upgrade", DiscCellUpgradeRecipe.Serializer::new);
+    public static final DeferredBlock<ReloadGlowBlock> RELOAD_GLOW = BLOCKS.register("reload_glow", () -> new ReloadGlowBlock(
+            BlockBehaviour.Properties.of().air().noCollission().noOcclusion().noLootTable().replaceable()
+                    .strength(-1, 3600000).lightLevel(state -> 15)));
+    public static final DeferredBlock<DiscCellChargerBlock> DISC_CELL_CHARGER = BLOCKS.register("disc_cell_charger",
+            () -> new DiscCellChargerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()
+                    .lightLevel(state -> state.getValue(DiscCellChargerBlock.CHARGING) ? 12 : 0)));
+    public static final DeferredItem<?> DISC_CELL_CHARGER_ITEM = ITEMS.registerSimpleBlockItem("disc_cell_charger", DISC_CELL_CHARGER);
+    public static final Supplier<BlockEntityType<DiscCellCharger>> DISC_CELL_CHARGER_ENTITY = BLOCK_ENTITIES.register(
+            "disc_cell_charger", () -> BlockEntityType.Builder.of(DiscCellCharger::new, DISC_CELL_CHARGER.get()).build(null));
+    public static final DeferredItem<DiscLauncherItem> DISC_LAUNCHER = ITEMS.register("disc_launcher",
+            () -> new DiscLauncherItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<EntityType<?>, EntityType<DiscProjectile>> DISC_PROJECTILE =
+            ENTITIES.register("disc_projectile", () -> EntityType.Builder.<DiscProjectile>of(
+                    DiscProjectile::new, MobCategory.MISC).sized(.35f, .12f)
+                    .clientTrackingRange(10).updateInterval(1).build(MOD_ID + ":disc_projectile"));
 
     public static final DeferredItem<CustomDiscItem> CUSTOM_DISC = ITEMS.register("custom_disc",
             () -> new CustomDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE).jukeboxPlayable(CUSTOM_SONG)));
@@ -162,7 +268,10 @@ public class CreateMediaSystems {
     public static final Supplier<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
             .icon(() -> new ItemStack(CUSTOM_DISC.get()))
-            .displayItems((params, output) -> ITEMS.getEntries().forEach(item -> output.accept(item.get())))
+            .displayItems((params, output) -> ITEMS.getEntries().forEach(item -> {
+                if (!(item.get() instanceof DiscCellItem cell) || !cell.tier.optional()
+                        || net.neoforged.fml.ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID)) output.accept(item.get());
+            }))
             .build());
     public static final DeferredBlock<TrainDetectorBlock> TRAIN_DETECTOR = BLOCKS.register("train_detector",
             () -> new TrainDetectorBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OBSERVER).noOcclusion()));
@@ -268,10 +377,14 @@ public class CreateMediaSystems {
     public CreateMediaSystems(IEventBus modBus, ModContainer container) {
         ServerConfig.register(modBus, container);
         SOUNDS.register(modBus);
+        ENTITIES.register(modBus);
         COMPONENTS.register(modBus);
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
+        MENUS.register(modBus);
+        RECIPE_SERIALIZERS.register(modBus);
+        modBus.addListener(DiscCellCharger::registerCapabilities);
         // Worlds from before the rename keep what they have of the mod.
         for (DeferredRegister<?> register : List.of(SOUNDS, COMPONENTS, BLOCKS, ITEMS, BLOCK_ENTITIES, ATTACHMENTS, TABS)) {
             for (DeferredHolder<?, ?> entry : register.getEntries()) {
@@ -330,12 +443,18 @@ public class CreateMediaSystems {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("13");
+        var registrar = event.registrar("16");
         ServerConfig.registerPayloads(registrar);
         StreamPackets.registerPayloads(registrar);
         TrainDiscReaderBehaviour.registerPayloads(registrar);
         TrainSignals.registerPayloads(registrar);
         RangeQuill.registerPayloads(registrar);
+        DiscLauncherReloadPacket.registerPayloads(registrar);
+        org.haruyq.createmediasystems.launcher.DiscLauncherTrigger.register(registrar);
+        org.haruyq.createmediasystems.launcher.LauncherFeedback.register(registrar);
+        org.haruyq.createmediasystems.partybox.PartyBoxAction.register(registrar);
+        org.haruyq.createmediasystems.megaphone.MegaphoneAction.register(registrar);
+        org.haruyq.createmediasystems.launcher.DiscPlaybackMetadata.register(registrar);
         CustomDiscItem.registerPayloads(registrar);
         VideoDiscItem.registerPayloads(registrar);
         RemoteItem.registerPayloads(registrar);

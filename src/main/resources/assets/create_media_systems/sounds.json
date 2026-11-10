@@ -23,5 +23,47 @@
         "stream": true
       }
     ]
+  },
+  "disc_fire": {
+    "subtitle": "subtitles.create_media_systems.disc_fire",
+    "sounds": [
+      {
+        "name": "create_media_systems:disc_fire"
+      }
+    ]
+  },
+  "disc_latch": {
+    "subtitle": "subtitles.create_media_systems.disc_latch",
+    "sounds": [
+      {
+        "name": "create_media_systems:disc_latch"
+      }
+    ]
+  },
+  "disc_insert": {
+    "subtitle": "subtitles.create_media_systems.disc_insert",
+    "sounds": [
+      {
+        "name": "create_media_systems:disc_insert"
+      }
+    ]
+  },
+  "disc_charge": {
+    "subtitle": "subtitles.create_media_systems.disc_charge",
+    "sounds": [
+      {
+        "name": "create_media_systems:disc_charge"
+      }
+    ]
+  },
+  "disc_hit": {
+    "sounds": [
+      "create_media_systems:disc_hit"
+    ]
+  },
+  "disc_headshot": {
+    "sounds": [
+      "create_media_systems:disc_headshot"
+    ]
   }
 }

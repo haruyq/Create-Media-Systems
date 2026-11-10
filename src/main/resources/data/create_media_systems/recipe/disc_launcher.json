@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": ["GPG", "BCB", " SH"],
+  "key": {
+    "G": {"item":"create:large_cogwheel"},
+    "P": {"item":"create:precision_mechanism"},
+    "B": {"item":"create:brass_sheet"},
+    "C": {"item":"minecraft:crossbow"},
+    "S": {"item":"create:shaft"},
+    "H": {"item":"create:brass_casing"}
+  },
+  "result": {"id":"create_media_systems:disc_launcher", "count":1}
+}

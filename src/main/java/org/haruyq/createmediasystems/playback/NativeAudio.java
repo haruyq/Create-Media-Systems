@@ -5,10 +5,12 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleConsumer;
+import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.sound.sampled.AudioFormat;
@@ -56,6 +58,9 @@ public final class NativeAudio {
      */
     private static final long SEEK_DRIFT_MILLIS = 3000;
     private static final long SEEK_COOLDOWN_NANOS = 10_000_000_000L;
+    // Moving discs rejoin independently after unloading; loading stalls must not leave one listener seconds behind.
+    private static final long DISC_SEEK_DRIFT_MILLIS = 1000;
+    private static final long DISC_SEEK_COOLDOWN_NANOS = 3_000_000_000L;
     /** The last moments of a track aren't checked: VLC's time stops at its end. */
     private static final long END_MARGIN_MILLIS = 2000;
     /** The player each track's latest playback plays on, per Blu-ray player showing it; guarded by itself. */
@@ -75,6 +80,9 @@ public final class NativeAudio {
         }
     }
 
+    /** A moving CD has an explicit identity and a server-owned playback clock. */
+    record DiscClock(UUID id, DoubleSupplier seconds) {}
+
     /**
      * {@code playback} is what plays it on the server, and {@code load} which load of its track (see
      * {@link Shared#join}); null and 0 if unknown. {@code display} is
@@ -85,11 +93,17 @@ public final class NativeAudio {
     static AudioStream open(URI source, @Nullable BlockPos playback, long load, @Nullable Streams.Video video,
                             double startSeconds, long requestedAt, BooleanSupplier cancelled, Streams.Channel channel,
                             @Nullable CompletableFuture<Go> go, DoubleConsumer loaded) throws IOException {
+        return open(source, playback, load, video, startSeconds, requestedAt, cancelled, channel, go, loaded, null);
+    }
+
+    static AudioStream open(URI source, @Nullable BlockPos playback, long load, @Nullable Streams.Video video,
+                            double startSeconds, long requestedAt, BooleanSupplier cancelled, Streams.Channel channel,
+                            @Nullable CompletableFuture<Go> go, DoubleConsumer loaded, @Nullable DiscClock disc) throws IOException {
         if (Vlc.MISSING != null) {
             throw new IOException(Vlc.MISSING);
         }
-        return retrying(() -> open(() -> new VlcPlayer(video, requestedAt, startSeconds), source, playback, load,
-                video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded),
+        return retrying(() -> open(() -> new VlcPlayer(video, requestedAt, startSeconds, disc == null ? null : disc.seconds()), source, playback, load,
+                video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded, disc),
                 cancelled, RETRY_MILLIS);
     }
 
@@ -146,6 +160,19 @@ public final class NativeAudio {
      * video is (0: unknown, or live); {@code loading} while it loads here, or waits for the others to.
      */
     public record Progress(boolean loading, double seconds, double length) {
+    }
+
+    /** Actual decoder position for this moving CD, for the development probe. */
+    @Nullable
+    public static Progress discProgress(UUID id) {
+        synchronized (SHARED) {
+            for (Shared shared : SHARED.values()) {
+                if (!id.equals(shared.key.discId()) || shared.playing.isCompletedExceptionally()) continue;
+                boolean loading = !shared.playing.isDone();
+                return new Progress(loading, Math.max(0, shared.owner.time()) / 1000.0, shared.owner.seconds());
+            }
+        }
+        return null;
     }
 
     /** The video of the Blu-ray player at {@code pos} as it plays here (see Progress); null if it plays none here. */
@@ -249,14 +276,21 @@ public final class NativeAudio {
                                     @Nullable BlockPos display, double startSeconds, long requestedAt,
                                     BooleanSupplier cancelled, Streams.Channel channel,
                                     @Nullable CompletableFuture<Go> go, DoubleConsumer loaded) throws IOException {
+        return open(players, source, playback, load, display, startSeconds, requestedAt, cancelled, channel, go, loaded, null);
+    }
+
+    static AudioStream open(Supplier<Backend> players, URI source, @Nullable BlockPos playback, long load,
+                                    @Nullable BlockPos display, double startSeconds, long requestedAt,
+                                    BooleanSupplier cancelled, Streams.Channel channel,
+                                    @Nullable CompletableFuture<Go> go, DoubleConsumer loaded, @Nullable DiscClock disc) throws IOException {
         long origin = requestedAt - Math.round(startSeconds * 1e9);
-        Key key = new Key(source, display);
+        Key key = new Key(source, display, disc == null ? null : disc.id());
         Shared shared;
         boolean opener = false;
         synchronized (SHARED) {
             shared = SHARED.get(key);
             if (shared == null || !shared.join(origin, playback, load, startSeconds > 0)) {
-                shared = new Shared(key, playback, load, players.get(), origin);
+                shared = new Shared(key, playback, load, players.get(), origin, disc);
                 SHARED.put(key, shared);
                 opener = true;
             }
@@ -284,7 +318,7 @@ public final class NativeAudio {
         if (shared.playing.isCompletedExceptionally()) {
             // Its opener failed or gave up (it may only have been stopped): open one of our own.
             stream.close();
-            return open(players, source, playback, load, display, startSeconds, requestedAt, cancelled, channel, go, loaded);
+            return open(players, source, playback, load, display, startSeconds, requestedAt, cancelled, channel, go, loaded, disc);
         }
         if (!cancelled.getAsBoolean()) {
             loaded.accept(shared.owner.seconds());
@@ -313,6 +347,9 @@ public final class NativeAudio {
 
         /** Fails with a reason safe to show the player. */
         void start(URI source) throws IOException;
+
+        /** The backend supplied the CD's clock as an input start time before it opened. */
+        default boolean startsAtPosition() { return false; }
 
         Status status();
 
@@ -398,9 +435,10 @@ public final class NativeAudio {
             Go told = go == null ? null : go.getNow(null);
             // Without the server's word (an announcement, or it never came): where the server was when it sent the
             // stream, plus the time it took to load here.
-            long target = told != null ? told.position(now)
+            long target = shared.disc != null ? Math.max(0, Math.round(shared.disc.seconds().getAsDouble() * 1e9))
+                    : told != null ? told.position(now)
                     : startSeconds > 0 ? Math.round(startSeconds * 1e9) + Math.max(0, now - requestedAt) : 0;
-            if (vod && target >= SYNC_TOLERANCE_NANOS) {
+            if (vod && target >= SYNC_TOLERANCE_NANOS && !owner.startsAtPosition()) {
                 owner.seek(target / 1_000_000);
             }
             owner.resume();
@@ -440,7 +478,7 @@ public final class NativeAudio {
     }
 
     /** A track, and the Blu-ray player showing it (null for none: a record's audio alone). */
-    private record Key(URI source, @Nullable BlockPos display) {
+    private record Key(URI source, @Nullable BlockPos display, @Nullable UUID discId) {
     }
 
     /** A player and the streams playing it; released when the last of them closes. */
@@ -451,6 +489,8 @@ public final class NativeAudio {
         /** Which load of the track it plays (see Streams.Load); 0 if unknown. */
         final long load;
         final Backend owner;
+        @Nullable
+        final DiscClock disc;
         /** What its video's playback took (see Diagnostics); null for a record's. */
         @Nullable
         final Diagnostics diagnostics;
@@ -467,11 +507,12 @@ public final class NativeAudio {
         /** When it last sought; on the sound thread (see correct). */
         private long seekedAt;
 
-        Shared(Key key, @Nullable BlockPos playback, long load, Backend owner, long origin) {
+        Shared(Key key, @Nullable BlockPos playback, long load, Backend owner, long origin, @Nullable DiscClock disc) {
             this.key = key;
             this.playback = playback;
             this.load = load;
             this.owner = owner;
+            this.disc = disc;
             this.origin = origin;
             diagnostics = owner instanceof VlcPlayer player ? player.diagnostics : null;
         }
@@ -495,6 +536,7 @@ public final class NativeAudio {
         }
 
         private boolean samePlayback(long origin, @Nullable BlockPos playback, long load, boolean midway) {
+            if (disc != null) return true; // Its UUID, not a timestamp tolerance or the URL, identifies this CD.
             boolean sameSource = playback != null && playback.equals(this.playback);
             if (load != 0 && this.load != 0) {
                 return live || sameSource && load == this.load;
@@ -522,7 +564,8 @@ public final class NativeAudio {
                 nextCheck = now + CHECK_NANOS;
             }
             long at = owner.time();
-            long expected = (now - origin) / 1_000_000;
+            long expected = disc == null ? (now - origin) / 1_000_000
+                    : Math.max(0, Math.round(disc.seconds().getAsDouble() * 1000));
             double length = owner.seconds();
             if (diagnostics != null && now - diagnostics.playing >= Diagnostics.REPORT_AFTER_NANOS) {
                 diagnostics.send();
@@ -530,7 +573,9 @@ public final class NativeAudio {
             if (live || !seekable || at < 0 || length > 0 && expected > length * 1000 - END_MARGIN_MILLIS) {
                 return;
             }
-            boolean seek = Math.abs(expected - at) >= SEEK_DRIFT_MILLIS && now - seekedAt >= SEEK_COOLDOWN_NANOS;
+            long tolerance = disc == null ? SEEK_DRIFT_MILLIS : DISC_SEEK_DRIFT_MILLIS;
+            long cooldown = disc == null ? SEEK_COOLDOWN_NANOS : DISC_SEEK_COOLDOWN_NANOS;
+            boolean seek = Math.abs(expected - at) >= tolerance && now - seekedAt >= cooldown;
             if (diagnostics != null) {
                 diagnostics.drift(expected - at, seek);
             }
@@ -596,6 +641,11 @@ public final class NativeAudio {
                 return ByteBuffer.allocateDirect(0);
             }
             Status state = shared.owner.status();
+            if (state.ready()) {
+                // Some HTTP inputs become seekable only after their first buffers have opened.
+                shared.live = state.live();
+                shared.seekable = state.seekable();
+            }
             if (state.broken()) {
                 done = true;
                 close();
