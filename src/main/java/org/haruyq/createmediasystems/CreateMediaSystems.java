@@ -52,6 +52,7 @@ import org.haruyq.createmediasystems.train.TrainDiscReaderBlock;
 import org.haruyq.createmediasystems.train.TrainSignalReceiverBlock;
 import org.haruyq.createmediasystems.train.TrainSignals;
 import org.haruyq.createmediasystems.train.TrainSpeakerBlock;
+import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.EqualizerBlock;
 import org.haruyq.createmediasystems.video.RemoteItem;
 import org.haruyq.createmediasystems.video.VideoDiscItem;
@@ -300,6 +301,12 @@ public class CreateMediaSystems {
     public static final DeferredItem<?> VIDEO_PLAYER_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_player", VIDEO_PLAYER);
     public static final Supplier<BlockEntityType<VideoPlayerBlock.Entity>> VIDEO_PLAYER_ENTITY = BLOCK_ENTITIES.register(
             "blu_ray_player", () -> BlockEntityType.Builder.of(VideoPlayerBlock.Entity::new, VIDEO_PLAYER.get()).build(null));
+    /** A Blu-ray player for the disc in its player's real drive. */
+    public static final DeferredBlock<DriveEmulatorBlock> DRIVE_EMULATOR = BLOCKS.register("blu_ray_drive_emulator",
+            () -> new DriveEmulatorBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
+    public static final DeferredItem<?> DRIVE_EMULATOR_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_drive_emulator", DRIVE_EMULATOR);
+    public static final Supplier<BlockEntityType<DriveEmulatorBlock.Entity>> DRIVE_EMULATOR_ENTITY = BLOCK_ENTITIES.register(
+            "blu_ray_drive_emulator", () -> BlockEntityType.Builder.of(DriveEmulatorBlock.Entity::new, DRIVE_EMULATOR.get()).build(null));
     public static final DeferredItem<RemoteItem> REMOTE = ITEMS.register("remote",
             () -> new RemoteItem(new Item.Properties().stacksTo(1)));
     /** Display quill: links displays to a Blu-ray player and sets their size (client-side UI only). */
@@ -443,7 +450,7 @@ public class CreateMediaSystems {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("16");
+        var registrar = event.registrar("17");
         ServerConfig.registerPayloads(registrar);
         StreamPackets.registerPayloads(registrar);
         TrainDiscReaderBehaviour.registerPayloads(registrar);
@@ -458,6 +465,7 @@ public class CreateMediaSystems {
         CustomDiscItem.registerPayloads(registrar);
         VideoDiscItem.registerPayloads(registrar);
         RemoteItem.registerPayloads(registrar);
+        DriveEmulatorBlock.registerPayloads(registrar);
         EqualizerBlock.registerPayloads(registrar);
         HifiStackBlock.registerPayloads(registrar);
         DisplayQuill.registerPayloads(registrar);

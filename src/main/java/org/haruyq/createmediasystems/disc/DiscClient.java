@@ -92,31 +92,85 @@ public final class DiscClient {
                 }))));
     }
 
+    /** What a disc is read for: the disc held for {@code /cms disc load}, or a drive emulator (see DriveClient). */
+    public interface Reader {
+        /** FFmpeg is downloaded first. */
+        void downloading();
+
+        /** It is read, and shared as {@code url} if this says true: false drops it, as it is no longer wanted. */
+        boolean loaded(DiscUrl url, DiscSource disc);
+
+        void failed(String message);
+    }
+
     private static int load(String path, int title) {
         var mc = Minecraft.getInstance();
         if (mc.player == null || !(mc.player.getMainHandItem().getItem() instanceof VideoDiscItem)) {
             say("hold_disc", true);
             return 0;
         }
-        if (reading != null && reading.isAlive()) {
+        if (busy()) {
             say("busy", true);
             return 0;
         }
-        if (!P2pClient.connect(mc.player.getUUID())) {
+        var held = mc.player.getMainHandItem().copy();
+        if (load(path, title, new Reader() {
+            @Override
+            public void downloading() {
+                say("downloading", false);
+            }
+
+            @Override
+            public boolean loaded(DiscUrl url, DiscSource disc) {
+                if (!net.minecraft.world.item.ItemStack.matches(held, mc.player.getMainHandItem())) {
+                    say("hold_disc", true);
+                    return false;
+                }
+                PacketDistributor.sendToServer(new VideoDiscItem.SetPlaylist(List.of(url.toString())));
+                say("loaded", false, String.format(java.util.Locale.ROOT, "%.0f", disc.duration()));
+                return true;
+            }
+
+            @Override
+            public void failed(String message) {
+                say("failed", true, message);
+            }
+        }) == 0) {
+            return 0;
+        }
+        say("reading", false);
+        return 1;
+    }
+
+    /** Whether a disc is still being read: another waits for it (see load). */
+    public static boolean busy() {
+        return reading != null && reading.isAlive();
+    }
+
+    /** Whether load {@code load} is still the disc read or shared: not since unloaded, or another loaded. */
+    public static boolean current(int load) {
+        return load == generation;
+    }
+
+    /**
+     * Reads the disc at {@code path} for {@code reader}, in place of the one shared, and hosts a P2P session to share
+     * it over. Says which load it is (see current), or 0 if it can't start one now.
+     */
+    public static int load(String path, int title, Reader reader) {
+        var mc = Minecraft.getInstance();
+        if (mc.player == null || busy() || !P2pClient.connect(mc.player.getUUID())) {
             return 0;
         }
         clear();
         int request = generation;
         UUID owner = mc.player.getUUID();
-        var held = mc.player.getMainHandItem().copy();
-        say("reading", false);
         reading = Thread.ofPlatform().daemon().name("CMS disc reader").start(() -> {
             try {
                 Path disc = Path.of(path).toRealPath();
                 DiscSource opened = DiscReaders.open(ClientConfig.DIR.resolve("ffmpeg"), ClientConfig.DISC_FFMPEG_PATH.get(),
                         ClientConfig.DISC_FFPROBE_PATH.get(), disc, title, () -> mc.execute(() -> {
                             if (request == generation) {
-                                say("downloading", false);
+                                reader.downloading();
                             }
                         }));
                 try {
@@ -124,22 +178,15 @@ public final class DiscClient {
                     DiscUrl url = new DiscUrl(owner, UUID.randomUUID());
                     DiscStream prepared = new DiscStream(connected, url.source(), opened, DiscClient::log);
                     mc.execute(() -> {
-                        if (request != generation || mc.player == null || connected != P2pClient.current()) {
+                        if (request != generation || mc.player == null || connected != P2pClient.current()
+                                || !reader.loaded(url, opened)) {
                             prepared.close();
                             opened.close();
-                            return;
-                        }
-                        if (!net.minecraft.world.item.ItemStack.matches(held, mc.player.getMainHandItem())) {
-                            prepared.close();
-                            opened.close();
-                            say("hold_disc", true);
                             return;
                         }
                         source = opened;
                         shared = url;
                         stream = prepared;
-                        PacketDistributor.sendToServer(new VideoDiscItem.SetPlaylist(List.of(url.toString())));
-                        say("loaded", false, String.format(java.util.Locale.ROOT, "%.0f", opened.duration()));
                     });
                 } catch (IOException | RuntimeException failed) {
                     opened.close();
@@ -148,12 +195,12 @@ public final class DiscClient {
             } catch (IOException | RuntimeException failed) {
                 mc.execute(() -> {
                     if (request == generation) {
-                        say("failed", true, failed instanceof IOException ? failed.getMessage() : "The disc path is invalid");
+                        reader.failed(failed instanceof IOException ? failed.getMessage() : "The disc path is invalid");
                     }
                 });
             }
         });
-        return 1;
+        return request;
     }
 
     public record Prepared(URI uri, double duration) {}
@@ -218,7 +265,8 @@ public final class DiscClient {
         throw new IOException("Could not connect directly to the disc host; check /cms p2p status");
     }
 
-    private static synchronized void clear() {
+    /** Stops reading and sharing the disc. */
+    public static synchronized void clear() {
         generation++;
         if (reading != null) {
             reading.interrupt();

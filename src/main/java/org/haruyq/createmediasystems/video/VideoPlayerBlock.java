@@ -157,7 +157,12 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private int finished;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
+            this(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
+        }
+
+        /** As another block's entity, which plays a disc of its own making (see DriveEmulatorBlock). */
+        protected Entity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+            super(type, pos, state);
         }
 
         @Override
@@ -310,7 +315,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /** Saved, and sent to clients for remotes and goggles. */
-        private void changed() {
+        protected void changed() {
             setChanged();
             if (level != null && !level.isClientSide) {
                 sendData();
@@ -333,16 +338,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
-            List<String> playlist = playlist();
-            tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
-                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
-            if (!playlist.isEmpty()) {
-                tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
-                        Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
-                tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
-                        .withStyle(ChatFormatting.DARK_GRAY));
-                tooltip.add(Component.empty());
-            }
+            describeDisc(tooltip);
             if (playing && !paused && level != null && level.isClientSide) {
                 NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
                 if (progress != null) {
@@ -367,6 +363,25 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.lighting_value",
                     value(lighting.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
             return true;
+        }
+
+        /** Its state as goggles colour it: gray empty, red stopped, yellow paused, green playing. */
+        protected Component coloredState() {
+            return state().copy().withStyle(playlist().isEmpty() ? ChatFormatting.GRAY
+                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
+        }
+
+        /** What goggles say of its disc: its state, and the entry and link it plays. */
+        protected void describeDisc(List<Component> tooltip) {
+            List<String> playlist = playlist();
+            tooltip.add(Component.literal("     ").append(coloredState()));
+            if (!playlist.isEmpty()) {
+                tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
+                        Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                tooltip.add(Component.empty());
+            }
         }
 
         /** A value in a goggle line, set apart from its gray label. */
