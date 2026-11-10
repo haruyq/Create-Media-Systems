@@ -85,10 +85,12 @@ public final class DiscStream implements AutoCloseable {
             fetch(-1);
         }
         int start = Math.min(count() - 1, Math.max(0, (int) (startSeconds / DiscSource.SEGMENT_SECONDS)));
+        // Queued in order, at the back: each at the front put 2 before 1, and a DVD's pass (DiscRun) seeks again for
+        // every segment taken out of order, jumping at the first boundaries.
         List<CompletableFuture<byte[]>> ready = new ArrayList<>();
-        ready.add(segment(0));
+        ready.add(segment(0, true));
         for (int i = start; i < Math.min(count(), start + 3); i++) {
-            ready.add(segment(i));
+            ready.add(segment(i, true));
         }
         for (var part : ready) {
             await(part);
