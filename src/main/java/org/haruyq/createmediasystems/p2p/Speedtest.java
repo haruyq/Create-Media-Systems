@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +23,8 @@ import com.google.gson.JsonParser;
  * output, which names this computer's addresses, is not.
  */
 public final class Speedtest {
+    /** speedtestPath's default: the CLI on PATH, or else one a {@link Provider} supplies. */
+    public static final String DEFAULT_PATH = "speedtest";
     /** How long a measurement sizes P2P sessions for. */
     public static final Duration FRESH = Duration.ofHours(1);
     static final Duration TIMEOUT = Duration.ofSeconds(120);
@@ -36,13 +39,33 @@ public final class Speedtest {
     }
 
     /** Why a measurement failed, said to the player as is. */
-    public static final class Failure extends Exception {
+    public static sealed class Failure extends Exception permits Missing {
         Failure(String message) {
             super(message);
         }
     }
 
+    /** No CLI at the path. */
+    static final class Missing extends Failure {
+        Missing(String message) {
+            super(message);
+        }
+    }
+
+    /** A CLI for when none is on PATH, e.g. one an extension downloads. Never accepts the license either. */
+    @FunctionalInterface
+    public interface Provider {
+        /** Blocks on the speedtest's thread; an interrupt cancels it. */
+        Path executable() throws IOException;
+    }
+
+    private static volatile Provider provider;
+
     private Speedtest() {
+    }
+
+    public static void provide(Provider supplier) {
+        provider = supplier;
     }
 
     /**
@@ -50,7 +73,24 @@ public final class Speedtest {
      * interrupt stops the CLI and throws InterruptedException.
      */
     public static Result run(String executable) throws Failure, InterruptedException {
-        return run(List.of(executable), TIMEOUT);
+        try {
+            return run(List.of(executable), TIMEOUT);
+        } catch (Missing missing) {
+            Provider fallback = provider;
+            if (fallback == null || !DEFAULT_PATH.equals(executable)) {
+                throw missing;
+            }
+            Path provided;
+            try {
+                provided = fallback.executable();
+            } catch (IOException | RuntimeException e) {
+                if (Thread.interrupted()) {
+                    throw new InterruptedException();
+                }
+                throw new Failure("Ookla's Speedtest CLI could not be set up: " + e.getMessage());
+            }
+            return run(List.of(provided.toString()), TIMEOUT);
+        }
     }
 
     static Result run(List<String> executable, Duration timeout) throws Failure, InterruptedException {
@@ -60,7 +100,7 @@ public final class Speedtest {
         try {
             process = new ProcessBuilder(command).redirectErrorStream(true).start();
         } catch (IOException | RuntimeException e) {
-            throw new Failure("Ookla's Speedtest CLI is not at '" + String.join(" ", executable)
+            throw new Missing("Ookla's Speedtest CLI is not at '" + String.join(" ", executable)
                     + "'. Install it from speedtest.net/apps/cli, or set speedtestPath in cms-client.toml.");
         }
         try {
@@ -88,7 +128,7 @@ public final class Speedtest {
             synchronized (kept) {
                 out = kept.toString(StandardCharsets.UTF_8);
             }
-            return parse(out, process.exitValue(), Instant.now());
+            return parse(out, process.exitValue(), Instant.now(), String.join(" ", executable));
         } catch (IOException e) {
             throw new Failure("The speedtest failed: " + e.getMessage());
         } finally {
@@ -97,8 +137,8 @@ public final class Speedtest {
         }
     }
 
-    /** The result in the CLI's {@code --format=json} output, measured at {@code now}. */
-    static Result parse(String output, int exitCode, Instant now) throws Failure {
+    /** The result in the CLI's {@code --format=json} output, measured at {@code now} by {@code cli}. */
+    static Result parse(String output, int exitCode, Instant now, String cli) throws Failure {
         // A CLI that failed measured nothing usable, whatever it printed.
         for (String line : exitCode == 0 ? output.lines().toList().reversed() : List.<String>of()) {
             JsonObject json;
@@ -114,8 +154,8 @@ public final class Speedtest {
         }
         String lower = output.toLowerCase(Locale.ROOT);
         if (lower.contains("license") || lower.contains("gdpr") || lower.contains("privacy")) {
-            throw new Failure("Ookla's Speedtest CLI needs you to accept its license first: run it once in a "
-                    + "terminal and read it yourself. CMS never accepts it for you.");
+            throw new Failure("Ookla's Speedtest CLI needs you to accept its license first: run \"" + cli
+                    + "\" once in a terminal and read it yourself. CMS never accepts it for you.");
         }
         throw new Failure(exitCode == 0 ? "The speedtest gave no result." : "The speedtest failed (exit code " + exitCode + ").");
     }

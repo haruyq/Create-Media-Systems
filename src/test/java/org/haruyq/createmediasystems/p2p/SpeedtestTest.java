@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.p2p;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,7 +29,7 @@ class SpeedtestTest {
     @Test
     void convertsBytesPerSecondToBits() throws Exception {
         Instant now = Instant.parse("2026-11-09T12:40:00Z");
-        Speedtest.Result result = Speedtest.parse("noise\n" + RESULT + "\n", 0, now);
+        Speedtest.Result result = Speedtest.parse("noise\n" + RESULT + "\n", 0, now, "speedtest");
         assertEquals(937_267_304L, result.downloadBps());
         assertEquals(945_011_472L, result.uploadBps());
         assertTrue(result.fresh(now.plus(Duration.ofMinutes(59))));
@@ -38,17 +39,17 @@ class SpeedtestTest {
     @Test
     void refusesRatesOutOfRange() {
         for (String bandwidth : List.of("0", "-5", "12500000001", "1e300", "\"fast\"", "NaN")) {
-            assertThrows(Speedtest.Failure.class, () -> Speedtest.parse(RESULT.replace("117158413", bandwidth), 0, Instant.now()), bandwidth);
+            assertThrows(Speedtest.Failure.class, () -> Speedtest.parse(RESULT.replace("117158413", bandwidth), 0, Instant.now(), "speedtest"), bandwidth);
         }
-        assertThrows(Speedtest.Failure.class, () -> Speedtest.parse("{\"type\":\"log\",\"message\":\"x\"}", 2, Instant.now()));
+        assertThrows(Speedtest.Failure.class, () -> Speedtest.parse("{\"type\":\"log\",\"message\":\"x\"}", 2, Instant.now(), "speedtest"));
         for (String odd : List.of("{\"type\":null}", "{\"type\":[]}", "{}", "[]", "{\"type\":\"result\"}")) {
-            assertThrows(Speedtest.Failure.class, () -> Speedtest.parse(odd, 0, Instant.now()), odd);
+            assertThrows(Speedtest.Failure.class, () -> Speedtest.parse(odd, 0, Instant.now(), "speedtest"), odd);
         }
     }
 
     @Test
     void aFailedCliMeasuredNothing() {
-        Speedtest.Failure failure = assertThrows(Speedtest.Failure.class, () -> Speedtest.parse(RESULT, 3, Instant.now()));
+        Speedtest.Failure failure = assertThrows(Speedtest.Failure.class, () -> Speedtest.parse(RESULT, 3, Instant.now(), "speedtest"));
         assertTrue(failure.getMessage().contains("exit code 3"));
         assertThrows(Speedtest.Failure.class, () -> run("failed", Duration.ofSeconds(60)));
     }
@@ -83,6 +84,29 @@ class SpeedtestTest {
         thread.interrupt();
         thread.join(10_000);
         assertTrue(thrown.get() instanceof InterruptedException, String.valueOf(thrown.get()));
+    }
+
+    @Test
+    void aProvidedCliStandsInOnlyForTheDefault() throws Exception {
+        Speedtest.Failure onPath = assertThrows(Speedtest.Failure.class,
+                () -> Speedtest.run(List.of(Speedtest.DEFAULT_PATH), Duration.ofSeconds(5)));
+        assumeTrue(onPath instanceof Speedtest.Missing, "a real Speedtest CLI is on PATH");
+        Path provided = dir.resolve("provided.exe");
+        try {
+            Speedtest.provide(() -> provided);
+            assertTrue(assertThrows(Speedtest.Failure.class, () -> Speedtest.run(Speedtest.DEFAULT_PATH))
+                    .getMessage().contains(provided.toString()));
+            String custom = dir.resolve("custom.exe").toString();
+            assertTrue(assertThrows(Speedtest.Failure.class, () -> Speedtest.run(custom)).getMessage().contains(custom));
+
+            Speedtest.provide(() -> {
+                throw new java.io.IOException("offline");
+            });
+            assertTrue(assertThrows(Speedtest.Failure.class, () -> Speedtest.run(Speedtest.DEFAULT_PATH))
+                    .getMessage().contains("offline"));
+        } finally {
+            Speedtest.provide(null);
+        }
     }
 
     /** Runs a stand-in CLI: Java's source launcher on a file that acts as {@code mode} says. */
