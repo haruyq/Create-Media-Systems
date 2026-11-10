@@ -201,6 +201,35 @@ if (providers.gradleProperty('sableTests').isPresent()) {
     }
 }
 
+// Minecraft 26.1's note samples, verified against Mojang's asset index.
+def noteSounds = [
+    trumpet: 'f2c01a26fb57688fc86be1c3f3953d6bfbf3bdb8',
+    trumpet_exposed: '39a5792432cf0c1f858b118f8058194f099affbc',
+    trumpet_weathered: '77569a04f9b225f23dbbde4fc973bdff50798f25',
+    trumpet_oxidized: '3bbd246c8aeaabdbd50fa7d6ffbe08ec5f86fefb'
+]
+def noteResources = layout.buildDirectory.dir('generated/note-sounds')
+var downloadNoteSounds = tasks.register('downloadNoteSounds') {
+    inputs.property 'sounds', noteSounds
+    outputs.dir noteResources
+    doLast {
+        def destination = noteResources.get().dir('assets/create_media_systems/sounds/note').asFile
+        destination.mkdirs()
+        noteSounds.each { name, hash ->
+            def output = new File(destination, "${name}.ogg")
+            if (output.exists() && output.bytes.digest('SHA-1') == hash) return
+            def url = "https://resources.download.minecraft.net/${hash.substring(0, 2)}/${hash}"
+            logger.lifecycle("Downloading ${url}")
+            def bytes = new URL(url).bytes
+            if (bytes.digest('SHA-1') != hash) {
+                throw new GradleException("The ${name} download does not match Mojang's SHA-1; run downloadNoteSounds again")
+            }
+            output.bytes = bytes
+        }
+    }
+}
+sourceSets.main.resources.srcDir(files(noteResources).builtBy(downloadNoteSounds))
+
 // VideoLAN's own VLC for 64-bit Windows, bundled so CMS plays media with nothing else installed (see Vlc.java).
 // Downloaded once into Gradle's cache, checked against VideoLAN's published SHA-256, and left without the parts
 // playback and lighting analysis don't use (its interfaces, scripting, network output). Other systems use their own VLC 3.

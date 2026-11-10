@@ -97,6 +97,14 @@ public class CreateMediaSystems {
     /** Placeholder event: every stream plays through it, the audio itself comes from {@code getStream}. */
     public static final DeferredHolder<SoundEvent, SoundEvent> STREAM =
             SOUNDS.register("stream", SoundEvent::createVariableRangeEvent);
+    public static final DeferredHolder<SoundEvent, SoundEvent> NOTE_BLOCK_TRUMPET =
+            SOUNDS.register("block.note_block.trumpet", SoundEvent::createVariableRangeEvent);
+    public static final DeferredHolder<SoundEvent, SoundEvent> NOTE_BLOCK_TRUMPET_EXPOSED =
+            SOUNDS.register("block.note_block.trumpet_exposed", SoundEvent::createVariableRangeEvent);
+    public static final DeferredHolder<SoundEvent, SoundEvent> NOTE_BLOCK_TRUMPET_WEATHERED =
+            SOUNDS.register("block.note_block.trumpet_weathered", SoundEvent::createVariableRangeEvent);
+    public static final DeferredHolder<SoundEvent, SoundEvent> NOTE_BLOCK_TRUMPET_OXIDIZED =
+            SOUNDS.register("block.note_block.trumpet_oxidized", SoundEvent::createVariableRangeEvent);
     public static final ResourceKey<JukeboxSong> CUSTOM_SONG = ResourceKey.create(Registries.JUKEBOX_SONG, id("custom"));
 
     public static final Supplier<DataComponentType<String>> URL = COMPONENTS.registerComponentType("url",

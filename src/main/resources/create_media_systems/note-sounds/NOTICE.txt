@@ -1,0 +1,6 @@
+The trumpet, exposed trumpet, weathered trumpet and oxidized trumpet samples
+are from Minecraft Java Edition 26.1, copyright Mojang AB. They are not covered
+by this project's MIT license.
+
+Source: https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1
+The downloadNoteSounds task in build.gradle records their Mojang asset hashes.
