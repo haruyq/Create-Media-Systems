@@ -296,8 +296,10 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                 pen.text(3.25f, 0.7f, 0.09f, 0.68f, String.format(Locale.ROOT, "%02d", Math.min(stack.index(), playlist.size() - 1) + 1),
                         CYAN, true, LEFT, 1.6f);
                 pen.text(4.95f, 0.72f, 0.09f, 0.26f, "/" + playlist.size(), 0x3F8FA0, true, LEFT, 1);
-                pen.text(5.75f, 1.08f, 0.09f, 0.26f, !stack.discPlaying() ? "STOP" : stack.discPaused() ? "PAUSE" : "PLAY",
-                        stack.discPlaying() && !stack.discPaused() ? GREEN : AMBER, true, LEFT, 1.2f);
+                boolean loading = stack.loading(HifiStackBlock.Input.DISC);
+                pen.text(5.75f, 1.08f, 0.09f, 0.26f, !stack.discPlaying() ? "STOP" : stack.discPaused() ? "PAUSE"
+                        : loading ? "LOAD" : "PLAY", stack.discPlaying() && !stack.discPaused() && !loading ? GREEN : AMBER,
+                        true, LEFT, 1.2f);
                 pen.text(8.4f, 0.7f, 0.09f, 0.6f, HifiStackBlock.Entity.clock(stack.discTicks()), CYAN, true, RIGHT, 2.4f);
             }
         }

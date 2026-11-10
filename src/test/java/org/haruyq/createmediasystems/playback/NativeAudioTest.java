@@ -275,6 +275,35 @@ class NativeAudioTest {
     }
 
     @Test
+    void aSourceThatWouldNotOpenIsTriedAgain() throws Exception {
+        // As a link the origin holds back for a moment: it opens on the third try.
+        Player first = new Player();
+        Player second = new Player();
+        Player third = new Player();
+        first.state = second.state = NativeAudio.Status.BROKEN;
+        java.util.Iterator<Player> players = List.of(first, second, third).iterator();
+        try (AudioStream stream = NativeAudio.retrying(() -> own(players.next(), 0, System.nanoTime(), () -> false,
+                Streams.Channel.MIX), () -> false, 1, 1)) {
+            assertEquals(List.of("tap", "start", "resume"), third.actions);
+        }
+        assertEquals(1, first.releases.get());
+        assertEquals(1, second.releases.get());
+
+        Player broken = new Player();
+        broken.state = NativeAudio.Status.BROKEN;
+        IOException error = assertThrows(IOException.class, () -> NativeAudio.retrying(() -> own(broken, 0,
+                System.nanoTime(), () -> false, Streams.Channel.MIX), () -> false, 1));
+        assertEquals("The native player could not open this source", error.getMessage());
+        assertEquals(List.of("tap", "start", "tap", "start"), broken.actions, "once more, then it gives up");
+
+        Player stopped = new Player();
+        stopped.state = NativeAudio.Status.BROKEN;
+        assertThrows(IOException.class, () -> NativeAudio.retrying(() -> own(stopped, 0, System.nanoTime(),
+                () -> false, Streams.Channel.MIX), () -> true, 60_000));
+        assertEquals(List.of("tap", "start"), stopped.actions, "a stopped stream doesn't wait to try again");
+    }
+
+    @Test
     void tapFailureStillReleasesOwner() {
         Player player = new Player(); player.failTap = true;
         assertThrows(IOException.class, () -> own(player, 0, System.nanoTime(),

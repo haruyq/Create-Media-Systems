@@ -33,6 +33,13 @@ public final class NativeAudio {
     private static final long END_TAIL_NANOS = 500_000_000L;
     /** Longest a player waits, ready, for the streams joining it to tap it (see Shared#allTapped). */
     private static final long TAP_WAIT_NANOS = 1_000_000_000L;
+    /**
+     * How long (ms) to wait before each new try at a source the native player could not open. A link the origin has
+     * only just handed out may answer 403 for some seconds yet (YouTube holds it back for its pre-roll ad), longer
+     * than the resolver was told to wait: a track first opened part way in, moments after the server asked about it,
+     * failed every time, and stayed silent until it was played again.
+     */
+    private static final long[] RETRY_MILLIS = {2000, 3000, 5000, 8000};
     /** How far a playback may start off the server's position before it seeks there; seeking stalls a moment. */
     private static final long SYNC_TOLERANCE_NANOS = 300_000_000L;
     /** How often a playing video on demand checks how far its player is off where it should be (see Shared#correct). */
@@ -81,8 +88,41 @@ public final class NativeAudio {
         if (Vlc.MISSING != null) {
             throw new IOException(Vlc.MISSING);
         }
-        return open(() -> new VlcPlayer(video, requestedAt, startSeconds), source, playback, load,
-                video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded);
+        return retrying(() -> open(() -> new VlcPlayer(video, requestedAt, startSeconds), source, playback, load,
+                video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded),
+                cancelled, RETRY_MILLIS);
+    }
+
+    /** The native player could not open a source: it may open a moment later (see {@link #RETRY_MILLIS}). */
+    static final class Unopened extends IOException {
+        Unopened() {
+            super("The native player could not open this source");
+        }
+    }
+
+    interface Opening {
+        AudioStream open() throws IOException;
+    }
+
+    /**
+     * {@code opening}'s stream; a source that would not open is tried again after each of {@code waits} (ms), and
+     * fails for good after the last, or once {@code cancelled}.
+     */
+    static AudioStream retrying(Opening opening, BooleanSupplier cancelled, long... waits) throws IOException {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return opening.open();
+            } catch (Unopened notYet) {
+                if (attempt >= waits.length) {
+                    throw notYet;
+                }
+                long until = System.nanoTime() + waits[attempt] * 1_000_000L;
+                while (System.nanoTime() - until < 0) {
+                    checkCancelled(cancelled);
+                    sleep();
+                }
+            }
+        }
     }
 
     /**
@@ -323,7 +363,7 @@ public final class NativeAudio {
             while (!(state = owner.status()).ready()) {
                 checkCancelled(cancelled);
                 if (state.broken() || state.ended()) {
-                    throw new IOException("The native player could not open this source");
+                    throw new Unopened();
                 }
                 if (System.nanoTime() >= deadline) {
                     throw new IOException("The native player timed out opening this source");

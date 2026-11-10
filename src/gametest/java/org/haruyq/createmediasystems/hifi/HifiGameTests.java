@@ -130,6 +130,49 @@ public class HifiGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void aDiscStartedUnheardLeavesTheTapeAloneAndIsTakenUpWhereItIs(GameTestHelper helper) {
+        HifiStackBlock.Entity stack = stack(helper, Unit.CASSETTE_DECK, Unit.DISC_PLAYER, Unit.AMPLIFIER);
+        ServerPlayer player = player(helper);
+        hold(player, new ItemStack(CreateMediaSystems.HIFI_CABLE.get(), 3));
+        stack.press(player, Control.POWER, 0);
+        stack.press(player, Control.SOCKET_DECK, 0);
+        stack.press(player, Control.SOCKET_DISC, 0);
+        stack.press(player, Control.LINE_IN, 0);
+        stack.press(player, Control.INPUT_TAPE, 0);
+        ItemStack tape = new ItemStack(CreateMediaSystems.CASSETTE.get());
+        tape.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://example.com/hifi-tape.mp3"));
+        hold(player, tape);
+        stack.press(player, Control.DOOR_1, 0);
+        stack.press(player, Control.PLAY_1, 0);
+        helper.runAfterDelay(5, () -> {
+            long tapeLoad = Streams.loadId(stack);
+            helper.assertTrue(tapeLoad != 0 && Streams.playing(stack) != null, "the tape is heard");
+            ItemStack disc = new ItemStack(CreateMediaSystems.CD.get());
+            disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://example.com/hifi-cd.mp3"));
+            stack.press(player, Control.TRAY, 0);
+            hold(player, disc);
+            stack.press(player, Control.TRAY, 0);
+            stack.press(player, Control.OPEN, 0);
+            helper.assertTrue(stack.discPlaying(), "the disc plays, unheard");
+            helper.runAfterDelay(30, () -> {
+                Streams.Source heard = Streams.playing(stack);
+                helper.assertTrue(heard != null && heard.url().equals("https://example.com/hifi-tape.mp3")
+                        && Streams.loadId(stack) == tapeLoad, "the tape plays on, not started over by the disc");
+                long discAt = stack.discTicks();
+                helper.assertTrue(discAt >= 29, "the disc has played on meanwhile, to " + discAt);
+                stack.press(player, Control.INPUT_DISC, 0);
+                helper.runAfterDelay(3, () -> {
+                    Streams.Source disc2 = Streams.playing(stack);
+                    helper.assertTrue(disc2 != null && disc2.url().equals("https://example.com/hifi-cd.mp3")
+                            && disc2.ticks() >= discAt && disc2.ticks() <= discAt + 1, "the disc is heard from where it is, "
+                            + discAt + ", was " + (disc2 == null ? null : disc2.ticks()));
+                    helper.succeed();
+                });
+            });
+        });
+    }
+
+    @GameTest(template = "empty")
     public static void aSpeakerCableRunsFromATerminalToASpeaker(GameTestHelper helper) {
         HifiStackBlock.Entity stack = stack(helper, Unit.AMPLIFIER);
         ServerPlayer player = player(helper);
