@@ -123,7 +123,10 @@ final class NativeMediaResolver {
         CACHE.keySet().removeIf(key -> key.source().equals(source));
     }
 
-    /** A display's media comes from yt-dlp on this computer if it can, else from the API; a record's from the API. */
+    /**
+     * A display's media comes from yt-dlp on this computer if it can, else from the API; a record's from the API (one
+     * file, which can be kept: see AudioCache), else from yt-dlp.
+     */
     private static Prepared fetch(URI source, boolean audioOnly, int maxHeight) {
         if (!audioOnly) {
             try {
@@ -149,6 +152,19 @@ final class NativeMediaResolver {
             throw new IllegalStateException("Native media loading was interrupted");
         } catch (IOException | RuntimeException error) {
             // A page, signed media URL or native exception may contain credentials. Do not attach it to log output.
+            if (audioOnly) {
+                // The API is down or refuses the track: a record or tape plays on from yt-dlp here, as a display does.
+                LogUtils.getLogger().warn("The API could not resolve {} ({}); trying yt-dlp", source.getHost(),
+                        error.getClass().getSimpleName());
+                try {
+                    return YtDlp.resolveAudio(source);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Native media loading was interrupted");
+                } catch (IOException | RuntimeException failed) {
+                    LogUtils.getLogger().warn("yt-dlp could not resolve {}: {}", source.getHost(), failed.getMessage());
+                }
+            }
             throw new IllegalStateException("Native media could not be resolved; check the API and origin availability");
         }
     }

@@ -60,6 +60,25 @@ public final class YtDlp {
     }
 
     /**
+     * {@code page}'s audio alone, for a record or tape the API can't resolve (see NativeMediaResolver#fetch): HLS
+     * first, as for a display (see the class comment); fails with yt-dlp's reason.
+     */
+    static NativeMediaResolver.Prepared resolveAudio(URI page) throws IOException, InterruptedException {
+        return audio(JsonParser.parseString(run(page, TIMEOUT_SECONDS, "-J", "-f",
+                "ba[protocol^=m3u8]/ba[protocol=https]/ba/b")).getAsJsonObject());
+    }
+
+    /** What VLC opens for the one format yt-dlp's {@code -J} output picked as a page's audio: that format itself. */
+    static NativeMediaResolver.Prepared audio(JsonObject info) {
+        boolean live = info.has("is_live") && !info.get("is_live").isJsonNull() && info.get("is_live").getAsBoolean();
+        double duration = live || !info.has("duration") || info.get("duration").isJsonNull() ? 0
+                : info.get("duration").getAsDouble();
+        JsonObject track = track(info, "audio");
+        return NativeMediaResolver.Prepared.of(NativeMedia.origin(track), live, null, duration,
+                NativeMedia.httpOptions(List.of(track)));
+    }
+
+    /**
      * Whether {@code url} is a YouTube link with a playlist in it ({@code list=}: a playlist page, a video in a
      * playlist, a mix), which a disc's playlist screen expands.
      */

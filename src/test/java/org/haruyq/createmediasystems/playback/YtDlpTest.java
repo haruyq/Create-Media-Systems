@@ -53,6 +53,20 @@ class YtDlpTest {
     }
 
     @Test
+    void aRecordsAudioOpensItsOwnPlaylistNotTheMaster() {
+        var prepared = YtDlp.audio(JsonParser.parseString("""
+                {"format_id": "234", "protocol": "m3u8_native", "vcodec": "none", "ext": "mp4", "duration": 228,
+                 "url": "https://cdn.test/a.m3u8", "manifest_url": "https://cdn.test/master.m3u8",
+                 "http_headers": {"User-Agent": "UA", "Cookie": "secret=1"}}
+                """).getAsJsonObject());
+        assertEquals(URI.create("https://cdn.test/a.m3u8"), prepared.uri(), "the master would fetch the video too");
+        assertEquals(228, prepared.duration());
+        assertFalse(prepared.live());
+        assertTrue(prepared.options().contains(":http-user-agent=UA"));
+        assertFalse(prepared.options().stream().anyMatch(option -> option.contains("secret")));
+    }
+
+    @Test
     void reasonIsYtDlpsLastError() {
         assertEquals("[youtube] x: Sign in to confirm you're not a bot",
                 YtDlp.reason("WARNING: a\nERROR: [youtube] y: first\nERROR: [youtube] x: Sign in to confirm you're not a bot\n"));
