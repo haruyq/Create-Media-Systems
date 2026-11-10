@@ -3,21 +3,28 @@ package org.haruyq.createmediasystems.playback;
 import java.util.Arrays;
 
 /**
- * A Blu-ray player's equalizer as it plays here: one peaking filter per equalizer block joined to it (see
- * EqualizerBlock), each raising or lowering its band, from its low edge to its high edge, by its gain. Bands come as
+ * A source's tone as it plays here (see Tone): its stereo image widened, then one peaking filter per band, each
+ * raising or lowering its band, from its low edge to its high edge, by its gain. Bands come as
  * {@code low, high, gain} triples (Hz, Hz, dB), set on the game's thread; VLC's audio thread filters with them.
  */
 final class Equalizer {
     private volatile float[] bands = new float[0];
+    /** How wide the stereo image is: 1 as recorded, 0 mono, more than 1 wider. */
+    private volatile float width = 1;
     // VLC's audio thread only: the bands its filters were made for, each filter's coefficients and history per channel.
     private float[] built = bands;
     private double[][] filters = new double[0][];
     private double[][] history = new double[0][];
 
     void set(float[] bands) {
+        set(bands, 1);
+    }
+
+    void set(float[] bands, float width) {
         if (!Arrays.equals(bands, this.bands)) {
             this.bands = bands;
         }
+        this.width = width;
     }
 
     /** Filters VLC's interleaved 16-bit stereo {@code stereo} in place. */
@@ -33,26 +40,43 @@ final class Equalizer {
             }
             built = bands;
         }
-        if (filters.length == 0) {
+        float width = this.width;
+        if (filters.length == 0 && width == 1) {
             return;
         }
-        for (int i = 0; i + 1 < stereo.length; i += 2) {
-            int channel = i / 2 % 2 * 4;
-            double x = (short) (stereo[i] & 0xff | stereo[i + 1] << 8);
-            for (int f = 0; f < filters.length; f++) {
-                double[] c = filters[f];
-                double[] h = history[f];
-                double y = c[0] * x + c[1] * h[channel] + c[2] * h[channel + 1] - c[3] * h[channel + 2] - c[4] * h[channel + 3];
-                h[channel + 1] = h[channel];
-                h[channel] = x;
-                h[channel + 3] = h[channel + 2];
-                h[channel + 2] = y;
-                x = y;
+        for (int i = 0; i + 3 < stereo.length; i += 4) {
+            double left = (short) (stereo[i] & 0xff | stereo[i + 1] << 8);
+            double right = (short) (stereo[i + 2] & 0xff | stereo[i + 3] << 8);
+            if (width != 1) {
+                double middle = (left + right) / 2;
+                double side = (left - right) / 2 * width;
+                left = middle + side;
+                right = middle - side;
             }
-            int sample = Math.clamp(Math.round(x), Short.MIN_VALUE, Short.MAX_VALUE);
-            stereo[i] = (byte) sample;
-            stereo[i + 1] = (byte) (sample >> 8);
+            put(stereo, i, filter(left, 0));
+            put(stereo, i + 2, filter(right, 4));
         }
+    }
+
+    /** {@code x} through every filter, with the history of the channel at {@code channel} (0 left, 4 right). */
+    private double filter(double x, int channel) {
+        for (int f = 0; f < filters.length; f++) {
+            double[] c = filters[f];
+            double[] h = history[f];
+            double y = c[0] * x + c[1] * h[channel] + c[2] * h[channel + 1] - c[3] * h[channel + 2] - c[4] * h[channel + 3];
+            h[channel + 1] = h[channel];
+            h[channel] = x;
+            h[channel + 3] = h[channel + 2];
+            h[channel + 2] = y;
+            x = y;
+        }
+        return x;
+    }
+
+    private static void put(byte[] stereo, int at, double value) {
+        int sample = Math.clamp(Math.round(value), Short.MIN_VALUE, Short.MAX_VALUE);
+        stereo[at] = (byte) sample;
+        stereo[at + 1] = (byte) (sample >> 8);
     }
 
     /**

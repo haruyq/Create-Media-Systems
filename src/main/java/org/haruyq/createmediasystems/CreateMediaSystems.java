@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -16,6 +18,12 @@ import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.display.DisplayQuill;
 import org.haruyq.createmediasystems.display.ImageViewerBlock;
+import org.haruyq.createmediasystems.hifi.HifiCableItem;
+import org.haruyq.createmediasystems.hifi.HifiSpeakerBlock;
+import org.haruyq.createmediasystems.hifi.HifiStackBlock;
+import org.haruyq.createmediasystems.hifi.HifiUnitItem;
+import org.haruyq.createmediasystems.hifi.TapePosition;
+import org.haruyq.createmediasystems.hifi.Unit;
 import org.haruyq.createmediasystems.lighting.AnalysisCoordinator;
 import org.haruyq.createmediasystems.lighting.AnalysisPackets;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
@@ -226,6 +234,36 @@ public class CreateMediaSystems {
             "lighting_source", b -> b.persistent(UUIDUtil.CODEC).networkSynchronized(UUIDUtil.STREAM_CODEC));
     public static final DeferredItem<LightingLinkItem> LIGHTING_LINK = ITEMS.register("lighting_link",
             () -> new LightingLinkItem(new Item.Properties().stacksTo(1)));
+    /** A hi-fi system's units, stacked in one block; each unit has its own item (see HifiUnitItem), the block none. */
+    public static final DeferredBlock<HifiStackBlock> HIFI_STACK = BLOCKS.register("hifi_stack",
+            () -> new HifiStackBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).strength(1.5f)
+                    .noOcclusion().dynamicShape().noLootTable()));
+    public static final Supplier<BlockEntityType<HifiStackBlock.Entity>> HIFI_STACK_ENTITY = BLOCK_ENTITIES.register(
+            "hifi_stack", () -> BlockEntityType.Builder.of(HifiStackBlock.Entity::new, HIFI_STACK.get()).build(null));
+    private static final Map<Unit, DeferredItem<HifiUnitItem>> HIFI_UNITS = new EnumMap<>(Unit.class);
+
+    static {
+        for (Unit unit : Unit.values()) {
+            HIFI_UNITS.put(unit, ITEMS.register("hifi_" + unit.id,
+                    () -> new HifiUnitItem(HIFI_STACK.get(), unit, new Item.Properties())));
+        }
+    }
+
+    public static final DeferredBlock<HifiSpeakerBlock> HIFI_SPEAKER = BLOCKS.register("hifi_speaker",
+            () -> new HifiSpeakerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.NOTE_BLOCK).noOcclusion()));
+    public static final DeferredItem<?> HIFI_SPEAKER_ITEM = ITEMS.registerSimpleBlockItem("hifi_speaker", HIFI_SPEAKER);
+    public static final Supplier<BlockEntityType<HifiSpeakerBlock.Entity>> HIFI_SPEAKER_ENTITY = BLOCK_ENTITIES.register(
+            "hifi_speaker", () -> BlockEntityType.Builder.of(HifiSpeakerBlock.Entity::new, HIFI_SPEAKER.get()).build(null));
+    public static final DeferredItem<HifiCableItem> HIFI_CABLE = ITEMS.register("audio_cable",
+            () -> new HifiCableItem(new Item.Properties()));
+    /** A CD and a cassette hold links to sound alone, for a hi-fi stack's disc player and its deck. */
+    public static final DeferredItem<VideoDiscItem> CD = ITEMS.register("cd",
+            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), 24, 0));
+    public static final DeferredItem<VideoDiscItem> CASSETTE = ITEMS.register("cassette",
+            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), 12, 0));
+    /** Where a cassette was stopped. */
+    public static final Supplier<DataComponentType<TapePosition>> TAPE_POSITION = COMPONENTS.registerComponentType(
+            "tape_position", b -> b.persistent(TapePosition.CODEC).networkSynchronized(TapePosition.STREAM_CODEC));
 
     public CreateMediaSystems(IEventBus modBus, ModContainer container) {
         ServerConfig.register(modBus, container);
@@ -252,6 +290,10 @@ public class CreateMediaSystems {
         NeoForge.EVENT_BUS.addListener(TrainSignals::onServerTick);
         AnalysisCoordinator.register();
         P2p.register();
+    }
+
+    public static HifiUnitItem hifiUnit(Unit unit) {
+        return HIFI_UNITS.get(unit).get();
     }
 
     public static ResourceLocation id(String path) {
@@ -288,7 +330,7 @@ public class CreateMediaSystems {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("12");
+        var registrar = event.registrar("13");
         ServerConfig.registerPayloads(registrar);
         StreamPackets.registerPayloads(registrar);
         TrainDiscReaderBehaviour.registerPayloads(registrar);
@@ -298,6 +340,7 @@ public class CreateMediaSystems {
         VideoDiscItem.registerPayloads(registrar);
         RemoteItem.registerPayloads(registrar);
         EqualizerBlock.registerPayloads(registrar);
+        HifiStackBlock.registerPayloads(registrar);
         DisplayQuill.registerPayloads(registrar);
         ImageViewerBlock.registerPayloads(registrar);
         LightingPackets.register(registrar);

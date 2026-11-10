@@ -24,7 +24,7 @@ import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.video.Remotable;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -145,7 +145,7 @@ final class Diagnostics {
             Minecraft mc = Minecraft.getInstance();
             JsonObject report = new JsonObject();
             report.addProperty("player", mc.getUser().getName());
-            if (mc.level != null && mc.level.getBlockEntity(video.player()) instanceof VideoPlayerBlock.Entity disc) {
+            if (mc.level != null && mc.level.getBlockEntity(video.player()) instanceof Remotable disc) {
                 report.addProperty("playlistIndex", disc.index());
                 report.addProperty("playlistSize", disc.playlist().size());
             }

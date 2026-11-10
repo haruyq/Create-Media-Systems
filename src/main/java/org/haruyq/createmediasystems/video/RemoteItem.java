@@ -44,7 +44,7 @@ public class RemoteItem extends Item {
     public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
         if (player == null || !player.isShiftKeyDown()
-                || !(context.getLevel().getBlockEntity(context.getClickedPos()) instanceof VideoPlayerBlock.Entity)) {
+                || !(context.getLevel().getBlockEntity(context.getClickedPos()) instanceof Remotable)) {
             return InteractionResult.PASS;
         }
         if (!context.getLevel().isClientSide) {
@@ -149,7 +149,7 @@ public class RemoteItem extends Item {
                     .withStyle(ChatFormatting.RED), true);
             return;
         }
-        if (!player.level().isLoaded(pos) || !(player.level().getBlockEntity(pos) instanceof VideoPlayerBlock.Entity videoPlayer)) {
+        if (!player.level().isLoaded(pos) || !(player.level().getBlockEntity(pos) instanceof Remotable videoPlayer)) {
             player.displayClientMessage(Component.translatable("create_media_systems.remote.missing").withStyle(ChatFormatting.RED), true);
             return;
         }

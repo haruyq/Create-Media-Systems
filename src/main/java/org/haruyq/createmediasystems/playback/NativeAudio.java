@@ -168,15 +168,37 @@ public final class NativeAudio {
         }
     }
 
-    /** Every Blu-ray player's video playing here plays through {@code bands} of its player (see Equalizer#set). */
-    public static void equalize(Function<BlockPos, float[]> bands) {
+    /**
+     * Every playback here plays through the tone of what plays it: its Blu-ray player or hi-fi stack if it is a
+     * video, else its source (see Equalizer#set).
+     */
+    public static void equalize(Function<BlockPos, Tone> tones) {
         synchronized (SHARED) {
             for (Shared shared : SHARED.values()) {
-                if (shared.key.display() != null && shared.owner instanceof VlcPlayer player) {
-                    player.audio.equalizer.set(bands.apply(shared.key.display()));
+                BlockPos at = shared.key.display() != null ? shared.key.display() : shared.playback;
+                if (at != null && shared.owner instanceof VlcPlayer player) {
+                    Tone tone = tones.apply(at);
+                    player.audio.equalizer.set(tone.bands(), tone.width());
                 }
             }
         }
+    }
+
+    /**
+     * What the source at {@code pos} sounds like here at this moment, after its tone (see Spectrum); null if it
+     * plays nothing here.
+     */
+    @Nullable
+    public static Spectrum.Frame spectrum(BlockPos pos) {
+        synchronized (SHARED) {
+            for (Shared shared : SHARED.values()) {
+                if ((pos.equals(shared.key.display()) || pos.equals(shared.playback)) && shared.playing.isDone()
+                        && !shared.playing.isCompletedExceptionally() && shared.owner instanceof VlcPlayer player) {
+                    return player.audio.spectrum();
+                }
+            }
+        }
+        return null;
     }
 
     /**

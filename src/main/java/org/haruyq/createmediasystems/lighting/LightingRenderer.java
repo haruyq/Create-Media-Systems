@@ -69,7 +69,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     .setCullState(RenderStateShard.NO_CULL)
                     .setWriteMaskState(RenderStateShard.COLOR_WRITE)
                     .createCompositeState(false));
-    static final RenderType SCREEN = RenderType.create("create_media_systems_lighting_controls",
+    public static final RenderType SCREEN = RenderType.create("create_media_systems_lighting_controls",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
             RenderType.CompositeState.builder()
                     .setShaderState(new RenderStateShard.ShaderStateShard(GameRenderer::getPositionColorShader))
@@ -691,13 +691,13 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
      * The buffer for {@code type} asked for again each quad: another type asked for between (text, another part)
      * may have ended its batch. Everything here is drawn in whole quads, 4 vertices together.
      */
-    static final class Output implements VertexConsumer {
+    public static final class Output implements VertexConsumer {
         private final MultiBufferSource buffers;
         private final RenderType type;
         private VertexConsumer current;
         private int vertices;
 
-        Output(MultiBufferSource buffers, RenderType type) {
+        public Output(MultiBufferSource buffers, RenderType type) {
             this.buffers = buffers;
             this.type = type;
         }

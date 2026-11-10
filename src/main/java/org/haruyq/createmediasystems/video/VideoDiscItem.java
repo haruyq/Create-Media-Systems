@@ -24,15 +24,16 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
- * A playlist of video links for a Blu-ray player (not a jukebox): a DVD or a Blu-ray, which differ in how many videos
- * they hold and how sharp they play. Use in the air to edit the list.
+ * A playlist of links for a Blu-ray player or a hi-fi stack (not a jukebox): a DVD or a Blu-ray, which differ in how
+ * many videos they hold and how sharp they play, or a CD or a cassette, which have no picture and play in a hi-fi
+ * stack only. Use in the air to edit the list.
  */
 public class VideoDiscItem extends Item {
     /** Most links any disc holds (the network's limit). */
     public static final int MAX_ENTRIES = 64;
     private static final int SHOWN_ENTRIES = 5;
 
-    /** How many links it holds, and the tallest picture (pixels) it plays. */
+    /** How many links it holds, and the tallest picture (pixels) it plays: 0 for sound alone. */
     public final int entries;
     public final int maxHeight;
 
@@ -64,7 +65,7 @@ public class VideoDiscItem extends Item {
             tooltip.add(Component.translatable("create_media_systems.url.unset").withStyle(ChatFormatting.DARK_GRAY));
             return;
         }
-        tooltip.add(Component.translatable("create_media_systems.disc.entries", playlist.size()).withStyle(ChatFormatting.GOLD));
+        tooltip.add(Component.translatable(maxHeight > 0 ? "create_media_systems.disc.entries" : "create_media_systems.disc.tracks", playlist.size()).withStyle(ChatFormatting.GOLD));
         for (int i = 0; i < Math.min(playlist.size(), SHOWN_ENTRIES); i++) {
             tooltip.add(Component.literal((i + 1) + ". " + playlist.get(i)).withStyle(ChatFormatting.GRAY));
         }
@@ -100,7 +101,8 @@ public class VideoDiscItem extends Item {
             var physical = DiscUrl.parse(playlist.get(i));
             if (!ServerConfig.isAllowed(playlist.get(i)) || physical != null && !physical.owner().equals(player.getUUID())
                     && !held.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of()).contains(playlist.get(i))) {
-                player.displayClientMessage(Component.translatable("create_media_systems.disc.rejected", i + 1)
+                player.displayClientMessage(Component.translatable(disc.maxHeight > 0 ? "create_media_systems.disc.rejected"
+                        : "create_media_systems.disc.rejected_track", i + 1)
                         .withStyle(ChatFormatting.RED), true);
                 return;
             }
@@ -110,7 +112,8 @@ public class VideoDiscItem extends Item {
         } else {
             held.set(CreateMediaSystems.PLAYLIST.get(), playlist);
         }
-        player.displayClientMessage(Component.translatable("create_media_systems.disc.saved", playlist.size())
+        player.displayClientMessage(Component.translatable(disc.maxHeight > 0 ? "create_media_systems.disc.saved"
+                : "create_media_systems.disc.saved_tracks", playlist.size())
                 .withStyle(ChatFormatting.GREEN), true);
     }
 

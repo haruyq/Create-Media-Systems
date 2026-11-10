@@ -1,7 +1,9 @@
 package org.haruyq.createmediasystems.video;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.hifi.HifiStackBlock;
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.playback.Tone;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -60,11 +62,15 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(CreateMediaSystems.EQUALIZER_ENTITY.get(), EqualizerFaders::new));
         modBus.addListener((ModelEvent.RegisterAdditional event) -> event.register(KNOB));
-        // Every Blu-ray player's video playing here plays through the equalizers touching it.
+        // Every Blu-ray player's video playing here plays through the equalizers touching it, and what a hi-fi
+        // stack plays through its own controls.
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
             var level = Minecraft.getInstance().level;
             if (level != null) {
-                NativeAudio.equalize(player -> EqualizerBlock.bands(level, player));
+                NativeAudio.equalize(source -> level.getBlockEntity(source) instanceof HifiStackBlock.Entity stack
+                        ? stack.tone()
+                        : level.getBlockState(source).is(CreateMediaSystems.VIDEO_PLAYER.get())
+                        ? new Tone(EqualizerBlock.bands(level, source), 1) : Tone.FLAT);
             }
         });
         NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {

@@ -10,7 +10,7 @@ import org.haruyq.createmediasystems.lighting.LightingScreens;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -276,8 +276,8 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 return;
             }
             Optional<BlockPos> linked = source();
-            VideoPlayerBlock.Entity videoPlayer = linked.filter(level::isLoaded).map(level::getBlockEntity)
-                    .orElse(null) instanceof VideoPlayerBlock.Entity found ? found : null;
+            VideoSource videoPlayer = linked.filter(level::isLoaded).map(level::getBlockEntity)
+                    .orElse(null) instanceof VideoSource found ? found : null;
             if (videoPlayer != null && Math.round(videoPlayer.lighting() * 100) != lighting) {
                 lighting = Math.round(videoPlayer.lighting() * 100);
                 changed();

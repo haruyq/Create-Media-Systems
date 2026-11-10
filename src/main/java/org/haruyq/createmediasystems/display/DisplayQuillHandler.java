@@ -6,6 +6,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
 import org.haruyq.createmediasystems.playback.VlcPlayer;
+import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -58,7 +59,7 @@ final class DisplayQuillHandler {
         var mc = Minecraft.getInstance();
         DisplayBlock.Entity display = display(hovered);
         if (display == null) {
-            if (!mc.level.getBlockState(hovered).is(CreateMediaSystems.VIDEO_PLAYER.get())) {
+            if (!(mc.level.getBlockEntity(hovered) instanceof VideoSource)) {
                 return false;
             }
             videoPlayer = hovered;
