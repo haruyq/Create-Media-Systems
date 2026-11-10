@@ -37,8 +37,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
- * The server config, synced to clients (they stream from the API it points them at), and
- * {@code /create_media_systems config ...}, with which operators read, change and reload it without restarting.
+ * The server config, synced to clients (they stream from the API it points them at) but for its secret, and
+ * {@code /cms config ...}, with which operators read, change and reload it without restarting.
  */
 public final class ServerConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
@@ -54,13 +54,19 @@ public final class ServerConfig {
     public static final ModConfigSpec.IntValue REMOTE_RANGE = BUILDER
             .comment("Farthest (in blocks) a remote reaches the Blu-ray player it is paired with.")
             .defineInRange("remoteRange", 64, 1, MAX_REMOTE_RANGE);
+    /** Read by P2p only. Never sent: emptied in what players get of this file (see {@link #withoutSecrets}). */
+    public static final ModConfigSpec.ConfigValue<String> P2P_SERVER_TOKEN = BUILDER
+            .comment("Direct P2P's secret: the CMS-API's P2P_SERVER_TOKEN, 16 to 512 characters without spaces. Empty turns P2P off; the CMS_P2P_SERVER_TOKEN environment variable takes its place if set. Players never receive it, unlike the rest of this file: never give it to them.")
+            .define("p2pServerToken", "", o -> o instanceof String);
     private static final ModConfigSpec SPEC = BUILDER.build();
+    /** The file's name, which NeoForge also sends players by (see ConfigSyncMixin). */
+    public static final String FILE = "cms-server.toml";
 
     private ServerConfig() {
     }
 
     static void register(IEventBus modBus, ModContainer container) {
-        container.registerConfig(ModConfig.Type.SERVER, SPEC, "cms-server.toml");
+        container.registerConfig(ModConfig.Type.SERVER, SPEC, FILE);
         modBus.addListener(ServerConfig::onReload);
         NeoForge.EVENT_BUS.addListener(ServerConfig::registerCommand);
     }
@@ -185,7 +191,28 @@ public final class ServerConfig {
 
     private static void sync() {
         PacketDistributor.sendToAllPlayers(new Changed(
-                TomlFormat.instance().createWriter().writeToString(file().getLoadedConfig().config())));
+                withoutSecrets(TomlFormat.instance().createWriter().writeToString(file().getLoadedConfig().config()))));
+    }
+
+    /**
+     * {@code toml} (this file's) as players may have it: p2pServerToken emptied, not removed, so it stays a valid
+     * config for them. Nothing at all if it can't be read, as then the token can't be found to empty.
+     */
+    public static String withoutSecrets(String toml) {
+        CommentedConfig config;
+        try {
+            config = TomlFormat.instance().createParser().parse(toml);
+        } catch (RuntimeException unreadable) {
+            return "";
+        }
+        if (config.contains("p2pServerToken")) {
+            config.set("p2pServerToken", "");
+        }
+        return TomlFormat.instance().createWriter().writeToString(config);
+    }
+
+    public static byte[] withoutSecrets(byte[] toml) {
+        return withoutSecrets(new String(toml, java.nio.charset.StandardCharsets.UTF_8)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     static ModConfig file() {

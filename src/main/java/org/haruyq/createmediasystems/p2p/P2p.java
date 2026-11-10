@@ -1,11 +1,8 @@
 package org.haruyq.createmediasystems.p2p;
 
-import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -34,7 +31,6 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
@@ -47,12 +43,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * Direct P2P sessions between players (see README). A player asks this server to host or join; the server asks the
  * API, with a secret only it and the API know, for a ticket for that player alone, and sends it to them. Peers then
  * signal through the API and send data to each other directly (see Transport): nothing of theirs passes through
- * here. The secret is CMS_P2P_SERVER_TOKEN or config/cms-p2p-server-token.txt, never the synced server config.
+ * here. The secret is CMS_P2P_SERVER_TOKEN, else the server config's p2pServerToken, which players never receive.
  */
 public final class P2p {
     private static final Pattern TOKEN = Pattern.compile("[\\x21-\\x7e]{16,512}");
     private static final String TOKEN_ENV = "CMS_P2P_SERVER_TOKEN";
-    private static final String TOKEN_FILE = "cms-p2p-server-token.txt";
     private static final long COOLDOWN_MS = 3000;
     // Never follows redirects, so the secret goes to the configured API only. HTTP/1.1: uvicorn refuses h2c upgrades.
     static final HttpClient HTTP = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
@@ -324,15 +319,9 @@ public final class P2p {
     private static String secret() {
         String secret = System.getenv(TOKEN_ENV);
         if (secret == null || secret.isBlank()) {
-            Path file = FMLPaths.CONFIGDIR.get().resolve(TOKEN_FILE);
-            try {
-                secret = Files.isRegularFile(file) ? Files.readString(file) : null;
-            } catch (IOException e) {
-                LogUtils.getLogger().warn("Could not read {}: {}", file, e.getMessage());
-                return null;
-            }
+            secret = ServerConfig.P2P_SERVER_TOKEN.get();
         }
-        return secret == null || !TOKEN.matcher(secret.strip()).matches() ? null : secret.strip();
+        return TOKEN.matcher(secret.strip()).matches() ? secret.strip() : null;
     }
 
     private static void notice(ServerPlayer player, Component message) {
