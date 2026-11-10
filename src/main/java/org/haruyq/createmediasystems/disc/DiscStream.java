@@ -55,6 +55,8 @@ public final class DiscStream implements AutoCloseable {
     private volatile boolean closed;
     private Pending pending;
     private String codec;
+    /** The DVD pass segments are taken from; on the encoder thread, and closed by close. */
+    private volatile DiscRun run;
     private int cachedBytes;
 
     public DiscStream(Transport transport, UUID sourceId, DiscSource source, Consumer<String> status) throws IOException {
@@ -200,14 +202,14 @@ public final class DiscStream implements AutoCloseable {
                     }
                     long started = System.nanoTime();
                     try {
-                        bytes = source.encode(index, quality, codec);
+                        bytes = encode(index, quality);
                     } catch (IOException failed) {
                         if (codec.equals("libx264") || Thread.currentThread().isInterrupted()) {
                             throw failed;
                         }
                         codec = "libx264";
                         status.accept("Hardware encoding failed; using libx264 for this disc");
-                        bytes = source.encode(index, quality, codec);
+                        bytes = encode(index, quality);
                     }
                     adaptive.encoded(System.nanoTime() - started, available);
                     status.accept("Disc segment " + index + ": " + quality.height() + "p " + quality.fps() + " fps, " + quality.kbps() + " kbps");
@@ -241,6 +243,31 @@ public final class DiscStream implements AutoCloseable {
             work.addFirst(task);
         }
         return result;
+    }
+
+    /** On the encoder thread. A DVD's next segment comes from its running pass (see DiscSource#run). */
+    private byte[] encode(int index, DiscSource.Quality quality) throws IOException {
+        if (source.bluray()) {
+            return source.encode(index, quality, codec);
+        }
+        DiscRun current = run;
+        if (current == null || !current.continues(index, quality, codec)) {
+            if (current != null) {
+                current.close();
+            }
+            run = current = source.run(index, quality, codec);
+            if (closed) {
+                current.close();
+                throw new IOException("Disc stream was closed");
+            }
+        }
+        try {
+            return current.take();
+        } catch (IOException failed) {
+            current.close();
+            run = null;
+            throw failed;
+        }
     }
 
     private static byte[] await(CompletableFuture<byte[]> future) throws IOException {
@@ -465,6 +492,10 @@ public final class DiscStream implements AutoCloseable {
         http.stop(0);
         encoder.shutdownNow();
         workers.shutdownNow();
+        DiscRun current = run;
+        if (current != null) {
+            current.close();
+        }
         synchronized (reception) {
             if (pending != null) {
                 pending.result.completeExceptionally(new IOException("Disc session closed"));

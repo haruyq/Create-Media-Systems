@@ -83,6 +83,41 @@ class DiscReaderIntegrationTest {
         assertEquals(0x47, segment[0] & 255);
     }
 
+    @Test
+    @EnabledIfEnvironmentVariable(named = "CMS_DISC_DVD_FIXTURE", matches = ".+")
+    void continuesADvdPassAcrossSegmentBoundaries() throws Exception {
+        DiscSource source = DiscSource.open("ffmpeg", "ffprobe", Path.of(System.getenv("CMS_DISC_DVD_FIXTURE")), 1);
+        byte[][] reference = gray(DiscSource.run(List.of("ffmpeg", "-v", "error", "-f", "dvdvideo", "-title", "1", "-i",
+                source.root().toString(), "-an", "-vf", "bwdif=deint=interlaced,fps=30,scale=64:36,format=gray",
+                "-f", "rawvideo", "pipe:1"), 64 * 36 * 30 * 20, 60));
+        try (DiscRun run = source.run(1, new DiscSource.Quality(480, 30, 1100), "libx264")) {
+            byte[][] first = gray(decode(run.take())), second = gray(decode(run.take()));
+            assertEquals(120, first.length);
+            // Each segment decodes on its own, and the second goes on from the first's last frame.
+            int last = nearest(reference, first[first.length - 1]), next = nearest(reference, second[0]);
+            assertTrue(next - last >= 0 && next - last <= 2, "segment boundary jumps from frame " + last + " to " + next);
+        }
+    }
+
+    private static byte[] decode(byte[] segment) throws IOException {
+        return DiscSource.run(List.of("ffmpeg", "-v", "error", "-f", "mpegts", "-i", "pipe:0", "-an",
+                "-vf", "scale=64:36,format=gray", "-f", "rawvideo", "pipe:1"), segment, 64 * 36 * 30 * 8, 30);
+    }
+
+    private static byte[][] gray(byte[] frames) {
+        byte[][] split = new byte[frames.length / (64 * 36)][];
+        for (int i = 0; i < split.length; i++) split[i] = java.util.Arrays.copyOfRange(frames, i * 64 * 36, (i + 1) * 64 * 36);
+        return split;
+    }
+
+    private static int nearest(byte[][] reference, byte[] frame) {
+        int best = 0;
+        for (int i = 1; i < reference.length; i++) {
+            if (difference(reference[i], frame) < difference(reference[best], frame)) best = i;
+        }
+        return best;
+    }
+
     private static byte[] frame(Path root, double seconds) throws Exception {
         return DiscSource.run(List.of("ffmpeg", "-v", "error", "-i", root.resolve("BDMV/STREAM/00000.m2ts").toString(),
                 "-ss", Double.toString(seconds), "-frames:v", "1",

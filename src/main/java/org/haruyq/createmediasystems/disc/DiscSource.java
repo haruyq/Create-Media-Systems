@@ -185,6 +185,22 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
 
     public byte[] encode(int segment, Quality quality, String encoder) throws IOException {
         double seconds = seconds(segment);
+        return run(command(segment, seconds, quality, encoder, false),
+                playlist == null ? new byte[0] : playlist.concat(root, segment * SEGMENT_SECONDS, seconds, SEGMENT_SECONDS, access),
+                MAX_SEGMENT_BYTES, 30, access);
+    }
+
+    /**
+     * A DVD title encoded in one pass from {@code segment} on (see DiscRun). FFmpeg's DVD reader seeks to the VOBU
+     * before the time asked yet stamps it as that time, up to half a second off, so segments encoded apart jumped
+     * back and forth at every boundary; one pass only seeks where it starts.
+     */
+    DiscRun run(int segment, Quality quality, String encoder) throws IOException {
+        return new DiscRun(command(segment, duration - (double) segment * SEGMENT_SECONDS, quality, encoder, true),
+                access, quality, encoder, segment);
+    }
+
+    private List<String> command(int segment, double seconds, Quality quality, String encoder, boolean continuous) {
         List<String> command = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-v", "error", "-nostdin"));
         if (bluray) {
             // Decode references before each in-point; select removes the preroll on the playlist's timeline.
@@ -205,16 +221,32 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         if (encoder.equals("h264_nvenc")) {
             command.addAll(List.of("-preset", "p4", "-rc", "cbr"));
         }
+        if (continuous) {
+            // Every segment of a pass starts on an IDR frame, so a player can start at any of them.
+            command.addAll(List.of("-force_key_frames", "expr:gte(t,n_forced*" + SEGMENT_SECONDS + ")"));
+            if (!encoder.equals("libx264")) {
+                command.addAll(List.of(encoder.equals("h264_nvenc") ? "-forced-idr" : "-forced_idr", "1"));
+            }
+        }
         // AC-3 frames divide four seconds exactly. Compensate its 256-sample encoder delay to keep audio at zero.
         command.addAll(List.of("-af", (bluray ? "aselect=concatdec_select," : "")
-                        + "asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0,apad,atrim=duration=" + seconds
-                        + ",asetpts=PTS+256/48000/TB", "-c:a", "ac3",
+                        + "asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0,"
+                        + (continuous ? "" : "apad,atrim=duration=" + seconds + ",") + "asetpts=PTS+256/48000/TB", "-c:a", "ac3",
                 "-b:a", "192k", "-ar", "48000", "-ac", "2", "-mpegts_flags", "+resend_headers+initial_discontinuity",
                 "-muxdelay", "0", "-muxpreload", "0",
                 "-output_ts_offset", Integer.toString(segment * SEGMENT_SECONDS),
                 "-f", "mpegts", "pipe:1"));
-        return run(command, playlist == null ? new byte[0] : playlist.concat(root, segment * SEGMENT_SECONDS, seconds, SEGMENT_SECONDS, access),
-                MAX_SEGMENT_BYTES, 30, access);
+        return command;
+    }
+
+    /** Why a disc reader failed, from its exit code and errors; null if it did not. */
+    static String failure(int exitCode, String errors, Access access) {
+        if (exitCode == 0 && !(access == null && errors.toLowerCase(Locale.ROOT).contains("encrypted"))) {
+            return null;
+        }
+        return access == null
+                ? "The disc reader failed; use an unencrypted disc and an FFmpeg build with DVD-Video, H.264 and AC-3 support"
+                : "The disc reader failed; check the disc, selected title and reader extension";
     }
 
     static byte[] run(List<String> command, int limit, int timeout) throws IOException {
@@ -228,9 +260,7 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     private static byte[] run(List<String> command, byte[] input, int limit, int timeout, Access access) throws IOException {
         Process process;
         try {
-            ProcessBuilder builder = new ProcessBuilder(command);
-            if (access != null) builder.environment().putAll(access.environment());
-            process = builder.start();
+            process = start(command, access);
         } catch (IOException missing) {
             throw new IOException("FFmpeg/FFprobe could not start; set discFfmpegPath and discFfprobePath in cms-client.toml");
         }
@@ -258,11 +288,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
                 if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
                     throw new IOException("The disc reader timed out; check the drive, disc and encoder");
                 }
-                String error = errors.get();
-                if (process.exitValue() != 0 || access == null && error.toLowerCase(Locale.ROOT).contains("encrypted")) {
-                    throw new IOException(access == null
-                            ? "The disc reader failed; use an unencrypted disc and an FFmpeg build with DVD-Video, H.264 and AC-3 support"
-                            : "The disc reader failed; check the disc, selected title and reader extension");
+                String failure = failure(process.exitValue(), errors.get(), access);
+                if (failure != null) {
+                    throw new IOException(failure);
                 }
                 return output.get();
             } catch (InterruptedException interrupted) {
@@ -274,5 +302,11 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
                 process.destroyForcibly();
             }
         }
+    }
+
+    static Process start(List<String> command, Access access) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(command);
+        if (access != null) builder.environment().putAll(access.environment());
+        return builder.start();
     }
 }
