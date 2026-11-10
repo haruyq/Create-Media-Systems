@@ -74,12 +74,14 @@ public final class DiscAttachmentGameTests {
         var loaded=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),h.getLevel());loaded.load(tag);loaded.tick();
         h.assertTrue(loaded.isRemoved() && loaded.getPickResult().isEmpty(),"Track expiry removes the blade without an obtainable original");h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=120)
+    @GameTest(template="empty",timeoutTicks=400)
     public static void aDimensionChangeKeepsTheAttachedDiscIdentityAndPlaybackPosition(GameTestHelper h) {
         var other=h.getLevel().getServer().getLevel(Level.NETHER);h.assertTrue(other!=null,"The actual second dimension must exist");
         // This headless server has no player in the Nether to load or expose the destination's entities.
         boolean destinationWasForced=other.getForcedChunks().contains(net.minecraft.world.level.ChunkPos.asLong(0,0));
-        other.setChunkForced(0,0,true);other.getChunk(0,0);
+        other.setChunkForced(0,0,true);
+        // Entity-ticking readiness also needs the surrounding FULL chunks on a freshly generated world.
+        for (int x=-2;x<=2;x++) for (int z=-2;z<=2;z++) other.getChunk(x,z);
         var target=EntityType.IRON_GOLEM.create(h.getLevel());target.setNoAi(true);target.setNoGravity(true);target.setInvulnerable(true);target.setPos(base(h));h.getLevel().addFreshEntity(target);
         var d=disc(h,h.makeMockPlayer(GameType.CREATIVE));d.onHitEntity(new EntityHitResult(target,target.position().add(-.76,1,0)));h.getLevel().addFreshEntity(d);
         var id=d.getUUID();double before=d.elapsedMusicSeconds();
