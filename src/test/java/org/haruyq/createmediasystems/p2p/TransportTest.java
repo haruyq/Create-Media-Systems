@@ -33,13 +33,13 @@ import com.google.gson.JsonParser;
 
 /**
  * Two real native WebRTC peers in this process, signalling through a stand-in for the API that forwards as it does
- * (to → from): checks the bytes that cross their DataChannel, the budget's pacing and backpressure, and closing.
+ * (to → from): checks the probe each connection is measured with, the bytes that cross their DataChannel, pacing and
+ * backpressure, and closing.
  * Natives ship for 64-bit Windows only, so the tests that load them run only there.
  */
 class TransportTest {
     static final UUID HOST = P2pTest.HOST;
     static final UUID VIEWER = P2pTest.VIEWER;
-    static final long BUDGET = 8_000_000;
 
     @Test
     @EnabledOnOs(value = OS.WINDOWS, architectures = {"amd64", "x86_64"})
@@ -71,6 +71,14 @@ class TransportTest {
             host.signal(peers(HOST, VIEWER));
             await(() -> host.connected().equals(List.of(VIEWER)) && viewer.connected().equals(List.of(HOST)), 20_000, said);
             assertFalse(viewer.send(new byte[1]), "only the host sends");
+            await(() -> host.budgetBps() != LinkRate.INITIAL_BPS && viewer.budgetBps() > 0, 10_000, said);
+            assertTrue(said.stream().anyMatch(s -> s.startsWith("Measured the direct connection to viewer")), said::toString);
+            // In-process, the probe measures far more than real connections carry: pace this one at 8 Mbit/s.
+            synchronized (host) {
+                host.links.get(VIEWER).rate.probed(1_250_000, 1_000_000_000L);
+            }
+            await(() -> host.budgetBps() == 8_000_000, 1_000, said);
+            assertEquals(0, viewer.received(), "the probe is not data");
 
             byte[] data = new byte[2 << 20];
             new Random(1).nextBytes(data);
@@ -248,8 +256,7 @@ class TransportTest {
         });
         try {
             await(() -> host.connected().equals(List.of(VIEWER)) && viewer.connected().equals(List.of(HOST)), 20_000, said);
-            // floor(min(0.65 * 100 Mbps / 1 viewer, 0.65 * 100 Mbps))
-            assertEquals(65_000_000, host.budgetBps());
+            await(() -> host.budgetBps() != LinkRate.INITIAL_BPS && viewer.budgetBps() > 0, 10_000, said);
             byte[] data = new byte[256 * 1024];
             new Random(2).nextBytes(data);
             for (int at = 0; at < data.length; at += Transport.MAX_PAYLOAD) {
@@ -279,7 +286,7 @@ class TransportTest {
         HttpResponse<String> response = P2p.HTTP.send(HttpRequest.newBuilder(Protocol.endpoint(api, path, false))
                 .header("Authorization", "Bearer " + secret).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"" + idField + "\":\"" + id
-                        + "\",\"upload_bps\":100000000,\"download_bps\":100000000}")).build(), HttpResponse.BodyHandlers.ofString());
+                        + "\"}")).build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(200, response.statusCode() / 100 * 100, response.body());
         return response.body();
     }
@@ -297,10 +304,9 @@ class TransportTest {
         StringBuilder peers = new StringBuilder();
         for (UUID id : ids) {
             peers.append(peers.isEmpty() ? "" : ",").append("{\"peer_id\":\"").append(id).append("\",\"role\":\"")
-                    .append(id.equals(HOST) ? "host" : "viewer").append("\",\"upload_bps\":100000000,\"download_bps\":100000000}");
+                    .append(id.equals(HOST) ? "host" : "viewer").append("\"}");
         }
-        return "{\"type\":\"peers\",\"host_id\":\"" + HOST + "\",\"peers\":[" + peers + "],\"budget_bps\":"
-                + (ids.length > 1 ? BUDGET : 0) + "}";
+        return "{\"type\":\"peers\",\"host_id\":\"" + HOST + "\",\"peers\":[" + peers + "],\"budget_bps\":0}";
     }
 
     private static void await(BooleanSupplier condition, long millis, Object... context) throws InterruptedException {

@@ -64,7 +64,8 @@ import dev.onvoid.webrtc.media.audio.HeadlessAudioDeviceModule;
 /**
  * A client's direct P2P session (see P2p): signals through the API's WebSocket with its ticket, then holds a WebRTC
  * DataChannel to each viewer (as host) or to the host (as viewer), over direct ICE candidates only: no TURN, no relay.
- * The host sends payloads to its viewers, paced at the room's budget. Client only: it loads native WebRTC.
+ * The host measures each viewer's connection as it opens, by sending as much as it takes for a moment (see
+ * LinkRate), then sends payloads to each paced at what it measured. Client only: it loads native WebRTC.
  * <p>
  * Everything runs on the session's own thread; native callbacks only hand work to it, and nothing runs once the
  * session is closed. Listener calls come on that thread too, never the game's.
@@ -83,7 +84,11 @@ public final class Transport implements AutoCloseable {
     private static final int MAX_PENDING = 64;
     private static final long CONNECT_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(30);
     private static final long TICK_MILLIS = 10;
-    private static final byte DATA = 0, PING = 1, PONG = 2, CONTROL = 3;
+    private static final byte DATA = 0, PING = 1, PONG = 2, CONTROL = 3, PROBE = 4, PROBE_REPORT = 5;
+    /** How long the host sends a new viewer probe frames, and in what size, keeping at most this much in flight. */
+    private static final long PROBE_NANOS = 1_000_000_000L;
+    private static final int PROBE_FRAME = 16 * 1024;
+    private static final int PROBE_BUFFER = 512 * 1024;
     private static final Pattern CANDIDATE_TYPE = Pattern.compile(" typ (\\S+)");
     private static final String LIBRARY = "webrtc-java-windows-x86_64.dll";
     private static final Logger LOGGER = LoggerFactory.getLogger(Transport.class);
@@ -207,7 +212,10 @@ public final class Transport implements AutoCloseable {
         return ticket.hostId();
     }
 
-    /** The room's budget per viewer, in bit/s, which sending is paced at; 0 while there are no viewers. */
+    /**
+     * In bit/s: as host, the slowest connected viewer's pace (see LinkRate), 0 while none is connected; as viewer,
+     * what the host's probe measured coming in, 0 until it has.
+     */
     public long budgetBps() {
         return budgetBps;
     }
@@ -320,14 +328,6 @@ public final class Transport implements AutoCloseable {
                 if (!UUID.fromString(message.get("host_id").getAsString()).equals(ticket.hostId())) {
                     throw new IllegalArgumentException();
                 }
-                long budget = message.get("budget_bps").getAsLong();
-                if (budget < 0 || budget > Protocol.MAX_BPS) {
-                    throw new IllegalArgumentException();
-                }
-                if (budget != budgetBps && budget > 0) {
-                    listener.status(String.format(Locale.ROOT, "Budget per viewer: %.1f Mbps", budget / 1e6));
-                }
-                budgetBps = budget;
                 state = State.CONNECTED;
                 if (ticket.host()) {
                     Set<UUID> viewers = new HashSet<>();
@@ -410,10 +410,28 @@ public final class Transport implements AutoCloseable {
         link.pc.createOffer(new RTCOfferOptions(), link.created("offer"));
     }
 
-    /** Sends what the budget allows of each queue, and gives up on peers that took too long to connect. */
+    /**
+     * The bytes {@code peer} acknowledged, {@code nanos} after they were queued for it: how its pace follows the
+     * connection (see LinkRate). Host only; deliveries that began before its probe answered say nothing.
+     */
+    public void delivered(UUID peer, long bytes, long nanos) {
+        post(() -> {
+            Link link = links.get(peer);
+            if (ticket.host() && link != null && link.open && link.rate.measured()
+                    && System.nanoTime() - nanos - link.probedAt >= 0) {
+                link.rate.delivered(bytes, nanos);
+            }
+        });
+    }
+
+    /**
+     * Sends a new viewer its probe, else what its pace allows of its queue, and gives up on peers that took too long
+     * to connect.
+     */
     private void tick() {
         long now = System.nanoTime();
         long most = 0;
+        long slowest = 0;
         for (Link link : List.copyOf(links.values())) {
             if (!link.open) {
                 if (now - link.createdAt > CONNECT_TIMEOUT_NANOS) {
@@ -422,7 +440,11 @@ public final class Transport implements AutoCloseable {
                 }
                 continue;
             }
-            double rate = budgetBps / 8.0;
+            if (ticket.host() && !probe(link, now)) {
+                continue;
+            }
+            slowest = slowest == 0 ? link.rate.bps() : Math.min(slowest, link.rate.bps());
+            double rate = link.rate.bps() / 8.0;
             link.tokens = Math.min(Math.max(MAX_PAYLOAD + 1, rate * 0.05),
                     link.tokens + rate * (now - link.lastTick) / 1e9);
             link.lastTick = now;
@@ -440,6 +462,29 @@ public final class Transport implements AutoCloseable {
             }
         }
         backlog = most;
+        if (ticket.host()) {
+            budgetBps = slowest;
+        }
+    }
+
+    /**
+     * Sends {@code link} what is left of its probe: frames for {@link #PROBE_NANOS}, as fast as the connection takes
+     * them, then the end. Whether the probe is done with, so the link sends its queue.
+     */
+    private boolean probe(Link link, long now) {
+        if (link.probeEnded) {
+            return true;
+        }
+        if (now - link.openedAt < PROBE_NANOS) {
+            byte[] frame = new byte[PROBE_FRAME + 1];
+            frame[0] = PROBE;
+            while (link.channel.getBufferedAmount() < PROBE_BUFFER && link.sendNow(frame)) {
+                // Filled up to the bound, or dropped.
+            }
+            return false;
+        }
+        link.probeEnded = link.sendNow(new byte[] {PROBE, 1});
+        return false;
     }
 
     private static byte[] frame(byte type, byte[] body) {
@@ -468,6 +513,20 @@ public final class Transport implements AutoCloseable {
                     listener.data(link.peer, payload);
                 }
             }
+            case PROBE -> {
+                if (!ticket.host() && link.peer.equals(ticket.hostId()) && !link.probeEnded) {
+                    probed(link, frame);
+                }
+            }
+            case PROBE_REPORT -> {
+                if (ticket.host() && link.probeEnded && !link.rate.measured() && frame.length == 17) {
+                    ByteBuffer report = ByteBuffer.wrap(frame, 1, 16);
+                    link.rate.probed(report.getLong(), report.getLong());
+                    link.probedAt = System.nanoTime();
+                    listener.status(String.format(Locale.ROOT, "Measured the direct connection to %s: %.1f Mbps",
+                            name(link.peer), link.rate.bps() / 1e6));
+                }
+            }
             case PING -> {
                 if (link.channel.getBufferedAmount() < MAX_QUEUED) {
                     frame[0] = PONG;
@@ -483,6 +542,30 @@ public final class Transport implements AutoCloseable {
             }
             default -> { }
         }
+    }
+
+    /**
+     * A viewer counts the host's probe as it comes: bytes after the first frame, over the time from it to the last.
+     * At the end it reports them, and keeps the rate as its own measure (see {@link #budgetBps}).
+     */
+    private void probed(Link link, byte[] frame) {
+        long now = System.nanoTime();
+        if (frame.length > 2) {
+            if (link.probeFirst == 0) {
+                link.probeFirst = now;
+            } else {
+                link.probeBytes += frame.length;
+            }
+            link.probeLast = now;
+            return;
+        }
+        link.probeEnded = true;
+        long nanos = link.probeLast - link.probeFirst;
+        link.sendNow(frame(PROBE_REPORT, ByteBuffer.allocate(16).putLong(link.probeBytes).putLong(nanos).array()));
+        LinkRate rate = new LinkRate();
+        rate.probed(link.probeBytes, nanos);
+        budgetBps = rate.bps();
+        listener.status(String.format(Locale.ROOT, "Measured the direct connection from the host: %.1f Mbps", budgetBps / 1e6));
     }
 
     /** Closes {@code link}, telling the player {@code reason} if any. A viewer has nothing left without its host. */
@@ -599,6 +682,10 @@ public final class Transport implements AutoCloseable {
         int queued;
         double tokens;
         long lastTick = createdAt;
+        final LinkRate rate = new LinkRate();
+        /** When it opened and when its probe answered (host); the probe as it comes in (viewer). */
+        long openedAt, probedAt, probeFirst, probeLast, probeBytes;
+        boolean probeEnded;
         String route = "direct";
 
         Link(UUID peer) {
@@ -727,6 +814,7 @@ public final class Transport implements AutoCloseable {
             RTCDataChannelState now = channel.getState();
             if (now == RTCDataChannelState.OPEN && !open) {
                 open = true;
+                openedAt = System.nanoTime();
                 listener.status("Connected directly to " + name(peer) + ".");
             } else if (now == RTCDataChannelState.CLOSED) {
                 drop(this, "The connection to " + name(peer) + " closed.");

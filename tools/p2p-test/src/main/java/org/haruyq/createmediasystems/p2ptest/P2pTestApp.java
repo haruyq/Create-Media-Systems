@@ -80,7 +80,7 @@ public final class P2pTestApp {
     private final JFrame frame;
     private final JTextField api = new JTextField(28);
     private final JPasswordField token = new JPasswordField(16);
-    private final JSpinner up = mbps(), down = mbps();
+    private final JSpinner cap = mbps();
     private final JComboBox<Source> source = new JComboBox<>();
     private final JTextField room = new JTextField(24);
     private final JButton host = new JButton("ホスト開始"), copy = new JButton("コピー"), join = new JButton("参加"),
@@ -98,7 +98,7 @@ public final class P2pTestApp {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 2 && args[0].equals("--smoke")) {
-            smoke(Path.of(args[1]), 20_000_000);
+            smoke(Path.of(args[1]), 0);
             System.exit(0);
         }
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -156,7 +156,7 @@ public final class P2pTestApp {
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         form.add(row(new JLabel("API URL"), api, new JLabel("テスト用サーバートークン"), token));
-        form.add(row(new JLabel("上り"), up, new JLabel("下り"), down, new JLabel("Mbps（手入力のテスト値。計測値ではありません）")));
+        form.add(row(new JLabel("送信上限"), cap, new JLabel("Mbps（遅い回線を試すときだけ。0なら接続ごとの測定値で送ります）")));
         form.add(row(new JLabel("送信映像"), source, host));
         form.add(row(new JLabel("ルームID"), room, copy, join, leave, ping));
 
@@ -210,7 +210,7 @@ public final class P2pTestApp {
     }
 
     private static JSpinner mbps() {
-        JSpinner spinner = new JSpinner(new SpinnerNumberModel(20.0, 0.1, 10_000.0, 1.0));
+        JSpinner spinner = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 10_000.0, 1.0));
         ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setColumns(5);
         return spinner;
     }
@@ -233,9 +233,9 @@ public final class P2pTestApp {
         stop();
         Object id = new Object();
         generation = id;
-        long upBps = Math.round((Double) up.getValue() * 1e6), downBps = Math.round((Double) down.getValue() * 1e6);
+        long capBps = Math.round((Double) cap.getValue() * 1e6);
         try {
-            Session s = new Session(api.getText().strip(), new String(token.getPassword()), roomId, upBps, downBps, listener(id));
+            Session s = new Session(api.getText().strip(), new String(token.getPassword()), roomId, capBps, listener(id));
             session = s;
             if (roomId == null) {
                 room.setText("");
@@ -331,9 +331,9 @@ public final class P2pTestApp {
             lastBytes = bytes;
             String budget = t == null ? "-" : String.format(Locale.ROOT, "%.1f Mbps", t.budgetBps() / 1e6);
             text = new String[] {(s.host() ? "ホスト: " : "視聴者: ") + s.state(), s.host()
-                    ? String.format(Locale.ROOT, "予算 %s ／ 送信に渡した量 %.2f Mbps ／ 未送出 %d KB ／ %.1f fps ／ 送信 %d フレーム ／ 間引き %d",
+                    ? String.format(Locale.ROOT, "最も遅い接続 %s ／ 送信に渡した量 %.2f Mbps ／ 未送出 %d KB ／ %.1f fps ／ 送信 %d フレーム ／ 間引き %d",
                             budget, mbps, t == null ? 0 : t.backlog() / 1024, fps, frames, s.dropped.get())
-                    : String.format(Locale.ROOT, "予算 %s ／ 受信 %.2f Mbps ／ %.1f fps ／ 表示 %d フレーム ／ 壊れたフレーム %d",
+                    : String.format(Locale.ROOT, "測定 %s ／ 受信 %.2f Mbps ／ %.1f fps ／ 表示 %d フレーム ／ 壊れたフレーム %d",
                             budget, mbps, fps, frames, s.bad.get())};
         }
         if (shown.getAndSet(text) == null) {
@@ -398,18 +398,18 @@ public final class P2pTestApp {
     }
 
     /**
-     * Without a screen or user: a host and a viewer, both saying they have {@code bps}, through a CMS-API of their
-     * own, checking that the viewer decodes changing frames no more than a second behind, then that both sessions,
+     * Without a screen or user: a host (sending at most {@code capBps} if over 0) and a viewer, through a CMS-API of
+     * their own, checking that their connection was measured, that the viewer decodes changing frames no more than a second behind, then that both sessions,
      * the room and the API end. Throws on any failure; returns how many frames the host dropped.
      */
-    static long smoke(Path apiDir, long bps) throws Exception {
+    static long smoke(Path apiDir, long capBps) throws Exception {
         LocalApi local = LocalApi.start(apiDir);
         long dropped;
         try {
             CompletableFuture<String> roomId = new CompletableFuture<>();
             Map<Long, Integer> decoded = new ConcurrentHashMap<>();
             AtomicLong latest = new AtomicLong();
-            Session host = new Session(local.url, local.token, null, bps, bps, new Session.Listener() {
+            Session host = new Session(local.url, local.token, null, capBps, new Session.Listener() {
                 @Override
                 public void room(String id) {
                     roomId.complete(id);
@@ -425,7 +425,7 @@ public final class P2pTestApp {
                     latest.set(sequence);
                 }
             });
-            Session viewer = new Session(local.url, local.token, roomId.get(30, TimeUnit.SECONDS), bps, bps,
+            Session viewer = new Session(local.url, local.token, roomId.get(30, TimeUnit.SECONDS), 0,
                     new Session.Listener() {
                         @Override
                         public void status(String message) {
@@ -442,12 +442,11 @@ public final class P2pTestApp {
             await(() -> decoded.size() >= 10 && decoded.values().stream().distinct().count() >= 5, 30, "changing frames");
             long behind = latest.get() - decoded.keySet().stream().mapToLong(Long::longValue).max().orElseThrow();
             check(behind <= Session.FPS, "the viewer is " + behind + " frames behind");
-            // floor(min(0.65 * bps / 1 viewer, 0.65 * bps))
-            check(host.transport().budgetBps() == bps * 13 / 20, "budget " + host.transport().budgetBps());
+            check(host.transport().budgetBps() > 0 && viewer.transport().budgetBps() > 0, "connection not measured");
             check(viewer.bad.get() == 0, viewer.bad.get() + " bad frames");
             dropped = host.dropped.get();
-            System.out.printf(Locale.ROOT, "smoke at %d bit/s: viewer decoded %d frames (%d distinct, %d behind), %d bytes; "
-                    + "host sent %d, dropped %d%n", bps, viewer.frames.get(), decoded.values().stream().distinct().count(),
+            System.out.printf(Locale.ROOT, "smoke capped at %d bit/s: viewer decoded %d frames (%d distinct, %d behind), %d bytes; "
+                    + "host sent %d, dropped %d%n", capBps, viewer.frames.get(), decoded.values().stream().distinct().count(),
                     behind, viewer.transport().received(), host.frames.get(), dropped);
             CompletableFuture.allOf(viewer.close(), host.close()).get(10, TimeUnit.SECONDS);
             await(() -> host.transport().state() == Transport.State.CLOSED && viewer.transport().state() == Transport.State.CLOSED
@@ -456,7 +455,7 @@ public final class P2pTestApp {
             HttpResponse<String> gone = Session.HTTP.send(HttpRequest.newBuilder(Protocol.endpoint(local.url,
                             "p2p/sessions/" + roomId.get() + "/peers", false)).header("Authorization", "Bearer " + local.token)
                     .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{\"peer_id\":\""
-                            + UUID.randomUUID() + "\",\"upload_bps\":1000000,\"download_bps\":1000000}")).build(),
+                            + UUID.randomUUID() + "\"}")).build(),
                     HttpResponse.BodyHandlers.ofString());
             check(gone.statusCode() == 404, "room still open: HTTP " + gone.statusCode());
         } catch (Exception | AssertionError e) {

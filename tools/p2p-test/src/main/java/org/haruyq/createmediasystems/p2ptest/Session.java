@@ -49,6 +49,7 @@ final class Session {
     private final String api;
     private final String token;
     private final String room;
+    private final long capBps;
     private final Listener listener;
     /** Sends (host) or decodes (viewer), one frame at a time. */
     final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(
@@ -70,11 +71,13 @@ final class Session {
     final AtomicLong frames = new AtomicLong(), sent = new AtomicLong(), dropped = new AtomicLong(), bad = new AtomicLong();
 
     /**
-     * Hosts a room (if {@code room} is null) or joins it, saying it can send and receive these test bit rates.
-     * Throws IllegalArgumentException, with what to fix, for an unusable API URL, room ID or bit rate.
+     * Hosts a room (if {@code room} is null) or joins it. A host sends frames at what its Transport measured, or at
+     * most {@code capBps} if that is over 0, to try a slower connection. Throws IllegalArgumentException, with what
+     * to fix, for an unusable API URL, room ID or cap.
      */
-    Session(String api, String token, String room, long uploadBps, long downloadBps, Listener listener) {
+    Session(String api, String token, String room, long capBps, Listener listener) {
         this.api = api;
+        this.capBps = capBps;
         this.token = token;
         this.room = room;
         this.listener = listener;
@@ -89,14 +92,12 @@ final class Session {
         if (room != null && !Protocol.SESSION_ID.matcher(room).matches()) {
             throw new IllegalArgumentException("ルームIDの形式が違います（英数字・-・_ の8〜128文字）。");
         }
-        if (!Protocol.validBps(uploadBps) || !Protocol.validBps(downloadBps)) {
-            throw new IllegalArgumentException("上り・下りのテスト値は 0 より大きくしてください。");
+        if (capBps < 0) {
+            throw new IllegalArgumentException("送信上限は 0 以上にしてください。");
         }
         UUID self = UUID.randomUUID();
         JsonObject body = new JsonObject();
         body.addProperty(room == null ? "host_id" : "peer_id", self.toString());
-        body.addProperty("upload_bps", uploadBps);
-        body.addProperty("download_bps", downloadBps);
         call("POST", room == null ? "p2p/sessions" : "p2p/sessions/" + room + "/peers", body.toString())
                 .whenComplete((response, error) -> {
                     try {
@@ -205,7 +206,7 @@ final class Session {
             long number = sequence++;
             report(image, number);
             Transport t = transport;
-            long budget = t.budgetBps();
+            long budget = capBps > 0 ? Math.min(t.budgetBps(), capBps) : t.budgetBps();
             long now = System.nanoTime();
             // At most the budget on average; a frame over it is let through, then later ones wait it out.
             allowance = Math.min(budget / 8.0 / 2, allowance + budget / 8.0 * (now - lastSend) / 1e9);
@@ -213,7 +214,7 @@ final class Session {
             if (budget <= 0 || t.connected().isEmpty()) {
                 return;
             }
-            // Nor any while a payload's worth still waits to go out: a line slower than the typed rates drops frames
+            // Nor any while a payload's worth still waits to go out: a line slower than measured drops frames
             // instead of showing ones seconds old.
             byte[] payload = allowance < 0 || t.backlog() > Transport.MAX_PAYLOAD ? null
                     : Frames.encode(image, number, (int) Math.min(Transport.MAX_PAYLOAD, budget / 8 / FPS));

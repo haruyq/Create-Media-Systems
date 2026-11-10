@@ -52,17 +52,19 @@ class DiscStreamTest {
     }
 
     @Test
-    void reducesQualityQuicklyAndRecoversGradually() {
+    void reducesQualityForASlowEncoderAndRecoversGradually() {
         DiscStream.Adaptive rate = new DiscStream.Adaptive();
         assertEquals(new DiscSource.Quality(1080, 60, 8000), DiscSource.Quality.forBudget(rate.budget(13_000_000)));
-        rate.delivered(2_000_000, 5_000_000_000L, 0);
+        rate.encoded(6_000_000_000L, 13_000_000, 0);
         long reduced = rate.budget(13_000_000);
-        assertTrue(reduced < 3_000_000);
-        assertEquals(480, DiscSource.Quality.forBudget(reduced).height());
-        for (int i = 0; i < 20; i++) rate.delivered(500_000, 1_000_000_000L, 10_000_000_000L);
-        assertEquals(reduced, rate.budget(13_000_000));
-        rate.delivered(500_000, 1_000_000_000L, 46_000_000_000L);
-        assertTrue(rate.budget(13_000_000) > reduced);
+        assertEquals(6_500_000, reduced, "encoding at half speed halves the budget");
+        assertEquals(720, DiscSource.Quality.forBudget(reduced).height());
+        for (int i = 0; i < 20; i++) rate.encoded(1_000_000_000L, reduced, 10_000_000_000L);
+        assertEquals(reduced, rate.budget(13_000_000), "held for 45 s");
+        rate.encoded(1_000_000_000L, reduced, 46_000_000_000L);
+        assertEquals(7_150_000, rate.budget(13_000_000));
+        rate.encoded(1_000_000_000L, reduced, 50_000_000_000L);
+        assertEquals(7_150_000, rate.budget(13_000_000), "then a step every 15 s");
         assertEquals(1_000_000, rate.budget(1_000_000));
     }
 

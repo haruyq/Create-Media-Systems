@@ -20,7 +20,7 @@ import com.google.gson.JsonParser;
  */
 public final class Protocol {
     public static final int VERSION = 1;
-    /** Most a peer may say it measured, in bit/s: 100 Gbps. */
+    /** Most a connection is taken to carry, in bit/s: 100 Gbps. */
     public static final long MAX_BPS = 100_000_000_000L;
     public static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9_-]{8,128}");
     private static final Pattern TOKEN = Pattern.compile("[\\x21-\\x7e]{16,512}");
@@ -45,11 +45,6 @@ public final class Protocol {
 
     private static boolean loopback(String host) {
         return host.equalsIgnoreCase("localhost") || host.matches("127(\\.\\d{1,3}){3}") || host.equals("[::1]");
-    }
-
-    /** Whether {@code bps} is a measurement a peer may report. */
-    public static boolean validBps(long bps) {
-        return bps > 0 && bps <= MAX_BPS;
     }
 
     /** A peer's own ticket to the API's signaling (see README). */

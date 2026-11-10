@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.p2p;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -31,9 +30,9 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * {@code /cms_p2p}: this client's side of direct P2P (see P2p). speedtest measures here; host, join and leave ask
- * the server, which hands back a ticket; status and ping report on the session. Game thread only, but for the
- * speedtest's own thread and the Transport's, which come back to it.
+ * {@code /cms_p2p}: this client's side of direct P2P (see P2p). host, join and leave ask the server, which hands
+ * back a ticket; status and ping report on the session, whose connections measure themselves (see LinkRate). Game
+ * thread only, but for the Transport's, which comes back to it.
  * <p>
  * Each host or join is a numbered request, and its ticket, session and leave carry that number: whatever comes
  * for a request this client no longer wants is dropped, and the server ignores a leave for one it replaced.
@@ -48,8 +47,6 @@ public final class P2pClient {
     /** The latest host or join; 0 once left. Numbers are never reused, not even on another server. */
     private static int wanted;
     private static int requests;
-    static Speedtest.Result measured;
-    private static Thread speedtest;
     /** The game thread, the server, its API, and how a ticket's session opens there; other in tests. */
     static Executor game = task -> Minecraft.getInstance().execute(task);
     static Consumer<CustomPacketPayload> server = PacketDistributor::sendToServer;
@@ -72,12 +69,7 @@ public final class P2pClient {
 
     public static void register() {
         NeoForge.EVENT_BUS.addListener(P2pClient::registerCommands);
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
-            logout();
-            if (speedtest != null) {
-                speedtest.interrupt();
-            }
-        });
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> logout());
     }
 
     /** This client's session, for what sends or receives over it; null if none. */
@@ -118,8 +110,6 @@ public final class P2pClient {
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("cms_p2p")
-                .then(Commands.literal("speedtest").executes(c -> speedtest())
-                        .then(Commands.literal("cancel").executes(c -> cancelSpeedtest())))
                 .then(Commands.literal("host").executes(c -> request(P2p.Action.HOST, "")))
                 .then(Commands.literal("join").then(Commands.argument("host", StringArgumentType.word())
                         .suggests((c, builder) -> SharedSuggestionProvider.suggest(players(), builder))
@@ -136,39 +126,6 @@ public final class P2pClient {
                 })));
     }
 
-    private static int speedtest() {
-        if (speedtest != null && speedtest.isAlive()) {
-            say(Component.translatable("create_media_systems.p2p.speedtest.busy"), true);
-            return 0;
-        }
-        String executable = ClientConfig.SPEEDTEST_PATH.get();
-        say(Component.translatable("create_media_systems.p2p.speedtest.running"), false);
-        speedtest = Thread.ofPlatform().daemon().name("CMS speedtest").start(() -> {
-            try {
-                Speedtest.Result result = Speedtest.run(executable);
-                game.execute(() -> {
-                    measured = result;
-                    say(Component.translatable("create_media_systems.p2p.speedtest.done",
-                            mbps(result.downloadBps()), mbps(result.uploadBps())), false);
-                });
-            } catch (Speedtest.Failure e) {
-                game.execute(() -> say(Component.literal(e.getMessage()), true));
-            } catch (InterruptedException e) {
-                game.execute(() -> say(Component.translatable("create_media_systems.p2p.speedtest.cancelled"), false));
-            }
-        });
-        return 1;
-    }
-
-    private static int cancelSpeedtest() {
-        if (speedtest == null || !speedtest.isAlive()) {
-            say(Component.translatable("create_media_systems.p2p.speedtest.idle"), true);
-            return 0;
-        }
-        speedtest.interrupt();
-        return 1;
-    }
-
     /**
      * Asks the server to host or join. The current session stays until the server ends it for this request, so a
      * refused one (cooldown, no such room) keeps it.
@@ -178,12 +135,8 @@ public final class P2pClient {
             say(Component.translatable("create_media_systems.p2p.no_room", host), true);
             return 0;
         }
-        if (measured == null || !measured.fresh(Instant.now())) {
-            say(Component.translatable("create_media_systems.p2p.speedtest.required"), true);
-            return 0;
-        }
         wanted = ++requests;
-        server.accept(new P2p.Request(action, wanted, host, measured.uploadBps(), measured.downloadBps()));
+        server.accept(new P2p.Request(action, wanted, host));
         say(Component.translatable("create_media_systems.p2p.requested"), false);
         return 1;
     }
@@ -193,10 +146,10 @@ public final class P2pClient {
         int open = session;
         closeTransport();
         if (open != 0) {
-            server.accept(new P2p.Request(P2p.Action.LEAVE, open, "", 0, 0));
+            server.accept(new P2p.Request(P2p.Action.LEAVE, open, ""));
         }
         if (wanted != 0 && wanted != open) {
-            server.accept(new P2p.Request(P2p.Action.LEAVE, wanted, "", 0, 0));
+            server.accept(new P2p.Request(P2p.Action.LEAVE, wanted, ""));
         }
         wanted = 0;
         say(Component.translatable("create_media_systems.p2p.left"), false);
@@ -210,9 +163,6 @@ public final class P2pClient {
     }
 
     private static int status() {
-        say(measured == null ? Component.translatable("create_media_systems.p2p.status.unmeasured")
-                : Component.translatable("create_media_systems.p2p.status.measured", mbps(measured.downloadBps()),
-                        mbps(measured.uploadBps()), (Instant.now().getEpochSecond() - measured.measuredAt().getEpochSecond()) / 60), false);
         Transport t = transport;
         say(t == null ? Component.translatable("create_media_systems.p2p.none")
                 : Component.translatable("create_media_systems.p2p.status." + (t.host() ? "host" : "viewer"),
@@ -288,7 +238,7 @@ public final class P2pClient {
         if (wanted == request) {
             wanted = 0;
         }
-        server.accept(new P2p.Request(P2p.Action.LEAVE, request, "", 0, 0));
+        server.accept(new P2p.Request(P2p.Action.LEAVE, request, ""));
     }
 
     static void notice(Component message) {

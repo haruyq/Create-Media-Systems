@@ -50,7 +50,7 @@ class P2pServerTest {
     @Test
     void hostingAgainIgnoresTheOldSessionsLeave() {
         host(1, "session_one_0000");
-        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.HOST, 2, "", 8, 8), null);
+        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.HOST, 2, ""), null);
         assertEquals(List.of("DELETE p2p/sessions/session_one_0000"), pending(), "the new room waits for the old one's DELETE");
         // The API closed the old session for that DELETE; its client says so, with the old request's number.
         P2p.leave(HOST, 1);
@@ -73,7 +73,7 @@ class P2pServerTest {
         assertEquals(List.of(), pending());
         assertEquals(2, ((P2p.Ticket) viewer.getLast()).request());
         List<CustomPacketPayload> other = new ArrayList<>();
-        P2p.request(player(UUID.randomUUID(), other), new P2p.Request(P2p.Action.JOIN, 1, "Viewer", 8, 8), VIEWER);
+        P2p.request(player(UUID.randomUUID(), other), new P2p.Request(P2p.Action.JOIN, 1, "Viewer"), VIEWER);
         assertInstanceOf(P2p.Notice.class, other.getFirst(), "a viewer hosts no room");
     }
 
@@ -97,7 +97,7 @@ class P2pServerTest {
         List<CustomPacketPayload> other = new ArrayList<>();
         host(1, "session_one_0000");
         join(1);
-        P2p.request(player(third, other), new P2p.Request(P2p.Action.JOIN, 1, "Host", 8, 8), HOST);
+        P2p.request(player(third, other), new P2p.Request(P2p.Action.JOIN, 1, "Host"), HOST);
         P2p.leave(HOST, 1);
         answer(1, 200, ticket("viewer", VIEWER, "session_one_0000"));
         answer(2, 404, "{\"detail\":\"Unknown room\"}");
@@ -127,7 +127,7 @@ class P2pServerTest {
         answer(1, 200, ticket("viewer", VIEWER, "session_one_0000"));
         assertEquals(List.of("DELETE p2p/sessions/session_one_0000/peers/" + VIEWER), pending());
         List<CustomPacketPayload> relogged = new ArrayList<>();
-        P2p.request(player(VIEWER, relogged), new P2p.Request(P2p.Action.JOIN, 1, "Host", 8, 8), HOST);
+        P2p.request(player(VIEWER, relogged), new P2p.Request(P2p.Action.JOIN, 1, "Host"), HOST);
         answer(2, 204, "");
         answer(3, 200, ticket("viewer", VIEWER, "session_one_0000"));
         assertEquals(List.of(), viewer);
@@ -149,17 +149,17 @@ class P2pServerTest {
         stopping.join(5000);
         assertEquals(List.of(), viewer);
         host.clear();
-        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.HOST, 2, "", 8, 8), null);
+        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.HOST, 2, ""), null);
         assertInstanceOf(P2p.Notice.class, host.getFirst(), "nothing opens while stopping");
     }
 
     private void host(int request, String session) {
-        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.HOST, request, "", 8, 8), null);
+        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.HOST, request, ""), null);
         answer(calls.size() - 1, 200, ticket("host", HOST, session));
     }
 
     private void join(int request) {
-        P2p.request(player(VIEWER, viewer), new P2p.Request(P2p.Action.JOIN, request, "Host", 8, 8), HOST);
+        P2p.request(player(VIEWER, viewer), new P2p.Request(P2p.Action.JOIN, request, "Host"), HOST);
     }
 
     private static P2p.Player player(UUID id, List<CustomPacketPayload> sent) {

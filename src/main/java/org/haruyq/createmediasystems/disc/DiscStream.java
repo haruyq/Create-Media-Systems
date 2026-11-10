@@ -349,7 +349,7 @@ public final class DiscStream implements AutoCloseable {
             Delivery delivery = deliveries.get(peer);
             if (delivery != null && delivery.id == request && delivery.index == index && deliveries.remove(peer, delivery)) {
                 if (index >= 0) {
-                    adaptive.delivered(delivery.bytes, System.nanoTime() - delivery.started);
+                    transport.delivered(peer, delivery.bytes, System.nanoTime() - delivery.started);
                 }
             }
         } else if (type == 1) {
@@ -529,41 +529,29 @@ public final class DiscStream implements AutoCloseable {
 
     private record Request(int id, int index) {}
 
+    /**
+     * Holds the quality down while this computer encodes segments slower than they play, and lets it back up
+     * gradually; how fast each viewer's connection is, the Transport measures (see LinkRate).
+     */
     static final class Adaptive {
         private long limit = Long.MAX_VALUE;
-        private int healthy;
         private long recoverAfter;
 
         synchronized long budget(long measured) {
             return Math.min(measured, limit);
         }
 
-        synchronized void delivered(int bytes, long nanos) {
-            delivered(bytes, nanos, System.nanoTime());
-        }
-
-        synchronized void delivered(int bytes, long nanos, long now) {
-            if (bytes == 0 || nanos <= 0) {
-                return;
-            }
-            if (nanos > 2_800_000_000L) {
-                limit = Math.max(500_000, Math.min(limit, (long) (bytes * 8e9 / nanos * 0.85)));
-                healthy = 0;
-                recoverAfter = now + 45_000_000_000L;
-            } else if (++healthy >= 12 && now >= recoverAfter) {
-                if (limit != Long.MAX_VALUE) {
-                    limit = Math.min(20_000_000, limit + Math.max(250_000, limit / 10));
-                }
-                healthy = 0;
-                recoverAfter = now + 15_000_000_000L;
-            }
-        }
-
         synchronized void encoded(long nanos, long budget) {
+            encoded(nanos, budget, System.nanoTime());
+        }
+
+        synchronized void encoded(long nanos, long budget, long now) {
             if (nanos > 3_500_000_000L) {
                 limit = Math.min(limit, Math.max(500_000, (long) (budget * 3e9 / nanos)));
-                healthy = 0;
-                recoverAfter = System.nanoTime() + 45_000_000_000L;
+                recoverAfter = now + 45_000_000_000L;
+            } else if (limit != Long.MAX_VALUE && now - recoverAfter >= 0) {
+                limit = Math.min(20_000_000, limit + Math.max(250_000, limit / 10));
+                recoverAfter = now + 15_000_000_000L;
             }
         }
     }

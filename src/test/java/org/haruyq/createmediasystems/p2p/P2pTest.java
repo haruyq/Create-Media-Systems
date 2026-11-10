@@ -69,13 +69,4 @@ class P2pTest {
         assertFalse(Transport.direct("candidate:3 1 udp 41885439 198.51.100.7 3478 typ relay raddr 203.0.113.5 rport 54321"));
         assertFalse(Transport.direct("candidate:4 1 udp 1 1.2.3.4 1"));
     }
-
-    @Test
-    void boundsMeasurements() {
-        assertTrue(Protocol.validBps(1));
-        assertTrue(Protocol.validBps(Protocol.MAX_BPS));
-        assertFalse(Protocol.validBps(0));
-        assertFalse(Protocol.validBps(-8));
-        assertFalse(Protocol.validBps(Protocol.MAX_BPS + 1));
-    }
 }

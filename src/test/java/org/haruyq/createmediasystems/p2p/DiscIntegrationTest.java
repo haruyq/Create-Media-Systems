@@ -50,8 +50,8 @@ class DiscIntegrationTest {
         try (DiscStream host = streams[0] = new DiscStream(peers[0], id, source, log::add);
              DiscStream viewer = streams[1] = new DiscStream(peers[1], id, null, log::add);
              HttpClient http = HttpClient.newHttpClient()) {
-            peers[1].signal(members(13_000_000));
-            peers[0].signal(members(13_000_000));
+            peers[1].signal(members());
+            peers[0].signal(members());
             URI remote = viewer.prepare(0);
             URI local = host.prepare(0);
             byte[] first = get(http, remote.resolve("0.ts"));
@@ -61,8 +61,10 @@ class DiscIntegrationTest {
             Files.write(file, first);
             String probe = probe(file);
             assertTrue(probe.contains("1920") && probe.contains("1080") && probe.contains("60/1") && probe.contains("ac3"), probe);
-            peers[0].signal(members(2_000_000));
-            peers[1].signal(members(2_000_000));
+            // As if the viewer's connection measured 2 Mbit/s: paced at 1.6.
+            synchronized (peers[0]) {
+                peers[0].links.get(viewerId).rate.probed(250_000, 1_000_000_000L);
+            }
             Thread.sleep(100);
             Path low = Path.of("build", "disc-low.ts");
             Files.write(low, get(http, remote.resolve("10.ts")));
@@ -106,8 +108,8 @@ class DiscIntegrationTest {
         return result;
     }
 
-    private static String members(long budget) {
-        return "{\"type\":\"peers\",\"host_id\":\"" + P2pTest.HOST + "\",\"budget_bps\":" + budget + ",\"peers\":["
+    private static String members() {
+        return "{\"type\":\"peers\",\"host_id\":\"" + P2pTest.HOST + "\",\"budget_bps\":0,\"peers\":["
                 + "{\"peer_id\":\"" + P2pTest.HOST + "\",\"role\":\"host\"},"
                 + "{\"peer_id\":\"" + P2pTest.VIEWER + "\",\"role\":\"viewer\"}]}";
     }

@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.p2p;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,7 +36,6 @@ class P2pClientTest {
             origins.add(api);
             throw new IllegalStateException("no natives here");
         };
-        P2pClient.measured = new Speedtest.Result(8_000_000, 8_000_000, Instant.now());
         P2pClient.logout();
     }
 

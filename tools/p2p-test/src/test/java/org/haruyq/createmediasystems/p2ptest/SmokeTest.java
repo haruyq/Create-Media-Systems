@@ -30,10 +30,10 @@ class SmokeTest {
 
     @Test
     void aViewerDecodesChangingFramesAndEverythingEnds() throws Exception {
-        P2pTestApp.smoke(API, 20_000_000);
+        P2pTestApp.smoke(API, 0);
     }
 
-    /** At 0.3 Mbps typed in, the 640×360 frames are over the budget: the host drops some, and the viewer stays current. */
+    /** Capped at 0.3 Mbps, the 640×360 frames are over it: the host drops some, and the viewer stays current. */
     @Test
     void aLowBudgetDropsFramesRatherThanFallingBehind() throws Exception {
         assertTrue(P2pTestApp.smoke(API, 300_000) > 0, "no frame dropped");

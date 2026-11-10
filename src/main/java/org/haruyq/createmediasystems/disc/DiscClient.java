@@ -164,7 +164,7 @@ public final class DiscClient {
         mc.execute(() -> joined.complete(request == generation && P2pClient.connect(url.owner())));
         try {
             if (!joined.get(10, TimeUnit.SECONDS)) {
-                throw new IOException("Run /cms_p2p speedtest before joining a disc stream");
+                throw new IOException("Could not join the disc host's P2P session");
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();

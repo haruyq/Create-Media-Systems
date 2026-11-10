@@ -132,10 +132,6 @@ public final class P2p {
             notice(player, Component.translatable("create_media_systems.p2p.disabled"));
             return;
         }
-        if (!Protocol.validBps(request.uploadBps()) || !Protocol.validBps(request.downloadBps())) {
-            notice(player, Component.translatable("create_media_systems.p2p.speedtest.required"));
-            return;
-        }
         ServerPlayer host = request.action() == Action.JOIN ? player.server.getPlayerList().getPlayerByName(request.host()) : null;
         if (request.action() == Action.JOIN && host == null) {
             notice(player, Component.translatable("create_media_systems.p2p.no_room", request.host()));
@@ -158,8 +154,6 @@ public final class P2p {
             MEMBERS.put(player.id(), member);
             JsonObject body = new JsonObject();
             body.addProperty(room == null ? "host_id" : "peer_id", player.id().toString());
-            body.addProperty("upload_bps", request.uploadBps());
-            body.addProperty("download_bps", request.downloadBps());
             String path = room == null ? "p2p/sessions" : "p2p/sessions/" + room.id() + "/peers";
             then(player.id(), () -> api.call("POST", path, body).handle((answer, error) -> {
                 synchronized (LOCK) {
@@ -350,17 +344,15 @@ public final class P2p {
     }
 
     /**
-     * Client → server: request {@code id} (numbered by the client) to host a room or join {@code host}'s, with this
-     * client's measured bit rates; or to leave what request {@code id} got.
+     * Client → server: request {@code id} (numbered by the client) to host a room or join {@code host}'s; or to leave
+     * what request {@code id} got.
      */
-    public record Request(Action action, int id, String host, long uploadBps, long downloadBps) implements CustomPacketPayload {
+    public record Request(Action action, int id, String host) implements CustomPacketPayload {
         public static final Type<Request> TYPE = new Type<>(CreateMediaSystems.id("p2p_request"));
         static final StreamCodec<ByteBuf, Request> CODEC = StreamCodec.composite(
                 ByteBufCodecs.idMapper(i -> Action.values()[Math.floorMod(i, Action.values().length)], Action::ordinal), Request::action,
                 ByteBufCodecs.VAR_INT, Request::id,
                 ByteBufCodecs.stringUtf8(16), Request::host,
-                ByteBufCodecs.VAR_LONG, Request::uploadBps,
-                ByteBufCodecs.VAR_LONG, Request::downloadBps,
                 Request::new);
 
         @Override

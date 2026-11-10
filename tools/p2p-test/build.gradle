@@ -16,7 +16,8 @@ def webrtcVersion = modProperties.getProperty('webrtc_version')
 // The mod's Transport and the Minecraft-free files it needs, compiled as they are.
 def sharedSources = tasks.register('sharedSources', Sync) {
     from('../../src/main/java') {
-        include 'org/haruyq/createmediasystems/p2p/Transport.java', 'org/haruyq/createmediasystems/p2p/Protocol.java',
+        include 'org/haruyq/createmediasystems/p2p/Transport.java', 'org/haruyq/createmediasystems/p2p/LinkRate.java',
+                'org/haruyq/createmediasystems/p2p/Protocol.java',
                 'org/haruyq/createmediasystems/stream/UrlPolicy.java'
     }
     into layout.buildDirectory.dir('generated/shared')
