@@ -24,6 +24,9 @@ config="${mod_id}.lighting.mixins.json"
 [[mixins]]
 config="${mod_id}.playback.mixins.json"
 
+[[mixins]]
+config="${mod_id}.launcher.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
