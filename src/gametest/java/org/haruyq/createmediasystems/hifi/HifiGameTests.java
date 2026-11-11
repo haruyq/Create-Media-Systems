@@ -106,7 +106,7 @@ public class HifiGameTests {
         stack.press(player, Control.DOOR_1, 0);
         stack.press(player, Control.PLAY_1, 0);
         helper.assertTrue(stack.deck().playingDeck() == 0, "deck I plays");
-        helper.runAfterDelay(5, () -> {
+        helper.runAfterDelay(HifiStackBlock.WARM_UP + 5, () -> {
             helper.assertTrue(stack.nowPlaying() != null, "the tape is heard");
             stack.press(player, Control.FORWARD_1, 0);
             helper.runAfterDelay(4, () -> {
@@ -146,7 +146,7 @@ public class HifiGameTests {
         hold(player, tape);
         stack.press(player, Control.DOOR_1, 0);
         stack.press(player, Control.PLAY_1, 0);
-        helper.runAfterDelay(5, () -> {
+        helper.runAfterDelay(HifiStackBlock.WARM_UP + 5, () -> {
             long tapeLoad = Streams.loadId(stack);
             helper.assertTrue(tapeLoad != 0 && Streams.playing(stack) != null, "the tape is heard");
             ItemStack disc = new ItemStack(HifiFeature.CD.get());
