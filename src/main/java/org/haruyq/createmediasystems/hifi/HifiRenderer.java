@@ -47,12 +47,6 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
-/**
- * Draws a hi-fi stack unit by unit, as its units are stacked: each a dark metal box with its controls where Control
- * has them, its legends, and what moves and lights up on it (knobs, the disc tray, a tape's reels, lamps, the
- * fluorescent displays with the spectrum and level meters of what plays here), and on the back its sockets and the
- * cables plugged into them. A unit's item is drawn the same way, alone.
- */
 public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.Entity> {
     static final RenderType METAL = RenderType.entityCutoutNoCull(CreateMediaSystems.id("textures/block/hifi_metal.png"));
     /** How near (blocks) the camera is for legends and display text to be drawn. */
@@ -76,7 +70,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
     private static final int MIDDLE = 1;
     private static final int RIGHT = 2;
 
-    /** What each stack's meters show, falling back slowly from what was last heard. */
     private static final Map<HifiStackBlock.Entity, Meters> METERS = new WeakHashMap<>();
 
     public static void register(IEventBus modBus) {
@@ -108,7 +101,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                 METERS.computeIfAbsent(stack, key -> new Meters()).update(stack));
     }
 
-    /** The meters' levels as shown: up at once, down at a steady fall, each band's peak held a little longer. */
     private static final class Meters {
         final float[] bands = new float[Spectrum.BANDS];
         final float[] peaks = new float[Spectrum.BANDS];
@@ -266,7 +258,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         pen.text(9.77f, 2.02f, 0.07f, 0.16f, "STATION", FAINT, false, MIDDLE, 3);
     }
 
-    /** A link's host, as a station's name. */
     private static String host(String link) {
         int from = link.indexOf("://");
         String host = from < 0 ? link : link.substring(from + 3);
@@ -282,7 +273,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         legend(pen, Unit.DISC_PLAYER, "DISC PLAYER", 2.3f);
         float out = (player.lastTrayOut + (player.trayOut - player.lastTrayOut) * partialTick) * 5.2f;
         Control tray = Control.TRAY;
-        // The tray's front, and the drawer behind it as it comes out with the disc.
         pen.box(tray.left, tray.bottom, 0.06f + out, tray.right, tray.top, 0.2f + out, 0x3E3E44);
         pen.text(tray.left + 0.2f, tray.bottom + 0.12f, 0.21f + out, 0.17f, "DISC", FAINT, false, LEFT, 2);
         if (out > 0.05f) {
@@ -336,7 +326,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             if (!decks.tape(deck).isEmpty()) {
                 float x = door.centerX();
                 float y = door.bottom + 0.5f;
-                // The cassette behind the window: its shell, its label, and the two reels showing through it.
                 pen.box(x - 1.6f, y, 0.15f, x + 1.6f, y + 1.1f, 0.2f, 0x4A4A50);
                 pen.box(x - 1.4f, y + 0.72f, 0.2f, x + 1.4f, y + 1.02f, 0.215f, 0xD8D2C0);
                 pen.glow(x - 1.05f, y + 0.18f, x + 1.05f, y + 0.62f, 0.205f, 0x100D0A);
@@ -363,7 +352,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                     + HifiStackBlock.Entity.clock(decks.ticks(deck));
             pen.text(deck == 0 ? 1.05f : 8.15f, 1.3f, 0.09f, 0.3f, counter, CYAN, true, LEFT, 2.8f);
         }
-        // What the tape puts out, a row per channel.
         boolean tape = stack.amplifier().input == HifiStackBlock.Input.TAPE && decks.playingDeck() >= 0;
         for (int channel = 0; channel < 2; channel++) {
             int lit = tape ? Math.round((channel == 0 ? meters.left : meters.right) * 14) : 0;
@@ -376,14 +364,12 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         }
     }
 
-    /** The maker, what it is and its model number, at the left of a unit's front; the maker's name at {@code y}. */
     private static void legend(Pen pen, Unit unit, String kind, float y) {
         pen.text(0.4f, y, 0.07f, 0.32f, Unit.BRAND, LEGEND, false, LEFT, 2.3f);
         pen.text(0.4f, y - 0.3f, 0.07f, 0.16f, kind, FAINT, false, LEFT, 2.3f);
         pen.text(0.4f, y - 0.6f, 0.07f, 0.2f, unit.model, FAINT, false, LEFT, 2.3f);
     }
 
-    /** A unit's back: its rating plate, and its sockets with the plugs in them. */
     private static void back(Pen pen, HifiStackBlock.Entity stack, Unit unit) {
         float plate = unit == Unit.AMPLIFIER ? 2.2f : 0.55f;
         float left = unit == Unit.AMPLIFIER ? 4.6f : 7.4f;
@@ -396,7 +382,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             }
             float middle = control.centerY();
             if (control.kind == Control.Kind.TERMINAL) {
-                // A sprung clip for each of a speaker cable's two wires.
                 pen.box(control.left, control.bottom, 0, control.right, control.top, 0.25f, 0x1A1A1C);
                 pen.box(control.left + 0.12f, middle + 0.06f, 0.25f, control.right - 0.12f, control.top - 0.12f, 0.5f, 0xC23A32);
                 pen.box(control.left + 0.12f, control.bottom + 0.12f, 0.25f, control.right - 0.12f, middle - 0.06f, 0.5f, 0x101012);
@@ -410,7 +395,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                 pen.text(control.centerX(), control.top + 0.08f, 0.01f, 0.18f, unit == Unit.AMPLIFIER ? "DISC IN" : "LINE OUT",
                         LEGEND, false, MIDDLE, 1.9f);
             } else if (control.cable != null) {
-                // A flat cable's socket, in its cable's colour.
                 pen.box(control.left, control.bottom, 0, control.right, control.top, 0.12f, control.cable.color);
                 pen.glow(control.left + 0.15f, control.bottom + 0.14f, control.right - 0.15f, control.top - 0.14f, 0.125f, 0x050506);
                 if (stack.wired(control.cable)) {
@@ -425,7 +409,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         }
     }
 
-    /** The cables between the stack's units, hanging behind it one outside the other. */
     private static void cables(Pen pen, HifiStackBlock.Entity stack) {
         List<Unit> units = stack.units();
         int amplifier = units.indexOf(Unit.AMPLIFIER);
@@ -473,7 +456,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             ink = new QuadOutput(buffers, QuadOutput.FLAT);
         }
 
-        /** A lit quad through four corners, facing ({@code nx}, {@code ny}, {@code nz}). */
         private void quad(float x0, float y0, float z0, float x1, float y1, float z1, float x2, float y2, float z2,
                           float x3, float y3, float z3, float nx, float ny, float nz, int color) {
             at.transformDirection(nx, ny, nz, normal).normalize();
@@ -538,7 +520,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             at = face;
         }
 
-        /** A disc lying flat, its middle at ({@code x}, {@code y}, {@code z}). */
         void disc(float x, float y, float z, float radius, int color) {
             Matrix4f face = at;
             float side = radius * 0.71f;
@@ -551,7 +532,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             at = face;
         }
 
-        /** A tape reel's six teeth, turned {@code degrees}. */
         void reel(float x, float y, float z, float radius, float degrees) {
             Matrix4f face = at;
             for (int tooth = 0; tooth < 3; tooth++) {
@@ -561,7 +541,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             at = face;
         }
 
-        /** A frame round {@code control}, {@code z} out of the face. */
         void outline(Control control, float z) {
             float edge = 0.06f;
             glow(control.left - edge, control.bottom - edge, control.right + edge, control.bottom, z, HOVER);
@@ -582,7 +561,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         }
     }
 
-    /** A unit's item: the unit alone, in the middle of its block, its front where a block's is. */
     private static final class UnitItems extends BlockEntityWithoutLevelRenderer {
         private final Map<Unit, HifiStackBlock.Entity> stacks = new EnumMap<>(Unit.class);
         private final Meters still = new Meters();
@@ -610,7 +588,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         }
     }
 
-    /** A hi-fi speaker's cable, hanging from its back to its amplifier's terminal. */
     private static final class SpeakerCable implements BlockEntityRenderer<HifiSpeakerBlock.Entity> {
         private static final int SEGMENTS = 14;
         private static final float HALF = 0.012f;
@@ -656,7 +633,6 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             }
         }
 
-        /** A flat strip from {@code a} to {@code b}, {@code across} wide either way, facing {@code facing}. */
         private static void strip(VertexConsumer out, Matrix4f pose, Vec3 a, Vec3 b, Vec3 across, Vec3 facing, int light) {
             Vector3f normal = pose.transformDirection((float) facing.x, (float) facing.y, (float) facing.z, new Vector3f()).normalize();
             Vec3[] corners = {a.subtract(across), a.add(across), b.add(across), b.subtract(across)};

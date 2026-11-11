@@ -49,7 +49,6 @@ public final class VideoCache {
     private final Path dir;
     private final LongSupplier maxBytes;
     private final Set<String> queued = ConcurrentHashMap.newKeySet();
-    /** The downloads under way, by name (see Download). */
     private final Map<String, Download> downloading = new ConcurrentHashMap<>();
 
     VideoCache(Path dir, LongSupplier maxBytes) {
@@ -57,7 +56,6 @@ public final class VideoCache {
         this.maxBytes = maxBytes;
     }
 
-    /** The game's cache, sized by the client config. */
     /**
      * For dev harnesses: keeps {@code video} as {@code page}'s, at most {@code maxHeight} tall and {@code seconds} long,
      * as if it had been downloaded, and checks it can be read back.

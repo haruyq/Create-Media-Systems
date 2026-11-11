@@ -62,7 +62,6 @@ public final class DiscStream implements AutoCloseable {
     private volatile boolean closed;
     private Pending pending;
     private volatile String codec;
-    /** For {@link #stats}: see there. */
     private volatile int waitingIndex, lastIndex = -1, lastEncoded = -1, failures;
     private volatile long waitingSince, lastBytes, lastNanos;
     private volatile String lastError, lastQuality;
@@ -381,7 +380,6 @@ public final class DiscStream implements AutoCloseable {
         }
     }
 
-    /** Hands {@code index}'s segment to whoever waits for it, and makes room for it among those kept. */
     private synchronized void keep(int index, byte[] bytes, CompletableFuture<byte[]> result) throws IOException {
         if (closed) {
             throw new IOException("Disc stream was closed");

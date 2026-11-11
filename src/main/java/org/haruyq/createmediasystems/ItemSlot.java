@@ -91,7 +91,6 @@ public final class ItemSlot {
         stack = ItemStack.parseOptional(registries, tag.getCompound(key));
     }
 
-    /** A right-click with {@code held}: one that fits goes in (or swaps); anything else is left to the block. */
     public static ItemInteractionResult useItemOn(ItemStack held, Level level, BlockPos pos, Player player,
                                                   InteractionHand hand) {
         if (!(level.getBlockEntity(pos) instanceof Holder holder) || !holder.slot().fits(held)) {
@@ -101,7 +100,6 @@ public final class ItemSlot {
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
     }
 
-    /** A right-click with an item it left to the block, or none: it gives its item back. */
     public static InteractionResult useWithoutItem(Level level, BlockPos pos, Player player) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Holder holder && !holder.slot().isEmpty()) {
             player.getInventory().placeItemBackInInventory(holder.slot().get());

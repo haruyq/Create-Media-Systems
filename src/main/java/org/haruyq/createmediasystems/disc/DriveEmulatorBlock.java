@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.video;
+package org.haruyq.createmediasystems.disc;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -7,8 +7,6 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.disc.DriveClient;
-import org.haruyq.createmediasystems.disc.DriveScreen;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaKind;
@@ -61,13 +59,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 /**
  * The disc drive of a real computer, beside what plays its disc: the Blu-ray or DVD in the drive of whoever uses it
  * is a Blu-ray player's disc, and the audio CD a disc reader's, while those hold no disc of their own. Their client
- * reads the disc and shares it directly (see DriveClient). Right-click for the drive, which opens and closes as the
- * real one does, for everyone who looks (see DriveScreen); goggles show how well each viewer's connection holds up.
+ * reads the disc and shares it directly (see DriveClient).
  */
 public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
         SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<DriveEmulatorBlock> CODEC = simpleCodec(DriveEmulatorBlock::new);
-    /** Its lamp: lit while a disc is in. */
     public static final BooleanProperty LIT = BlockStateProperties.LIT;
 
     public DriveEmulatorBlock(Properties properties) {
@@ -115,10 +111,9 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return type != VideoFeature.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+        return type != DiscFeature.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    /** The drive beside {@code pos}, with a disc in it if any has; null for none. */
     @Nullable
     public static Entity beside(@Nullable BlockGetter level, BlockPos pos) {
         Entity found = null;
@@ -187,7 +182,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         }
     }
 
-    /** How well a viewer's connection holds up. */
     public enum Stability {
         CONNECTING(ChatFormatting.GRAY), POOR(ChatFormatting.RED), UNSTABLE(ChatFormatting.YELLOW), STABLE(ChatFormatting.GREEN);
 
@@ -212,7 +206,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         /** Round trips (ms) from which a connection is unstable, and poor. Tuning knobs. */
         static final int SLOW_RTT = 150, POOR_RTT = 300;
 
-        /** Stable while it keeps up the rate {@code disc} needs with a short round trip; poor at half that rate. */
         public Stability stability(Disc disc) {
             return !measured ? Stability.CONNECTING
                     : kbps < disc.kbps / 2 || rttMillis >= POOR_RTT ? Stability.POOR
@@ -288,9 +281,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         private String label = "";
         /** The disc as shared (see DiscUrl), once it is ready. */
         private String link = "";
-        /** Why reading it failed. */
         private String error = "";
-        /** Whether the disc turns: as it is read, and while what it is beside plays it. For its sound and lamp. */
         private boolean spinning;
         /** Whether what it is beside has its disc but still loads it: shared, yet nothing of it is seen or heard so far. */
         private boolean starting;
@@ -299,7 +290,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         private List<String> viewerNames = List.of();
 
         public Entity(BlockPos pos, BlockState state) {
-            super(VideoFeature.DRIVE_EMULATOR_ENTITY.get(), pos, state);
+            super(DiscFeature.DRIVE_EMULATOR_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -342,19 +333,16 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             return spinning;
         }
 
-        /** What the disc in it is called: its label and kind. */
         public String discName() {
             return label.isEmpty() ? disc.name : label + " (" + disc.name + ")";
         }
 
-        /** Its drive's state, as its screen and goggles say it: still loading until its shared disc plays. */
         public Component status() {
             Drive shown = drive == Drive.READY && starting ? Drive.LOADING : drive;
             return Component.translatable("create_media_systems.drive." + shown.name().toLowerCase(Locale.ROOT))
                     .withStyle(shown.color);
         }
 
-        /** Whether what plays a disc of kind {@code kind} is beside it (see DiscDrive.Fed). */
         public boolean feeds(Disc kind) {
             for (Direction side : Direction.values()) {
                 if (level != null && level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed
@@ -365,7 +353,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             return false;
         }
 
-        /** Whether what plays any disc a drive takes is beside it. */
         public boolean feedsAny() {
             for (Disc kind : Disc.values()) {
                 if (feeds(kind)) {
@@ -406,15 +393,14 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             host = next == Drive.OPEN ? null : player.getUUID();
             hostName = player.getGameProfile().getName();
             if (wasOpen || next == Drive.OPEN) {
-                sound(next == Drive.OPEN ? VideoFeature.DRIVE_TRAY_OPEN.get() : VideoFeature.DRIVE_TRAY.get());
+                sound(next == Drive.OPEN ? DiscFeature.DRIVE_TRAY_OPEN.get() : DiscFeature.DRIVE_TRAY.get());
             }
             if (next == Drive.READING) {
-                sound(VideoFeature.DRIVE_SEEK.get());
+                sound(DiscFeature.DRIVE_SEEK.get());
             }
             changed(player);
         }
 
-        /** The viewers of its disc, from its host's client. */
         void viewers(ServerPlayer player, List<Viewer> told) {
             if (!player.getUUID().equals(host) || drive != Drive.READY || told.equals(viewers)) {
                 return;
@@ -433,7 +419,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             sendData();
         }
 
-        /** Open again, its disc gone with its player or the block. */
         void release() {
             if (drive != Drive.OPEN) {
                 drive = Drive.OPEN;
@@ -448,7 +433,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             level.playSound(null, worldPosition, sound, SoundSource.BLOCKS, 0.5f, 1);
         }
 
-        /** Its drive changed: clients are told, its lamp follows, and what is beside it plays the disc, or stops. */
         private void changed(@Nullable Player by) {
             if (drive != Drive.READY) {
                 viewers = List.of();
@@ -490,7 +474,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             turn();
         }
 
-        /** Tells clients whether its disc turns now, and whether what plays it still loads it. */
         private void turn() {
             BlockEntity player = drive == Drive.READY ? player() : null;
             boolean turns = drive == Drive.LOADING || drive == Drive.READING || drive == Drive.DOWNLOADING || player != null;
@@ -502,7 +485,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             }
         }
 
-        /** What beside it plays its disc now; null for nothing. */
         @Nullable
         private BlockEntity player() {
             for (Direction side : Direction.values()) {
@@ -516,7 +498,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             return null;
         }
 
-        /** What goggles on the Blu-ray player beside it say of it: its state, and its disc and whose it is. */
         public void describe(List<Component> tooltip) {
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.drive.drive", status()))
                     .withStyle(ChatFormatting.GRAY));
@@ -533,7 +514,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             }
         }
 
-        /** Its own goggles: how well each viewer's connection to its host holds up, their round trip and rate. */
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));

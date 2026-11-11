@@ -115,7 +115,7 @@ public final class LightingPackets {
     public enum Control {
         GROUP(0, "group", Press.SELECT,
                 (s, g, i, step, fine) -> Math.floorMod(s.selectedGroup + step, LightingSettings.GROUPS),
-                view -> LightingText.message("select").withColor(LightingText.MUTED),
+                view -> LightingText.message(LightingText.MUTED, "select"),
                 (console, s, g, change, value, player) -> set(() -> s.selectedGroup = value)),
         BRIGHTNESS(1, "brightness", Press.DRAG,
                 (s, g, i, step, fine) -> s.groups[i].brightness + step * LightingSettings.BRIGHTNESS.step(),
@@ -229,7 +229,8 @@ public final class LightingPackets {
                 }),
         /** Index: the preset's slot; value: a PresetAction. */
         PRESET(20, "preset", Press.PRESET, null,
-                view -> LightingText.message(view.saving() ? "preset_save_help" : "preset_help",
+                view -> LightingText.message(view.saving() ? LightingText.WARNING : LightingText.TEXT,
+                        view.saving() ? "preset_save_help" : "preset_help",
                         LightingText.presetName(view.console(), view.index(), view.customPresets())),
                 (console, s, g, change, value, player) -> {
                     int slot = change.index;
@@ -308,7 +309,6 @@ public final class LightingPackets {
             this.apply = apply;
         }
 
-        /** The control with wire id {@code id}; null if there is none. */
         @Nullable
         public static Control byId(int id) {
             return id >= 0 && id < BY_ID.length ? BY_ID[id] : null;

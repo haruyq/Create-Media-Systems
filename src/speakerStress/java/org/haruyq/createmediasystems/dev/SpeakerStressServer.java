@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
@@ -117,8 +118,8 @@ public final class SpeakerStressServer {
         readerDisc.set(AudioFeature.URL.get(), url("reader"));
         ((DiscReaderBlock.Entity) level.getBlockEntity(DISC_READER)).insert(readerDisc, null);
 
-        ItemStack bluRay = new ItemStack(VideoFeature.BLU_RAY.get());
-        bluRay.set(VideoFeature.PLAYLIST.get(), List.of(url("bluray")));
+        ItemStack bluRay = new ItemStack(DiscFeature.BLU_RAY.get());
+        bluRay.set(DiscFeature.PLAYLIST.get(), List.of(url("bluray")));
         ((VideoPlayerBlock.Entity) level.getBlockEntity(BLU_RAY)).insert(bluRay, null);
     }
 

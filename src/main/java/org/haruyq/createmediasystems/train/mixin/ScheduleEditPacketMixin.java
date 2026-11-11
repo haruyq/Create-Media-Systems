@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.mixin;
+package org.haruyq.createmediasystems.train.mixin;
 
 import org.haruyq.createmediasystems.train.TrainFeature;
 

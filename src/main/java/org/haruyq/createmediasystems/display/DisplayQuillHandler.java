@@ -45,7 +45,6 @@ final class DisplayQuillHandler {
         Quill.listen(DisplayQuillHandler::tick, DisplayQuillHandler::mouseScrolled, DisplayQuillHandler::onRightClick);
     }
 
-    /** The display or image viewer at {@code pos}; null for neither. */
     @Nullable
     private static ScreenEntity screen(@Nullable BlockPos pos) {
         var level = Minecraft.getInstance().level;

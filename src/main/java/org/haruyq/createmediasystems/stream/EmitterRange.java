@@ -39,7 +39,6 @@ public record EmitterRange(Optional<BoundingBox> area, float volume) {
         volume = Mth.clamp(volume, 0, 1);
     }
 
-    /** The default range at {@code volume}. */
     public static EmitterRange at(float volume) {
         return new EmitterRange(Optional.empty(), volume);
     }
@@ -63,7 +62,6 @@ public record EmitterRange(Optional<BoundingBox> area, float volume) {
                 .orElseGet(() -> listener.distanceTo(origin) <= DEFAULT_RANGE + margin);
     }
 
-    /** Linear falloff from {@code volume} at {@code origin} to silence at the farthest point of the range. */
     public float gain(BlockPos emitter, Vec3 origin, Vec3 listener) {
         double reach = areaAt(emitter).map(box -> farthestCorner(origin, box)).orElse(DEFAULT_RANGE);
         return volume * (float) Mth.clamp(1 - listener.distanceTo(origin) / Math.max(reach, 1), 0, 1);

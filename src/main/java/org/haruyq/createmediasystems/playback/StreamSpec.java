@@ -114,7 +114,6 @@ public record StreamSpec(String track, double startSeconds, Streams.Channel chan
         return ApiHttp.streamUrl(apiBase, track, 0, channel.api);
     }
 
-    /** {@code opened} through its decorators. */
     AudioStream decorate(AudioStream opened) {
         for (UnaryOperator<AudioStream> decorator : decorators) {
             opened = decorator.apply(opened);

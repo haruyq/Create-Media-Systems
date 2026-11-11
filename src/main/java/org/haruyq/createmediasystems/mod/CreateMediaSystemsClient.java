@@ -1,14 +1,14 @@
 package org.haruyq.createmediasystems.mod;
 
-import org.haruyq.createmediasystems.client.PointLights;
-import org.haruyq.createmediasystems.power.client.BatteryRenderer;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.AudioClient;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
+import org.haruyq.createmediasystems.client.PointLights;
 import org.haruyq.createmediasystems.client.ScreenLight;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.display.DisplayClient;
 import org.haruyq.createmediasystems.hifi.HifiClient;
@@ -19,6 +19,7 @@ import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.partybox.client.PartyBoxClient;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
+import org.haruyq.createmediasystems.power.client.BatteryRenderer;
 import org.haruyq.createmediasystems.train.TrainClient;
 import org.haruyq.createmediasystems.video.VideoClient;
 
@@ -32,7 +33,6 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 
-/** The mod on a client: each feature's client part, then the client config they add to, and their Ponder scenes. */
 @Mod(value = CreateMediaSystems.MOD_ID, dist = Dist.CLIENT)
 public final class CreateMediaSystemsClient {
     /** In the order their listeners are added, which is the order they hear an event in. */
@@ -45,6 +45,7 @@ public final class CreateMediaSystemsClient {
         FEATURES.forEach(feature -> feature.register(modBus));
         ClientConfig.register(container);
         ScreenLight.register();
+        WorldEvents.register();
         PointLights.register(modBus);
         modBus.addListener((FMLClientSetupEvent event) -> PonderIndex.addPlugin(new PonderPlugin() {
             @Override

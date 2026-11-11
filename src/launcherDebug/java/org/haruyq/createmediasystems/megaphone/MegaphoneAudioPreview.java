@@ -5,7 +5,7 @@ import java.nio.*;
 import java.nio.file.*;
 import javax.sound.sampled.*;
 import net.minecraft.client.sounds.AudioStream;
-import org.haruyq.createmediasystems.playback.MegaphoneAudioStream;
+import org.haruyq.createmediasystems.megaphone.client.MegaphoneAudioStream;
 
 /** Offline preview using the exact shipped DSP, not an approximation in an external audio editor. */
 public final class MegaphoneAudioPreview {

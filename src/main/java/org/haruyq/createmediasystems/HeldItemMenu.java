@@ -13,21 +13,14 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * A menu of the item a player holds, opened from that item: the held stack stays locked in its inventory slot (no
- * pickup, placement, shift-move or hotbar swap onto it) and the menu is valid only while that same stack is there.
- */
 public abstract class HeldItemMenu extends AbstractContainerMenu {
-    /** The inventory slot of the off hand. */
     private static final int OFFHAND = 40;
     protected final Inventory inventory;
     /** The inventory slot the item is held in. */
     protected final int held;
-    /** The held stack, as the menu opened on it. */
     protected final ItemStack item;
     private final Class<? extends Item> kind;
 
-    /** Makes a menu of the stack in inventory slot {@code held}, {@code menuId} its container id. */
     @FunctionalInterface
     public interface Factory {
         AbstractContainerMenu create(int menuId, Inventory inventory, int held);
@@ -41,14 +34,12 @@ public abstract class HeldItemMenu extends AbstractContainerMenu {
         this.kind = kind;
     }
 
-    /** Opens {@code factory}'s menu of the item in {@code player}'s {@code hand}, titled with its name. */
     public static void open(ServerPlayer player, InteractionHand hand, Factory factory) {
         int slot = hand == InteractionHand.MAIN_HAND ? player.getInventory().selected : OFFHAND;
         player.openMenu(new SimpleMenuProvider((id, inventory, owner) -> factory.create(id, inventory, slot),
                 player.getItemInHand(hand).getHoverName()), buf -> buf.writeVarInt(slot));
     }
 
-    /** Adds the player's main inventory with its top-left slot at (x, y), and the hotbar below it. */
     protected void addPlayerSlots(int x, int y) {
         for (int row = 0; row < 3; row++) for (int col = 0; col < 9; col++)
             addPlayerSlot(col + row * 9 + 9, x + col * 18, y + row * 18);

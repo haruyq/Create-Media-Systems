@@ -13,7 +13,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 public final class PartyBoxRenderer extends EntityRenderer<PartyBoxEntity> {
-    /** A playing box's light show lights what is around it. */
     static final PointLights.Source LIGHTS = (view, lights) -> {
         double time = (view.level().getGameTime() + (double) view.partial()) / 20.0;
         for (var entity : view.entities()) {

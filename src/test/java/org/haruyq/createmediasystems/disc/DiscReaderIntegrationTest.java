@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.disc;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -41,15 +42,14 @@ class DiscReaderIntegrationTest {
         byte[] segment = source.encode(1, new DiscSource.Quality(480, 30, 1100), source.encoder());
         byte[] actual = DiscSource.run(List.of("ffmpeg", "-v", "error", "-f", "mpegts", "-i", "pipe:0", "-ss", "0.5",
                 "-frames:v", "1", "-vf", "scale=160:90,format=gray", "-f", "rawvideo", "pipe:1"), segment, 160 * 90, 10);
-        Files.write(Path.of("build", "disc-boundary.gray"), actual);
-        Files.write(Path.of("build", "disc-boundary.ts"), segment);
         double expected = difference(actual, frame(original, 10.7)), wrong = difference(actual, frame(original, 5.5));
         assertTrue(expected < wrong / 3, "After the clip boundary, playback uses the next clip's in-point: " + expected + "/" + wrong);
     }
 
+    /** Needs only FFmpeg on the PATH. */
     @Test
-    @EnabledIfEnvironmentVariable(named = "CMS_DISC_SHORT_FIXTURE", matches = ".+")
     void stopsAnEncoderThatDoesNotFinish() {
+        assumeTrue(onPath("ffmpeg"), "FFmpeg is not on the PATH");
         assertTimeoutPreemptively(java.time.Duration.ofSeconds(6), () ->
                 assertThrows(IOException.class, () -> DiscSource.run(List.of("ffmpeg", "-v", "error", "-nostdin",
                         "-re", "-f", "lavfi", "-i", "color=s=32x32", "-f", "null", "-"), 1024, 1)));
@@ -100,6 +100,18 @@ class DiscReaderIntegrationTest {
             assertEquals(-1, run.ahead(3, new DiscSource.Quality(720, 30, 2500), "libx264"));
             DiscSource.Quality same = new DiscSource.Quality(480, 30, 1100);
             assertEquals(-1, run.ahead(2, same, "libx264"), "behind it, only a new pass gets there");
+        }
+    }
+
+    private static boolean onPath(String tool) {
+        try {
+            return new ProcessBuilder(tool, "-version").redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor() == 0;
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 

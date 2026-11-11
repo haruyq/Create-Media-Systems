@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.mixin;
+package org.haruyq.createmediasystems.audio.mixin;
 
 import org.haruyq.createmediasystems.audio.NoteBlockSounds;
 

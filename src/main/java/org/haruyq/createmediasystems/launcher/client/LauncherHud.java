@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.launcher.client;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.*;
+import org.haruyq.createmediasystems.launcher.mixin.GameRendererAccessor;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -18,7 +19,6 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
 
-/** A compact angled weapon card: original vector weapon art, actual installed rounds, capacity and spare cells. */
 public final class LauncherHud {
     private static final ResourceLocation LAYER=CreateMediaSystems.id("launcher_hud");
     private static final Style FONT=Style.EMPTY.withFont(CreateMediaSystems.id("hud"));
@@ -26,7 +26,6 @@ public final class LauncherHud {
     private static final int WIDTH=318,HEIGHT=88;
     private static int spareCells,cachedTick=Integer.MIN_VALUE;
     private static Object cachedPlayer;
-    /** Whether the last frame drew the reticle (see LauncherClient.diagnostics). */
     static boolean reticleDrawn;
     private LauncherHud() {}
     public static void register(IEventBus bus) {
@@ -60,7 +59,6 @@ public final class LauncherHud {
         line(g,1,51,9,67,1,0xB6D5DCCB);line(g,9,67,WIDTH-20,67,1,0xB6D5DCCB);
         line(g,WIDTH-20,67,WIDTH,22,1,0xB6D5DCCB);
         gunIcon(g,20,10,0xFFE5E9DF);
-        // Four compact attachment/state sockets echo the supplied layout, with original shapes and live cell state.
         socket(g,14,48,24,aim>.85?accent:0xFF78837A,"ADS");
         socket(g,41,48,20,r.hasOriginal()?0xFFD5CB86:RED,"CD");
         socket(g,64,48,20,accent,r.hasCell()?"L"+tier.level:"--");
@@ -68,7 +66,6 @@ public final class LauncherHud {
         String rounds=r.hasCell()?Integer.toString(r.shots()):"--";
         right(g,Component.literal(rounds),238,0,3.45f,!r.hasCell()?MUTED:low?RED:WHITE);
         label(g,"/ "+r.capacity(),211,39,1.2f,MUTED);
-        // Cell-shaped badge has a clear level, instead of an unrelated fixed 512-round symbol.
         polygon(g,0xA53C443A,262,6,WIDTH-8,6,WIDTH-5,22,WIDTH-23,60,265,60,250,23);
         polygon(g,accent,266,10,WIDTH-11,10,WIDTH-10,22,WIDTH-26,56,268,56,255,23);
         polygon(g,0xDB172019,269,14,WIDTH-15,14,WIDTH-14,23,WIDTH-29,51,271,51,260,23);
@@ -156,7 +153,7 @@ public final class LauncherHud {
         var camera=mc.gameRenderer.getMainCamera();var at=camera.getPosition();
         var v=new org.joml.Vector3f((float)(x-at.x),(float)(y-at.y),(float)(z-at.z));
         v.rotate(new org.joml.Quaternionf(camera.rotation()).conjugate());
-        double fov=((org.haruyq.createmediasystems.mixin.GameRendererAccessor)mc.gameRenderer).cms$fieldOfView(camera,partial,true);
+        double fov=((GameRendererAccessor)mc.gameRenderer).cms$fieldOfView(camera,partial,true);
         var clip=mc.gameRenderer.getProjectionMatrix(fov).transform(new org.joml.Vector4f(v,1));
         if(clip.w<=.05f)return null;
         float px=(clip.x/clip.w+1)*.5f*g.guiWidth(),py=(1-clip.y/clip.w)*.5f*g.guiHeight();

@@ -27,7 +27,6 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/** Jukebox-playable disc whose audio is the URL stored on it. Use in the air to edit the URL. */
 public class CustomDiscItem extends Item implements MediaItem {
     public CustomDiscItem(Properties properties) {
         super(properties);

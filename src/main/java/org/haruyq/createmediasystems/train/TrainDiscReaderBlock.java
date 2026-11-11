@@ -46,7 +46,6 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         return PercentSetting.saved(data, PercentSetting.DEFAULT_TAG) / 100f;
     }
 
-    /** Holds one announcement schedule; any right-click on it full gives it back. Also on a train (see Interaction). */
     static ItemSlot slot() {
         return new ItemSlot(ITEM_TAG, stack -> stack.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get()), true);
     }

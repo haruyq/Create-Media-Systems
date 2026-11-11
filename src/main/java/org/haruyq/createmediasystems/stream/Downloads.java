@@ -19,7 +19,6 @@ public final class Downloads {
     private final Map<ServerPlayer, Float> told = new HashMap<>();
     /** Their average, in percent; -1 while none has told. */
     private int average = -1;
-    /** How many it is the average of, and how many of them have all of it. */
     private int downloaders;
     private int finished;
 
@@ -58,7 +57,6 @@ public final class Downloads {
         finished = tag.getInt("Finished");
     }
 
-    /** Its goggle line, only while any of them waits. Several: their average, then how many have it. */
     public void addTo(List<Component> tooltip, String indent) {
         if (average < 0 || finished >= downloaders) {
             return;

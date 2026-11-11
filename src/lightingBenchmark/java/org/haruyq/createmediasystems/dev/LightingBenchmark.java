@@ -84,7 +84,6 @@ public final class LightingBenchmark {
             return;
         }
         configure(level, console, mode);
-        // Its lighting setting: the player's default scroll value (see VideoPlayerBlock).
         player.getBehaviour(ScrollValueBehaviour.TYPE).setValue(mode.displayLighting());
         player.control(Remotable.Action.SELECT, 1, null);
         active = new Phase(mode, System.nanoTime());

@@ -77,7 +77,6 @@ public final class HifiLayout {
         return new Aim(rear, rear ? Unit.LEFT + Unit.WIDTH - at.x : at.x - Unit.LEFT, at.y);
     }
 
-    /** The control of a stack of {@code units} that {@code aim} is on; null for none. */
     @Nullable
     public static Control control(List<Unit> units, Aim aim) {
         float bottom = 0;

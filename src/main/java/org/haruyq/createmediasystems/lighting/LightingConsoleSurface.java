@@ -48,7 +48,6 @@ public final class LightingConsoleSurface {
         return light;
     }
 
-    /** The deck's height at {@code z}. */
     public float height(float z) {
         return ConsoleLayout.deckHeight(z);
     }

@@ -70,12 +70,10 @@ public final class SableCompat {
         return SableCompanion.INSTANCE.getContaining(level, pos);
     }
 
-    /** Whether {@code a} and {@code b} are on the same sub-level, or both on none. */
     public static boolean sameSubLevel(Level level, BlockPos a, BlockPos b) {
         return containing(level, a) == containing(level, b);
     }
 
-    /** Every sub-level in {@code level}. */
     public static Iterable<? extends SubLevelAccess> subLevels(Level level) {
         return SableCompanion.INSTANCE.getAllIntersecting(level,
                 new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000));
@@ -95,7 +93,6 @@ public final class SableCompat {
         return SableCompanion.INSTANCE.getEyePositionInterpolated(entity, partialTick);
     }
 
-    /** The middle of {@code entity}'s body in the world this frame (see {@link #eye}). */
     public static Vec3 bodyCenter(Entity entity, float partialTick) {
         return eye(entity, partialTick).add(0, entity.getBbHeight() * 0.5 - entity.getEyeHeight(), 0);
     }
@@ -106,19 +103,16 @@ public final class SableCompat {
         return subLevel instanceof ClientSubLevelAccess client ? client.renderPose() : logicalPose(subLevel);
     }
 
-    /** Where {@code subLevel} logically is; null for no sub-level. */
     @Nullable
     public static Pose3dc logicalPose(@Nullable SubLevelAccess subLevel) {
         return subLevel == null ? null : subLevel.logicalPose();
     }
 
-    /** {@link #renderPose(SubLevelAccess)} of the sub-level holding {@code pos}. */
     @Nullable
     public static Pose3dc renderPose(Level level, BlockPos pos) {
         return renderPose(containing(level, pos));
     }
 
-    /** The axis-aligned box around {@code box} with each of its corners moved by {@code move}. */
     public static AABB transform(AABB box, UnaryOperator<Vec3> move) {
         AABB result = null;
         for (int corner = 0; corner < 8; corner++) {

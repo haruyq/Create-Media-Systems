@@ -28,15 +28,10 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
-/**
- * The mod's identity and the registers every feature adds its blocks, items and the like to. The mod's entry point
- * (see mod.CreateMediaSystemsMod) hands {@link #register} its features.
- */
 public final class CreateMediaSystems {
     public static final String MOD_ID = "create_media_systems";
     /** The mod's id before it was renamed: worlds from then name its blocks, items and data with it. */
     public static final String LEGACY_ID = "disksb";
-    /** The root of every CMS command, the server's and the client's: {@code /cms}. */
     public static final String COMMAND = "cms";
     /** Bumped whenever a payload's format changes, so a client and server that differ refuse each other. */
     private static final String PROTOCOL = "20";
@@ -58,10 +53,6 @@ public final class CreateMediaSystems {
     private CreateMediaSystems() {
     }
 
-    /**
-     * Sets the mod up with {@code features}, whose registry entries are already in the registers (their classes
-     * loaded when they were made): each adds its listeners and settings, then the config and registers follow.
-     */
     public static void register(IEventBus modBus, ModContainer container, List<? extends Feature> features) {
         features.forEach(feature -> feature.register(modBus));
         ServerConfig.register(modBus, container);

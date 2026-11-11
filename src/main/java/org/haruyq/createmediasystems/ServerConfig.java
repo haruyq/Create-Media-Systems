@@ -49,10 +49,8 @@ public final class ServerConfig {
             .defineListAllowEmpty("allowedHosts",
                     List.of("youtube.com", "youtu.be", "discordapp.com", "discordapp.net", "tver.jp"),
                     () -> "", o -> o instanceof String);
-    /** Built once every feature has added its settings (see register). */
     private static ModConfigSpec spec;
     private static final List<IntSetting> INT_SETTINGS = new ArrayList<>();
-    /** The keys of the settings players never receive (see {@link #secret}). */
     private static final Set<String> SECRETS = ConcurrentHashMap.newKeySet();
     /** The file's name, which NeoForge also sends players by (see ConfigSyncMixin). */
     public static final String FILE = "cms-server.toml";
@@ -119,7 +117,6 @@ public final class ServerConfig {
                 .requires(source -> source.hasPermission(2)).then(config));
     }
 
-    /** A change made by editing the file reaches the clients that stream with it, as one by command does (see saved). */
     private static void onReload(ModConfigEvent.Reloading event) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (event.getConfig().getSpec() == spec && server != null) {
@@ -181,7 +178,6 @@ public final class ServerConfig {
         return 1;
     }
 
-    /** Swaps in a whole config only if every value is valid, so a typo keeps the working settings. */
     private static boolean apply(CommentedConfig fresh) {
         if (!spec.isCorrect(fresh)) {
             return false;
@@ -191,7 +187,6 @@ public final class ServerConfig {
         return true;
     }
 
-    /** A command changed a value: written to the file, and sent to the clients now rather than when the file is seen to change. */
     private static void saved() {
         spec.save();
         sync();
@@ -233,7 +228,6 @@ public final class ServerConfig {
     private record IntSetting(String key, String argument, ModConfigSpec.IntValue value, int min, int max) {
     }
 
-    /** Server → client: the config's TOML after it changed while players were on. */
     record Changed(String toml) implements CustomPacketPayload {
         static final Type<Changed> TYPE = new Type<>(CreateMediaSystems.id("server_config"));
         static final StreamCodec<ByteBuf, Changed> CODEC =

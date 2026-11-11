@@ -13,7 +13,6 @@ public final class LauncherTimeline {
     public static final int RELOAD_TICKS = 80;
     public static final int SHOT_TICKS = 10;
 
-    /** One stage of the reload, from tick {@code start} to {@code end}. */
     public record Stage(float start, float end) {
         /** 0 before the stage, 1 after it, smooth in between. */
         public float at(float age) { return smooth(start, end, age); }
@@ -76,7 +75,6 @@ public final class LauncherTimeline {
         return shot == null ? -1 : level.getGameTime() - shot + partial;
     }
 
-    /** {@code launcher}'s animation now. */
     public static Frame sample(ItemStack launcher, Level level, float partial) {
         return sample(reloadAge(launcher, level, partial), shotAge(launcher, level, partial));
     }

@@ -59,7 +59,6 @@ public final class P2pOverlay {
                 event.registerAboveAll(CreateMediaSystems.id("p2p_debug"), P2pOverlay::render));
     }
 
-    /** Shows or hides it; whether it is shown now. */
     static boolean toggle() {
         shown = !shown;
         WINDOWS.clear();
@@ -109,7 +108,6 @@ public final class P2pOverlay {
         }
     }
 
-    /** The overlay's text for a session as of {@code now}; {@code name} gives a player's name. */
     static List<Line> lines(Transport.State session, boolean hosting, UUID hostId, long received, List<Transport.LinkInfo> links,
                             double receivingBps, long now, Function<UUID, String> name) {
         List<Line> lines = new ArrayList<>();

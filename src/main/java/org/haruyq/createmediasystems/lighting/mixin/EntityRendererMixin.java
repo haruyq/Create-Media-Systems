@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.mixin;
+package org.haruyq.createmediasystems.lighting.mixin;
 
 import org.haruyq.createmediasystems.lighting.LightingIllumination;
 import org.spongepowered.asm.mixin.Mixin;

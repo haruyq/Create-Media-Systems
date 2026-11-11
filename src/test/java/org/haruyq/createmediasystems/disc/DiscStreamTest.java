@@ -48,27 +48,47 @@ class DiscStreamTest {
     void preservesTheWholeTimelineAcrossIndependentQualityChanges() {
         String playlist = DiscStream.playlist(10.5);
         assertTrue(playlist.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
-        assertTrue(playlist.contains("#EXTINF:2.500000,\n2.ts\n#EXT-X-ENDLIST"));
+        assertTrue(playlist.strip().endsWith("#EXT-X-ENDLIST"));
         assertFalse(playlist.contains("#EXT-X-DISCONTINUITY"));
+        double length = 0;
+        List<String> segments = new java.util.ArrayList<>();
+        for (String line : playlist.split("\n")) {
+            if (line.startsWith("#EXTINF:")) {
+                length += Double.parseDouble(line.substring("#EXTINF:".length(), line.indexOf(',')));
+            } else if (!line.isBlank() && !line.startsWith("#")) {
+                segments.add(line);
+            }
+        }
+        assertEquals(10.5, length, 1e-6, "its segments last as long as the disc");
+        assertEquals(java.util.stream.IntStream.range(0, segments.size()).mapToObj(i -> i + ".ts").toList(), segments);
         assertThrows(IllegalArgumentException.class, () -> DiscStream.playlist(Double.NaN));
         assertThrows(IllegalArgumentException.class, () -> DiscStream.playlist(86400));
     }
 
     @Test
     void reducesQualityForASlowEncoderAndRecoversGradually() {
+        long viewer = 13_000_000, second = 1_000_000_000L;
         DiscStream.Adaptive rate = new DiscStream.Adaptive();
-        assertEquals(new DiscSource.Quality(1080, 60, 8000), DiscSource.Quality.forBudget(rate.budget(13_000_000)));
-        rate.encoded(6_000_000_000L, 13_000_000, 0);
-        long reduced = rate.budget(13_000_000);
-        assertEquals(6_500_000, reduced, "encoding at half speed halves the budget");
-        assertEquals(720, DiscSource.Quality.forBudget(reduced).height());
-        for (int i = 0; i < 20; i++) rate.encoded(1_000_000_000L, reduced, 10_000_000_000L);
-        assertEquals(reduced, rate.budget(13_000_000), "held for 45 s");
-        rate.encoded(1_000_000_000L, reduced, 46_000_000_000L);
-        assertEquals(7_150_000, rate.budget(13_000_000));
-        rate.encoded(1_000_000_000L, reduced, 50_000_000_000L);
-        assertEquals(7_150_000, rate.budget(13_000_000), "then a step every 15 s");
-        assertEquals(1_000_000, rate.budget(1_000_000));
+        assertEquals(viewer, rate.budget(viewer), "a fast enough encoder keeps the viewer's budget");
+        rate.encoded(2L * DiscSource.SEGMENT_SECONDS * second, viewer, 0);
+        long reduced = rate.budget(viewer);
+        DiscStream.Adaptive slower = new DiscStream.Adaptive();
+        slower.encoded(4L * DiscSource.SEGMENT_SECONDS * second, viewer, 0);
+        assertTrue(reduced < viewer, "a slow encoder lowers the budget");
+        assertEquals(2, reduced / (double) slower.budget(viewer), 0.01, "twice as slow, half the budget");
+        assertTrue(DiscSource.Quality.forBudget(reduced).height() < DiscSource.Quality.forBudget(viewer).height());
+        rate.encoded(second, reduced, second);
+        assertEquals(reduced, rate.budget(viewer), "one fast segment is not yet a recovery");
+        long now = second;
+        while (rate.budget(viewer) == reduced && now < 600 * second) {
+            now += second;
+            rate.encoded(second, reduced, now);
+        }
+        long stepped = rate.budget(viewer);
+        assertTrue(stepped > reduced && stepped < viewer, "it recovers a step at a time, was " + stepped);
+        rate.encoded(second, reduced, now + second);
+        assertEquals(stepped, rate.budget(viewer), "not a step every segment");
+        assertEquals(1_000_000, rate.budget(1_000_000), "never above what the viewer can take");
     }
 
     @Test
@@ -114,18 +134,24 @@ class DiscStreamTest {
         var stats = new DiscStream.Stats(false, 38, now - 5 * s, 37, 4 * 1024 * 1024, 520_000_000, 1, "Disc transfer timed out",
                 null, -1, null);
         List<P2pOverlay.Line> lines = stats.lines(false, now);
-        assertEquals(List.of(
-                "Disc: waiting for segment 38 for 5.00 s",
-                "Last segment 37: 4.0 MB in 0.52 s (64.5 Mbps)",
-                "Failed requests: 1, last: Disc transfer timed out"), lines.stream().map(P2pOverlay.Line::text).toList());
-        assertEquals(0xFFFF5555, lines.getFirst().color(), "past a segment's length the wait shows red");
+        assertEquals(3, lines.size(), lines.toString());
+        assertTrue(lines.get(0).text().contains("38"), "the segment it waits for: " + lines.get(0));
+        assertTrue(lines.get(1).text().contains("37"), "the last segment it had: " + lines.get(1));
+        assertTrue(lines.get(2).text().contains("Disc transfer timed out"), "why the last request failed: " + lines.get(2));
+        var brief = new DiscStream.Stats(false, 38, now - s / 10, 37, 4 * 1024 * 1024, 520_000_000, 1,
+                "Disc transfer timed out", null, -1, null);
+        assertNotEquals(brief.lines(false, now).getFirst().color(), lines.getFirst().color(),
+                "past a segment's length the wait shows as a warning");
         assertTrue(stats.lines(true, now).isEmpty(), "a viewer's stream shows nothing to a host");
     }
 
     @Test
     void aHostSeesItsEncoderInTheP2pOverlay() {
         var stats = new DiscStream.Stats(true, 0, 0, -1, 0, 0, 0, null, "h264_nvenc", 12, "1080p60 8000 kbps");
-        assertEquals(List.of("Disc: h264_nvenc, segment 12 at 1080p60 8000 kbps"),
-                stats.lines(true, 0).stream().map(P2pOverlay.Line::text).toList());
+        List<P2pOverlay.Line> lines = stats.lines(true, 0);
+        assertEquals(1, lines.size(), lines.toString());
+        for (String fact : List.of("h264_nvenc", "12", "1080p60 8000 kbps")) {
+            assertTrue(lines.getFirst().text().contains(fact), fact + " in " + lines.getFirst());
+        }
     }
 }

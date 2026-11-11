@@ -29,7 +29,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.GlStateBackup;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -58,7 +57,6 @@ public final class PointLights {
         List<Entity> entities();
     }
 
-    /** Something in the world that gives lights. */
     @FunctionalInterface
     public interface Source {
         void collect(View view, Consumer<Light> lights);
@@ -75,12 +73,11 @@ public final class PointLights {
             } catch (IOException e) { throw new UncheckedIOException(e); }
         });
         NeoForge.EVENT_BUS.addListener(PointLights::render);
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
+        WorldEvents.onLevelChanged(() -> {
             if (scene != null) { scene.destroyBuffers(); scene = null; }
         });
     }
 
-    /** Adds {@code source}, from a feature's client setup. */
     public static void add(Source source) {
         SOURCES.add(source);
     }

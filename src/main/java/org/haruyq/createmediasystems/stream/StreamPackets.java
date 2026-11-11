@@ -16,9 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/** What a block's stream says between server and client (see Streams and ClientStreams). */
 public final class StreamPackets {
-    /** A disc's, image viewer's or announcement's link as sent: at most {@link UrlPolicy#MAX_LENGTH} characters. */
     public static final StreamCodec<ByteBuf, String> URL = ByteBufCodecs.stringUtf8(UrlPolicy.MAX_LENGTH);
 
     /** What a client does with the server's words: ClientStreams, which sets it as the client starts. */
@@ -27,7 +25,6 @@ public final class StreamPackets {
     private StreamPackets() {
     }
 
-    /** A client's handling of the streams the server sends it. */
     public interface Client {
         void play(PlayAtBlock payload);
 
@@ -152,7 +149,7 @@ public final class StreamPackets {
     }
 
     /**
-     * Server → client: play the stream of the block at {@code pos} that StartedAtBlock said was loaded, from
+     * Server → client: play the stream of the block at {@code pos} that Started said was loaded, from
      * {@code seconds} in: the top, once every listener of a fresh track has it, or where it is, for one that loaded it
      * later or joined it playing (see Streams#started).
      */
@@ -210,7 +207,6 @@ public final class StreamPackets {
                 (payload, context) -> downloaded((ServerPlayer) context.player(), payload));
     }
 
-    /** Counted by the source at {@code payload.pos()} while {@code player} listens to it. */
     private static void downloaded(ServerPlayer player, DownloadedAtBlock payload) {
         ServerLevel level = player.serverLevel();
         if (level.isLoaded(payload.pos()) && level.getBlockEntity(payload.pos()) instanceof VideoSource source

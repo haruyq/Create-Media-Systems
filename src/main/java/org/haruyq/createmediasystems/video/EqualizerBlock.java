@@ -39,9 +39,9 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
- * Turns bands of a Blu-ray player's video's sound up or down, for everyone, with the three faders on its top (see
- * EqualizerFaders), facing whoever placed it. Touching the Blu-ray player, its faders are Low, Mid and Hi; a second
- * equalizer touching that one splits each of those bands in two, taking the lower half as BASS, Low-Mid and Hi-Mid.
+ * Turns bands of a Blu-ray player's video's sound up or down, for everyone, with the three faders on its top, facing
+ * whoever placed it. Touching the Blu-ray player, its faders are Low, Mid and Hi; a second equalizer touching that
+ * one splits each of those bands in two, taking the lower half as BASS, Low-Mid and Hi-Mid.
  */
 public class EqualizerBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final MapCodec<EqualizerBlock> CODEC = simpleCodec(EqualizerBlock::new);
@@ -83,7 +83,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
                 .anyMatch(side -> level.getBlockState(pos.relative(side)).is(VideoFeature.VIDEO_PLAYER.get()));
     }
 
-    /** Whether the equalizer at {@code pos} is a second one: touching one that touches a Blu-ray player. */
     static boolean isSecond(BlockGetter level, BlockPos pos) {
         return !touchesPlayer(level, pos) && Arrays.stream(Direction.values()).map(pos::relative)
                 .anyMatch(beside -> level.getBlockEntity(beside) instanceof Entity && touchesPlayer(level, beside));
@@ -127,7 +126,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
         return above > 0 && along.y < 0 ? eye.add(along.scale(above / -along.y)) : null;
     }
 
-    /** {@code gain} as a fader can set it: in half-dB steps, within {@link Tone#MAX_GAIN} either way. */
     static float snap(float gain) {
         return Mth.clamp(Math.round(gain * 2) / 2f, -Tone.MAX_GAIN, Tone.MAX_GAIN);
     }
@@ -161,7 +159,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
             return (float) (20 * Math.pow(10, (ordinal() + 1) / 2.0));
         }
 
-        /** Its low edge: half a decade below its top, or a whole one if {@code whole}. */
         float low(boolean whole) {
             return high() / (float) Math.pow(10, whole ? 1 : 0.5);
         }
@@ -251,7 +248,6 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
         }
     }
 
-    /** A fader of an equalizer within reach was let go. */
     public static void setEqualizer(Player player, SetEqualizer payload) {
         Entity equalizer = Reach.blockEntity(player, payload.equalizer(), Reach.HAND, Entity.class);
         if (equalizer != null) {

@@ -38,12 +38,6 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * A hi-fi stack's own speaker: a slim cabinet on a foot, as tall as the stack. It plays the left or the right of what
- * its amplifier plays, at the amplifier's volume, once a speaker cable runs to it: touch one of the amplifier's
- * speaker terminals with an audio cable, then the speaker. Sneak and right-click it with an empty hand to pull the
- * cable out.
- */
 public class HifiSpeakerBlock extends SpeakerBlock implements SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<HifiSpeakerBlock> CODEC = simpleCodec(HifiSpeakerBlock::new);
     private static final VoxelShape ALONG_Z = Shapes.or(Block.box(2.5, 0, 3, 13.5, 1, 13), Block.box(3.5, 1, 4, 12.5, 16, 12));
@@ -58,13 +52,11 @@ public class HifiSpeakerBlock extends SpeakerBlock implements SableCompat.Silent
         return CODEC;
     }
 
-    /** Always upright, its front to whoever places it. */
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
-    /** A wrench turns it about where it stands. */
     @Override
     public InteractionResult onWrenched(BlockState state, UseOnContext context) {
         Level level = context.getLevel();
@@ -131,10 +123,6 @@ public class HifiSpeakerBlock extends SpeakerBlock implements SableCompat.Silent
             super(HifiFeature.HIFI_SPEAKER_ENTITY.get(), pos, state);
         }
 
-        /**
-         * Runs the cable {@code player} holds from the amplifier terminal they last touched with it to this speaker,
-         * if it reaches; a speaker with a cable already has that one moved.
-         */
         void connect(ServerPlayer player, ItemStack cable) {
             HifiCableItem.From from = HifiCableItem.picked(player);
             ServerLevel level = player.serverLevel();
@@ -161,7 +149,6 @@ public class HifiSpeakerBlock extends SpeakerBlock implements SableCompat.Silent
                     from.channel().label()), true);
         }
 
-        /** Unlinks it; the cable that linked it comes back, if one did. */
         ItemStack unplug(ServerLevel level) {
             ItemStack cable = cabled ? new ItemStack(HifiFeature.HIFI_CABLE.get()) : ItemStack.EMPTY;
             cabled = false;

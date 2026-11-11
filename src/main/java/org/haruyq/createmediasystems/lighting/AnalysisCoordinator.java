@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.BlockIdentity;
+import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -33,6 +34,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 public final class AnalysisCoordinator {
     private static final Map<ServerLevel, Map<UUID, Session>> LEVELS = new HashMap<>();
+    /** How near a console a player sees its lights: as far as a fixture it links is drawn from. */
+    private static final double SEEN = LightingSettings.VIEW_DISTANCE + Link.MAX_DISTANCE;
+    /** A prepared batch a viewer has not said it received is sent again after this long (ns). */
+    private static final long RESEND_NANOS = 5_000_000_000L;
 
     private AnalysisCoordinator() {
     }
@@ -113,7 +118,6 @@ public final class AnalysisCoordinator {
                            long sequence, long liveSequence, long published, int ready, long trackEnd, long nextEnd) {
     }
 
-    /** Every session the server keeps now. */
     public static List<Snapshot> snapshots() {
         List<Snapshot> snapshots = new ArrayList<>();
         for (Map<UUID, Session> sessions : LEVELS.values()) {
@@ -129,7 +133,6 @@ public final class AnalysisCoordinator {
         return snapshots;
     }
 
-    /** The session of the source {@code source} in {@code level}; null if none. */
     @Nullable
     static Session session(ServerLevel level, UUID source) {
         Map<UUID, Session> sessions = LEVELS.get(level);
@@ -224,15 +227,14 @@ public final class AnalysisCoordinator {
                         || !console.formed || console.controller() != console);
                 for (ServerPlayer player : level.players()) {
                     boolean nearby = listeners.contains(player) || session.consoles.stream().anyMatch(pos ->
-                            player.distanceToSqr(SableCompat.toWorld(level, pos, pos.getCenter()))
-                                    <= (LightingSettings.MAX_RANGE + 160.0) * (LightingSettings.MAX_RANGE + 160.0));
+                            player.distanceToSqr(SableCompat.toWorld(level, pos, pos.getCenter())) <= SEEN * SEEN);
                     if (!nearby) {
                         continue;
                     }
                     present.add(player.getUUID());
                     boolean joined = !session.audience.containsKey(player.getUUID());
                     Audience audience = session.audience.computeIfAbsent(player.getUUID(), ignored -> new Audience());
-                    if (joined || changed || level.getGameTime() - session.sentAt >= 10) {
+                    if (joined || changed || level.getGameTime() - session.sentAt >= AnalysisSession.STATE_TICKS) {
                         PacketDistributor.sendToPlayer(player, session.state());
                     }
                     if (session.active && batches.getOrDefault(player.getUUID(), 0) < 2 && replay(player, session, audience)) {
@@ -240,7 +242,7 @@ public final class AnalysisCoordinator {
                     }
                 }
                 session.audience.keySet().retainAll(present);
-                if (changed || level.getGameTime() - session.sentAt >= 10) {
+                if (changed || level.getGameTime() - session.sentAt >= AnalysisSession.STATE_TICKS) {
                     session.sentAt = level.getGameTime();
                 }
                 session.consoles.clear();
@@ -251,7 +253,7 @@ public final class AnalysisCoordinator {
     private static boolean replay(ServerPlayer player, Session session, Audience audience) {
         if (audience.pending != null) {
             long now = System.nanoTime();
-            if (now - audience.pendingAt > 5_000_000_000L) {
+            if (now - audience.pendingAt > RESEND_NANOS) {
                 PacketDistributor.sendToPlayer(player, audience.pending);
                 audience.pendingAt = now;
                 return true;

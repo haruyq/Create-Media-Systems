@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.haruyq.createmediasystems.audio.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "JukeboxBlockEntityMixin",
+    "NoteBlockMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

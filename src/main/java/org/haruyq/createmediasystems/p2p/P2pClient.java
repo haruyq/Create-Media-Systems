@@ -312,7 +312,6 @@ public final class P2pClient {
         }
     }
 
-    /** {@code message} with the players' UUIDs in it as their names. */
     private static String named(String message) {
         ClientPacketListener connection = Minecraft.getInstance() == null ? null : Minecraft.getInstance().getConnection();
         if (connection != null) {

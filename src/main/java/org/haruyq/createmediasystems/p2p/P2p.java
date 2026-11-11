@@ -204,7 +204,6 @@ public final class P2p {
             return CompletableFuture.completedFuture(null);
         }
         if (!wanted || !live) {
-            // Left, asked again, logged out, stopping or the host left meanwhile: the ticket is not wanted.
             return delete(room == null ? "p2p/sessions/" + ticket.sessionId()
                     : "p2p/sessions/" + room.id() + "/peers/" + player.id());
         }

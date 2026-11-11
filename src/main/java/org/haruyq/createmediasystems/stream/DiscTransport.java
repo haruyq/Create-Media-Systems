@@ -110,7 +110,6 @@ public final class DiscTransport {
         deck.changed();
     }
 
-    /** Stops: back to the top of the entry, and on a CD player to the first track. */
     public void stop() {
         playing = false;
         clock.stop();
@@ -162,7 +161,6 @@ public final class DiscTransport {
         }
     }
 
-    /** Stopped, a CD player's PREVIOUS and NEXT pick the track to play. */
     private void select(int entry) {
         index = Math.max(entry, 0);
         deck.changed();
@@ -202,7 +200,6 @@ public final class DiscTransport {
         }
     }
 
-    /** Empty (no disc, or none with links), stopped, paused or playing, as its remote and goggles show it. */
     public Component state() {
         return Component.translatable(deck.playlist().isEmpty() ? "create_media_systems.video_player.empty"
                 : !playing ? "create_media_systems.video_player.stopped"

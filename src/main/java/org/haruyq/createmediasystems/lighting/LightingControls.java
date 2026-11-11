@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.lighting;
 
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout.Button;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout.Slot;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
@@ -17,7 +18,6 @@ import com.simibubi.create.foundation.utility.RaycastHelper;
 
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,7 +32,6 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class LightingControls {
-    private static ClientLevel knownLevel;
     private static Hit held;
     private static boolean pressed;
     private static int heldGroup;
@@ -51,6 +50,15 @@ public final class LightingControls {
     public static void register() {
         LightingLinkHandler.register();
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
+        WorldEvents.onLevelChanged(() -> {
+            held = null;
+            pressed = false;
+            hovered = null;
+            activated = null;
+            presetConsole = null;
+            savingGroup = -1;
+            noticeUntil = 0;
+        });
         NeoForge.EVENT_BUS.addListener((InputEvent.MouseScrollingEvent event) -> {
             if (scroll(event.getScrollDeltaY())) {
                 event.setCanceled(true);
@@ -145,7 +153,7 @@ public final class LightingControls {
             } else {
                 hit.page.press(shift);
             }
-            feedback(hit, "hover", label(hit), scope(hit), value(hit));
+            hover(hit);
             return true;
         }
         LightingSettings settings = hit.console.settings;
@@ -159,8 +167,9 @@ public final class LightingControls {
             presetConsole = hit.console;
             customPresets = true;
             savingGroup = cancel ? -1 : settings.selectedGroup;
-            feedback(hit, cancel ? "preset_cancelled" : "preset_choose_slot",
-                    LightingText.group(settings, settings.selectedGroup));
+            Component group = LightingText.group(settings, settings.selectedGroup);
+            feedback(hit, cancel ? LightingText.message(LightingText.MUTED, "preset_cancelled", group)
+                    : LightingText.message(LightingText.WARNING, "preset_choose_slot", group));
             return true;
         } else {
             Control control = hit.control();
@@ -186,15 +195,16 @@ public final class LightingControls {
                     boolean save = saving(hit.console);
                     int slot = hit.index();
                     if (!save && customPresets(hit.console) && hit.console.presets[slot] == null) {
-                        feedback(hit, "preset_empty_help", LightingText.number(slot + 1));
+                        feedback(hit, LightingText.message(LightingText.MUTED, "preset_empty_help",
+                                LightingText.number(slot + 1)));
                         return true;
                     }
                     PresetAction action = save ? PresetAction.SAVE
                             : customPresets(hit.console) ? PresetAction.LOAD : PresetAction.FACTORY;
                     change(hit, Control.PRESET, slot, action.ordinal(), 0);
                     savingGroup = -1;
-                    feedback(hit, save ? "preset_saved" : "preset_loaded", presetName(hit.console, slot),
-                            LightingText.group(settings, settings.selectedGroup));
+                    feedback(hit, LightingText.message(LightingText.ON, save ? "preset_saved" : "preset_loaded",
+                            presetName(hit.console, slot), LightingText.group(settings, settings.selectedGroup)));
                     return true;
                 }
                 case SELECT -> change(hit, control, 0, hit.index(), 0);
@@ -203,7 +213,7 @@ public final class LightingControls {
                 }
             }
         }
-        feedback(hit, "hover", label(hit), scope(hit), value(hit));
+        hover(hit);
         return true;
     }
 
@@ -217,7 +227,7 @@ public final class LightingControls {
         if (hit != null && hit.page != null) {
             savingGroup = -1;
             hit.page.scroll(step, mc.player.isShiftKeyDown(), controlDown());
-            feedback(hit, "hover", label(hit), scope(hit), value(hit));
+            hover(hit);
             return true;
         }
         if (hit != null) {
@@ -233,7 +243,7 @@ public final class LightingControls {
                 step *= LightingSettings.FAST_RANGE_STEP;
             }
             adjust(hit, step);
-            feedback(hit, "hover", label(hit), scope(hit), value(hit));
+            hover(hit);
             return true;
         }
         BlockHitResult at = pointed(Reach.HAND);
@@ -325,7 +335,6 @@ public final class LightingControls {
         return slot == null ? null : new Hit(console, slot, point);
     }
 
-    /** The player's eye, in {@code console}'s space. */
     private static Vec3 eye(LightingConsoleBlock.Entity console, Vec3 eye) {
         BlockPos origin = console.getBlockPos();
         Direction facing = console.getBlockState().getValue(LightingConsoleBlock.FACING);
@@ -348,16 +357,6 @@ public final class LightingControls {
 
     private static void tick() {
         Minecraft mc = Minecraft.getInstance();
-        if (knownLevel != mc.level) {
-            knownLevel = mc.level;
-            held = null;
-            pressed = false;
-            hovered = null;
-            activated = null;
-            presetConsole = null;
-            savingGroup = -1;
-            noticeUntil = 0;
-        }
         if (mc.level == null || mc.player == null) {
             return;
         }
@@ -402,7 +401,8 @@ public final class LightingControls {
             return LightingText.mode("preset_bank." + hit.index());
         }
         if (button == Button.PRESET_SAVE) {
-            return LightingText.message(saving(hit.console) ? "preset_cancel_help" : "preset_start_help");
+            return saving(hit.console) ? LightingText.message("preset_cancel_help")
+                    : LightingText.message(LightingText.WARNING, "preset_start_help");
         }
         return hit.control().format(new LightingPackets.View(hit.console, hit.index(), controlDown(),
                 customPresets(hit.console), saving(hit.console)));
@@ -419,13 +419,13 @@ public final class LightingControls {
         Control control = hit.control();
         var label = Component.translatable("create_media_systems.lighting.label."
                 + (control == null ? hit.slot.button().key : control.key)).withColor(LightingText.TEXT);
-        return control == Control.RANGE ? label.append(" ").append(LightingText.message("range_help")
-                .withColor(LightingText.MUTED)) : label;
+        return control == Control.RANGE
+                ? label.append(" ").append(LightingText.message(LightingText.MUTED, "range_help")) : label;
     }
 
     private static Component scope(Hit hit) {
         return hit.control() == Control.RANGE && controlDown()
-                ? LightingText.message("all_groups").withColor(LightingText.WARNING)
+                ? LightingText.message(LightingText.WARNING, "all_groups")
                 : LightingText.group(hit.console.settings, group(hit));
     }
 
@@ -440,10 +440,15 @@ public final class LightingControls {
         return control != null && control.indexIsGroup() ? hit.index() : hit.console.settings.selectedGroup;
     }
 
-    private static void feedback(Hit hit, String key, Object... args) {
+    /** Says what {@code hit} is and what it is set to now, as it is used. */
+    private static void hover(Hit hit) {
+        feedback(hit, LightingText.message("hover", label(hit), scope(hit), value(hit)));
+    }
+
+    private static void feedback(Hit hit, Component message) {
         activated = hit;
         activatedAt = Util.getMillis();
-        notice = LightingText.message(key, args);
+        notice = message;
         noticeUntil = activatedAt + 1800;
         Minecraft.getInstance().player.displayClientMessage(notice, true);
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.2f, 0.2f));

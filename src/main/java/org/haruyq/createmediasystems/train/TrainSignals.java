@@ -46,13 +46,11 @@ public class TrainSignals extends SavedData {
         return server.overworld().getDataStorage().computeIfAbsent(FACTORY, CreateMediaSystems.MOD_ID + "_train_detectors");
     }
 
-    /** Asks this client's player for the channel of the detector or receiver at {@code pos}, now {@code channel}. */
     public static void promptChannel(BlockPos pos, String channel) {
         TextPromptScreen.open("create_media_systems.screen.channel", channel, MAX_CHANNEL_LENGTH,
                 value -> PacketDistributor.sendToServer(new SetChannel(pos, value)));
     }
 
-    /** Trims and checks a typed channel name: empty (no channel) if it is too long or has control characters. */
     public static String normalize(String channel) {
         String trimmed = channel.strip();
         return trimmed.length() <= MAX_CHANNEL_LENGTH && trimmed.codePoints().noneMatch(Character::isISOControl)
@@ -81,7 +79,6 @@ public class TrainSignals extends SavedData {
                 Create.RAILWAYS.trains.values().stream().map(train -> train.occupiedObservers).toList());
     }
 
-    /** Channels with a train over at least one of their detectors, given each train's occupied observers. */
     static Set<String> activeChannels(Map<UUID, String> channels, Iterable<? extends Set<UUID>> occupiedByTrain) {
         Set<String> on = new HashSet<>();
         for (Set<UUID> occupied : occupiedByTrain) {

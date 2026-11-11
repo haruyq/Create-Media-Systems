@@ -30,12 +30,10 @@ public interface MediaItem {
         return stack.getItem() instanceof MediaItem media ? media.kind() : null;
     }
 
-    /** The links on {@code stack}; empty for none, or for an item that is no media item. */
     static List<String> linksOf(ItemStack stack) {
         return stack.getItem() instanceof MediaItem media ? media.links(stack) : List.of();
     }
 
-    /** Whether {@code stack} goes in {@code slot}: a media item whose kind fits it, or in a portable one any jukebox disc. */
     static boolean fits(ItemStack stack, DiscKind.Slot slot) {
         DiscKind kind = kindOf(stack);
         return kind != null ? kind.fits(slot)
@@ -49,7 +47,6 @@ public interface MediaItem {
         return links.isEmpty() || links.getFirst().isBlank() ? null : links.getFirst();
     }
 
-    /** Whether {@code stack} is a media item without links: it plays nothing. */
     static boolean silent(ItemStack stack) {
         return stack.getItem() instanceof MediaItem && url(stack) == null;
     }
@@ -60,7 +57,6 @@ public interface MediaItem {
         return url == null || UrlPolicy.isAllowed(url);
     }
 
-    /** The jukebox song a portable player plays from {@code stack}: none for a media item, which plays its link. */
     static Optional<Holder<JukeboxSong>> song(ItemStack stack, HolderLookup.Provider registries) {
         return stack.getItem() instanceof MediaItem ? Optional.empty() : JukeboxSong.fromStack(registries, stack);
     }
@@ -72,7 +68,6 @@ public interface MediaItem {
                 : song(stack, registries).map(song -> (double) song.value().lengthInSeconds()).orElse(-1.0);
     }
 
-    /** Whether {@code seconds} can be a track's length, as a client tells it. */
     static boolean plausibleLength(double seconds) {
         return Double.isFinite(seconds) && seconds > 0 && seconds <= MAX_LENGTH_SECONDS;
     }

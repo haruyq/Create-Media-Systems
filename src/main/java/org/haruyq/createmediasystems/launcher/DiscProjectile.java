@@ -147,7 +147,6 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         return attachedTarget;
     }
     private static Vec3 vector(Vector3f v){return new Vec3(v.x,v.y,v.z);}
-    /** Where on its target it sits, as its synced data keeps it. */
     private AttachmentAnchor anchor(){return AttachmentAnchor.of(attachedToHead(),attachmentPart(),attachmentBone());}
     private void keep(AttachmentAnchor anchor) {
         entityData.set(ATTACH_HEAD,anchor.head());entityData.set(ATTACH_PART,anchor.part());entityData.set(ATTACH_BONE,anchor.bone());
@@ -207,7 +206,6 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     public void setCellTier(DiscCellTier tier) { entityData.set(CELL_TIER, tier.level); }
     public float damage() { return cellTier().damage; }
     @Override public ItemStack getPickResult() { return ItemStack.EMPTY; }
-    /** Only its shooter's client tells its track's length. */
     @Override public boolean takesLengthFrom(ServerPlayer player) { return getOwner() == player; }
     @Override public void learnLength(double seconds) {
         if (!level().isClientSide) learn(seconds);
@@ -266,11 +264,8 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
 
     // Fixtures (the launcher game tests and harness, in this package) set what a save would carry through these,
     // never by writing its save format by hand.
-    /** Its music started {@code ticks} ago. */
     void musicStartedAgo(long ticks) { entityData.set(MUSIC_START_TICK, level().getGameTime() - ticks); }
-    /** It was fired {@code ticks} ago. */
     void firedAgo(long ticks) { spawnedAtTick = level().getGameTime() - ticks; }
-    /** It is stuck where it is, as in a block or a body. */
     void stuckHere() { entityData.set(EMBEDDED, true); setDeltaMovement(Vec3.ZERO); setNoGravity(true); }
     /** Its track is {@code seconds} long, as the server learned it; negative while unknown. */
     void trackLasts(double seconds) { length = seconds; }

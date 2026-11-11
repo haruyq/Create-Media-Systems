@@ -14,7 +14,6 @@ public enum DiscKind {
     CD(24, 0, Slot.DISC_TRAY),
     CASSETTE(12, 0, Slot.TAPE_DECK);
 
-    /** How many links it holds. */
     public final int entries;
     /** The tallest picture (pixels) it plays; 0 for sound alone. */
     public final int pictureHeight;
@@ -34,7 +33,6 @@ public enum DiscKind {
         return slots.contains(slot);
     }
 
-    /** Where a media item goes in to be played. */
     public enum Slot {
         /** Shows its picture on displays, and plays its sound. */
         PICTURE,

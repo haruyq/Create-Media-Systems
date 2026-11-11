@@ -26,7 +26,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RedstoneLampBlock;
 import net.neoforged.bus.api.IEventBus;
 
-/** Trains on this client: the train detector's renderer, and the announcement and train detector scenes. */
 public final class TrainClient implements ClientFeature {
     @Override
     public void register(IEventBus modBus) {

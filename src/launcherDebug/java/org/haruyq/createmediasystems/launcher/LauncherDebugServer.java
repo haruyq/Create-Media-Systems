@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.power.PowerFeature;
 import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.power.ChargeableItem;
@@ -9,7 +10,6 @@ import com.mojang.logging.LogUtils;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -176,10 +176,10 @@ public final class LauncherDebugServer {
         try {Files.writeString(DIR.resolve("server-checks.log"),text+"\n",StandardOpenOption.CREATE,StandardOpenOption.APPEND);}catch(Exception e){throw new RuntimeException(e);}
     }
     static ItemStack disc(String kind) {
-        ItemStack d=new ItemStack(switch(kind){case "vanilla"->Items.MUSIC_DISC_CAT;case "dvd"->VideoFeature.DVD.get();case "blu"->VideoFeature.BLU_RAY.get();default->AudioFeature.CUSTOM_DISC.get();});
+        ItemStack d=new ItemStack(switch(kind){case "vanilla"->Items.MUSIC_DISC_CAT;case "dvd"->DiscFeature.DVD.get();case "blu"->DiscFeature.BLU_RAY.get();default->AudioFeature.CUSTOM_DISC.get();});
         if(kind.equals("custom"))d.set(AudioFeature.URL.get(),URL);
         if(kind.equals("blocked"))d.set(AudioFeature.URL.get(),"http://blocked.invalid/song.wav");
-        if(kind.equals("dvd")||kind.equals("blu"))d.set(VideoFeature.PLAYLIST.get(),List.of(URL,URL+"?next=1"));
+        if(kind.equals("dvd")||kind.equals("blu"))d.set(DiscFeature.PLAYLIST.get(),List.of(URL,URL+"?next=1"));
         return d;
     }
     static void equip(ServerPlayer p,String kind) {

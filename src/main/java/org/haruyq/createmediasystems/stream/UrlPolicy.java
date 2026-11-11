@@ -10,7 +10,6 @@ import org.jetbrains.annotations.Nullable;
 
 /** Which links the server allows; the host check is kept free of Minecraft classes so it can be unit tested. */
 public final class UrlPolicy {
-    /** Longest link a disc, image viewer or announcement takes. */
     public static final int MAX_LENGTH = 2048;
 
     private UrlPolicy() {
@@ -21,7 +20,6 @@ public final class UrlPolicy {
         return isAllowed(url, ServerConfig.ALLOWED_HOSTS.get());
     }
 
-    /** Whether {@code url} is a kind CMS plays (see MediaKind) and, where that kind asks, its host is on {@code allowedHosts}. */
     public static boolean isAllowed(@Nullable String url, List<? extends String> allowedHosts) {
         MediaKind kind = MediaKind.of(url);
         if (kind == null || !kind.listedHost) {

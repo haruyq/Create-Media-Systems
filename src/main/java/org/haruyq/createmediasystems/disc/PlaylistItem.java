@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.video;
+package org.haruyq.createmediasystems.disc;
 
 import java.util.List;
 
@@ -25,19 +25,14 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/**
- * A disc (or tape) that holds a playlist of links: a DVD or a Blu-ray, which differ in how many videos they hold and
- * how sharp they play, or a CD or a cassette, which have no picture. Its kind says what plays it (see DiscKind). Use
- * in the air to edit the list.
- */
-public class VideoDiscItem extends Item implements MediaItem {
+public class PlaylistItem extends Item implements MediaItem {
     /** Most links any disc holds (the network's limit). */
     public static final int MAX_ENTRIES = 64;
     private static final int SHOWN_ENTRIES = 5;
 
     private final DiscKind kind;
 
-    public VideoDiscItem(Properties properties, DiscKind kind) {
+    public PlaylistItem(Properties properties, DiscKind kind) {
         super(properties);
         if (kind.entries > MAX_ENTRIES) {
             throw new IllegalArgumentException("A disc holds at most " + MAX_ENTRIES + " links");
@@ -52,7 +47,7 @@ public class VideoDiscItem extends Item implements MediaItem {
 
     @Override
     public List<String> links(ItemStack stack) {
-        return stack.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
+        return stack.getOrDefault(DiscFeature.PLAYLIST.get(), List.of());
     }
 
     @Override
@@ -87,7 +82,7 @@ public class VideoDiscItem extends Item implements MediaItem {
     public record SetPlaylist(List<String> urls) implements CustomPacketPayload {
         public static final Type<SetPlaylist> TYPE = new Type<>(CreateMediaSystems.id("set_playlist"));
         public static final StreamCodec<ByteBuf, SetPlaylist> CODEC = StreamPackets.URL
-                .apply(ByteBufCodecs.list(VideoDiscItem.MAX_ENTRIES)).map(SetPlaylist::new, SetPlaylist::urls);
+                .apply(ByteBufCodecs.list(PlaylistItem.MAX_ENTRIES)).map(SetPlaylist::new, SetPlaylist::urls);
 
         @Override
         public Type<SetPlaylist> type() {
@@ -101,7 +96,7 @@ public class VideoDiscItem extends Item implements MediaItem {
      */
     static void writePlaylist(ServerPlayer player, List<String> urls) {
         ItemStack held = player.getMainHandItem();
-        if (!(held.getItem() instanceof VideoDiscItem disc)) {
+        if (!(held.getItem() instanceof PlaylistItem disc)) {
             return;
         }
         List<String> playlist = urls.stream().map(String::trim).filter(url -> !url.isEmpty())
@@ -116,9 +111,9 @@ public class VideoDiscItem extends Item implements MediaItem {
             }
         }
         if (playlist.isEmpty()) {
-            held.remove(VideoFeature.PLAYLIST.get());
+            held.remove(DiscFeature.PLAYLIST.get());
         } else {
-            held.set(VideoFeature.PLAYLIST.get(), playlist);
+            held.set(DiscFeature.PLAYLIST.get(), playlist);
         }
         player.displayClientMessage(Component.translatable(disc.kind.hasPicture() ? "create_media_systems.disc.saved"
                 : "create_media_systems.disc.saved_tracks", playlist.size())

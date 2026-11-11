@@ -534,11 +534,11 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             Entity root = controller();
             tooltip.add(getBlockState().getBlock().getName().withColor(LightingText.TEXT));
             if (root == null) {
-                tooltip.add(LightingText.message("assembly").withColor(LightingText.WARNING));
+                tooltip.add(LightingText.message(LightingText.WARNING, "assembly"));
             } else {
                 tooltip.add(LightingText.group(root.settings, root.settings.selectedGroup));
                 tooltip.add(LightingText.message("connected", LightingText.number(root.fixtures.size())));
-                tooltip.add(LightingText.message("controls"));
+                tooltip.add(LightingText.message(LightingText.MUTED, "controls"));
             }
             return true;
         }

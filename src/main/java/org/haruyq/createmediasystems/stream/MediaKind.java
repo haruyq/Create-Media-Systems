@@ -57,7 +57,6 @@ public enum MediaKind {
         return scheme.equals("http") || scheme.equals("https") ? WEB : null;
     }
 
-    /** How long {@code url}'s track waits for the rest of its listeners (see barrierTicks); a web link's if it is none. */
     public static long barrierTicks(@Nullable String url) {
         MediaKind kind = of(url);
         return (kind == null ? WEB : kind).barrierTicks;
@@ -69,7 +68,6 @@ public enum MediaKind {
         return disc == null || disc.owner().equals(player);
     }
 
-    /** {@code url} as a URI, surrounding spaces ignored; null if it isn't one. */
     @Nullable
     static URI uri(String url) {
         try {

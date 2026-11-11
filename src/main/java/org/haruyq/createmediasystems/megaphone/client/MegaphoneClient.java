@@ -1,10 +1,10 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
 import java.util.*;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.InteractionHand;
@@ -20,7 +20,6 @@ import org.haruyq.createmediasystems.megaphone.*;
 import org.haruyq.createmediasystems.playback.*;
 
 public final class MegaphoneClient {
-    /** A megaphone's music, from its horn in {@code player}'s {@code hand}, beamed where they look. */
     private record Horn(Player player,InteractionHand hand,UUID id) implements MusicEmitter {
         @Override public int cap(){return 8;}
         static Stream<Horn> near(Entity ear) {
@@ -33,7 +32,7 @@ public final class MegaphoneClient {
         ItemStack item(){return player.getItemInHand(hand);}
         @Override public int revision(){return MegaphoneData.revision(item());}
         @Override public ItemStack media(){return MegaphoneData.disc(item(),player.level());}
-        @Override public boolean present(){return !player.isRemoved() && player.level()==Minecraft.getInstance().level
+        @Override public boolean present(){return !player.isRemoved() && WorldEvents.isClientWorld(player.level())
                 && item().getItem() instanceof MegaphoneItem && MegaphoneData.id(item()).filter(id::equals).isPresent() && MegaphoneData.playing(item());}
         @Override public Vec3 position(){return player.getEyePosition().add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
         @Override public Vec3 velocity(){return DopplerMath.step(player);}
@@ -47,7 +46,16 @@ public final class MegaphoneClient {
         @Override public boolean viaApi(){return true;}
     }
     private MegaphoneClient(){}
+    /** The arm of each hand holding a playing megaphone held up before the face, following the head. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,Player p,float yaw,float pitch) {
+        for(var hand:InteractionHand.values()) {
+            var item=p.getItemInHand(hand);if(!(item.getItem() instanceof MegaphoneItem) || !MegaphoneData.playing(item))continue;
+            boolean right=(p.getMainArm()==net.minecraft.world.entity.HumanoidArm.RIGHT)==(hand==InteractionHand.MAIN_HAND);
+            var arm=right?model.rightArm:model.leftArm;arm.xRot=(float)(-Math.PI/2+Math.toRadians(pitch)*.8);arm.yRot=(float)Math.toRadians(yaw)+(right?-.12f:.12f);arm.zRot=0;
+        }
+    }
     public static void register(IEventBus bus) {
+        org.haruyq.createmediasystems.client.ArmPoses.add(MegaphoneClient::poseArms);
         bus.addListener((RegisterMenuScreensEvent e)->e.register(MegaphoneFeature.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
         bus.addListener((RegisterClientExtensionsEvent e)->e.registerItem(new IClientItemExtensions(){
             private MegaphoneItemRenderer renderer;

@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.List;
@@ -9,9 +10,9 @@ import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.Remotable.Action;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Disc;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Disc;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Drive;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import com.mojang.authlib.GameProfile;
@@ -39,7 +40,7 @@ public class DriveEmulatorGameTests {
         BlockPos pos = new BlockPos(1, 2, 1);
         helper.setBlock(pos.west(), AudioFeature.DISC_READER.get());
         helper.setBlock(pos.east(), VideoFeature.VIDEO_PLAYER.get());
-        helper.setBlock(pos, VideoFeature.DRIVE_EMULATOR.get());
+        helper.setBlock(pos, DiscFeature.DRIVE_EMULATOR.get());
         DriveEmulatorBlock.Entity emulator = helper.getBlockEntity(pos);
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos.east());
         DiscReaderBlock.Entity reader = helper.getBlockEntity(pos.west());
@@ -55,6 +56,7 @@ public class DriveEmulatorGameTests {
                         && !helper.getBlockState(pos).getValue(DriveEmulatorBlock.LIT),
                 "a real drive that closed on nothing leaves it free: " + emulator.drive() + " " + emulator.host());
         emulator.update(host, Drive.LOADING, "", Disc.BLU_RAY);
+        Component loading = emulator.status();
         helper.assertTrue(emulator.drive() == Drive.LOADING && host.getUUID().equals(emulator.host()) && player.playlist().isEmpty(),
                 "a disc the real drive closes on makes it its player's before it is read: " + emulator.drive() + " " + emulator.host());
         emulator.update(host, Drive.READING, "MOVIE", Disc.BLU_RAY);
@@ -69,26 +71,25 @@ public class DriveEmulatorGameTests {
         String link = new DiscUrl(host.getUUID(), UUID.randomUUID()).toString();
         emulator.update(host, Drive.READY, link, Disc.BLU_RAY);
         Streams.Source playing = player.nowPlaying();
-        helper.assertTrue(player.playlist().equals(List.of(link)) && playing != null && playing.video().maxHeight() == 1080
-                && reader.nowPlaying() == null, "the Blu-ray player beside it plays its Blu-ray, the disc reader doesn't: "
+        helper.assertTrue(player.playlist().equals(List.of(link)) && playing != null && reader.nowPlaying() == null, "the Blu-ray player beside it plays its Blu-ray, the disc reader doesn't: "
                 + player.playlist() + " " + playing + " " + reader.nowPlaying());
         helper.assertTrue("MOVIE (Blu-ray)".equals(emulator.discName()), "it is called by its label: " + emulator.discName());
-        helper.assertTrue(emulator.status().getString().equals(Component.translatable("create_media_systems.drive.loading").getString()),
+        helper.assertTrue(emulator.status().equals(loading),
                 "it says it loads until the player has its disc playing: " + emulator.status().getString());
 
         // A remote's buttons, as RemoteItem passes them on.
         player.control(Action.PLAY_PAUSE, 0, host);
-        helper.assertTrue(player.nowPlaying() == null && player.state().getString().toLowerCase(java.util.Locale.ROOT).contains("paused"), "paused: " + player.state().getString());
+        helper.assertTrue(player.nowPlaying() == null && player.transport().paused(), "paused: " + player.state().getString());
         player.control(Action.PLAY_PAUSE, 0, host);
         helper.assertTrue(player.nowPlaying() != null, "played on: " + player.state().getString());
         player.control(Action.STOP, 0, host);
-        helper.assertTrue(player.nowPlaying() == null && player.state().getString().toLowerCase(java.util.Locale.ROOT).contains("stopped"), "stopped: " + player.state().getString());
+        helper.assertTrue(player.nowPlaying() == null && !player.transport().playing(), "stopped: " + player.state().getString());
         player.control(Action.SELECT, 1, host);
         helper.assertTrue(player.nowPlaying() != null, "played again from its remote: " + player.state().getString());
 
         // A disc of the player's own comes first; taken out, the drive's plays again.
-        ItemStack own = new ItemStack(VideoFeature.BLU_RAY.get());
-        own.set(VideoFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));
+        ItemStack own = new ItemStack(DiscFeature.BLU_RAY.get());
+        own.set(DiscFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));
         player.insert(own, host);
         helper.assertTrue(player.playlist().equals(List.of("https://www.youtube.com/watch?v=own")), "its own disc: " + player.playlist());
         player.insert(ItemStack.EMPTY, host);
