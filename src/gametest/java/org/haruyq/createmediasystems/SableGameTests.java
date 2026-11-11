@@ -142,7 +142,9 @@ public class SableGameTests {
         Vec3 spot = new Vec3(plot.getX() + 0.2, plot.getY() + 1, plot.getZ() + 0.7);
         Vec3 eye = SableCompat.toWorld(level, plot, spot.add(0.3, 1.5, 1.2));
         Vec3 look = SableCompat.toWorld(level, plot, spot).subtract(eye).normalize();
-        Vec3 aimed = EqualizerBlock.aim(level, plot, eye, look);
+        // As ControlDrag#look takes the look into the equalizer's block space.
+        Vec3 from = SableCompat.toBlockSpace(level, plot, eye);
+        Vec3 aimed = EqualizerBlock.aim(plot, from, SableCompat.toBlockSpace(level, plot, eye.add(look)).subtract(from));
         helper.assertTrue(aimed != null && aimed.distanceTo(spot) < 1e-6,
                 "the crosshair finds the spot on a turned ship, got " + aimed);
 
