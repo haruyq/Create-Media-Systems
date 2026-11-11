@@ -37,6 +37,7 @@ public final class DiscLauncherTrigger {
     }
     @SubscribeEvent public static void tick(PlayerTickEvent.Post event) {
         if(!(event.getEntity() instanceof ServerPlayer p))return;
+        LauncherAimLock.tick(p);
         var held=HELD.get(p.getUUID());if(held==null)return;
         if(p.level().getGameTime()-held.updated>6 || !p.isAlive() || p.isSpectator() || p.getMainHandItem()!=held.weapon) {
             HELD.remove(p.getUUID());return;

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.launcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.*;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.item.*;
@@ -10,6 +11,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.*;
 import net.neoforged.neoforge.gametest.*;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID) @PrefixGameTestTemplate(false)
 public final class DiscDragonGameTests {
@@ -20,6 +22,48 @@ public final class DiscDragonGameTests {
         var parts=d.getSubEntities();for(int i=0;i<parts.length;i++)parts[i].setPos(b.add(i*6,2,0));return d;
     }
     private static DiscProjectile disc(GameTestHelper h){var d=new DiscProjectile(h.getLevel(),h.makeMockPlayer(GameType.SURVIVAL),new ItemStack(Items.MUSIC_DISC_CAT));d.setDeltaMovement(1,0,0);return d;}
+
+    @GameTest(template="empty")
+    public static void assistedShotLeadsTheMovingDragonHeadThroughRealFlightTicks(GameTestHelper h) {
+        var level = h.getLevel();
+        var dragon = dragon(h);
+        var player = h.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 88, 1))));
+        Vec3 eye = player.getEyePosition();
+        var head = dragon.head;
+        Vec3 motion = new Vec3(.9, 0, 0);
+        head.setPos(eye.add(.1, -.5, 38));
+        head.xo = head.getX() - motion.x;
+        head.yo = head.getY();
+        head.zo = head.getZ();
+        level.getChunkAt(head.blockPosition());
+
+        var original = new ItemStack(Items.MUSIC_DISC_CAT);
+        var cell = new ItemStack(LauncherFeature.cell(DiscCellTier.COPPER));
+        DiscCellItem.setMaster(cell, original);
+        ChargeableItem.setEnergy(cell, 2000);
+        var launcher = new ItemStack(LauncherFeature.DISC_LAUNCHER.get());
+        LauncherMagazine.setCell(launcher, cell);
+        launcher.set(LauncherFeature.LAUNCHER_AIM_MODULE.get(), true);
+        player.getInventory().setItem(0, launcher);
+        player.startUsingItem(InteractionHand.MAIN_HAND);
+        h.assertTrue(DiscLauncherItem.fire(player, 0, 0), "The launcher fires with its module mounted");
+        var assisted = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
+        var manual = DiscProjectile.forShot(player, original, 0, new Vec3(0, 0, 1), true);
+
+        for (int tick = 0; tick < 8; tick++) {
+            head.setPos(head.position().add(motion));
+            manual.tick();
+            assisted.tick();
+        }
+        h.assertTrue(!manual.embedded(), "An uncorrected shot misses the dragon head after it crosses the eye line");
+        h.assertTrue(assisted.attachmentTarget() == dragon && assisted.attachedToHead() && dragon.getHealth() == 176,
+                "The leading shot reaches the actual head eight flight ticks later and deals head damage");
+        assisted.discard();
+        dragon.discard();
+        h.succeed();
+    }
+
     @GameTest(template="empty") public static void actualSweptHeadHitAttachesToTheParentAndMovesWithTheAnimatedHead(GameTestHelper h){
         var dragon=dragon(h);var part=dragon.head;var shot=disc(h);var start=part.position().add(-2,.5,0);shot.setPos(start);
         var hit=DiscBallistics.trace(shot,start,start.add(4,0,0),e->e.canBeHitByProjectile() && (e==dragon || e instanceof net.minecraft.world.entity.boss.EnderDragonPart p && p.parentMob==dragon));

@@ -23,6 +23,15 @@ public final class DiscLauncherItem extends Item {
 
     public DiscLauncherItem(Properties properties) { super(properties); }
 
+    public static boolean hasAimModule(ItemStack launcher) {
+        return launcher.getOrDefault(LauncherFeature.LAUNCHER_AIM_MODULE.get(), false);
+    }
+
+    static boolean aiming(Player player, ItemStack stack) {
+        return stack.getItem() instanceof DiscLauncherItem && player.isUsingItem()
+                && player.getUsedItemHand() == InteractionHand.MAIN_HAND && player.getUseItem().is(stack.getItem());
+    }
+
     @Override
     public boolean shouldCauseReequipAnimation(ItemStack previous, ItemStack next, boolean slotChanged) {
         // Energy, escrow and animation timestamps change the stack without changing the held weapon.
@@ -80,9 +89,10 @@ public final class DiscLauncherItem extends Item {
         DiscCellTier tier = LauncherMagazine.tier(stack);
         ItemStack disc = LauncherMagazine.pop(stack);
         if (disc.isEmpty()) return false;
-        boolean aimed = player.isUsingItem() && player.getUseItem().is(stack.getItem());
-        DiscProjectile projectile = DiscProjectile.forShot(player, disc, startSeconds,
-                Vec3.directionFromRotation(pitch, yaw), aimed);
+        boolean aimed = aiming(player, stack);
+        Vec3 forward = Vec3.directionFromRotation(pitch, yaw);
+        Vec3 direction = aimed ? LauncherAimLock.direction(player, stack, forward) : forward;
+        DiscProjectile projectile = DiscProjectile.forShot(player, disc, startSeconds, direction, aimed);
         projectile.setCellTier(tier);
         if (!level.addFreshEntity(projectile)) {
             LauncherMagazine.setCell(stack, before);
@@ -137,6 +147,9 @@ public final class DiscLauncherItem extends Item {
                     tier.shots, (int) tier.damage).withStyle(ChatFormatting.GOLD));
         if (LauncherMagazine.reloading(stack)) {
             tooltip.add(Component.translatable("create_media_systems.launcher.reloading").withStyle(ChatFormatting.YELLOW));
+        }
+        if (hasAimModule(stack)) {
+            tooltip.add(Component.translatable("create_media_systems.launcher.aim_module").withStyle(ChatFormatting.LIGHT_PURPLE));
         }
         tooltip.add(Component.translatable("create_media_systems.launcher.controls").withStyle(ChatFormatting.GRAY));
     }

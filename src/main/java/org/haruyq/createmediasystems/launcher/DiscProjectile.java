@@ -87,12 +87,11 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         entityData.set(MUSIC_START_TICK, spawnedAtTick - playback.positionTicks());
     }
 
-    static DiscProjectile forShot(Player shooter, ItemStack disc, int startSeconds, Vec3 forward, boolean aimed) {
+    static DiscProjectile forShot(Player shooter, ItemStack disc, int startSeconds, Vec3 direction, boolean aimed) {
         Level level = shooter.level();
         DiscPlayback playback = DiscPlayback.prepare(level, disc).at(startSeconds * 20L);
         DiscProjectile projectile = new DiscProjectile(level, shooter, disc, playback);
         projectile.setPos(shooter.getEyePosition());
-        Vec3 direction = aimed ? DiscBallistics.assistAim(projectile, shooter, forward, projectile::canHitEntity) : forward;
         projectile.shoot(direction.x, direction.y, direction.z, LAUNCH_SPEED, aimed ? 0f : .15f);
         return projectile;
     }

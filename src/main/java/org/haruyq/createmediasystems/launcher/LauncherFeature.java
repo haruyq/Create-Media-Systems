@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import static org.haruyq.createmediasystems.CreateMediaSystems.ATTACHMENTS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCKS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCK_ENTITIES;
 import static org.haruyq.createmediasystems.CreateMediaSystems.COMPONENTS;
@@ -20,6 +21,8 @@ import org.haruyq.createmediasystems.Feature;
 import com.mojang.serialization.Codec;
 
 import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.entity.EntityType;
@@ -30,10 +33,12 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
@@ -70,6 +75,10 @@ public final class LauncherFeature implements Feature {
             "launcher_pending_cell", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
     public static final Supplier<DataComponentType<Boolean>> LAUNCHER_EJECT_ONLY = COMPONENTS.registerComponentType(
             "launcher_eject_only", b -> b.persistent(Codec.BOOL).networkSynchronized(ByteBufCodecs.BOOL));
+    public static final Supplier<DataComponentType<Boolean>> LAUNCHER_AIM_MODULE = COMPONENTS.registerComponentType(
+            "launcher_aim_module", b -> b.persistent(Codec.BOOL).networkSynchronized(ByteBufCodecs.BOOL));
+    static final Supplier<AttachmentType<LauncherAimLock>> AIM_LOCK = ATTACHMENTS.register(
+            "launcher_aim_lock", () -> AttachmentType.builder(LauncherAimLock::new).build());
 
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_FIRE_SOUND =
             SOUNDS.register("disc_fire", () -> SoundEvent.createVariableRangeEvent(id("disc_fire")));
@@ -97,7 +106,11 @@ public final class LauncherFeature implements Feature {
     public static final Supplier<BlockEntityType<DiscCellCharger>> DISC_CELL_CHARGER_ENTITY = BLOCK_ENTITIES.register(
             "disc_cell_charger", () -> BlockEntityType.Builder.of(DiscCellCharger::new, DISC_CELL_CHARGER.get()).build(null));
     public static final DeferredItem<DiscLauncherItem> DISC_LAUNCHER = ITEMS.register("disc_launcher",
-            () -> new DiscLauncherItem(new Item.Properties().stacksTo(1)));
+            () -> new DiscLauncherItem(new Item.Properties().stacksTo(1).component(LAUNCHER_AIM_MODULE.get(), false)));
+    public static final DeferredItem<Item> LAUNCHER_AIM_MODULE_ITEM = ITEMS.register("launcher_aim_module",
+            () -> new Item(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)
+                    .component(DataComponents.LORE, new ItemLore(List.of(
+                            Component.translatable("item.create_media_systems.launcher_aim_module.install"))))));
     public static final DeferredHolder<EntityType<?>, EntityType<DiscProjectile>> DISC_PROJECTILE =
             ENTITIES.register("disc_projectile", () -> EntityType.Builder.<DiscProjectile>of(
                     DiscProjectile::new, MobCategory.MISC).sized(.35f, .12f)

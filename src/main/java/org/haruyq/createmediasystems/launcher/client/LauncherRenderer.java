@@ -13,6 +13,7 @@ import org.haruyq.createmediasystems.client.mesh.Tint;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;
+import org.haruyq.createmediasystems.launcher.DiscLauncherItem;
 import org.haruyq.createmediasystems.launcher.LauncherMechanics;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -72,7 +73,8 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         box(pose, mesh, 6.3f, 5.4f, 15, 7, 7.2f, 15.7f, BRASS, light, overlay);
 
         float spin = level == null ? 0 : (level.getGameTime()%360+partial)*16;
-        frontAssembly(pose,mesh,glow,motion.latch(),spin,-motion.bolt()*2.4f-motion.recoil()*1.2f,light,overlay);
+        frontAssembly(pose,mesh,glow,motion.latch(),spin,-motion.bolt()*2.4f-motion.recoil()*1.2f,
+                DiscLauncherItem.hasAimModule(stack),light,overlay);
 
         // The taller lid clears the cell's top button with .45 model pixels to spare.
         pose.pushPose();
@@ -123,7 +125,8 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
     }
 
     /** Every front part, including the optic, shares one hinge and cannot be left at its idle position. */
-    static void frontAssembly(PoseStack pose,VertexConsumer mesh,VertexConsumer glow,float latch,float spin,float boltOffset,int light,int overlay) {
+    static void frontAssembly(PoseStack pose,VertexConsumer mesh,VertexConsumer glow,float latch,float spin,
+                              float boltOffset,boolean aimModule,int light,int overlay) {
         pose.pushPose();
         pose.translate(8,9,8.2f);pose.mulPose(Axis.XP.rotationDegrees(-latch*14));pose.translate(-8,-9,-8.2f);
         box(pose,mesh,5.7f,12.1f,5.9f,6.3f,16.1f,7.2f,METAL,light,overlay);
@@ -135,6 +138,13 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         box(pose,mesh,5.65f,20.25f,5.9f,10.35f,20.7f,7.2f,DARK,light,overlay);
         box(pose,mesh,6.1f,17.1f,5.9f,9.9f,17.55f,7.2f,DARK,light,overlay);
         box(pose,glow,5.5f,18.0f,6.15f,5.65f,19.3f,6.85f,LIGHT,FULL_BRIGHT,overlay);
+        if (aimModule) {
+            box(pose, mesh, 10.25f, 16.42f, 5.95f, 11.2f, 17.08f, 7.25f, BRASS, light, overlay);
+            box(pose, mesh, 11.18f, 16.15f, 4.3f, 13.52f, 18.65f, 7.6f, DARK, light, overlay);
+            box(pose, mesh, 11.38f, 16.38f, 4.04f, 13.32f, 18.42f, 4.3f, BRASS, light, overlay);
+            box(pose, new Tint(mesh, 0xB5A0FF, 255), 11.65f, 16.68f, 3.99f, 13.05f, 18.12f, 4.04f,
+                    LIGHT, FULL_BRIGHT, overlay);
+        }
         // Front rail and barrel ribs make the direction legible in both hip fire and ADS.
         for(int i=0;i<4;i++)box(pose,mesh,5.25f,12.1f,1.7f+i*.9f,10.75f,12.5f,2.05f+i*.9f,DARK,light,overlay);
 

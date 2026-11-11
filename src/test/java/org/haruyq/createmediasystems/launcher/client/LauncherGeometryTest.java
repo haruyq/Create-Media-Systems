@@ -73,8 +73,8 @@ class LauncherGeometryTest {
 
     @Test void everyOpticAndReceiverVertexFollowsTheSameReloadHinge() {
         Mesh closed=new Mesh(),open=new Mesh();
-        LauncherRenderer.frontAssembly(new PoseStack(),closed,closed,0,0,0,0,0);
-        LauncherRenderer.frontAssembly(new PoseStack(),open,open,1,0,0,0,0);
+        LauncherRenderer.frontAssembly(new PoseStack(),closed,closed,0,0,0,true,0,0);
+        LauncherRenderer.frontAssembly(new PoseStack(),open,open,1,0,0,true,0,0);
         assertTrue(closed.vertices.size()==open.vertices.size());closed.assertOutward();open.assertOutward();
         int optic=0;
         for(int i=0;i<closed.vertices.size();i++) {

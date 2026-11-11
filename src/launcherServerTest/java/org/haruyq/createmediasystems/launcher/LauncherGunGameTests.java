@@ -2,13 +2,20 @@ package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import com.simibubi.create.AllItems;
+import com.simibubi.create.content.kinetics.crafter.MechanicalCraftingRecipe;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.animal.IronGolem;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.inventory.SmithingMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -67,12 +74,16 @@ public final class LauncherGunGameTests {
         h.assertTrue(DiscBallistics.trace(manual, eye, eye.add(forward.scale(32)), e -> e == target).getType()
                 == HitResult.Type.MISS, "The original reticle ray misses the target");
 
-        player.getInventory().setItem(0, gun());
+        var launcher = gun();
+        player.getInventory().setItem(0, launcher);
         player.startUsingItem(InteractionHand.MAIN_HAND);
+        h.assertTrue(LauncherAimLock.direction(player, launcher, forward).equals(forward),
+                "The bare launcher leaves the near miss uncorrected");
+        launcher.set(LauncherFeature.LAUNCHER_AIM_MODULE.get(), true);
         h.assertTrue(DiscLauncherItem.fire(player, 0, 0), "The aimed trigger fires");
         var fired = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
         Vec3 assisted = fired.getDeltaMovement().normalize();
-        h.assertTrue(assisted.dot(forward) >= Math.cos(Math.toRadians(4)) - 1e-6,
+        h.assertTrue(assisted.dot(forward) >= Math.cos(Math.toRadians(6)) - 1e-6,
                 "The trigger nudges the projectile within the assist cone");
         for (int tick = 0; tick < 8 && !fired.embedded(); tick++) fired.tick();
         h.assertTrue(fired.attachmentTarget() == target, "The assisted shot hits and attaches to the target");
@@ -80,8 +91,7 @@ public final class LauncherGunGameTests {
 
         var disc = new ItemStack(Items.MUSIC_DISC_CAT);
         Vec3 headAim = target.getEyePosition().subtract(eye).normalize();
-        var headshot = DiscProjectile.forShot(player, disc, 0, headAim, true);
-        h.assertTrue(headshot.getDeltaMovement().normalize().distanceTo(headAim) < 1e-7,
+        h.assertTrue(LauncherAimLock.direction(player, launcher, headAim).distanceTo(headAim) < 1e-7,
                 "An aimed headshot keeps its exact direction");
         var hipfire = DiscProjectile.forShot(player, disc, 0, forward, false);
         Vec3 hipfireEnd = eye.add(hipfire.getDeltaMovement().normalize().scale(32));
@@ -90,13 +100,87 @@ public final class LauncherGunGameTests {
 
         BlockPos cover = BlockPos.containing(eye.add(.4, 0, 8));
         level.setBlockAndUpdate(cover, Blocks.STONE.defaultBlockState());
-        var covered = DiscProjectile.forShot(player, disc, 0, forward, true);
-        h.assertTrue(covered.getDeltaMovement().normalize().distanceTo(forward) < 1e-7,
+        h.assertTrue(LauncherAimLock.direction(player, launcher, forward).distanceTo(forward) < 1e-7,
                 "Cover blocks aim assistance");
         level.removeBlock(cover, false);
         target.discard();
         h.succeed();
     }
+
+    @GameTest(template="empty")
+    public static void lockKeepsAnOrdinaryTargetUntilThePlayerLowersTheLauncher(GameTestHelper h) {
+        var level = h.getLevel();
+        var player = h.makeMockPlayer(GameType.SURVIVAL);
+        Vec3 base = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 67, 1)));
+        player.setPos(base);
+        var launcher = gun();
+        launcher.set(LauncherFeature.LAUNCHER_AIM_MODULE.get(), true);
+        player.getInventory().setItem(0, launcher);
+        player.startUsingItem(InteractionHand.MAIN_HAND);
+        var first = EntityType.IRON_GOLEM.create(level);
+        first.setNoAi(true);
+        first.setPos(base.add(1, 0, 17));
+        level.getChunkAt(first.blockPosition());
+        level.addFreshEntity(first);
+        Vec3 eye = player.getEyePosition();
+        LauncherAimLock.direction(player, launcher, new Vec3(0, 0, 1));
+
+        var second = EntityType.IRON_GOLEM.create(level);
+        second.setNoAi(true);
+        second.setPos(base.add(-3, 0, 16));
+        level.getChunkAt(second.blockPosition());
+        level.addFreshEntity(second);
+        Vec3 towardSecond = second.getBoundingBox().getCenter().subtract(eye).normalize();
+        Vec3 retained = LauncherAimLock.direction(player, launcher, towardSecond);
+        var retainedHit = DiscBallistics.trace(player, eye, eye.add(retained.scale(30)), e -> e == first || e == second);
+        h.assertTrue(retainedHit instanceof EntityHitResult hit && hit.getEntity() == first,
+                "The lock keeps tracking the first golem while a second crosses the reticle");
+
+        player.stopUsingItem();
+        LauncherAimLock.tick(player);
+        player.startUsingItem(InteractionHand.MAIN_HAND);
+        Vec3 reacquired = LauncherAimLock.direction(player, launcher, towardSecond);
+        h.assertTrue(reacquired.distanceTo(towardSecond) < 1e-7, "Lowering the launcher lets the player pick a new target");
+        first.discard();
+        second.discard();
+        h.succeed();
+    }
+
+    @GameTest(template="empty")
+    public static void aimModuleCraftsAndSmithingKeepsTheLoadedCell(GameTestHelper h) {
+        var level = h.getLevel();
+        var mechanical = level.getRecipeManager().byKey(CreateMediaSystems.id("launcher_aim_module")).orElseThrow().value();
+        h.assertTrue(mechanical instanceof MechanicalCraftingRecipe recipe
+                        && recipe.getWidth() == 5 && recipe.getHeight() == 5
+                        && recipe.getResultItem(level.registryAccess()).is(LauncherFeature.LAUNCHER_AIM_MODULE_ITEM.get()),
+                "The registered module recipe uses the five-by-five Mechanical Crafter");
+
+        var player = h.makeMockPlayer(GameType.SURVIVAL);
+        BlockPos table = h.absolutePos(new BlockPos(1, 1, 1));
+        level.setBlockAndUpdate(table, Blocks.SMITHING_TABLE.defaultBlockState());
+        var menu = new SmithingMenu(1, player.getInventory(), ContainerLevelAccess.create(level, table));
+        var launcher = gun();
+        launcher.set(DataComponents.CUSTOM_NAME, Component.literal("Loaded launcher"));
+        var loaded = LauncherMagazine.cell(launcher);
+        menu.getSlot(0).set(new ItemStack(LauncherFeature.LAUNCHER_AIM_MODULE_ITEM.get()));
+        menu.getSlot(1).set(launcher);
+        menu.getSlot(2).set(AllItems.STURDY_SHEET.asStack());
+        menu.clicked(3, 0, ClickType.PICKUP, player);
+        ItemStack installed = menu.getCarried();
+        h.assertTrue(DiscLauncherItem.hasAimModule(installed) && installed.getHoverName().getString().equals("Loaded launcher")
+                        && ItemStack.matches(loaded, LauncherMagazine.cell(installed)),
+                "Taking the smithing result mounts the module while preserving the renamed launcher and its loaded cell");
+        h.assertTrue(menu.getSlot(0).getItem().isEmpty() && menu.getSlot(1).getItem().isEmpty()
+                        && menu.getSlot(2).getItem().isEmpty(), "Smithing consumes the three inputs");
+        var restored = ItemStack.parse(level.registryAccess(), installed.save(level.registryAccess())).orElseThrow();
+        menu.getSlot(0).set(new ItemStack(LauncherFeature.LAUNCHER_AIM_MODULE_ITEM.get()));
+        menu.getSlot(1).set(restored);
+        menu.getSlot(2).set(AllItems.STURDY_SHEET.asStack());
+        h.assertTrue(DiscLauncherItem.hasAimModule(restored) && menu.getSlot(3).getItem().isEmpty(),
+                "The mount persists through a save and accepts only one module");
+        h.succeed();
+    }
+
     @GameTest(template="empty")
     public static void everyRapidBodyHitDealsFullDamageWithoutChangingOtherWeaponsInvulnerability(GameTestHelper h) {
         var p=h.makeMockPlayer(GameType.SURVIVAL);var target=new IronGolem(EntityType.IRON_GOLEM,h.getLevel());

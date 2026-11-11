@@ -1,0 +1,26 @@
+{
+  "type": "create:mechanical_crafting",
+  "accept_mirrored": false,
+  "category": "equipment",
+  "show_notification": false,
+  "pattern": [
+    "NPXPN",
+    "ESCSE",
+    "DBWBD",
+    "ESCSE",
+    "NPHPN"
+  ],
+  "key": {
+    "N": { "item": "minecraft:netherite_ingot" },
+    "P": { "item": "create:precision_mechanism" },
+    "X": { "item": "minecraft:end_crystal" },
+    "E": { "item": "minecraft:echo_shard" },
+    "S": { "item": "minecraft:spyglass" },
+    "C": { "item": "create:electron_tube" },
+    "D": { "item": "minecraft:dragon_breath" },
+    "B": { "item": "create:sturdy_sheet" },
+    "W": { "item": "minecraft:nether_star" },
+    "H": { "item": "minecraft:dragon_head" }
+  },
+  "result": { "id": "create_media_systems:launcher_aim_module", "count": 1 }
+}

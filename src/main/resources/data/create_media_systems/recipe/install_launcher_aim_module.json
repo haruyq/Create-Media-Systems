@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:smithing_transform",
+  "template": { "item": "create_media_systems:launcher_aim_module" },
+  "base": {
+    "type": "neoforge:components",
+    "items": "create_media_systems:disc_launcher",
+    "components": { "create_media_systems:launcher_aim_module": false }
+  },
+  "addition": { "item": "create:sturdy_sheet" },
+  "result": {
+    "id": "create_media_systems:disc_launcher",
+    "components": { "create_media_systems:launcher_aim_module": true }
+  }
+}
