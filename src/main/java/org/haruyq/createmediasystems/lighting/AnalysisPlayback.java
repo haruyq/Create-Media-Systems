@@ -370,8 +370,8 @@ public final class AnalysisPlayback {
     }
 
     public static double apply(LightingConsoleBlock.Entity console, double fallbackSeconds) {
-        Playback audio = find(console.audioSource);
-        Playback video = find(console.videoSource);
+        Playback audio = find(console.audioSource());
+        Playback video = find(console.videoSource());
         console.receive(sample(audio), sample(video), console.getLevel().getGameTime());
         AnalysisTimeline timeline = audio == null ? null : audio.tracks.get(audio.state.track());
         long position = audio == null ? 0 : audio.samplePosition();

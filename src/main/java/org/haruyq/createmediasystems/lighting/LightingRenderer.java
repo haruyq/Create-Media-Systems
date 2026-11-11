@@ -198,7 +198,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return;
         }
         var console = lamp.controller();
-        LightingSettings.Group group = console == null ? new LightingSettings.Group() : console.settings.groups[lamp.group];
+        LightingSettings.Group group = console == null ? new LightingSettings.Group() : console.settings.groups[lamp.group()];
         boolean enabled = console != null && console.formed && console.settings.enabled;
         double seconds = LightingMotion.seconds(level.getGameTime(), partialTick);
         if (console != null) {
@@ -207,8 +207,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         LightingMotion motion = MOTION.computeIfAbsent(lamp, ignored -> new LightingMotion());
         float pan = group.pan;
         float tilt = group.tilt;
-        double phase = (group.audio && console != null && console.audioSource != null ? console.motionPhase : seconds)
-                * group.speed + lamp.order * 0.35;
+        double phase = (group.audio && console != null && console.audioSource() != null ? console.motionPhase : seconds)
+                * group.speed + lamp.order() * 0.35;
         if (group.motion == LightingSettings.Group.MOTION_SWEEP) {
             pan += (float) Math.sin(phase) * 55;
         } else if (group.motion == LightingSettings.Group.MOTION_CIRCLE) {
@@ -270,9 +270,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             float floor = group.motion == LightingSettings.Group.MOTION_TRACK && !lamp.laser() ? 0.65f : 0.12f;
             strength *= Mth.clamp(floor + energy * 1.5f + console.pulse * 0.35f, 0, 1);
         }
-        int count = console == null ? 1 : Math.max(1, console.groupSize(lamp.group));
+        int count = console == null ? 1 : Math.max(1, console.groupSize(lamp.group()));
         boolean video = console != null && console.hasVideo && level.getGameTime() - console.signalAt < 30;
-        int color = LightingSettings.color(group, lamp.order, count, seconds,
+        int color = LightingSettings.color(group, lamp.order(), count, seconds,
                 console == null ? 0 : console.videoLeft, console == null ? 0 : console.videoRight,
                 video);
         if (group.mapping == LightingSettings.Group.MAPPING_PER_FIXTURE
@@ -883,8 +883,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                         LightingText.label("band", LightingText.mode("band", selected.audioBand)), LightingText.label("cycle", LightingText.on(selected.colorCycle)),
                         LightingText.label("pattern", LightingText.mode("pattern", selected.pattern)),
                         LightingText.label("sources", LightingText.text("A ", LightingText.TEXT)
-                                .append(LightingText.source(console.audioSource != null, console.hasAudio)).append("  V ")
-                                .append(LightingText.source(console.videoSource != null, console.hasVideo)))
+                                .append(LightingText.source(console.audioSource() != null, console.hasAudio)).append("  V ")
+                                .append(LightingText.source(console.videoSource() != null, console.hasVideo)))
                 };
                 for (int i = 0; i < show.length; i++) {
                     text(buffers, matrix, 1.08f, 1.845f - i * (0.74f / 6), show[i], 0.84f);

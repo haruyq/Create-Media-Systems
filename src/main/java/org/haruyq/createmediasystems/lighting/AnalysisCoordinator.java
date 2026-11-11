@@ -12,7 +12,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.MediaSource;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.BlockIdentity;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import net.minecraft.core.BlockPos;
@@ -110,14 +110,14 @@ public final class AnalysisCoordinator {
         if (!(console.getLevel() instanceof ServerLevel level)) {
             return;
         }
-        use(level, console.audioSource, console.getBlockPos());
-        use(level, console.videoSource, console.getBlockPos());
-        console.receive(sample(level, console.audioSource), sample(level, console.videoSource), level.getGameTime());
+        use(level, console.audioSource(), console.getBlockPos());
+        use(level, console.videoSource(), console.getBlockPos());
+        console.receive(sample(level, console.audioSource()), sample(level, console.videoSource()), level.getGameTime());
     }
 
     private static AnalysisFrame sample(ServerLevel level, BlockPos pos) {
         Map<UUID, Session> sessions = LEVELS.get(level);
-        Session session = sessions == null || pos == null ? null : sessions.get(SourceLinks.identify(level, pos));
+        Session session = sessions == null || pos == null ? null : sessions.get(BlockIdentity.of(level, pos));
         AnalysisTimeline timeline = session == null || !session.active ? null : session.tracks.get(session.track);
         long position = session == null ? 0 : session.position();
         return timeline == null ? null : timeline.sample(position, Math.round(session.delay.at(position)));
@@ -127,7 +127,7 @@ public final class AnalysisCoordinator {
         if (pos == null || !level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof MediaSource media)) {
             return;
         }
-        UUID id = SourceLinks.identify(level, pos);
+        UUID id = BlockIdentity.of(level, pos);
         if (id == null) {
             return;
         }

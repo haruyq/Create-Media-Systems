@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.video.VideoFeature;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.BlockIdentity;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -35,15 +35,15 @@ public final class AnalysisGameTests {
         disc.set(VideoFeature.PLAYLIST.get(), List.of("https://example.com/current.mp4", "https://example.com/next.mp4"));
         player.insert(disc, null);
         LightingConsoleBlock.Entity console = (LightingConsoleBlock.Entity) helper.getLevel().getBlockEntity(consolePos);
-        console.videoSource = playerPos;
+        console.setVideoSource(playerPos);
         AnalysisCoordinator.use(console);
-        UUID loadingSource = SourceLinks.identify(helper.getLevel(), playerPos);
+        UUID loadingSource = BlockIdentity.of(helper.getLevel(), playerPos);
         helper.assertTrue(!(boolean) get(session(helper.getLevel(), loadingSource), "active"),
                 "lights ran on a track still loading");
         loaded(player, console);
 
         ServerPlayer fake = FakePlayerFactory.getMinecraft(helper.getLevel());
-        UUID source = SourceLinks.identify(helper.getLevel(), playerPos);
+        UUID source = BlockIdentity.of(helper.getLevel(), playerPos);
         Object session = session(helper.getLevel(), source);
         helper.assertTrue(session != null, "analysis session was not created");
         @SuppressWarnings("unchecked")

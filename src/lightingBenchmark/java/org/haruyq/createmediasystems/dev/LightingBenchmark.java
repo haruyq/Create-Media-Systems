@@ -90,7 +90,7 @@ public final class LightingBenchmark {
         player.control(Remotable.Action.SELECT, 1, null);
         active = new Phase(mode, System.nanoTime());
         level.players().forEach(LightingBenchmark::camera);
-        LogUtils.getLogger().info("Lighting benchmark phase {}: {} fixtures", mode.key, console.fixtures.size());
+        LogUtils.getLogger().info("Lighting benchmark phase {}: {} fixtures", mode.key, console.fixtures().size());
     }
 
     @SubscribeEvent
@@ -117,7 +117,7 @@ public final class LightingBenchmark {
 
     private static void build(ServerLevel level, LightingConsoleBlock.Entity console, VideoPlayerBlock.Entity player)
             throws ReflectiveOperationException {
-        for (BlockPos pos : List.copyOf(console.fixtures)) {
+        for (BlockPos pos : console.fixtures()) {
             if (level.getBlockEntity(pos) instanceof StageLightBlock.Entity) {
                 level.removeBlock(pos, false);
             }
@@ -384,7 +384,7 @@ public final class LightingBenchmark {
                 started = 0;
                 var video = NativeAudio.screen(PLAYER);
                 if (!(minecraft.level.getBlockEntity(CONSOLE) instanceof LightingConsoleBlock.Entity console)
-                        || console.fixtures.size() != FIXTURES || console.settings.enabled != current.mode.fixtures()
+                        || console.fixtures().size() != FIXTURES || console.settings.enabled != current.mode.fixtures()
                         || console.settings.groups[0].pattern != (current.mode.laser ? 3 : 0)
                         || console.settings.groups[0].tilt != current.mode.tilt(0)
                         || console.settings.groups[2].brightness != current.mode.brightness(2)

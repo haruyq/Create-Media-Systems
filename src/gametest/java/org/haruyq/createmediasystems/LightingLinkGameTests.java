@@ -8,7 +8,6 @@ import java.util.List;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.LightingLinkItem;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
-import org.haruyq.createmediasystems.stream.SourceLinks;
 
 import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
@@ -117,9 +116,8 @@ public class LightingLinkGameTests {
         StageLightBlock.Entity light = (StageLightBlock.Entity) reload(level, fixture, savedLight);
         root.refreshLinks();
         helper.assertTrue(light.controller() == root, "legacy position links upgrade after reload");
-        helper.assertTrue(root.audioSource.equals(media) && root.videoSource.equals(media), "legacy media links upgrade");
+        helper.assertTrue(root.audioSource().equals(media) && root.videoSource().equals(media), "legacy media links upgrade");
         helper.assertTrue(root.settings.groups[2].colors[0] == 0x123456, "reload preserves palette");
-        helper.assertTrue(SourceLinks.identify(level, origin) == null, "media identification still rejects consoles");
         root = (LightingConsoleBlock.Entity) reload(level, origin, root.saveWithFullMetadata(level.registryAccess()));
         light = (StageLightBlock.Entity) reload(level, fixture, light.saveWithFullMetadata(level.registryAccess()));
         root.refreshLinks();
@@ -128,7 +126,7 @@ public class LightingLinkGameTests {
         level.setBlockAndUpdate(media, Blocks.AIR.defaultBlockState());
         level.setBlockAndUpdate(media, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         root.refreshLinks();
-        helper.assertTrue(root.audioSource == null && root.videoSource == null, "replacement media does not inherit links");
+        helper.assertTrue(root.audioSource() == null && root.videoSource() == null, "replacement media does not inherit links");
         ItemStack link = new ItemStack(LightingFeature.LIGHTING_LINK.get());
         link.set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), origin));
         link.set(LightingFeature.LIGHTING_SOURCE.get(), root.identity());
@@ -142,7 +140,7 @@ public class LightingLinkGameTests {
         replacement.refreshLinks();
         helper.assertTrue(light.controller() == null, "replacement console does not inherit fixture links");
         helper.assertTrue(LightingLinkItem.selected(operator) == null, "selection does not follow a replacement console");
-        helper.assertTrue(replacement.fixtures.isEmpty(), "replacement console starts unlinked");
+        helper.assertTrue(replacement.fixtures().isEmpty(), "replacement console starts unlinked");
         helper.succeed();
     }
 
@@ -209,13 +207,13 @@ public class LightingLinkGameTests {
         root.refreshLinks();
         root.updateStructure();
         helper.assertTrue(root.formed && root.controller() == root, "multiblock remains formed after relocation");
-        helper.assertTrue(root.fixtures.equals(List.of(first, second)), "fixture order follows both endpoints");
+        helper.assertTrue(root.fixtures().equals(List.of(first, second)), "fixture order follows both endpoints");
         StageLightBlock.Entity a = (StageLightBlock.Entity) level.getBlockEntity(first);
         StageLightBlock.Entity b = (StageLightBlock.Entity) level.getBlockEntity(second);
         helper.assertTrue(a.controller() == root && b.controller() == root, "ground and ship fixtures keep their console");
-        helper.assertTrue(a.group == 2 && b.group == 2 && a.order == 0 && b.order == 1 && root.groupSize(2) == 2,
+        helper.assertTrue(a.group() == 2 && b.group() == 2 && a.order() == 0 && b.order() == 1 && root.groupSize(2) == 2,
                 "group assignment and order survive relocation");
-        helper.assertTrue(audio.equals(root.audioSource) && video.equals(root.videoSource), "media references follow their own source");
+        helper.assertTrue(audio.equals(root.audioSource()) && video.equals(root.videoSource()), "media references follow their own source");
         helper.assertTrue(LightingLinkItem.selected(operator) == root, "link item follows console identity");
     }
 

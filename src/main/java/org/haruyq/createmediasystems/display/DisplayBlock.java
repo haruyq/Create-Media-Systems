@@ -6,7 +6,7 @@ import java.util.Optional;
 
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.lighting.LightingScreens;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 import org.haruyq.createmediasystems.stream.VideoSource;
@@ -169,7 +169,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
     }
 
     public static class Entity extends BlockEntity implements IHaveGoggleInformation {
-        private final SourceLinks.Link source = new SourceLinks.Link();
+        private Link source = Link.NONE;
         private int width = UNIT;
         private int height = UNIT;
         private Ratio ratio = Ratio.WIDE;
@@ -189,7 +189,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         }
 
         public Optional<BlockPos> source() {
-            return source.get(level, this::changed);
+            return Optional.ofNullable(source.pos());
         }
 
         public double width() {
@@ -232,7 +232,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
 
         /** Links it to the Blu-ray player at {@code source}, or unlinks it; its viewers start over. */
         void link(@Nullable BlockPos source) {
-            this.source.set(level, source);
+            this.source = Link.to(level, source);
             changed();
         }
 
@@ -274,6 +274,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             if (!Streams.relayDue(level)) {
                 return;
             }
+            followSource(level);
             Optional<BlockPos> linked = source();
             VideoSource videoPlayer = linked.filter(level::isLoaded).map(level::getBlockEntity)
                     .orElse(null) instanceof VideoSource found ? found : null;
@@ -284,6 +285,15 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             boolean speakers = linked.isPresent() && Streams.relayedBy(level, linked.get(), SpeakerBlock.Entity.class);
             Streams.relay(level, this, linked, center(), Optional.empty(), Streams.Channel.MIX,
                     videoPlayer == null || speakers ? 0 : 1);
+        }
+
+        /** Its source as it is now, where Sable moved it; resent if that changed. */
+        public void followSource(ServerLevel level) {
+            Link followed = source.follow(level);
+            if (!followed.equals(source)) {
+                source = followed;
+                changed();
+            }
         }
 
         @Override
@@ -317,7 +327,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         @Override
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
-            source.save(level, tag);
+            source.save(tag, "Source", "SourceId");
             tag.putInt("Width16", width);
             tag.putInt("Height16", height);
             tag.putInt("Ratio", ratio.ordinal());
@@ -330,7 +340,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         @Override
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
-            source.load(tag);
+            source = Link.load(tag, "Source", "SourceId");
             width = tag.contains("Width16") ? clampSize(tag.getInt("Width16")) : UNIT;
             height = tag.contains("Height16") ? clampSize(tag.getInt("Height16")) : UNIT;
             ratio = tag.contains("Ratio") ? Ratio.byId(tag.getInt("Ratio")) : Ratio.WIDE;

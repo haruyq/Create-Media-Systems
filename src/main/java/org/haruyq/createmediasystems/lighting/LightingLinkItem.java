@@ -1,12 +1,11 @@
 package org.haruyq.createmediasystems.lighting;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.VideoSource;
 
 import net.minecraft.core.BlockPos;
@@ -33,21 +32,8 @@ public class LightingLinkItem extends Item {
         if (target == null || !target.dimension().equals(player.level().dimension())) {
             return null;
         }
-        BlockPos pos = target.pos();
-        if (!player.level().isClientSide) {
-            UUID id = player.getMainHandItem().get(LightingFeature.LIGHTING_SOURCE.get());
-            LightingConsoleBlock.Entity legacy = id == null ? LightingConsoleBlock.find(player.level(), pos) : null;
-            if (legacy != null) {
-                id = legacy.identity();
-                if (id != null) {
-                    player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), id);
-                }
-            }
-            pos = SourceLinks.resolve(player.level(), id, pos);
-            if (pos != null && !pos.equals(target.pos())) {
-                player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(target.dimension(), pos));
-            }
-        }
+        BlockPos pos = Link.follow(player.level(), player.getMainHandItem(), LightingFeature.LIGHTING_TARGET.get(),
+                LightingFeature.LIGHTING_SOURCE.get());
         return pos == null ? null : LightingConsoleBlock.find(player.level(), pos);
     }
 
@@ -64,9 +50,9 @@ public class LightingLinkItem extends Item {
         }
         LightingConsoleBlock.Entity clicked = LightingConsoleBlock.find(level, pos);
         if (clicked != null) {
-            player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(),
-                    GlobalPos.of(level.dimension(), clicked.getBlockPos()));
-            player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), clicked.identity());
+            Link console = Link.to(level, clicked.getBlockPos());
+            player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), console.pos()));
+            player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), console.id());
             clicked.refreshLinks();
             say(player, "picked", LightingText.group(clicked.settings, clicked.settings.selectedGroup));
             return;
@@ -80,21 +66,21 @@ public class LightingLinkItem extends Item {
             say(player, "pick_first");
             return;
         }
-        if (SableCompat.distance(level, console.getBlockPos(), pos) > SourceLinks.MAX_LINK_DISTANCE
-                || !SableCompat.mayInteract(level, player, console.getBlockPos())) {
+        if (!Link.inReach(level, console.getBlockPos(), pos) || !SableCompat.mayInteract(level, player, console.getBlockPos())) {
             say(player, "too_far");
             return;
         }
         if (block instanceof StageLightBlock.Entity light) {
-            LightingConsoleBlock.Entity previous = light.linkedController();
+            LightingConsoleBlock.Entity previous = light.linked();
             if (previous != null && !SableCompat.mayInteract(level, player, previous.getBlockPos())) {
                 return;
             }
-            if (player.isShiftKeyDown() || previous == console && light.group == console.settings.selectedGroup) {
+            if (player.isShiftKeyDown() || previous == console && console.group(pos) == console.settings.selectedGroup) {
                 light.unlink();
                 say(player, "link_removed");
             } else if (console.bind(light, console.settings.selectedGroup)) {
-                say(player, "linked", LightingText.group(console.settings, light.group), LightingText.number(light.order + 1));
+                say(player, "linked", LightingText.group(console.settings, console.group(pos)),
+                        LightingText.number(console.order(pos) + 1));
             } else if (!console.accepts(light, console.settings.selectedGroup)) {
                 int group = console.settings.selectedGroup;
                 say(player, "other_family", LightingText.group(console.settings, group),
@@ -143,7 +129,7 @@ public class LightingLinkItem extends Item {
         LightingConsoleBlock.Entity console = selected(player);
         if (console != null && player.mayBuild() && SableCompat.mayInteract(player.level(), player, console.getBlockPos())
                 && player.distanceToSqr(SableCompat.toWorld(player.level(), console.getBlockPos().getCenter()))
-                        < SourceLinks.MAX_LINK_DISTANCE * SourceLinks.MAX_LINK_DISTANCE) {
+                        < Link.MAX_DISTANCE * Link.MAX_DISTANCE) {
             LightingSettings.Group group = console.settings.groups[console.settings.selectedGroup];
             group.target = target.getUUID();
             group.motion = LightingSettings.Group.MOTION_TRACK;

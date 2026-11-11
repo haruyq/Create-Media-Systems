@@ -520,8 +520,8 @@ public final class LightingIllumination {
             }
             // A fixture lit without a console (another mod's, on redstone, say) is lit while it draws its beam.
             var console = lamp.controller();
-            if (console == null ? lamp.console != null : !console.formed || !console.settings.enabled
-                    || console.settings.master <= 0 || console.settings.groups[lamp.group].brightness <= 0) {
+            if (console == null ? lamp.console() != null : !console.formed || !console.settings.enabled
+                    || console.settings.master <= 0 || console.settings.groups[lamp.group()].brightness <= 0) {
                 continue;
             }
             Vec3 local = SableCompat.toRenderBlockSpace(entity.level(), lamp.getBlockPos(), target)

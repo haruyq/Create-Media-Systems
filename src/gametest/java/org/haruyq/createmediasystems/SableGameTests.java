@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.BlockIdentity;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.EqualizerBlock;
 import org.haruyq.createmediasystems.video.RemoteItem;
@@ -57,10 +57,10 @@ public class SableGameTests {
         CompoundTag legacy = new CompoundTag();
         legacy.put("Source", NbtUtils.writeBlockPos(origin));
         ((DisplayBlock.Entity) level.getBlockEntity(origin.east())).loadWithComponents(legacy, level.registryAccess());
-        ((DisplayBlock.Entity) level.getBlockEntity(origin.east())).source();
+        ((DisplayBlock.Entity) level.getBlockEntity(origin.east())).followSource(level);
         ((SpeakerBlock.Entity) level.getBlockEntity(origin.east(2))).configure(level, origin, 1, Streams.Channel.LEFT);
         ((SpeakerBlock.Entity) level.getBlockEntity(ground)).configure(level, origin, 1, Streams.Channel.RIGHT);
-        UUID id = SourceLinks.identify(level, origin);
+        UUID id = BlockIdentity.of(level, origin);
         ItemStack remote = new ItemStack(VideoFeature.REMOTE.get());
         remote.set(VideoFeature.REMOTE_TARGET.get(), GlobalPos.of(level.dimension(), origin));
         remote.set(VideoFeature.REMOTE_SOURCE.get(), id);
@@ -79,7 +79,9 @@ public class SableGameTests {
         BlockPos plot = ship.getPlot().getCenterBlock();
         level.setBlockEntity(BlockEntity.loadStatic(ground, groundBefore.getBlockState(), groundSaved, level.registryAccess()));
         checkLinks(helper, plot, plot.east(), plot.east(2), ground, remote, id);
-        helper.assertTrue(((SpeakerBlock.Entity) level.getBlockEntity(plot.east(3))).source().orElseThrow().equals(groundSource),
+        SpeakerBlock.Entity aboardSpeaker = (SpeakerBlock.Entity) level.getBlockEntity(plot.east(3));
+        aboardSpeaker.followSource(level);
+        helper.assertTrue(aboardSpeaker.source().orElseThrow().equals(groundSource),
                 "a ground source is not moved with its speaker");
         VideoPlayerBlock.Entity moved = (VideoPlayerBlock.Entity) level.getBlockEntity(plot);
         helper.assertTrue(moved.playlist().equals(player.playlist()), "disc and playlist survive assembly");
@@ -117,7 +119,7 @@ public class SableGameTests {
         checkLinks(helper, destination, display, speaker, ground, remote, id);
         level.setBlockAndUpdate(destination, Blocks.AIR.defaultBlockState());
         level.setBlockAndUpdate(destination, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
-        helper.assertTrue(SourceLinks.resolve(level, id, destination) == null, "replacement players do not inherit links");
+        helper.assertTrue(BlockIdentity.find(level, id, destination) == null, "replacement players do not inherit links");
         helper.succeed();
     }
 
@@ -154,12 +156,15 @@ public class SableGameTests {
     private static void checkLinks(GameTestHelper helper, BlockPos source, BlockPos display, BlockPos speaker,
                                    BlockPos ground, ItemStack remote, UUID id) {
         ServerLevel level = helper.getLevel();
-        helper.assertTrue(source.equals(SourceLinks.resolve(level, id, null)), "source identity follows its block");
-        helper.assertTrue(((DisplayBlock.Entity) level.getBlockEntity(display)).source().orElseThrow().equals(source),
-                "display keeps its player");
-        helper.assertTrue(((SpeakerBlock.Entity) level.getBlockEntity(speaker)).source().orElseThrow().equals(source),
-                "onboard speaker keeps its player");
+        helper.assertTrue(source.equals(BlockIdentity.find(level, id, null)), "source identity follows its block");
+        DisplayBlock.Entity screen = (DisplayBlock.Entity) level.getBlockEntity(display);
+        SpeakerBlock.Entity onboard = (SpeakerBlock.Entity) level.getBlockEntity(speaker);
         SpeakerBlock.Entity groundSpeaker = (SpeakerBlock.Entity) level.getBlockEntity(ground);
+        screen.followSource(level);
+        onboard.followSource(level);
+        groundSpeaker.followSource(level);
+        helper.assertTrue(screen.source().orElseThrow().equals(source), "display keeps its player");
+        helper.assertTrue(onboard.source().orElseThrow().equals(source), "onboard speaker keeps its player");
         helper.assertTrue(groundSpeaker.source().orElseThrow().equals(source),
                 "ground speaker follows the moved player: expected " + source + ", got " + groundSpeaker.source()
                         + ", level " + groundSpeaker.getLevel());

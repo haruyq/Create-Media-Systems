@@ -71,7 +71,7 @@ final class LightingLinkHandler {
 
         if (picked != null) {
             outline(CONSOLE_OUTLINE, box(picked), Quill.PICKED, Quill.LINE_WIDTH);
-            for (BlockPos fixture : picked.fixtures) {
+            for (BlockPos fixture : picked.fixtures()) {
                 outline(List.of(FIXTURE_OUTLINE, fixture), new AABB(fixture), Quill.SETTING, 1 / 32f);
             }
         }
@@ -84,8 +84,8 @@ final class LightingLinkHandler {
                 outline(TARGET_OUTLINE, box(console), Quill.PICKED, Quill.LINE_WIDTH);
             }
         } else {
-            boolean linked = picked != null && (picked.fixtures.contains(hovered)
-                    || hovered.equals(picked.audioSource) || hovered.equals(picked.videoSource));
+            boolean linked = picked != null && (picked.links(hovered)
+                    || hovered.equals(picked.audioSource()) || hovered.equals(picked.videoSource()));
             outline(TARGET_OUTLINE, new AABB(hovered), linked ? Quill.SETTING : Quill.PICKED, Quill.LINE_WIDTH);
         }
     }
@@ -100,7 +100,7 @@ final class LightingLinkHandler {
             return console == null ? LightingText.message("assembly")
                     : console != picked ? LightingText.message("hint_console")
                     : LightingText.message("hint_picked", LightingText.group(picked.settings, picked.settings.selectedGroup),
-                            LightingText.number(picked.fixtures.size()));
+                            LightingText.number(picked.fixtures().size()));
         }
         var block = level.getBlockEntity(pos);
         boolean media = block instanceof MediaSource;
@@ -112,9 +112,9 @@ final class LightingLinkHandler {
         }
         int group = picked.settings.selectedGroup;
         if (block instanceof StageLightBlock.Entity light) {
-            if (picked.fixtures.contains(pos) && light.group == group) {
+            if (picked.links(pos) && picked.group(pos) == group) {
                 return LightingText.message("hint_unlink", LightingText.group(picked.settings, group),
-                        LightingText.number(light.order + 1));
+                        LightingText.number(picked.order(pos) + 1));
             }
             // A group holds one family of fixtures: say so before the click is refused.
             return picked.accepts(light, group) ? LightingText.message("hint_link", LightingText.group(picked.settings, group))
