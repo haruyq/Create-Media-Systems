@@ -10,6 +10,7 @@ import org.haruyq.createmediasystems.Feature;
 
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -27,10 +28,24 @@ public final class DisplayFeature implements Feature {
     public static final DeferredBlock<ImageViewerBlock> IMAGE_VIEWER = BLOCKS.register("image_viewer",
             () -> new ImageViewerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BLACK_CONCRETE).strength(1).noOcclusion()));
     public static final DeferredItem<?> IMAGE_VIEWER_ITEM = ITEMS.registerSimpleBlockItem("image_viewer", IMAGE_VIEWER);
-    /** Displays' and image viewers' (an image viewer is a display that shows an image). */
+    /** Displays'; image viewers saved before they had their own (as displays) load as image viewers. */
     public static final Supplier<BlockEntityType<DisplayBlock.Entity>> DISPLAY_ENTITY = BLOCK_ENTITIES.register(
-            "display", () -> BlockEntityType.Builder.of(DisplayBlock.Entity::new, DISPLAY.get(), IMAGE_VIEWER.get())
-                    .build(null));
+            "display", DisplayFeature::displayEntity);
+    public static final Supplier<BlockEntityType<ImageViewerBlock.Entity>> IMAGE_VIEWER_ENTITY = BLOCK_ENTITIES.register(
+            "image_viewer", () -> BlockEntityType.Builder.of(ImageViewerBlock.Entity::new, IMAGE_VIEWER.get()).build(null));
+
+    /**
+     * The display type, whose factory gives an image viewer's state an image viewer: vanilla makes a saved block
+     * entity by the type it was saved as, and those saved before the split say "display". Only vanilla's loading calls
+     * it with such a state, and it takes any block entity.
+     */
+    @SuppressWarnings("unchecked")
+    private static BlockEntityType<DisplayBlock.Entity> displayEntity() {
+        BlockEntityType.BlockEntitySupplier<BlockEntity> create = (pos, state) -> state.is(IMAGE_VIEWER.get())
+                ? new ImageViewerBlock.Entity(pos, state) : new DisplayBlock.Entity(pos, state);
+        return (BlockEntityType<DisplayBlock.Entity>) (BlockEntityType<?>) BlockEntityType.Builder.of(create, DISPLAY.get())
+                .build(null);
+    }
 
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {

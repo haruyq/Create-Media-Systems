@@ -108,7 +108,7 @@ public final class DisplayClient implements ClientFeature {
         scene.overlay().showControls(util.vector().centerOf(viewer), Pointing.DOWN, 40).scroll().whileCTRL()
                 .withItem(quill);
         scene.idle(10);
-        scene.world().modifyBlockEntity(viewer, DisplayBlock.Entity.class, entity -> entity.resize(3 * DisplayBlock.UNIT,
+        scene.world().modifyBlockEntity(viewer, ImageViewerBlock.Entity.class, entity -> entity.resize(3 * DisplayBlock.UNIT,
                 (int) Math.round(3 * DisplayBlock.UNIT / DisplayBlock.Ratio.WIDE.value), DisplayBlock.Ratio.WIDE));
         say(scene, 120, picture, "Size it with a Display Quill, just like a display. Shift+right-click's last ratio is the image's own.");
 

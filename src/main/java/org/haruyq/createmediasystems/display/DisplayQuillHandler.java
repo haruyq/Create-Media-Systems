@@ -45,10 +45,11 @@ final class DisplayQuillHandler {
         Quill.listen(DisplayQuillHandler::tick, DisplayQuillHandler::mouseScrolled, DisplayQuillHandler::onRightClick);
     }
 
+    /** The display or image viewer at {@code pos}; null for neither. */
     @Nullable
-    private static DisplayBlock.Entity display(@Nullable BlockPos pos) {
+    private static ScreenEntity screen(@Nullable BlockPos pos) {
         var level = Minecraft.getInstance().level;
-        return pos != null && level.getBlockEntity(pos) instanceof DisplayBlock.Entity display ? display : null;
+        return pos != null && level.getBlockEntity(pos) instanceof ScreenEntity screen ? screen : null;
     }
 
     private static boolean onRightClick() {
@@ -56,8 +57,8 @@ final class DisplayQuillHandler {
             return false;
         }
         var mc = Minecraft.getInstance();
-        DisplayBlock.Entity display = display(hovered);
-        if (display == null) {
+        ScreenEntity screen = screen(hovered);
+        if (screen == null) {
             if (!(mc.level.getBlockEntity(hovered) instanceof VideoSource)) {
                 return false;
             }
@@ -66,11 +67,11 @@ final class DisplayQuillHandler {
             return true;
         }
         if (mc.player.isShiftKeyDown()) {
-            DisplayBlock.Ratio ratio = display.ratio().next();
-            resize(display, display.widthUnits(), heightFor(display, ratio, display.widthUnits()), ratio);
+            DisplayBlock.Ratio ratio = screen.ratio().next();
+            resize(screen, screen.widthUnits(), heightFor(screen, ratio, screen.widthUnits()), ratio);
             return true;
         }
-        if (display.isImageViewer()) {
+        if (!(screen instanceof DisplayBlock.Entity display)) {
             PacketDistributor.sendToServer(new DisplayQuill.ToggleFrame(hovered));
             return true;
         }
@@ -84,7 +85,7 @@ final class DisplayQuillHandler {
     }
 
     private static boolean mouseScrolled(double delta) {
-        DisplayBlock.Entity display = isActive() ? display(hovered) : null;
+        ScreenEntity display = isActive() ? screen(hovered) : null;
         boolean alt = Screen.hasAltDown();
         if (display == null || !(AllKeys.ctrlDown() || alt)) {
             return false;
@@ -100,19 +101,25 @@ final class DisplayQuillHandler {
     }
 
     /** The height (sixteenths) a screen {@code width} wide has at {@code ratio}; as it is now when free. */
-    private static int heightFor(DisplayBlock.Entity display, DisplayBlock.Ratio ratio, int width) {
+    private static int heightFor(ScreenEntity display, DisplayBlock.Ratio ratio, int width) {
         double value = ratio.value;
         if (ratio == DisplayBlock.Ratio.VIDEO) {
-            Images.Picture picture = DisplayRenderer.picture(display);
-            VlcPlayer.Frame frame = DisplayRenderer.frame(display);
-            value = picture != null ? picture.width / (double) picture.height
-                    : frame != null && frame.height() > 0 ? frame.width() / (double) frame.height()
-                    : DisplayBlock.Ratio.WIDE.value;
+            value = pictureRatio(display);
         }
         return value <= 0 ? display.heightUnits() : DisplayBlock.clampSize((int) Math.round(width / value));
     }
 
-    private static void resize(DisplayBlock.Entity display, int width, int height, DisplayBlock.Ratio ratio) {
+    /** Width over height of the picture {@code screen} shows: its image, or its video; 16:9 while it shows none. */
+    private static double pictureRatio(ScreenEntity screen) {
+        if (screen instanceof ImageViewerBlock.Entity viewer) {
+            Images.Picture picture = ImageViewerRenderer.picture(viewer);
+            return picture != null ? picture.width / (double) picture.height : DisplayBlock.Ratio.WIDE.value;
+        }
+        VlcPlayer.Frame frame = DisplayRenderer.frame((DisplayBlock.Entity) screen);
+        return frame != null && frame.height() > 0 ? frame.width() / (double) frame.height() : DisplayBlock.Ratio.WIDE.value;
+    }
+
+    private static void resize(ScreenEntity display, int width, int height, DisplayBlock.Ratio ratio) {
         int w = DisplayBlock.clampSize(width);
         int h = DisplayBlock.clampSize(height);
         PacketDistributor.sendToServer(new DisplayQuill.ResizeDisplay(display.getBlockPos(), w, h, ratio.ordinal()));
@@ -126,12 +133,12 @@ final class DisplayQuillHandler {
         }
         BlockHitResult trace = Quill.pointedAt();
         hovered = trace == null ? null : trace.getBlockPos();
-        DisplayBlock.Entity display = display(hovered);
+        ScreenEntity display = screen(hovered);
         if (display != null && !display.getBlockPos().equals(hinted)) {
             boolean linked = linked(display);
-            if (display.isImageViewer()) {
+            if (!(display instanceof DisplayBlock.Entity linkable)) {
                 Quill.status("create_media_systems.display_quill.hint_frame");
-            } else if (videoPlayer == null && display.source().isEmpty()) {
+            } else if (videoPlayer == null && linkable.source().isEmpty()) {
                 Quill.status("create_media_systems.display_quill.hint_pick");
             } else if (videoPlayer != null && !linked) {
                 Quill.status("create_media_systems.display_quill.hint_link");
@@ -143,8 +150,7 @@ final class DisplayQuillHandler {
         hinted = display == null ? null : display.getBlockPos();
         if (display != null) {
             Outliner.getInstance().showAABB(SCREEN_OUTLINE, SableCompat.toWorld(Minecraft.getInstance().level, display.box(0, 0)))
-                    .colored(display.isImageViewer() || linked(display)
-                            ? Quill.SETTING : Quill.PICKED)
+                    .colored(!(display instanceof DisplayBlock.Entity) || linked(display) ? Quill.SETTING : Quill.PICKED)
                     .lineWidth(Quill.LINE_WIDTH);
         }
         if (videoPlayer != null) {
@@ -157,7 +163,8 @@ final class DisplayQuillHandler {
         return Quill.held(DisplayFeature.DISPLAY_QUILL.get());
     }
 
-    private static boolean linked(DisplayBlock.Entity display) {
-        return videoPlayer != null && display.source().filter(videoPlayer::equals).isPresent();
+    private static boolean linked(ScreenEntity screen) {
+        return videoPlayer != null && screen instanceof DisplayBlock.Entity display
+                && display.source().filter(videoPlayer::equals).isPresent();
     }
 }

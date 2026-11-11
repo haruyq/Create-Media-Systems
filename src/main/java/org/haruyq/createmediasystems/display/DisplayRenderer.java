@@ -54,8 +54,9 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.world.AuxiliaryLightManager;
 
 /**
- * An image viewer's picture (see {@link #image}), or a display's: black, with its Blu-ray player's video as it plays here on top, as large as fits uncropped;
+ * A display's picture: black, with its Blu-ray player's video as it plays here on top, as large as fits uncropped;
  * and, like YouTube's ambient mode, the video's colours glowing on the wall around it (shaders/core/display_glow).
+ * Also what every screen draws alike (see ImageViewerRenderer).
  */
 public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.Entity> {
     /** How far the picture sits off the panel, and the video off the black, so neither flickers into the other. */
@@ -94,6 +95,8 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(DisplayFeature.DISPLAY_ENTITY.get(), DisplayRenderer::new));
+        modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
+                event.registerBlockEntityRenderer(DisplayFeature.IMAGE_VIEWER_ENTITY.get(), ImageViewerRenderer::new));
         modBus.addListener(DisplayRenderer::registerShaders);
         // Before stage lights add their beams (LightingRenderer.effects, at the lowest priority).
         NeoForge.EVENT_BUS.addListener((RenderLevelStageEvent event) -> {
@@ -140,10 +143,6 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         float height = (float) display.height();
         Matrix4f matrix = pose.last().pose();
         DisplayBlock.Screen screen = new DisplayBlock.Screen(facing);
-        if (display.isImageViewer()) {
-            image(display, buffers, matrix, screen, width, height);
-            return;
-        }
         panel(buffers.getBuffer(RenderType.textBackground()), matrix, screen, width, height);
         VlcPlayer.Frame frame = frame(display);
         // Lights, not shapes: nothing of them in a shader pack's shadow map.
@@ -183,7 +182,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     }
 
     /** Where {@code display} draws: {@link #PICTURES} in the world, as drawn from the player's eyes. */
-    private static MultiBufferSource pictures(DisplayBlock.Entity display, MultiBufferSource buffers) {
+    static MultiBufferSource pictures(ScreenEntity display, MultiBufferSource buffers) {
         if (display.getLevel() != Minecraft.getInstance().level || IrisCompat.shadowPass()) {
             return buffers;
         }
@@ -211,25 +210,11 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         RenderSystem.restoreProjectionMatrix();
     }
 
-    /** Its image on its black panel, or (without its frame) alone on the wall, see-through where the image is. */
-    private static void image(DisplayBlock.Entity viewer, MultiBufferSource buffers, Matrix4f matrix, DisplayBlock.Screen screen,
-                              float width, float height) {
-        boolean framed = viewer.getBlockState().getValue(ImageViewerBlock.FRAMED);
-        if (framed) {
-            panel(buffers.getBuffer(RenderType.textBackground()), matrix, screen, width, height);
-        }
-        Images.Picture picture = picture(viewer);
-        if (picture != null) {
-            fit(viewer, buffers.getBuffer(RenderType.textPolygonOffset(picture.texture)), matrix, screen, width, height, picture.width,
-                    picture.height, picture.texture, framed ? 0 : -(float) DisplayBlock.DEPTH);
-        }
-    }
-
     /**
      * The black panel over the whole screen, its edges reaching back to the wall so it sits on it rather than floating
      * off it past the block's own model; a hair wider than the model, so as not to flicker into its sides.
      */
-    private static void panel(VertexConsumer out, Matrix4f matrix, DisplayBlock.Screen screen, float width, float height) {
+    static void panel(VertexConsumer out, Matrix4f matrix, DisplayBlock.Screen screen, float width, float height) {
         quad(out, matrix, screen, 0, 0, width, height, LIFT, null);
         float back = -(float) DisplayBlock.DEPTH;
         float x0 = -LIFT, y0 = -LIFT, x1 = width + LIFT, y1 = height + LIFT;
@@ -247,7 +232,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     }
 
     /** A picture {@code pw} × {@code ph} pixels, as large as fits uncropped in the middle of the screen, {@code base} off its front. */
-    private static void fit(DisplayBlock.Entity display, VertexConsumer out, Matrix4f matrix, DisplayBlock.Screen screen, float width, float height, int pw,
+    static void fit(ScreenEntity display, VertexConsumer out, Matrix4f matrix, DisplayBlock.Screen screen, float width, float height, int pw,
                             int ph, ResourceLocation texture, float base) {
         float[] at = fitted(width, height, pw, ph);
         float lift = base + 2 * LIFT;
@@ -384,38 +369,37 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         return display.source().map(NativeAudio::screen).orElse(null);
     }
 
-    /** The picture an image viewer shows, or null while it has none (or it isn't loaded yet). */
-    @Nullable
-    static Images.Picture picture(DisplayBlock.Entity viewer) {
-        return viewer.image().isEmpty() ? null : Images.get(viewer.image());
-    }
-
     @Override
     public boolean shouldRenderOffScreen(DisplayBlock.Entity display) {
         return true;
+    }
+
+    @Override
+    public int getViewDistance() {
+        return viewDistance();
     }
 
     /**
      * As far as the world itself is drawn, not block entities' usual 64 blocks: a venue's screen stays in sight from
      * its far end. Out of view, culling skips it anyway (see render).
      */
-    @Override
-    public int getViewDistance() {
+    static int viewDistance() {
         return Minecraft.getInstance().options.getEffectiveRenderDistance() * 16;
     }
 
-    /** Measured from the screen's nearest point, not its block: a big screen reaches past the view distance. */
     @Override
     public boolean shouldRender(DisplayBlock.Entity display, Vec3 camera) {
-        double reach = getViewDistance();
-        return display.box(0, 0).distanceToSqr(camera) < reach * reach;
+        return inSight(display, camera);
+    }
+
+    /** Measured from the screen's nearest point, not its block: a big screen reaches past the view distance. */
+    static boolean inSight(ScreenEntity screen, Vec3 camera) {
+        double reach = viewDistance();
+        return screen.box(0, 0).distanceToSqr(camera) < reach * reach;
     }
 
     @Override
     public AABB getRenderBoundingBox(DisplayBlock.Entity display) {
-        if (display.isImageViewer()) {
-            return display.box(0, 0.1f).inflate(0.1);
-        }
         float range = DisplayLight.range(display.width(), display.height());
         float r = Math.max(range, GLOW_REACH * (float) Math.max(display.width(), display.height()));
         return display.box(r, range).inflate(0.1);

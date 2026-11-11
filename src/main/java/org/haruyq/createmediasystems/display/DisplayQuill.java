@@ -67,12 +67,12 @@ public final class DisplayQuill {
     }
 
     @Nullable
-    static DisplayBlock.Entity quillDisplay(ServerPlayer player, BlockPos pos) {
-        return Reach.withQuill(player, DisplayFeature.DISPLAY_QUILL.get(), pos, DisplayBlock.Entity.class);
+    static <T extends ScreenEntity> T withQuill(ServerPlayer player, BlockPos pos, Class<T> kind) {
+        return Reach.withQuill(player, DisplayFeature.DISPLAY_QUILL.get(), pos, kind);
     }
 
     static void linkDisplay(ServerPlayer player, LinkDisplay payload) {
-        DisplayBlock.Entity display = quillDisplay(player, payload.display());
+        DisplayBlock.Entity display = withQuill(player, payload.display(), DisplayBlock.Entity.class);
         if (display == null) {
             return;
         }
@@ -87,15 +87,15 @@ public final class DisplayQuill {
     }
 
     static void resizeDisplay(ServerPlayer player, ResizeDisplay payload) {
-        DisplayBlock.Entity display = quillDisplay(player, payload.display());
-        if (display != null) {
-            display.resize(payload.width(), payload.height(), DisplayBlock.Ratio.byId(payload.ratio()));
+        ScreenEntity screen = withQuill(player, payload.display(), ScreenEntity.class);
+        if (screen != null) {
+            screen.resize(payload.width(), payload.height(), DisplayBlock.Ratio.byId(payload.ratio()));
         }
     }
 
     static void toggleFrame(ServerPlayer player, BlockPos pos) {
-        DisplayBlock.Entity viewer = quillDisplay(player, pos);
-        if (viewer == null || !viewer.isImageViewer()) {
+        ImageViewerBlock.Entity viewer = withQuill(player, pos, ImageViewerBlock.Entity.class);
+        if (viewer == null) {
             return;
         }
         BlockState state = viewer.getBlockState().cycle(ImageViewerBlock.FRAMED);
