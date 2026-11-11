@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.video;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.client.ControlDrag;
 import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
@@ -25,12 +26,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.model.data.ModelData;
-import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -48,11 +46,6 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
     /** How far a knob goes either side of the middle of the top (sixteenths). */
     private static final float TRAVEL = 4.5f;
 
-    /** The equalizer whose fader is held, and which one. */
-    @Nullable
-    private static BlockPos held;
-    private static int fader;
-
     EqualizerFaders(BlockEntityRendererProvider.Context context) {
     }
 
@@ -60,13 +53,7 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(VideoFeature.EQUALIZER_ENTITY.get(), EqualizerFaders::new));
         modBus.addListener((ModelEvent.RegisterAdditional event) -> event.register(KNOB));
-        NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {
-            if (event.isUseItem() && (held != null || grab())) {
-                event.setCanceled(true);
-                event.setSwingHand(false);
-            }
-        });
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> drag());
+        ControlDrag.onUse(EqualizerFaders::grab);
     }
 
     @Override
@@ -106,44 +93,43 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
             return false;
         }
         // Worked out from the look, not the hit, so it holds on a moving, turning sub-level too.
-        Vec3 at = aim(equalizer);
+        Vec3 at = aim(equalizer, ControlDrag.look(equalizer.getBlockPos()));
         if (at == null || Math.abs(at.x) > 8 || Math.abs(at.z) > 8) {
             return false;
         }
-        held = hit.getBlockPos();
-        fader = Mth.clamp((int) Math.round(at.x / SPACING) + MIDDLE, 0, EqualizerBlock.FADERS - 1);
+        ControlDrag.hold(new Fader(hit.getBlockPos().immutable(),
+                Mth.clamp((int) Math.round(at.x / SPACING) + MIDDLE, 0, EqualizerBlock.FADERS - 1)));
         return true;
     }
 
-    /** Moves the held fader's knob to where the crosshair crosses the top; sends it once right-click is let go. */
-    private static void drag() {
-        Minecraft mc = Minecraft.getInstance();
-        if (held == null) {
-            return;
+    /** The fader held: its knob goes where the crosshair crosses the top, and is sent once right-click is let go. */
+    private record Fader(BlockPos pos, int fader) implements ControlDrag.Held {
+        @Override
+        public void drag(ControlDrag.Look look) {
+            Minecraft mc = Minecraft.getInstance();
+            if (!(mc.level.getBlockEntity(pos) instanceof EqualizerBlock.Entity equalizer)) {
+                return;
+            }
+            Vec3 at = aim(equalizer, look);
+            if (at != null) {
+                equalizer.set(fader, (float) (at.z / TRAVEL * Tone.MAX_GAIN));
+            }
+            EqualizerBlock.Band band = equalizer.band(fader);
+            mc.player.displayClientMessage(Component.literal(band.label + "  " + EqualizerBlock.db(equalizer.gain(fader)))
+                    .withColor(band.color), true);
         }
-        if (mc.player == null || !(mc.level.getBlockEntity(held) instanceof EqualizerBlock.Entity equalizer)) {
-            held = null;
-            return;
+
+        @Override
+        public void release(boolean gone) {
+            if (!gone && Minecraft.getInstance().level.getBlockEntity(pos) instanceof EqualizerBlock.Entity equalizer) {
+                PacketDistributor.sendToServer(new EqualizerBlock.SetEqualizer(pos, fader, equalizer.gain(fader)));
+            }
         }
-        if (!mc.options.keyUse.isDown()) {
-            PacketDistributor.sendToServer(new EqualizerBlock.SetEqualizer(held, fader, equalizer.gain(fader)));
-            held = null;
-            return;
-        }
-        Vec3 at = aim(equalizer);
-        if (at != null) {
-            equalizer.set(fader, (float) (at.z / TRAVEL * Tone.MAX_GAIN));
-        }
-        EqualizerBlock.Band band = equalizer.band(fader);
-        mc.player.displayClientMessage(Component.literal(band.label + "  " + EqualizerBlock.db(equalizer.gain(fader)))
-                .withColor(band.color), true);
     }
 
     @Nullable
-    private static Vec3 aim(EqualizerBlock.Entity equalizer) {
-        Minecraft mc = Minecraft.getInstance();
-        Vec3 at = EqualizerBlock.aim(mc.level, equalizer.getBlockPos(), mc.player.getEyePosition(),
-                mc.player.getViewVector(1));
+    private static Vec3 aim(EqualizerBlock.Entity equalizer, ControlDrag.Look look) {
+        Vec3 at = EqualizerBlock.aim(equalizer.getBlockPos(), look.eye(), look.along());
         return at == null ? null : onTop(equalizer, at);
     }
 

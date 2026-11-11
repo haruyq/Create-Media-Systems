@@ -216,11 +216,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             DiscTransport.Deck {
         private static final DiscTransport.Keys DISC_KEYS =
                 new DiscTransport.Keys("Track", "DiscPlaying", "DiscPaused", "DiscTicks");
-        /** The client's stack whose knob is held, and which: the server's word for it waits (see HifiControls). */
-        @Nullable
-        public static Entity heldStack;
-        @Nullable
-        public static Control heldKnob;
 
         /** Bottom first. */
         private final List<Unit> units = new ArrayList<>();
@@ -265,6 +260,9 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         /** What its speakers were last told to play (see tick); not saved. */
         @Nullable
         private Playing begun;
+        /** Client only: the knob this player turns (see HifiControls), which the server's word leaves as it is meanwhile. */
+        @Nullable
+        private Control turning;
         /** Who last worked it, to start what it plays next. */
         @Nullable
         private Player by;
@@ -404,6 +402,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 default -> {
                 }
             }
+        }
+
+        /** The knob this client turns from now on; null once let go. */
+        void turning(@Nullable Control knob) {
+            turning = knob;
         }
 
         /** Whether {@code unit} can be put on top: one of each, and no taller than the block. */
@@ -1068,18 +1071,17 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             cables = tag.getInt("Cables");
             power = tag.getBoolean("Power");
             input = Input.byId(tag.getInt("Input"));
-            boolean held = level != null && level.isClientSide && heldStack == this;
-            if (!held || heldKnob != Control.VOLUME) {
+            if (turning != Control.VOLUME) {
                 volume = Mth.clamp(tag.getInt("Volume"), 0, 100);
             }
             bass = tag.getBoolean("Bass");
-            if (!held || heldKnob != Control.BASS_LEVEL) {
+            if (turning != Control.BASS_LEVEL) {
                 bassLevel = Mth.clamp(tag.getInt("BassLevel"), 0, 100);
             }
             wide = tag.getBoolean("Wide");
             direct = tag.getBoolean("Direct");
             preset = Preset.byId(tag.getInt("Preset"));
-            if (!held || heldKnob != Control.EFFECT) {
+            if (turning != Control.EFFECT) {
                 effect = Mth.clamp(tag.getInt("Effect"), 0, 100);
             }
             ListTag links = tag.getList("Stations", Tag.TAG_STRING);

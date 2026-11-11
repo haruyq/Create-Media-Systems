@@ -6,7 +6,6 @@ import java.util.Locale;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
-import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
@@ -30,7 +29,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -119,16 +117,14 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
     }
 
     /**
-     * Where a look from {@code eye} along {@code look} (both in the world) crosses the top of the equalizer at
-     * {@code pos}, in its block space, which moves and turns with it on a sub-level (see SableCompat); null if the
-     * look doesn't come down onto it from above.
+     * Where a look from {@code eye} along {@code along} (both in the block space of the equalizer at {@code pos}, which
+     * moves and turns with it on a sub-level; see SableCompat) crosses its top; null if the look doesn't come down onto
+     * it from above.
      */
     @Nullable
-    public static Vec3 aim(Level level, BlockPos pos, Vec3 eye, Vec3 look) {
-        Vec3 from = SableCompat.toBlockSpace(level, pos, eye);
-        Vec3 along = SableCompat.toBlockSpace(level, pos, eye.add(look)).subtract(from);
-        double above = from.y - (pos.getY() + 1);
-        return above > 0 && along.y < 0 ? from.add(along.scale(above / -along.y)) : null;
+    public static Vec3 aim(BlockPos pos, Vec3 eye, Vec3 along) {
+        double above = eye.y - (pos.getY() + 1);
+        return above > 0 && along.y < 0 ? eye.add(along.scale(above / -along.y)) : null;
     }
 
     /** {@code gain} as a fader can set it: in half-dB steps, within {@link Tone#MAX_GAIN} either way. */

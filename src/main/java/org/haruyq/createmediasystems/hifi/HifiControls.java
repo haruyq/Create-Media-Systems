@@ -1,38 +1,28 @@
 package org.haruyq.createmediasystems.hifi;
 
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.display.DisplayFeature;
-import org.haruyq.createmediasystems.lighting.LightingFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
-import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.ControlDrag;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
-
-import com.simibubi.create.content.equipment.wrench.WrenchItem;
 
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Working a hi-fi stack by hand: point at a control on its front or a socket on its back and right-click. What is
  * pointed at is outlined and named above the hotbar. A knob is held and turned by looking left or right along the
- * stack: it is heard at once here, and set for everyone as it turns. Sneaking, or holding a block, a quill or a
- * wrench, leaves the stack to those.
+ * stack (see ControlDrag): it is heard at once here, and set for everyone as it turns. Sneaking, or holding a block,
+ * a wrench or a tool that works blocks itself, leaves the stack to those.
  */
 public final class HifiControls {
     /** How far across the stack (sixteenths) the crosshair goes to turn a knob all the way. */
@@ -45,13 +35,6 @@ public final class HifiControls {
     @Nullable
     private static Control hovered;
     @Nullable
-    private static BlockPos heldAt;
-    @Nullable
-    private static Control held;
-    private static double grabbedAt;
-    private static int grabbedValue;
-    private static int sent;
-    @Nullable
     private static BlockPos pressedAt;
     @Nullable
     private static Control pressed;
@@ -62,18 +45,14 @@ public final class HifiControls {
 
     public static void register() {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
-        NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {
-            if (event.isUseItem() && (held != null || press())) {
-                event.setCanceled(true);
-                event.setSwingHand(false);
-            }
-        });
+        ControlDrag.onUse(HifiControls::press);
     }
 
     /** The control of {@code stack} pointed at (or held); null for none. */
     @Nullable
     static Control hovered(HifiStackBlock.Entity stack) {
-        return stack.getBlockPos().equals(heldAt) ? held : stack.getBlockPos().equals(hoveredAt) ? hovered : null;
+        return ControlDrag.held() instanceof Knob knob && knob.pos.equals(stack.getBlockPos()) ? knob.control
+                : stack.getBlockPos().equals(hoveredAt) ? hovered : null;
     }
 
     /** The button of {@code stack} just pressed; null for none. */
@@ -88,30 +67,17 @@ public final class HifiControls {
         return pos != null && level != null && level.getBlockEntity(pos) instanceof HifiStackBlock.Entity stack ? stack : null;
     }
 
-    /** Whether {@code player}'s right-click is the stack's: not if they sneak, or hold something that works blocks itself. */
-    private static boolean works(Player player) {
-        ItemStack hand = player.getMainHandItem();
-        return !player.isShiftKeyDown() && !(hand.getItem() instanceof BlockItem) && !(hand.getItem() instanceof WrenchItem)
-                && !hand.is(AudioFeature.RANGE_QUILL.get()) && !hand.is(DisplayFeature.DISPLAY_QUILL.get())
-                && !hand.is(LightingFeature.LIGHTING_LINK.get()) && !hand.is(VideoFeature.REMOTE.get());
-    }
-
-    /** Where the player's look crosses the front or back of {@code stack}, worked out in its block space (see SableCompat). */
+    /** Where {@code look} (in its block space; see ControlDrag#look) crosses the front or back of {@code stack}. */
     @Nullable
-    private static HifiLayout.Aim aim(HifiStackBlock.Entity stack) {
-        Minecraft mc = Minecraft.getInstance();
-        BlockPos pos = stack.getBlockPos();
-        Vec3 corner = Vec3.atLowerCornerOf(pos);
-        Vec3 eye = SableCompat.toBlockSpace(mc.level, pos, mc.player.getEyePosition());
-        Vec3 ahead = SableCompat.toBlockSpace(mc.level, pos, mc.player.getEyePosition().add(mc.player.getViewVector(1)));
-        return HifiLayout.aim(stack.getBlockState().getValue(HifiStackBlock.FACING), eye.subtract(corner), ahead.subtract(eye));
+    private static HifiLayout.Aim aim(HifiStackBlock.Entity stack, ControlDrag.Look look) {
+        return HifiLayout.aim(stack.getBlockState().getValue(HifiStackBlock.FACING),
+                look.eye().subtract(Vec3.atLowerCornerOf(stack.getBlockPos())), look.along());
     }
 
     private static void tick() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) {
-            hovered = held = null;
-            HifiStackBlock.Entity.heldStack = null;
+            hovered = null;
             return;
         }
         Control was = hovered;
@@ -119,18 +85,17 @@ public final class HifiControls {
         hovered = null;
         hoveredAt = null;
         if (mc.screen == null && mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
-                && works(mc.player)) {
+                && ControlDrag.works(mc.player)) {
             HifiStackBlock.Entity stack = stack(hit.getBlockPos());
-            HifiLayout.Aim aim = stack == null ? null : aim(stack);
+            HifiLayout.Aim aim = stack == null ? null : aim(stack, ControlDrag.look(stack.getBlockPos()));
             if (aim != null) {
                 hovered = HifiLayout.control(stack.units(), aim);
                 hoveredAt = hovered == null ? null : hit.getBlockPos().immutable();
             }
         }
-        if (held == null && hovered != null && (hovered != was || !hoveredAt.equals(wasAt))) {
+        if (ControlDrag.held() == null && hovered != null && (hovered != was || !hoveredAt.equals(wasAt))) {
             mc.gui.setOverlayMessage(hovered.label(), false);
         }
-        drag();
     }
 
     /** A right-click: works what is pointed at, if anything. */
@@ -142,16 +107,12 @@ public final class HifiControls {
         Control control = hovered;
         BlockPos pos = hoveredAt;
         if (control.kind == Control.Kind.KNOB && stack.live(control.unit)) {
-            HifiLayout.Aim aim = aim(stack);
+            HifiLayout.Aim aim = aim(stack, ControlDrag.look(pos));
             if (aim == null) {
                 return false;
             }
-            held = control;
-            heldAt = pos;
-            grabbedAt = aim.x();
-            grabbedValue = sent = stack.knob(control);
-            HifiStackBlock.Entity.heldStack = stack;
-            HifiStackBlock.Entity.heldKnob = control;
+            ControlDrag.hold(new Knob(pos, control, aim.x(), stack.knob(control)));
+            stack.turning(control);
             return true;
         }
         pressed = control;
@@ -169,31 +130,59 @@ public final class HifiControls {
         return true;
     }
 
-    /** Turns the held knob with the crosshair; lets it go with right-click. */
-    private static void drag() {
-        if (held == null) {
-            return;
+    /**
+     * The knob held, grabbed with the crosshair {@code grabbedAt} across the stack at {@code grabbedValue}: looking
+     * along the stack turns it, heard here at once, and sent for everyone every other tick and as it is let go.
+     */
+    private static final class Knob implements ControlDrag.Held {
+        private final BlockPos pos;
+        private final Control control;
+        private final double grabbedAt;
+        private final int grabbedValue;
+        private int sent;
+
+        Knob(BlockPos pos, Control control, double grabbedAt, int grabbedValue) {
+            this.pos = pos.immutable();
+            this.control = control;
+            this.grabbedAt = grabbedAt;
+            this.grabbedValue = sent = grabbedValue;
         }
-        Minecraft mc = Minecraft.getInstance();
-        HifiStackBlock.Entity stack = stack(heldAt);
-        boolean letGo = stack == null || !mc.options.keyUse.isDown();
-        if (stack != null) {
-            HifiLayout.Aim aim = letGo ? null : aim(stack);
+
+        @Override
+        public BlockPos pos() {
+            return pos;
+        }
+
+        @Override
+        public void drag(ControlDrag.Look look) {
+            HifiStackBlock.Entity stack = stack(pos);
+            if (stack == null) {
+                return;
+            }
+            HifiLayout.Aim aim = aim(stack, look);
             if (aim != null && !aim.rear()) {
-                stack.turn(held, Mth.clamp(grabbedValue + (int) Math.round((aim.x() - grabbedAt) * 100 / KNOB_TRAVEL), 0, 100));
+                stack.turn(control, Mth.clamp(grabbedValue + (int) Math.round((aim.x() - grabbedAt) * 100 / KNOB_TRAVEL), 0, 100));
             }
-            int value = stack.knob(held);
-            if (value != sent && (letGo || mc.level.getGameTime() % 2 == 0)) {
-                sent = value;
-                PacketDistributor.sendToServer(new HifiStackBlock.Press(heldAt, held.ordinal(), value));
-            }
-            mc.gui.setOverlayMessage(Component.empty().append(held.label()).append("  " + value + "%"), false);
+            send(stack, Minecraft.getInstance().level.getGameTime() % 2 == 0);
         }
-        if (letGo) {
-            held = null;
-            heldAt = null;
-            HifiStackBlock.Entity.heldStack = null;
-            HifiStackBlock.Entity.heldKnob = null;
+
+        @Override
+        public void release(boolean gone) {
+            HifiStackBlock.Entity stack = stack(pos);
+            if (stack != null) {
+                send(stack, true);
+                stack.turning(null);
+            }
+        }
+
+        /** Sends where it is turned to, if that changed and {@code now}; and shows it. */
+        private void send(HifiStackBlock.Entity stack, boolean now) {
+            int value = stack.knob(control);
+            if (value != sent && now) {
+                sent = value;
+                PacketDistributor.sendToServer(new HifiStackBlock.Press(pos, control.ordinal(), value));
+            }
+            Minecraft.getInstance().gui.setOverlayMessage(Component.empty().append(control.label()).append("  " + value + "%"), false);
         }
     }
 }
