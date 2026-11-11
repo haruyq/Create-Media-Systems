@@ -1,6 +1,8 @@
 package org.haruyq.createmediasystems.launcher.client;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.launcher.DiscLauncherReloadPacket;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;
@@ -14,6 +16,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.math.Axis;
 
+import net.neoforged.neoforge.common.ModConfigSpec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.player.LocalPlayer;
@@ -38,6 +41,12 @@ import org.lwjgl.glfw.GLFW;
 /** Holds only client-side render hooks. Common/server classes never load client code. */
 public final class LauncherClient {
     private LauncherClient() {}
+    public static final ModConfigSpec.EnumValue<LauncherDamageDisplay.Mode> DAMAGE_NUMBERS = ClientConfig.BUILDER
+            .comment("Weapon damage numbers: STACKING combines recent hits on the same target, FLOATING shows individual hits, BOTH shows both, OFF hides numbers.")
+            .defineEnum("launcherDamageNumbers", LauncherDamageDisplay.Mode.STACKING);
+    public static final ModConfigSpec.EnumValue<LauncherDamageDisplay.Crosshair> CROSSHAIR_FEEDBACK = ClientConfig.BUILDER
+            .comment("X_WITH_SHIELD shows a confirmed-hit X plus Minecraft absorption shield feedback; X shows only the X; OFF hides both.")
+            .defineEnum("launcherCrosshairFeedback", LauncherDamageDisplay.Crosshair.X_WITH_SHIELD);
     private static final LauncherGunMotion MOTION=new LauncherGunMotion();
     private static final LauncherDamageDisplay DAMAGE=new LauncherDamageDisplay();
     public static LauncherDamageDisplay damageDisplay(){return DAMAGE;}
@@ -66,12 +75,12 @@ public final class LauncherClient {
         modBus.addListener(LauncherClient::registerExtensions);
         modBus.addListener(LauncherClient::registerRenderers);
         modBus.addListener(LauncherClient::registerKeys);
-        modBus.addListener((RegisterMenuScreensEvent event) -> event.register(CreateMediaSystems.DISC_CELL_MENU.get(), DiscCellScreen::new));
+        modBus.addListener((RegisterMenuScreensEvent event) -> event.register(LauncherFeature.DISC_CELL_MENU.get(), DiscCellScreen::new));
         NeoForge.EVENT_BUS.addListener(LauncherClient::onClientTick);
         NeoForge.EVENT_BUS.addListener(LauncherClient::supportHand);
         NeoForge.EVENT_BUS.addListener(LauncherClient::input);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ComputeFovModifierEvent event)->{
-            if(event.getPlayer()==Minecraft.getInstance().player && event.getPlayer().getMainHandItem().is(CreateMediaSystems.DISC_LAUNCHER.get()))
+            if(event.getPlayer()==Minecraft.getInstance().player && event.getPlayer().getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))
                 event.setNewFovModifier(event.getNewFovModifier()*(1-.18f*aim(1)));
         });
         LauncherFeedback.shotListener=shot->{
@@ -99,13 +108,13 @@ public final class LauncherClient {
     private static void onClientTick(ClientTickEvent.Post event) {
         var mc=Minecraft.getInstance();var player=mc.player;
         if(currentPlayer!=player){currentPlayer=player;triggerDown=false;lastShot=Long.MIN_VALUE;MOTION.reset();DAMAGE.reset();cameraKick=0;}
-        boolean holding=player!=null && player.getMainHandItem().is(CreateMediaSystems.DISC_LAUNCHER.get()) && !player.isSpectator() && player.isAlive();
+        boolean holding=player!=null && player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()) && !player.isSpectator() && player.isAlive();
         boolean active=holding && mc.screen==null && mc.getOverlay()==null
                 && (mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed() || additionalInputActive.getAsBoolean());
         boolean wantsAim=active && mc.options.keyUse.isDown() && !LauncherMagazine.reloading(player.getMainHandItem());
         if(holding) {
             if(wantsAim && !player.isUsingItem() && mc.gameMode!=null)mc.gameMode.useItem(player,InteractionHand.MAIN_HAND);
-            if(!wantsAim && player.isUsingItem() && player.getUseItem().is(CreateMediaSystems.DISC_LAUNCHER.get()) && mc.gameMode!=null)
+            if(!wantsAim && player.isUsingItem() && player.getUseItem().is(LauncherFeature.DISC_LAUNCHER.get()) && mc.gameMode!=null)
                 mc.gameMode.releaseUsingItem(player);
             if(wantsAim)player.setSprinting(false);
         }
@@ -126,14 +135,14 @@ public final class LauncherClient {
 
     private static void input(net.neoforged.neoforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
         var mc=Minecraft.getInstance();
-        if(mc.player!=null && mc.player.getMainHandItem().is(CreateMediaSystems.DISC_LAUNCHER.get())
+        if(mc.player!=null && mc.player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get())
                 && (event.isAttack() || event.isUseItem())) {event.setCanceled(true);event.setSwingHand(false);}
     }
 
     public static LauncherTimeline.Frame frame(ItemStack stack, Level level, float partialTick) {
         if (level == null) return LauncherTimeline.sample(-1f, -1f);
-        Long reloadAt = stack.get(CreateMediaSystems.LAUNCHER_RELOAD_START.get());
-        Long shotAt = stack.get(CreateMediaSystems.LAUNCHER_SHOT_AT.get());
+        Long reloadAt = stack.get(LauncherFeature.LAUNCHER_RELOAD_START.get());
+        Long shotAt = stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
         float reload = reloadAt == null ? -1f : level.getGameTime()-reloadAt+partialTick;
         float shot = shotAt == null ? -1f : level.getGameTime()-shotAt+partialTick;
         return LauncherTimeline.sample(reload, shot);
@@ -142,7 +151,7 @@ public final class LauncherClient {
     public record CellVisual(ItemStack stack, LauncherMechanics.CellPose pose, int color, float strength) {}
 
     public static CellVisual cellVisual(ItemStack gun, Level level, float partial) {
-        Long start = gun.get(CreateMediaSystems.LAUNCHER_RELOAD_START.get());
+        Long start = gun.get(LauncherFeature.LAUNCHER_RELOAD_START.get());
         float age = start == null || level == null ? -1 : level.getGameTime()-start+partial;
         var motion = frame(gun, level, partial);
         var path = LauncherMechanics.cellPose(age, motion);
@@ -160,7 +169,7 @@ public final class LauncherClient {
                 if (renderer == null) renderer = new DiscCellRenderer();
                 return renderer;
             }
-        }, CreateMediaSystems.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
+        }, LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
         event.registerItem(new IClientItemExtensions() {
             private LauncherRenderer renderer;
 
@@ -179,12 +188,12 @@ public final class LauncherClient {
                 weaponPose(pose, f, hand, equip, bob);
                 return true;
             }
-        }, CreateMediaSystems.DISC_LAUNCHER.get());
+        }, LauncherFeature.DISC_LAUNCHER.get());
     }
 
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerEntityRenderer(CreateMediaSystems.DISC_PROJECTILE.get(), DiscProjectileRenderer::new);
-        event.registerBlockEntityRenderer(CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), DiscCellChargerRenderer::new);
+        event.registerEntityRenderer(LauncherFeature.DISC_PROJECTILE.get(), DiscProjectileRenderer::new);
+        event.registerBlockEntityRenderer(LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), DiscCellChargerRenderer::new);
     }
 
     static void weaponPose(PoseStack pose, LauncherTimeline.Frame f, float hand, float equip, float bob) {
@@ -202,11 +211,11 @@ public final class LauncherClient {
         var player = mc.player;
         if (player == null) return;
         ItemStack launcher = player.getMainHandItem();
-        if (!launcher.is(CreateMediaSystems.DISC_LAUNCHER.get())) return;
+        if (!launcher.is(LauncherFeature.DISC_LAUNCHER.get())) return;
         if(event.getHand()==InteractionHand.MAIN_HAND){gripHand(event,launcher,true);return;}
         event.setCanceled(true);
         if(!LauncherMagazine.reloading(launcher)){gripHand(event,launcher,false);return;}
-        float age = player.level().getGameTime()-launcher.get(CreateMediaSystems.LAUNCHER_RELOAD_START.get())+event.getPartialTick();
+        float age = player.level().getGameTime()-launcher.get(LauncherFeature.LAUNCHER_RELOAD_START.get())+event.getPartialTick();
         if (age < 10 || age >= LauncherMechanics.HAND_END
                 || LauncherMagazine.ejecting(launcher) && age >= LauncherMechanics.INCOMING_AT) return;
         var motion = frame(launcher, player.level(), event.getPartialTick());

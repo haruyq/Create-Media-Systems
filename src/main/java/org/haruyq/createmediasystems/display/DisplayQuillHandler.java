@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.display;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
 import org.haruyq.createmediasystems.playback.VlcPlayer;
@@ -155,7 +154,7 @@ final class DisplayQuillHandler {
     }
 
     private static boolean isActive() {
-        return Quill.held(CreateMediaSystems.DISPLAY_QUILL.get());
+        return Quill.held(DisplayFeature.DISPLAY_QUILL.get());
     }
 
     private static boolean linked(DisplayBlock.Entity display) {

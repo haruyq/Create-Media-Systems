@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.launcher;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -48,11 +47,11 @@ public final class DiscCellUpgradeRecipe extends CustomRecipe {
         return ItemStack.EMPTY;
     }
     @Override public boolean canCraftInDimensions(int width, int height) { return width * height >= 9; }
-    @Override public ItemStack getResultItem(HolderLookup.Provider registries) { return new ItemStack(CreateMediaSystems.cell(target)); }
-    @Override public RecipeSerializer<?> getSerializer() { return CreateMediaSystems.CELL_UPGRADE_RECIPE.get(); }
+    @Override public ItemStack getResultItem(HolderLookup.Provider registries) { return new ItemStack(LauncherFeature.cell(target)); }
+    @Override public RecipeSerializer<?> getSerializer() { return LauncherFeature.CELL_UPGRADE_RECIPE.get(); }
     @Override public NonNullList<Ingredient> getIngredients() {
         NonNullList<Ingredient> ingredients = NonNullList.create();
-        ingredients.add(Ingredient.of(CreateMediaSystems.cell(DiscCellTier.at(target.level - 1))));
+        ingredients.add(Ingredient.of(LauncherFeature.cell(DiscCellTier.at(target.level - 1))));
         for (String id : target.upgradeMaterials())
             ingredients.add(Ingredient.of(BuiltInRegistries.ITEM.get(ResourceLocation.parse(id))));
         return ingredients;

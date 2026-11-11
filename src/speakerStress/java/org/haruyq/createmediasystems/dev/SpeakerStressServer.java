@@ -12,7 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
@@ -108,29 +109,29 @@ public final class SpeakerStressServer {
         level.getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(false, level.getServer());
         level.setDayTime(6000);
         level.setBlock(JUKEBOX, Blocks.JUKEBOX.defaultBlockState(), 3);
-        level.setBlock(DISC_READER, CreateMediaSystems.DISC_READER.get().defaultBlockState(), 3);
-        level.setBlock(BLU_RAY, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState(), 3);
+        level.setBlock(DISC_READER, AudioFeature.DISC_READER.get().defaultBlockState(), 3);
+        level.setBlock(BLU_RAY, VideoFeature.VIDEO_PLAYER.get().defaultBlockState(), 3);
         wall(level, JUKEBOX, i -> new BlockPos(i % 11 - 5, Y + i / 11, -22), Direction.SOUTH);
         wall(level, DISC_READER, i -> new BlockPos(22, Y + i / 11, i % 11 - 5), Direction.WEST);
         wall(level, BLU_RAY, i -> new BlockPos(-22, Y + i / 11, i % 11 - 5), Direction.EAST);
 
-        ItemStack jukeboxDisc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        jukeboxDisc.set(CreateMediaSystems.URL.get(), url("jukebox"));
+        ItemStack jukeboxDisc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        jukeboxDisc.set(AudioFeature.URL.get(), url("jukebox"));
         ((JukeboxBlockEntity) level.getBlockEntity(JUKEBOX)).setTheItem(jukeboxDisc);
 
-        ItemStack readerDisc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        readerDisc.set(CreateMediaSystems.URL.get(), url("reader"));
+        ItemStack readerDisc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        readerDisc.set(AudioFeature.URL.get(), url("reader"));
         ((DiscReaderBlock.Entity) level.getBlockEntity(DISC_READER)).insert(readerDisc, null);
 
-        ItemStack bluRay = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        bluRay.set(CreateMediaSystems.PLAYLIST.get(), List.of(url("bluray")));
+        ItemStack bluRay = new ItemStack(VideoFeature.BLU_RAY.get());
+        bluRay.set(VideoFeature.PLAYLIST.get(), List.of(url("bluray")));
         ((VideoPlayerBlock.Entity) level.getBlockEntity(BLU_RAY)).insert(bluRay, null);
     }
 
     private static void wall(ServerLevel level, BlockPos source, java.util.function.IntFunction<BlockPos> at, Direction facing) {
         for (int i = 0; i < SPEAKERS; i++) {
             BlockPos pos = at.apply(i);
-            level.setBlock(pos, CreateMediaSystems.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, facing), 3);
+            level.setBlock(pos, AudioFeature.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, facing), 3);
             ((SpeakerBlock.Entity) level.getBlockEntity(pos)).configure(level, source, 1, Streams.Channel.values()[i % 3]);
         }
     }

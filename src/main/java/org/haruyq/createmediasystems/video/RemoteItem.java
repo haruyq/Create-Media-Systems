@@ -5,7 +5,6 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 
 import org.jetbrains.annotations.Nullable;
@@ -48,9 +47,9 @@ public class RemoteItem extends Item {
             return InteractionResult.PASS;
         }
         if (!context.getLevel().isClientSide) {
-            context.getItemInHand().set(CreateMediaSystems.REMOTE_TARGET.get(),
+            context.getItemInHand().set(VideoFeature.REMOTE_TARGET.get(),
                     GlobalPos.of(context.getLevel().dimension(), context.getClickedPos().immutable()));
-            context.getItemInHand().set(CreateMediaSystems.REMOTE_SOURCE.get(),
+            context.getItemInHand().set(VideoFeature.REMOTE_SOURCE.get(),
                     SourceLinks.identify(context.getLevel(), context.getClickedPos()));
             player.displayClientMessage(Component.translatable("create_media_systems.remote.paired"), true);
         }
@@ -58,12 +57,12 @@ public class RemoteItem extends Item {
     }
 
     static ItemStack held(Player player) {
-        return player.getMainHandItem().is(CreateMediaSystems.REMOTE.get()) ? player.getMainHandItem() : player.getOffhandItem();
+        return player.getMainHandItem().is(VideoFeature.REMOTE.get()) ? player.getMainHandItem() : player.getOffhandItem();
     }
 
     @Nullable
     public static GlobalPos target(Level level, ItemStack stack) {
-        GlobalPos target = stack.get(CreateMediaSystems.REMOTE_TARGET.get());
+        GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
         if (target == null || level.isClientSide) {
             return target;
         }
@@ -71,11 +70,11 @@ public class RemoteItem extends Item {
         if (targetLevel == null) {
             return null;
         }
-        UUID id = stack.get(CreateMediaSystems.REMOTE_SOURCE.get());
+        UUID id = stack.get(VideoFeature.REMOTE_SOURCE.get());
         if (id == null) {
             id = SourceLinks.identify(targetLevel, target.pos());
             if (id != null) {
-                stack.set(CreateMediaSystems.REMOTE_SOURCE.get(), id);
+                stack.set(VideoFeature.REMOTE_SOURCE.get(), id);
             }
         }
         BlockPos pos = SourceLinks.resolve(targetLevel, id, target.pos());
@@ -84,7 +83,7 @@ public class RemoteItem extends Item {
         }
         GlobalPos resolved = GlobalPos.of(target.dimension(), pos);
         if (!resolved.equals(target)) {
-            stack.set(CreateMediaSystems.REMOTE_TARGET.get(), resolved);
+            stack.set(VideoFeature.REMOTE_TARGET.get(), resolved);
         }
         return resolved;
     }
@@ -99,7 +98,7 @@ public class RemoteItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        GlobalPos target = stack.get(CreateMediaSystems.REMOTE_TARGET.get());
+        GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
         if (level.isClientSide) {
             if (target == null) {
                 player.displayClientMessage(Component.translatable("create_media_systems.remote.unpaired"), true);
@@ -112,7 +111,7 @@ public class RemoteItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        GlobalPos target = stack.get(CreateMediaSystems.REMOTE_TARGET.get());
+        GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
         tooltip.add(target == null
                 ? Component.translatable("create_media_systems.remote.unpaired").withStyle(ChatFormatting.DARK_GRAY)
                 : Component.translatable("create_media_systems.remote.target", target.pos().getX(), target.pos().getY(),
@@ -135,17 +134,17 @@ public class RemoteItem extends Item {
 
     static void remoteControl(ServerPlayer player, RemoteControl payload) {
         ItemStack remote = held(player);
-        GlobalPos target = remote.is(CreateMediaSystems.REMOTE.get()) ? RemoteItem.target(player.level(), remote) : null;
+        GlobalPos target = remote.is(VideoFeature.REMOTE.get()) ? RemoteItem.target(player.level(), remote) : null;
         if (target == null) {
-            if (remote.has(CreateMediaSystems.REMOTE_TARGET.get())) {
+            if (remote.has(VideoFeature.REMOTE_TARGET.get())) {
                 player.displayClientMessage(Component.translatable("create_media_systems.remote.missing"), true);
             }
             return;
         }
         BlockPos pos = target.pos();
         if (target.dimension() != player.level().dimension()
-                || SableCompat.distance(player.level(), pos, player.blockPosition()) > ServerConfig.REMOTE_RANGE.get()) {
-            player.displayClientMessage(Component.translatable("create_media_systems.remote.too_far", ServerConfig.REMOTE_RANGE.get())
+                || SableCompat.distance(player.level(), pos, player.blockPosition()) > VideoFeature.REMOTE_RANGE.get()) {
+            player.displayClientMessage(Component.translatable("create_media_systems.remote.too_far", VideoFeature.REMOTE_RANGE.get())
                     .withStyle(ChatFormatting.RED), true);
             return;
         }

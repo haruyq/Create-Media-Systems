@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -26,11 +27,11 @@ public final class AnalysisGameTests {
     public static void preparedNextTrackSurvivesTrackSwitch(GameTestHelper helper) {
         BlockPos playerPos = helper.absolutePos(new BlockPos(2, 2, 2));
         BlockPos consolePos = helper.absolutePos(new BlockPos(3, 2, 2));
-        helper.getLevel().setBlockAndUpdate(playerPos, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        helper.getLevel().setBlockAndUpdate(consolePos, CreateMediaSystems.LIGHTING_CONSOLE.get().defaultBlockState());
+        helper.getLevel().setBlockAndUpdate(playerPos, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        helper.getLevel().setBlockAndUpdate(consolePos, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState());
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) helper.getLevel().getBlockEntity(playerPos);
-        ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://example.com/current.mp4", "https://example.com/next.mp4"));
+        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+        disc.set(VideoFeature.PLAYLIST.get(), List.of("https://example.com/current.mp4", "https://example.com/next.mp4"));
         player.insert(disc, null);
         LightingConsoleBlock.Entity console = (LightingConsoleBlock.Entity) helper.getLevel().getBlockEntity(consolePos);
         console.videoSource = playerPos;

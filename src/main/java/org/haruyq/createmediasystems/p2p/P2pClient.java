@@ -10,8 +10,9 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -26,6 +27,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -53,7 +55,7 @@ public final class P2pClient {
     static Supplier<String> api = ServerConfig.API_URL::get;
     static Opener open = (api, ticket, listener) -> {
         try {
-            Transport.loadNatives(ClientConfig.DIR.resolve("webrtc"));
+            Transport.loadNatives(ClientFiles.DIR.resolve("webrtc"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -67,7 +69,8 @@ public final class P2pClient {
     private P2pClient() {
     }
 
-    public static void register() {
+    public static void register(IEventBus modBus) {
+        P2pOverlay.register(modBus);
         NeoForge.EVENT_BUS.addListener(P2pClient::registerCommands);
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> logout());
     }
@@ -110,7 +113,7 @@ public final class P2pClient {
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
         // A client command under the server's /cms: NeoForge hands what no client command matches (/cms config) to the server.
-        event.getDispatcher().register(Commands.literal("cms").then(Commands.literal("p2p")
+        event.getDispatcher().register(Commands.literal(CreateMediaSystems.COMMAND).then(Commands.literal("p2p")
                 .then(Commands.literal("host").executes(c -> request(P2p.Action.HOST, "")))
                 .then(Commands.literal("join").then(Commands.argument("host", StringArgumentType.word())
                         .suggests((c, builder) -> SharedSuggestionProvider.suggest(players(), builder))

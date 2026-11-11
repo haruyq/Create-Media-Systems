@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.audio;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
@@ -37,7 +36,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!stack.is(CreateMediaSystems.CUSTOM_DISC.get())) {
+        if (!stack.is(AudioFeature.CUSTOM_DISC.get())) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity reader && reader.disc.isEmpty()) {
@@ -82,7 +81,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.DISC_READER_ENTITY.get() ? null
+        return level.isClientSide || type != AudioFeature.DISC_READER_ENTITY.get() ? null
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
@@ -94,7 +93,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         private boolean powered;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.DISC_READER_ENTITY.get(), pos, state);
+            super(AudioFeature.DISC_READER_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -108,7 +107,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         @Nullable
         private String url() {
             if (!disc.isEmpty()) {
-                return disc.get(CreateMediaSystems.URL.get());
+                return disc.get(AudioFeature.URL.get());
             }
             DriveEmulatorBlock.Entity drive = DriveEmulatorBlock.feeding(level, worldPosition, true);
             return drive == null ? null : drive.link();

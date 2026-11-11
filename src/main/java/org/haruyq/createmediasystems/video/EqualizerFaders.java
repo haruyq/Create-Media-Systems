@@ -60,7 +60,7 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
 
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
-                event.registerBlockEntityRenderer(CreateMediaSystems.EQUALIZER_ENTITY.get(), EqualizerFaders::new));
+                event.registerBlockEntityRenderer(VideoFeature.EQUALIZER_ENTITY.get(), EqualizerFaders::new));
         modBus.addListener((ModelEvent.RegisterAdditional event) -> event.register(KNOB));
         // Every Blu-ray player's video playing here plays through the equalizers touching it, and what a hi-fi
         // stack plays through its own controls.
@@ -69,7 +69,7 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
             if (level != null) {
                 NativeAudio.equalize(source -> level.getBlockEntity(source) instanceof HifiStackBlock.Entity stack
                         ? stack.tone()
-                        : level.getBlockState(source).is(CreateMediaSystems.VIDEO_PLAYER.get())
+                        : level.getBlockState(source).is(VideoFeature.VIDEO_PLAYER.get())
                         ? new Tone(EqualizerBlock.bands(level, source), 1) : Tone.FLAT);
             }
         });

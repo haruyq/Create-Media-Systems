@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -40,7 +39,7 @@ public class HifiCableItem extends Item {
 
     /** {@code player} touched the {@code channel} speaker terminal of {@code stack}: the cable they hold starts there. */
     static void pick(ServerPlayer player, HifiStackBlock.Entity stack, Streams.Channel channel) {
-        if (!player.getMainHandItem().is(CreateMediaSystems.HIFI_CABLE.get())) {
+        if (!player.getMainHandItem().is(HifiFeature.HIFI_CABLE.get())) {
             player.displayClientMessage(Component.translatable("create_media_systems.hifi.needs_cable")
                     .withStyle(ChatFormatting.RED), true);
             return;

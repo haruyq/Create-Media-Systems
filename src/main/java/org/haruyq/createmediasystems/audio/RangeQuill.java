@@ -117,13 +117,13 @@ public final class RangeQuill {
 
     @Nullable
     static BlockEntity quillTarget(ServerPlayer player, BlockPos pos) {
-        return Reach.withQuill(player, CreateMediaSystems.RANGE_QUILL.get(), pos, BlockEntity.class);
+        return Reach.withQuill(player, AudioFeature.RANGE_QUILL.get(), pos, BlockEntity.class);
     }
 
     static void sendBlockSettings(ServerPlayer player, BlockPos pos) {
         BlockEntity target = quillTarget(player, pos);
         if (target instanceof JukeboxBlockEntity jukebox) {
-            PacketDistributor.sendToPlayer(player, new JukeboxSettingsInfo(pos, jukebox.getData(CreateMediaSystems.JUKEBOX_SETTINGS)));
+            PacketDistributor.sendToPlayer(player, new JukeboxSettingsInfo(pos, jukebox.getData(AudioFeature.JUKEBOX_SETTINGS)));
         } else if (target instanceof SpeakerBlock.Entity speaker) {
             PacketDistributor.sendToPlayer(player,
                     new SpeakerInfo(pos, speaker.source(), speaker.volume(), speaker.channel()));
@@ -155,9 +155,9 @@ public final class RangeQuill {
                     .withStyle(ChatFormatting.RED), true);
             return;
         }
-        Optional<BoundingBox> area = payload.keepArea() ? jukebox.getData(CreateMediaSystems.JUKEBOX_SETTINGS).area()
+        Optional<BoundingBox> area = payload.keepArea() ? jukebox.getData(AudioFeature.JUKEBOX_SETTINGS).area()
                 : payload.area().map(box -> JukeboxSettings.relative(box, payload.jukebox()));
-        jukebox.setData(CreateMediaSystems.JUKEBOX_SETTINGS, new JukeboxSettings(area, payload.volume()));
+        jukebox.setData(AudioFeature.JUKEBOX_SETTINGS, new JukeboxSettings(area, payload.volume()));
         jukebox.setChanged();
         Jukeboxes.relay(player.serverLevel(), jukebox);
         sendBlockSettings(player, payload.jukebox());

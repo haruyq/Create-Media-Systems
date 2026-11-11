@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -96,7 +96,7 @@ final class Vlc {
         try (InputStream in = resource("version")) {
             version = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
         }
-        Path dir = ClientConfig.DIR.resolve("vlc").resolve(version);
+        Path dir = ClientFiles.DIR.resolve("vlc").resolve(version);
         Path done = dir.resolve(".unpacked");
         if (Files.exists(done)) {
             return dir;

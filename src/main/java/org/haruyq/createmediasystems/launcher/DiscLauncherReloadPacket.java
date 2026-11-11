@@ -27,7 +27,7 @@ public record DiscLauncherReloadPacket() implements CustomPacketPayload {
                 : LauncherMagazine.reserve(player, stack, player.level().getGameTime());
         if (started) {
             player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
-                    CreateMediaSystems.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, .6f, 1.2f);
+                    LauncherFeature.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, .6f, 1.2f);
         } else if (!LauncherMagazine.reloading(stack)) player.displayClientMessage(
                 net.minecraft.network.chat.Component.translatable("cell.create_media_systems.need_cell"), true);
     }

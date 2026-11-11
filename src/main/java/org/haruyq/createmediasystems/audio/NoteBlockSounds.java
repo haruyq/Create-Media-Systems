@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.audio;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import net.minecraft.core.Holder;
 import net.minecraft.sounds.SoundEvent;
@@ -24,10 +23,10 @@ public final class NoteBlockSounds {
         if (first != Blocks.COPPER_BLOCK && first != Blocks.CUT_COPPER && first != Blocks.CHISELED_COPPER
                 && first != Blocks.CUT_COPPER_STAIRS && first != Blocks.CUT_COPPER_SLAB) return original;
         return switch (copper.getAge()) {
-            case UNAFFECTED -> CreateMediaSystems.NOTE_BLOCK_TRUMPET;
-            case EXPOSED -> CreateMediaSystems.NOTE_BLOCK_TRUMPET_EXPOSED;
-            case WEATHERED -> CreateMediaSystems.NOTE_BLOCK_TRUMPET_WEATHERED;
-            case OXIDIZED -> CreateMediaSystems.NOTE_BLOCK_TRUMPET_OXIDIZED;
+            case UNAFFECTED -> AudioFeature.NOTE_BLOCK_TRUMPET;
+            case EXPOSED -> AudioFeature.NOTE_BLOCK_TRUMPET_EXPOSED;
+            case WEATHERED -> AudioFeature.NOTE_BLOCK_TRUMPET_WEATHERED;
+            case OXIDIZED -> AudioFeature.NOTE_BLOCK_TRUMPET_OXIDIZED;
         };
     }
 }

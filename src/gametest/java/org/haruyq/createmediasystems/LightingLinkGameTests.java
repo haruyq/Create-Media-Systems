@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.lighting.LightingFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,18 +44,18 @@ public class LightingLinkGameTests {
         BlockPos video = aboard.north();
         BlockPos ground = origin.south(2);
         BlockPos audio = ground.east(4);
-        level.setBlockAndUpdate(aboard, CreateMediaSystems.STAGE_LIGHT.get().defaultBlockState());
-        level.setBlockAndUpdate(ground, CreateMediaSystems.LASER_PROJECTOR.get().defaultBlockState());
-        level.setBlockAndUpdate(video, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(audio, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(aboard, LightingFeature.STAGE_LIGHT.get().defaultBlockState());
+        level.setBlockAndUpdate(ground, LightingFeature.LASER_PROJECTOR.get().defaultBlockState());
+        level.setBlockAndUpdate(video, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(audio, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         LightingConsoleBlock.Entity root = (LightingConsoleBlock.Entity) level.getBlockEntity(origin);
         helper.assertTrue(root.bind((StageLightBlock.Entity) level.getBlockEntity(aboard), 2), "onboard fixture binds");
         helper.assertTrue(root.bind((StageLightBlock.Entity) level.getBlockEntity(ground), 2), "ground fixture binds");
         root.setAudioSource(audio);
         root.setVideoSource(video);
         root.settings.groups[2].colors[0] = 0x123456;
-        ItemStack link = new ItemStack(CreateMediaSystems.LIGHTING_LINK.get());
-        link.set(CreateMediaSystems.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), origin));
+        ItemStack link = new ItemStack(LightingFeature.LIGHTING_LINK.get());
+        link.set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), origin));
         Player operator = helper.makeMockPlayer(GameType.CREATIVE);
         operator.setItemInHand(InteractionHand.MAIN_HAND, link);
         helper.assertTrue(LightingLinkItem.selected(operator) == root, "legacy item selection adopts an identity");
@@ -97,8 +99,8 @@ public class LightingLinkGameTests {
         console(level, origin);
         BlockPos fixture = origin.east(4);
         BlockPos media = fixture.north();
-        level.setBlockAndUpdate(fixture, CreateMediaSystems.STAGE_LIGHT.get().defaultBlockState());
-        level.setBlockAndUpdate(media, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(fixture, LightingFeature.STAGE_LIGHT.get().defaultBlockState());
+        level.setBlockAndUpdate(media, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         LightingConsoleBlock.Entity root = (LightingConsoleBlock.Entity) level.getBlockEntity(origin);
         root.bind((StageLightBlock.Entity) level.getBlockEntity(fixture), 2);
         root.setAudioSource(media);
@@ -124,16 +126,16 @@ public class LightingLinkGameTests {
         helper.assertTrue(light.controller() == root, "identity links survive block-entity reload");
 
         level.setBlockAndUpdate(media, Blocks.AIR.defaultBlockState());
-        level.setBlockAndUpdate(media, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(media, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         root.refreshLinks();
         helper.assertTrue(root.audioSource == null && root.videoSource == null, "replacement media does not inherit links");
-        ItemStack link = new ItemStack(CreateMediaSystems.LIGHTING_LINK.get());
-        link.set(CreateMediaSystems.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), origin));
-        link.set(CreateMediaSystems.LIGHTING_SOURCE.get(), root.identity());
+        ItemStack link = new ItemStack(LightingFeature.LIGHTING_LINK.get());
+        link.set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), origin));
+        link.set(LightingFeature.LIGHTING_SOURCE.get(), root.identity());
         Player operator = helper.makeMockPlayer(GameType.CREATIVE);
         operator.setItemInHand(InteractionHand.MAIN_HAND, link);
         level.setBlockAndUpdate(origin, Blocks.AIR.defaultBlockState());
-        level.setBlockAndUpdate(origin, CreateMediaSystems.LIGHTING_CONSOLE.get().defaultBlockState()
+        level.setBlockAndUpdate(origin, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState()
                 .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
         LightingConsoleBlock.Entity replacement = (LightingConsoleBlock.Entity) level.getBlockEntity(origin);
         replacement.updateStructure();
@@ -153,7 +155,7 @@ public class LightingLinkGameTests {
         level.setBlockAndUpdate(monitor, Blocks.AIR.defaultBlockState());
         helper.runAfterDelay(2, () -> {
             helper.assertTrue(!level.getBlockState(origin).getValue(LightingConsoleBlock.FORMED), "incomplete console stays apart");
-            level.setBlockAndUpdate(monitor, CreateMediaSystems.LIGHTING_MONITOR.get().defaultBlockState()
+            level.setBlockAndUpdate(monitor, LightingFeature.LIGHTING_MONITOR.get().defaultBlockState()
                     .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
             helper.runAfterDelay(2, () -> {
                 helper.assertTrue(((LightingConsoleBlock.Entity) level.getBlockEntity(origin)).formed, "last monitor forms the console");
@@ -179,12 +181,12 @@ public class LightingLinkGameTests {
         for (int x = 0; x < 4; x++) {
             for (int z = 0; z < 2; z++) {
                 BlockPos pos = LightingConsoleBlock.at(origin, facing, x, 0, z);
-                level.setBlockAndUpdate(pos, CreateMediaSystems.LIGHTING_CONSOLE.get().defaultBlockState()
+                level.setBlockAndUpdate(pos, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState()
                         .setValue(LightingConsoleBlock.FACING, facing));
                 blocks.add(pos);
             }
             BlockPos monitor = LightingConsoleBlock.at(origin, facing, x, 1, 1);
-            level.setBlockAndUpdate(monitor, CreateMediaSystems.LIGHTING_MONITOR.get().defaultBlockState()
+            level.setBlockAndUpdate(monitor, LightingFeature.LIGHTING_MONITOR.get().defaultBlockState()
                     .setValue(LightingConsoleBlock.FACING, facing));
             blocks.add(monitor);
         }

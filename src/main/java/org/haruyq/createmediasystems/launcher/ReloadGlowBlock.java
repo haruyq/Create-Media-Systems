@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.launcher;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -24,11 +23,11 @@ public final class ReloadGlowBlock extends Block {
         if (!(player.level() instanceof ServerLevel level)) return;
         BlockPos pos = player.blockPosition().above();
         BlockState state = level.getBlockState(pos);
-        if (!state.is(CreateMediaSystems.RELOAD_GLOW.get()) && !state.isAir()) return;
+        if (!state.is(LauncherFeature.RELOAD_GLOW.get()) && !state.isAir()) return;
         UNTIL.put(GlobalPos.of(level.dimension(), pos), level.getGameTime() + 8);
-        if (!state.is(CreateMediaSystems.RELOAD_GLOW.get())) {
-            level.setBlockAndUpdate(pos, CreateMediaSystems.RELOAD_GLOW.get().defaultBlockState());
-            level.scheduleTick(pos, CreateMediaSystems.RELOAD_GLOW.get(), 8);
+        if (!state.is(LauncherFeature.RELOAD_GLOW.get())) {
+            level.setBlockAndUpdate(pos, LauncherFeature.RELOAD_GLOW.get().defaultBlockState());
+            level.scheduleTick(pos, LauncherFeature.RELOAD_GLOW.get(), 8);
         }
     }
 

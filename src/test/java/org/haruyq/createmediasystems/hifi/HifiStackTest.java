@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.playback.Tone;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -20,7 +20,7 @@ import net.minecraft.world.phys.Vec3;
 class HifiStackTest {
     private static HifiStackBlock.Entity stack(Unit... units) {
         HifiStackBlock.Entity stack = new HifiStackBlock.Entity(new BlockPos(3, 64, 3),
-                CreateMediaSystems.HIFI_STACK.get().defaultBlockState());
+                HifiFeature.HIFI_STACK.get().defaultBlockState());
         for (Unit unit : units) {
             stack.add(unit);
         }
@@ -125,7 +125,7 @@ class HifiStackTest {
     @Test
     void aTrackTakenUpWhereItWasLeftCountsOnFromThere() {
         DiscReaderBlock.Entity source = new DiscReaderBlock.Entity(new BlockPos(9, 64, 9),
-                CreateMediaSystems.DISC_READER.get().defaultBlockState());
+                AudioFeature.DISC_READER.get().defaultBlockState());
         Streams.loading(source, null, 600, true);
         assertEquals(600, Streams.played(source, 1), "its emitters haven't had their turn yet");
         // Nobody is there to load it: it doesn't wait for them.

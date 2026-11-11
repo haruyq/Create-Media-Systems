@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.StreamSound;
@@ -69,7 +68,7 @@ final class Announcements {
         }
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         List<Vec3> mouths = found.computeIfAbsent(carriage.getId(), i -> carriage.getContraption().getBlocks().entrySet()
-                .stream().filter(e -> e.getValue().state().is(CreateMediaSystems.TRAIN_SPEAKER.get()))
+                .stream().filter(e -> e.getValue().state().is(TrainFeature.TRAIN_SPEAKER.get()))
                 .map(e -> SpeakerBlock.mouth(e.getKey(), e.getValue().state().getValue(SpeakerBlock.FACING)))
                 .toList());
         return mouths.stream().map(local -> carriage.toGlobalVector(local, 1))

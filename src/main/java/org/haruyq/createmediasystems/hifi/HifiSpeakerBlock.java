@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.hifi;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -83,7 +82,7 @@ public class HifiSpeakerBlock extends SpeakerBlock {
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!stack.is(CreateMediaSystems.HIFI_CABLE.get())) {
+        if (!stack.is(HifiFeature.HIFI_CABLE.get())) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity speaker) {
@@ -108,7 +107,7 @@ public class HifiSpeakerBlock extends SpeakerBlock {
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         // Sable assembling a ship removes it too: data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity speaker && speaker.cabled) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), new ItemStack(CreateMediaSystems.HIFI_CABLE.get()));
+            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), new ItemStack(HifiFeature.HIFI_CABLE.get()));
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
@@ -121,7 +120,7 @@ public class HifiSpeakerBlock extends SpeakerBlock {
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.HIFI_SPEAKER_ENTITY.get() ? null
+        return level.isClientSide || type != HifiFeature.HIFI_SPEAKER_ENTITY.get() ? null
                 : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l, s);
     }
 
@@ -130,7 +129,7 @@ public class HifiSpeakerBlock extends SpeakerBlock {
         private boolean cabled;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.HIFI_SPEAKER_ENTITY.get(), pos, state);
+            super(HifiFeature.HIFI_SPEAKER_ENTITY.get(), pos, state);
         }
 
         /**
@@ -165,7 +164,7 @@ public class HifiSpeakerBlock extends SpeakerBlock {
 
         /** Unlinks it; the cable that linked it comes back, if one did. */
         ItemStack unplug(ServerLevel level) {
-            ItemStack cable = cabled ? new ItemStack(CreateMediaSystems.HIFI_CABLE.get()) : ItemStack.EMPTY;
+            ItemStack cable = cabled ? new ItemStack(HifiFeature.HIFI_CABLE.get()) : ItemStack.EMPTY;
             cabled = false;
             configure(level, null, 1, Streams.Channel.MIX);
             level.playSound(null, worldPosition, SoundEvents.STONE_BUTTON_CLICK_ON, SoundSource.BLOCKS, 0.4f, 0.8f);

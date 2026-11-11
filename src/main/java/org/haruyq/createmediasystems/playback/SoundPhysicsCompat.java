@@ -5,7 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.mixin.ChannelAccessor;
 import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
 import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
@@ -99,7 +99,7 @@ public final class SoundPhysicsCompat {
                 int source = ((ChannelAccessor) channel).create_media_systems$source();
                 Vec3 from = request.from();
                 Object ignored = PROCESS_SOUND.invoke(source, from.x, from.y, from.z, SoundSource.BLOCKS,
-                        CreateMediaSystems.STREAM.getId());
+                        StreamFeature.STREAM.getId());
                 AL10.alSource3f(source, AL10.AL_POSITION, (float) at.x, (float) at.y, (float) at.z);
             } catch (Throwable e) {
                 failed = true;

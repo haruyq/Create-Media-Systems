@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -20,10 +21,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class LauncherServerGameTests {
     private static DiscProjectile playing(GameTestHelper helper, String name, long positionTicks, double duration) {
         var level = helper.getLevel();
-        ItemStack item = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        item.set(CreateMediaSystems.URL.get(), "https://example.invalid/" + name + ".ogg");
-        item.set(CreateMediaSystems.DISC_PLAYBACK.get(), DiscPlayback.prepare(level, item).at(positionTicks));
-        var disc = new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(), level);
+        ItemStack item = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        item.set(AudioFeature.URL.get(), "https://example.invalid/" + name + ".ogg");
+        item.set(LauncherFeature.DISC_PLAYBACK.get(), DiscPlayback.prepare(level, item).at(positionTicks));
+        var disc = new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(), level);
         disc.setItem(item);
         disc.setNoGravity(true);
         var pos = helper.absolutePos(new BlockPos(1, 2, 1));
@@ -48,10 +49,10 @@ public final class LauncherServerGameTests {
         helper.assertTrue(first.playbackPositionTicks() == 400 && second.playbackPositionTicks() == 60,
                 "The server holds a separate playback clock for each CD of the same song");
         ItemStack returned = first.playbackItem();
-        var cell = new ItemStack(CreateMediaSystems.COPPER_DISC_CELL.get());
+        var cell = new ItemStack(LauncherFeature.COPPER_DISC_CELL.get());
         DiscCellItem.setMaster(cell, returned);
         DiscCellItem.setEnergy(cell, DiscCellTier.COPPER.capacity());
-        var launcher = new ItemStack(CreateMediaSystems.DISC_LAUNCHER.get());
+        var launcher = new ItemStack(LauncherFeature.DISC_LAUNCHER.get());
         LauncherMagazine.setCell(launcher, cell);
         var round = LauncherMagazine.pop(launcher);
         var owner = new ArmorStand(EntityType.ARMOR_STAND, helper.getLevel());
@@ -106,8 +107,8 @@ public final class LauncherServerGameTests {
     public static void changingTheSongResetsOnlyThatCdsPosition(GameTestHelper helper) {
         var disc = playing(helper, "old-song", 400, 254);
         var changed = disc.playbackItem();
-        var previous = changed.get(CreateMediaSystems.DISC_PLAYBACK.get());
-        changed.set(CreateMediaSystems.URL.get(), "https://example.invalid/new-song.ogg");
+        var previous = changed.get(LauncherFeature.DISC_PLAYBACK.get());
+        changed.set(AudioFeature.URL.get(), "https://example.invalid/new-song.ogg");
         var next = DiscPlayback.prepare(helper.getLevel(), changed);
         helper.assertTrue(next.positionTicks() == 0 && next.id().equals(previous.id()),
                 "Replacing the source resets the track, without replacing the CD");
@@ -117,11 +118,11 @@ public final class LauncherServerGameTests {
 
     @GameTest(template="empty")
     public static void projectileRegistryAndMetadataSaveLoad(GameTestHelper helper) {
-        helper.assertTrue(CreateMediaSystems.DISC_LAUNCHER.get() instanceof DiscLauncherItem,"Launcher registry bound");
+        helper.assertTrue(LauncherFeature.DISC_LAUNCHER.get() instanceof DiscLauncherItem,"Launcher registry bound");
         var level=helper.getLevel();
-        ItemStack original=new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        original.set(CreateMediaSystems.URL.get(),"http://example.invalid/saved-disc.ogg");
-        var disc=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),level);
+        ItemStack original=new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        original.set(AudioFeature.URL.get(),"http://example.invalid/saved-disc.ogg");
+        var disc=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),level);
         disc.setItem(original);disc.setNoGravity(true);
         var pos=helper.absolutePos(new BlockPos(1,2,1));disc.setPos(pos.getX()+.5,pos.getY(),pos.getZ()+.5);
         CompoundTag tag=new CompoundTag();disc.save(tag);
@@ -135,9 +136,9 @@ public final class LauncherServerGameTests {
     @GameTest(template="empty")
     public static void expiredProjectionDoesNotDropADuplicatedMaster(GameTestHelper helper) {
         var level=helper.getLevel();
-        ItemStack original=new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        original.set(CreateMediaSystems.URL.get(),"http://example.invalid/expiry-disc.ogg");
-        var disc=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),level);
+        ItemStack original=new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        original.set(AudioFeature.URL.get(),"http://example.invalid/expiry-disc.ogg");
+        var disc=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),level);
         disc.setItem(original);disc.setNoGravity(true);
         var pos=helper.absolutePos(new BlockPos(1,2,1));disc.setPos(pos.getX()+.5,pos.getY(),pos.getZ()+.5);
         level.addFreshEntity(disc);

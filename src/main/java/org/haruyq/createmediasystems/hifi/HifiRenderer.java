@@ -79,8 +79,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
-            event.registerBlockEntityRenderer(CreateMediaSystems.HIFI_STACK_ENTITY.get(), context -> new HifiRenderer());
-            event.registerBlockEntityRenderer(CreateMediaSystems.HIFI_SPEAKER_ENTITY.get(), context -> new SpeakerCable());
+            event.registerBlockEntityRenderer(HifiFeature.HIFI_STACK_ENTITY.get(), context -> new HifiRenderer());
+            event.registerBlockEntityRenderer(HifiFeature.HIFI_SPEAKER_ENTITY.get(), context -> new SpeakerCable());
         });
         modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
             private BlockEntityWithoutLevelRenderer renderer;
@@ -92,7 +92,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                 }
                 return renderer;
             }
-        }, Arrays.stream(Unit.values()).map(CreateMediaSystems::hifiUnit).toArray(Item[]::new)));
+        }, Arrays.stream(Unit.values()).map(HifiFeature::hifiUnit).toArray(Item[]::new)));
     }
 
     @Override
@@ -585,7 +585,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             }
             HifiStackBlock.Entity stack = stacks.computeIfAbsent(unitItem.unit, unit -> {
                 HifiStackBlock.Entity alone = new HifiStackBlock.Entity(BlockPos.ZERO,
-                        CreateMediaSystems.HIFI_STACK.get().defaultBlockState());
+                        HifiFeature.HIFI_STACK.get().defaultBlockState());
                 alone.units().add(unit);
                 return alone;
             });

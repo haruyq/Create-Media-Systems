@@ -118,15 +118,15 @@ public final class SourceLinks extends SavedData {
         if (source == null) {
             return null;
         }
-        UUID id = source.getData(CreateMediaSystems.SOURCE_ID);
+        UUID id = source.getData(StreamFeature.SOURCE_ID);
         source.setChanged();
         get(server).put(id, pos);
         return id;
     }
 
     public static void loaded(BlockEntity source) {
-        if (source.getLevel() instanceof ServerLevel level && source.hasData(CreateMediaSystems.SOURCE_ID)) {
-            get(level).put(source.getData(CreateMediaSystems.SOURCE_ID), source.getBlockPos());
+        if (source.getLevel() instanceof ServerLevel level && source.hasData(StreamFeature.SOURCE_ID)) {
+            get(level).put(source.getData(StreamFeature.SOURCE_ID), source.getBlockPos());
         }
     }
 
@@ -141,7 +141,7 @@ public final class SourceLinks extends SavedData {
         }
         if (pos != null && level.isLoaded(pos)) {
             BlockEntity source = level.getBlockEntity(pos);
-            if (source == null || !source.hasData(CreateMediaSystems.SOURCE_ID) || !id.equals(source.getData(CreateMediaSystems.SOURCE_ID))) {
+            if (source == null || !source.hasData(StreamFeature.SOURCE_ID) || !id.equals(source.getData(StreamFeature.SOURCE_ID))) {
                 return null;
             }
         }

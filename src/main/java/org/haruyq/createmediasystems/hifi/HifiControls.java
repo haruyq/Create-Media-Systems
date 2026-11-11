@@ -1,6 +1,9 @@
 package org.haruyq.createmediasystems.hifi;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.display.DisplayFeature;
+import org.haruyq.createmediasystems.lighting.LightingFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -89,8 +92,8 @@ public final class HifiControls {
     private static boolean works(Player player) {
         ItemStack hand = player.getMainHandItem();
         return !player.isShiftKeyDown() && !(hand.getItem() instanceof BlockItem) && !(hand.getItem() instanceof WrenchItem)
-                && !hand.is(CreateMediaSystems.RANGE_QUILL.get()) && !hand.is(CreateMediaSystems.DISPLAY_QUILL.get())
-                && !hand.is(CreateMediaSystems.LIGHTING_LINK.get()) && !hand.is(CreateMediaSystems.REMOTE.get());
+                && !hand.is(AudioFeature.RANGE_QUILL.get()) && !hand.is(DisplayFeature.DISPLAY_QUILL.get())
+                && !hand.is(LightingFeature.LIGHTING_LINK.get()) && !hand.is(VideoFeature.REMOTE.get());
     }
 
     /** Where the player's look crosses the front or back of {@code stack}, worked out in its block space (see SableCompat). */

@@ -3,7 +3,8 @@ package org.haruyq.createmediasystems.launcher;
 import java.util.List;
 import java.util.UUID;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -39,7 +40,7 @@ public record DiscPlayback(UUID id, String source, long positionTicks) {
     /** Changing the media starts that CD's new track at zero, keeping its physical identity. */
     static DiscPlayback prepare(Level level, ItemStack item) {
         String source = source(level, item);
-        DiscPlayback previous = item.get(CreateMediaSystems.DISC_PLAYBACK.get());
+        DiscPlayback previous = item.get(LauncherFeature.DISC_PLAYBACK.get());
         return previous == null ? new DiscPlayback(UUID.randomUUID(), source, 0)
                 : previous.source.equals(source) ? previous : new DiscPlayback(previous.id, source, 0);
     }
@@ -53,9 +54,9 @@ public record DiscPlayback(UUID id, String source, long positionTicks) {
     }
 
     public static String mediaUrl(ItemStack item) {
-        if (item.is(CreateMediaSystems.CUSTOM_DISC.get())) return item.get(CreateMediaSystems.URL.get());
-        if (item.is(CreateMediaSystems.DVD.get()) || item.is(CreateMediaSystems.BLU_RAY.get())) {
-            List<String> playlist = item.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+        if (item.is(AudioFeature.CUSTOM_DISC.get())) return item.get(AudioFeature.URL.get());
+        if (item.is(VideoFeature.DVD.get()) || item.is(VideoFeature.BLU_RAY.get())) {
+            List<String> playlist = item.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
             return playlist.isEmpty() ? null : playlist.getFirst();
         }
         return null;

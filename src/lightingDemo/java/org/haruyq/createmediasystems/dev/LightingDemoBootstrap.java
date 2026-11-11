@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.lighting.LightingFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
@@ -147,14 +149,14 @@ public final class LightingDemoBootstrap {
             level.setBlock(new BlockPos(x, 65, -8), Blocks.IRON_BLOCK.defaultBlockState(), 3);
         }
         Direction facing = Direction.SOUTH;
-        BlockState consoleState = CreateMediaSystems.LIGHTING_CONSOLE.get().defaultBlockState().setValue(LightingConsoleBlock.FACING,
+        BlockState consoleState = LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState().setValue(LightingConsoleBlock.FACING,
                 facing);
         for (int x = 0; x < 4; x++) {
             for (int z = 0; z < 2; z++) {
                 level.setBlock(LightingConsoleBlock.at(origin, facing, x, 0, z), consoleState, 3);
             }
             level.setBlock(LightingConsoleBlock.at(origin, facing, x, 1, 1),
-                    CreateMediaSystems.LIGHTING_MONITOR.get().defaultBlockState().setValue(LightingConsoleBlock.FACING, facing), 3);
+                    LightingFeature.LIGHTING_MONITOR.get().defaultBlockState().setValue(LightingConsoleBlock.FACING, facing), 3);
         }
         if (level.getBlockEntity(origin) instanceof LightingConsoleBlock.Entity console) {
             console.updateStructure();
@@ -177,16 +179,16 @@ public final class LightingDemoBootstrap {
         place(level, "create_media_systems:speaker", speakerPos, Direction.SOUTH);
         place(level, "create_media_systems:display", displayPos, Direction.SOUTH);
         if (level.getBlockEntity(playerPos) instanceof VideoPlayerBlock.Entity player) {
-            ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
+            ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
             if (Boolean.getBoolean("cms.sableLightingDemo")) {
-                disc.set(CreateMediaSystems.PLAYLIST.get(), Collections.nCopies(60, mediaUrl));
+                disc.set(VideoFeature.PLAYLIST.get(), Collections.nCopies(60, mediaUrl));
             } else {
                 String next = mediaUrl + "?next=1";
                 if (!Boolean.getBoolean("cms.lightingNetworkTest")) {
                     LightingDemoCache.seedNext(next, Path.of("media", "cms-lighting-lab.mp4"),
-                            CreateMediaSystems.BLU_RAY.get().maxHeight);
+                            VideoFeature.BLU_RAY.get().maxHeight);
                 }
-                disc.set(CreateMediaSystems.PLAYLIST.get(), List.of(mediaUrl, next));
+                disc.set(VideoFeature.PLAYLIST.get(), List.of(mediaUrl, next));
             }
             player.insert(disc, null);
             console.videoSource = playerPos.immutable();
@@ -324,7 +326,7 @@ public final class LightingDemoBootstrap {
         for (int x = -10; x <= 10; x += 4) {
             BlockPos pos = new BlockPos(x, 72, -8);
             level.setBlock(pos.above(), Blocks.IRON_BLOCK.defaultBlockState(), 3);
-            level.setBlock(pos, CreateMediaSystems.STAGE_LIGHT.get().defaultBlockState()
+            level.setBlock(pos, LightingFeature.STAGE_LIGHT.get().defaultBlockState()
                     .setValue(StageLightBlock.FACING, Direction.SOUTH).setValue(StageLightBlock.HANGING, true), 3);
             bind(level, pos, groups[index++], origin);
         }

@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.train;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.PercentSetting;
 
 import com.simibubi.create.foundation.block.IBE;
@@ -50,7 +49,7 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
             return ItemStack.EMPTY;
         }
         ItemStack held = player.getItemInHand(hand);
-        return held.is(CreateMediaSystems.ANNOUNCEMENT_SCHEDULE.get()) ? held.split(1) : ItemStack.EMPTY;
+        return held.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get()) ? held.split(1) : ItemStack.EMPTY;
     }
 
     @Override
@@ -59,7 +58,7 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         if (stack.is(Tags.Items.TOOLS_WRENCH)) {
             return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION; // missed the volume box: don't eject
         }
-        if (!stack.is(CreateMediaSystems.ANNOUNCEMENT_SCHEDULE.get())) {
+        if (!stack.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get())) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         interact(level, pos, player, hand);
@@ -97,7 +96,7 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
 
     @Override
     public BlockEntityType<? extends Entity> getBlockEntityType() {
-        return CreateMediaSystems.TRAIN_DISC_READER_ENTITY.get();
+        return TrainFeature.TRAIN_DISC_READER_ENTITY.get();
     }
 
     public static class Entity extends SmartBlockEntity {
@@ -105,7 +104,7 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         private ScrollValueBehaviour volume;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.TRAIN_DISC_READER_ENTITY.get(), pos, state);
+            super(TrainFeature.TRAIN_DISC_READER_ENTITY.get(), pos, state);
         }
 
         @Override

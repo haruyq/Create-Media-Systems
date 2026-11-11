@@ -21,7 +21,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.disc.DiscUrl;
@@ -361,7 +360,7 @@ public final class Streams {
 
     /** A source block entity is known by its id, which it keeps when Sable moves it or its chunk reloads. */
     private static UUID key(BlockEntity source) {
-        return source.getData(CreateMediaSystems.SOURCE_ID);
+        return source.getData(StreamFeature.SOURCE_ID);
     }
 
     @Nullable

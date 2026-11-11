@@ -4,12 +4,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.charset.StandardCharsets;
 
+import org.haruyq.createmediasystems.p2p.P2pFeature;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.electronwill.nightconfig.toml.TomlFormat;
 
 class ServerConfigSecretTest {
     private static final String TOKEN = "a3f9c0d17e2b4c58a3f9c0d17e2b4c58";
+
+    @BeforeAll
+    static void declareTheSecret() {
+        // P2P declares p2pServerToken a secret as its class loads, which the mod does as it starts.
+        assertNotNull(P2pFeature.SERVER_TOKEN);
+    }
 
     @Test
     void playersGetTheConfigWithItsTokenEmptied() {

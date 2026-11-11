@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 
 import org.junit.jupiter.api.Test;
@@ -69,6 +69,6 @@ class StreamsLoadTest {
     }
 
     private static DiscReaderBlock.Entity reader() {
-        return new DiscReaderBlock.Entity(new BlockPos(7, 64, 7), CreateMediaSystems.DISC_READER.get().defaultBlockState());
+        return new DiscReaderBlock.Entity(new BlockPos(7, 64, 7), AudioFeature.DISC_READER.get().defaultBlockState());
     }
 }

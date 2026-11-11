@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.partybox;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -21,9 +22,9 @@ public final class PartyBoxGameTests {
         h.getLevel().addFreshEntity(p); return p;
     }
     private static PartyBoxEntity box(GameTestHelper h,int energy) {
-        var box=new PartyBoxEntity(CreateMediaSystems.PARTYBOX_ENTITY.get(),h.getLevel());
+        var box=new PartyBoxEntity(PartyBoxFeature.PARTYBOX_ENTITY.get(),h.getLevel());
         var p=h.absolutePos(new BlockPos(1,1,1));box.setPos(p.getX()+.5,p.getY(),p.getZ()+.5);
-        ItemStack battery=new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get());PartyBoxBatteryItem.setEnergy(battery,energy);
+        ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());PartyBoxBatteryItem.setEnergy(battery,energy);
         box.inventory.setItem(1,battery);box.inventory.setItem(0,new ItemStack(Items.MUSIC_DISC_CAT));
         return box;
     }
@@ -33,8 +34,8 @@ public final class PartyBoxGameTests {
         h.assertTrue(box.positionTicks()==280 && box.playing(),"World reload restores the authoritative playing clock");
         box.setPos(box.getX()+12,box.getY(),box.getZ()+2);
         h.assertTrue(box.positionTicks()==280,"Dragging cannot restart a song");
-        ItemStack portable=box.portableItem();var restored=new PartyBoxEntity(CreateMediaSystems.PARTYBOX_ENTITY.get(),h.getLevel());
-        restored.loadPortable(portable.get(CreateMediaSystems.PARTYBOX_STATE.get()));
+        ItemStack portable=box.portableItem();var restored=new PartyBoxEntity(PartyBoxFeature.PARTYBOX_ENTITY.get(),h.getLevel());
+        restored.loadPortable(portable.get(PartyBoxFeature.PARTYBOX_STATE.get()));
         h.assertTrue(!restored.playing() && restored.positionTicks()==280,"Packed speakers pause at their actual position");
         h.assertTrue(restored.inventory.getItem(0).is(Items.MUSIC_DISC_CAT) && restored.energy()==PartyBoxSpecs.CAPACITY_FE,"One packed item owns its CD and battery");
         restored.play();h.assertTrue(restored.positionTicks()==280,"Unpacking resumes rather than restarting");h.succeed();
@@ -48,10 +49,10 @@ public final class PartyBoxGameTests {
         h.assertTrue(box.inventory.getItem(0).is(Items.MUSIC_DISC_CAT),"Depletion preserves the real source disc");h.succeed();
     }
     @GameTest(template="empty") public static void batteryCanUseTheExistingCreateChargerAndFESimulationIsPure(GameTestHelper h) {
-        ItemStack battery=new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get());
+        ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
         var port=battery.getCapability(Capabilities.EnergyStorage.ITEM);
         h.assertTrue(port!=null && port.receiveEnergy(1000,true)==1000 && PartyBoxBatteryItem.energy(battery)==0,"FE simulation changes nothing");
-        BlockPos pos=h.absolutePos(new BlockPos(1,1,1));h.getLevel().setBlockAndUpdate(pos,CreateMediaSystems.DISC_CELL_CHARGER.get().defaultBlockState());
+        BlockPos pos=h.absolutePos(new BlockPos(1,1,1));h.getLevel().setBlockAndUpdate(pos,LauncherFeature.DISC_CELL_CHARGER.get().defaultBlockState());
         var charger=(org.haruyq.createmediasystems.launcher.DiscCellCharger)h.getLevel().getBlockEntity(pos);charger.insert(battery);
         var dock=h.getLevel().getCapability(Capabilities.EnergyStorage.BLOCK,pos,null);dock.receiveEnergy(777,false);
         h.assertTrue(PartyBoxBatteryItem.energy(charger.cell())==777,"The normal rotation/FE charger charges a real PartyBox battery");
@@ -76,7 +77,7 @@ public final class PartyBoxGameTests {
     @GameTest(template="empty") public static void packingReturnsExactlyOneOwnedSpeakerAndNoLooseOriginals(GameTestHelper h) {
         var box=box(h,12345);h.getLevel().addFreshEntity(box);var p=h.makeMockPlayer(GameType.SURVIVAL);p.setPos(box.getX(),box.getY(),box.getZ());
         h.assertTrue(box.pack(p),"Packing succeeds near the speaker");h.assertTrue(!box.pack(p),"A removed speaker cannot be packed twice");
-        h.assertTrue(p.getInventory().countItem(CreateMediaSystems.PARTYBOX.get())==1 && p.getInventory().countItem(Items.MUSIC_DISC_CAT)==0,"CD lives inside one packed speaker");h.succeed();
+        h.assertTrue(p.getInventory().countItem(PartyBoxFeature.PARTYBOX.get())==1 && p.getInventory().countItem(Items.MUSIC_DISC_CAT)==0,"CD lives inside one packed speaker");h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=70) public static void trolleyUsesCollisionInsteadOfTeleportingThroughWalls(GameTestHelper h) {
         var box=box(h,10000);h.getLevel().addFreshEntity(box);var player=player(h);

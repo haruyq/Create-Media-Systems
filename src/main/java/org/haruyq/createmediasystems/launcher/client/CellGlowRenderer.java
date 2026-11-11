@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.display.ScreenLight;
 import org.haruyq.createmediasystems.launcher.CellLighting;
@@ -89,7 +90,7 @@ public final class CellGlowRenderer {
                             (mc.level.getGameTime()+(double)partial)/20.0,box.lights(),0),.6f));
             } else if (entity instanceof Player player) {
                 ItemStack gun = player.getMainHandItem();
-                if (gun.is(CreateMediaSystems.DISC_LAUNCHER.get())) {
+                if (gun.is(LauncherFeature.DISC_LAUNCHER.get())) {
                     var visual = LauncherClient.cellVisual(gun, mc.level, partial);
                     if (visual.strength() <= 0) continue;
                     var motion = LauncherClient.frame(gun, mc.level, partial);

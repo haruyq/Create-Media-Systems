@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.audio;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import org.junit.jupiter.api.Test;
 
@@ -14,9 +13,9 @@ class DiscReaderTest {
     @Test
     void redstoneStartsAndStopsTheDisc() {
         DiscReaderBlock.Entity reader = new DiscReaderBlock.Entity(BlockPos.ZERO,
-                CreateMediaSystems.DISC_READER.get().defaultBlockState());
-        ItemStack disc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        disc.set(CreateMediaSystems.URL.get(), "https://example.com/a.mp3");
+                AudioFeature.DISC_READER.get().defaultBlockState());
+        ItemStack disc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        disc.set(AudioFeature.URL.get(), "https://example.com/a.mp3");
         reader.insert(disc, null);
         assertNotNull(reader.nowPlaying(), "an inserted disc plays");
 

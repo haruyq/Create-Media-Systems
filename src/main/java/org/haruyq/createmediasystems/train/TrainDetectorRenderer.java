@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.train;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.simibubi.create.content.trains.observer.TrackObserver;
@@ -20,7 +19,7 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 public final class TrainDetectorRenderer extends SmartBlockEntityRenderer<TrainDetectorBlock.Entity> {
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
-                event.registerBlockEntityRenderer(CreateMediaSystems.TRAIN_DETECTOR_ENTITY.get(), TrainDetectorRenderer::new));
+                event.registerBlockEntityRenderer(TrainFeature.TRAIN_DETECTOR_ENTITY.get(), TrainDetectorRenderer::new));
     }
 
     TrainDetectorRenderer(BlockEntityRendererProvider.Context context) {

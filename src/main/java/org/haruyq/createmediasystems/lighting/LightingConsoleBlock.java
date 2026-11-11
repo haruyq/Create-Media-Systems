@@ -10,7 +10,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.jetbrains.annotations.Nullable;
@@ -101,7 +100,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get() ? null
+        return level.isClientSide || type != LightingFeature.LIGHTING_CONSOLE_ENTITY.get() ? null
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
@@ -206,7 +205,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         public long signalAt = -100;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get(), pos, state);
+            super(LightingFeature.LIGHTING_CONSOLE_ENTITY.get(), pos, state);
         }
 
         @Nullable

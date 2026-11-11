@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -84,7 +83,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.SPEAKER_ENTITY.get() ? null
+        return level.isClientSide || type != AudioFeature.SPEAKER_ENTITY.get() ? null
                 : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l, s);
     }
 
@@ -94,7 +93,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         private Streams.Channel channel = Streams.Channel.MIX;
 
         public Entity(BlockPos pos, BlockState state) {
-            this(CreateMediaSystems.SPEAKER_ENTITY.get(), pos, state);
+            this(AudioFeature.SPEAKER_ENTITY.get(), pos, state);
         }
 
         /** A speaker of another kind: a hi-fi stack's. */

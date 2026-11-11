@@ -106,8 +106,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             }
         });
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
-            event.registerBlockEntityRenderer(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), LightingRenderer::new);
-            event.registerBlockEntityRenderer(CreateMediaSystems.LIGHTING_CONSOLE_ENTITY.get(), Console::new);
+            event.registerBlockEntityRenderer(LightingFeature.STAGE_LIGHT_ENTITY.get(), LightingRenderer::new);
+            event.registerBlockEntityRenderer(LightingFeature.LIGHTING_CONSOLE_ENTITY.get(), Console::new);
         });
         modBus.addListener((RegisterShadersEvent event) -> {
             try {

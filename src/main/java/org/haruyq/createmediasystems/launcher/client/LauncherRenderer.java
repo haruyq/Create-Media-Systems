@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.launcher.client;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;
 import org.haruyq.createmediasystems.launcher.LauncherMechanics;
@@ -109,7 +110,7 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
                     (float) DiscCellItem.energy(visual.stack()) / item.tier.capacity(), light, overlay);
 
         box(pose, glow, 7.2f, 11.3f, 16.1f, 8.8f, 12, 16.25f, METAL, 0xF000F0, overlay);
-        Long shot=stack.get(CreateMediaSystems.LAUNCHER_SHOT_AT.get());
+        Long shot=stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
         float shotAge=shot==null || level==null?-1:level.getGameTime()-shot+partial;
         if(shotAge>=0 && shotAge<1.2f) {
             var flash=tint(luminous,color,210);

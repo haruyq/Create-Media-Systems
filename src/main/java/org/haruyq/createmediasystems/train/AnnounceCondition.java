@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.train;
 import java.util.Locale;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.simibubi.create.content.trains.entity.Train;
@@ -101,7 +102,7 @@ public class AnnounceCondition extends ScheduleWaitCondition {
             case PROGRESS -> value() + "% ";
             case BEFORE_ARRIVAL -> "-" + value() + "s ";
         };
-        return Pair.of(new ItemStack(CreateMediaSystems.CUSTOM_DISC.get()),
+        return Pair.of(new ItemStack(AudioFeature.CUSTOM_DISC.get()),
                 Component.literal(when + url().replaceFirst("^https?://", "")));
     }
 

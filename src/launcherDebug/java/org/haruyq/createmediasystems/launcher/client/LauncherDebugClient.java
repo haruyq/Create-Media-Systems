@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import java.nio.file.*;
 import java.lang.reflect.Field;
 import java.util.*;
@@ -89,7 +90,7 @@ public final class LauncherDebugClient {
                     inputCapture=action.substring(14).equals("1");fireTicks=0;aimHeld=false;
                     mc.options.keyAttack.setDown(false);mc.options.keyUse.setDown(false);
                 }
-                if(action.startsWith("damage-mode "))org.haruyq.createmediasystems.client.ClientConfig.LAUNCHER_DAMAGE_NUMBERS.set(
+                if(action.startsWith("damage-mode "))LauncherClient.DAMAGE_NUMBERS.set(
                         LauncherDamageDisplay.Mode.valueOf(action.substring(12).toUpperCase(java.util.Locale.ROOT)));
                 if(action.equals("launcher-crouch-fire") && mc.player!=null && mc.gameMode!=null) {
                     mc.player.input.shiftKeyDown=true;
@@ -151,7 +152,7 @@ public final class LauncherDebugClient {
             row.put("guiScale",mc.getWindow().getGuiScale());
             row.put("megaphonePlaybacks",org.haruyq.createmediasystems.megaphone.client.MegaphoneClient.playbacks());
             var groundItems=new ArrayList<Map<String,Object>>();
-            for(var entity:mc.level.entitiesForRendering())if(entity instanceof net.minecraft.world.entity.item.ItemEntity item && item.getItem().is(org.haruyq.createmediasystems.CreateMediaSystems.DISC_LAUNCHER.get()))
+            for(var entity:mc.level.entitiesForRendering())if(entity instanceof net.minecraft.world.entity.item.ItemEntity item && item.getItem().is(LauncherFeature.DISC_LAUNCHER.get()))
                 groundItems.add(Map.of("x",item.getX(),"y",item.getY(),"z",item.getZ(),"item",item.getItem().toString()));
             row.put("groundLaunchers",groundItems);
             if(mc.level.getBlockEntity(new net.minecraft.core.BlockPos(2,100,7)) instanceof org.haruyq.createmediasystems.launcher.DiscCellCharger charger)
@@ -176,7 +177,7 @@ public final class LauncherDebugClient {
             row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",LauncherClient.hitDamage());
             row.put("damageTotal",LauncherClient.damageDisplay().total());
             double damageAge=LauncherClient.damageDisplay().age(System.nanoTime()/1_000_000_000.0);row.put("damageAge",Double.isFinite(damageAge)?damageAge:-1);
-            row.put("damageMode",org.haruyq.createmediasystems.client.ClientConfig.LAUNCHER_DAMAGE_NUMBERS.get().name());
+            row.put("damageMode",LauncherClient.DAMAGE_NUMBERS.get().name());
             var damage=LauncherClient.damageDisplay().latest();
             if(damage!=null){row.put("damageTarget",damage.target());row.put("healthDamage",damage.health());row.put("shieldDamage",damage.shield());row.put("shieldBroken",damage.shieldBroken());}
             var pose=LauncherGunPose.sample(LauncherClient.frame(mc.player.getMainHandItem(),mc.level,1),1,LauncherClient.aim(1),LauncherClient.kick(1),0);
@@ -234,7 +235,7 @@ public final class LauncherDebugClient {
                 m.put("attachedBone",d.attachmentBone());
                 m.put("attachedUUID",d.attachmentTargetUUID().map(UUID::toString).orElse(""));
                 var anchor=d.attachmentPosition(1);m.put("anchor",List.of(anchor.x,anchor.y,anchor.z));
-                m.put("playback",d.getItem().get(org.haruyq.createmediasystems.CreateMediaSystems.DISC_PLAYBACK.get()));
+                m.put("playback",d.getItem().get(LauncherFeature.DISC_PLAYBACK.get()));
                 m.put("audio",org.haruyq.createmediasystems.playback.NativeAudio.discProgress(d.getUUID()));
                 m.put("pitchTarget",DiscAudioClient.pitchAt(d));m.put("gainTarget",DiscAudioClient.gain(d));
                 m.put("item",d.getItem().toString());discs.add(m);

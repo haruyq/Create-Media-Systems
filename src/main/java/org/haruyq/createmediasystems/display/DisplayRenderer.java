@@ -93,7 +93,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     /** Everything that draws and sets up displays and image viewers on this computer. */
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
-                event.registerBlockEntityRenderer(CreateMediaSystems.DISPLAY_ENTITY.get(), DisplayRenderer::new));
+                event.registerBlockEntityRenderer(DisplayFeature.DISPLAY_ENTITY.get(), DisplayRenderer::new));
         modBus.addListener(DisplayRenderer::registerShaders);
         // Before stage lights add their beams (LightingRenderer.effects, at the lowest priority).
         NeoForge.EVENT_BUS.addListener((RenderLevelStageEvent event) -> {

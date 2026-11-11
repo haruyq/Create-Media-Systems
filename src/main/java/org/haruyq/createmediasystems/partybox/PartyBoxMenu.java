@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.partybox;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.LauncherMagazine;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
@@ -15,7 +14,7 @@ public final class PartyBoxMenu extends AbstractContainerMenu {
         this(id, player, player.player.level().getEntity(data.readVarInt()) instanceof PartyBoxEntity box ? box : null);
     }
     public PartyBoxMenu(int id, Inventory player, PartyBoxEntity box) {
-        super(CreateMediaSystems.PARTYBOX_MENU.get(), id); this.box=box;
+        super(PartyBoxFeature.PARTYBOX_MENU.get(), id); this.box=box;
         var storage = box == null ? new net.minecraft.world.SimpleContainer(2) : box.inventory;
         addSlot(new Slot(storage, 0, 25, 58) {
             @Override public boolean mayPlace(ItemStack item) { return LauncherMagazine.isDisc(item); }

@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.lighting.LightingScreens;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.SourceLinks;
@@ -165,7 +164,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.DISPLAY_ENTITY.get() ? null
+        return level.isClientSide || type != DisplayFeature.DISPLAY_ENTITY.get() ? null
                 : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l);
     }
 
@@ -180,7 +179,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         private String image = "";
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.DISPLAY_ENTITY.get(), pos, state);
+            super(DisplayFeature.DISPLAY_ENTITY.get(), pos, state);
         }
 
         @Override

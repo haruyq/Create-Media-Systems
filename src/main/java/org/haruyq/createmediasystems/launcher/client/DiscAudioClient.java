@@ -8,7 +8,8 @@ import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
@@ -102,11 +103,11 @@ public final class DiscAudioClient {
 
     /** Select only sound stored ON the actual disc ItemStack, never an arbitrary weapon sound. */
     private static String mediaUrl(ItemStack disc) {
-        if (disc.is(CreateMediaSystems.CUSTOM_DISC.get())) {
-            return disc.get(CreateMediaSystems.URL.get());
+        if (disc.is(AudioFeature.CUSTOM_DISC.get())) {
+            return disc.get(AudioFeature.URL.get());
         }
-        if (disc.is(CreateMediaSystems.DVD.get()) || disc.is(CreateMediaSystems.BLU_RAY.get())) {
-            List<String> playlist = disc.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+        if (disc.is(VideoFeature.DVD.get()) || disc.is(VideoFeature.BLU_RAY.get())) {
+            List<String> playlist = disc.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
             return playlist.isEmpty() ? null : playlist.get(0);
         }
         return null;
@@ -141,9 +142,9 @@ public final class DiscAudioClient {
         // A normal jukebox disc uses its OWN song event, streamed and downmixed
         // to mono so OpenAL can perform HRTF/directional audio from the moving CD.
         // CMS custom discs without a URL must not play the placeholder song.
-        if (item.is(CreateMediaSystems.CUSTOM_DISC.get())
-                || item.is(CreateMediaSystems.DVD.get())
-                || item.is(CreateMediaSystems.BLU_RAY.get())) return null;
+        if (item.is(AudioFeature.CUSTOM_DISC.get())
+                || item.is(VideoFeature.DVD.get())
+                || item.is(VideoFeature.BLU_RAY.get())) return null;
         return JukeboxSong.fromStack(mc.level.registryAccess(), item).map(song -> {
             FlyingJukeboxSound sound = new FlyingJukeboxSound(disc, song.value().soundEvent().value());
             mc.getSoundManager().play(sound);

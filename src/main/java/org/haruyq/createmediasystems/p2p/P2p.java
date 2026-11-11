@@ -319,7 +319,7 @@ public final class P2p {
     private static String secret() {
         String secret = System.getenv(TOKEN_ENV);
         if (secret == null || secret.isBlank()) {
-            secret = ServerConfig.P2P_SERVER_TOKEN.get();
+            secret = P2pFeature.SERVER_TOKEN.get();
         }
         return TOKEN.matcher(secret.strip()).matches() ? secret.strip() : null;
     }

@@ -8,7 +8,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.p2p.Transport;
 import org.haruyq.createmediasystems.video.VideoDiscItem;
@@ -23,6 +25,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -36,7 +39,8 @@ public final class DiscClient {
     private DiscClient() {
     }
 
-    public static void register() {
+    public static void register(IEventBus modBus) {
+        DriveClient.register();
         NeoForge.EVENT_BUS.addListener(DiscClient::commands);
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clear());
         P2pClient.changed(DiscClient::changed);
@@ -80,7 +84,7 @@ public final class DiscClient {
 
     /** {@code /cms disc}; the server's {@code /cms config} and {@code /cms p2p} (see P2pClient) share the root. */
     private static void commands(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("cms").then(Commands.literal("disc")
+        event.getDispatcher().register(Commands.literal(CreateMediaSystems.COMMAND).then(Commands.literal("disc")
                 .then(Commands.literal("load").then(Commands.argument("path", StringArgumentType.string())
                         .executes(c -> load(StringArgumentType.getString(c, "path"), -1))
                         .then(Commands.argument("title", IntegerArgumentType.integer(0, 99999))
@@ -167,7 +171,7 @@ public final class DiscClient {
         reading = Thread.ofPlatform().daemon().name("CMS disc reader").start(() -> {
             try {
                 Path disc = Path.of(path).toRealPath();
-                DiscSource opened = DiscReaders.open(ClientConfig.DIR.resolve("ffmpeg"), ClientConfig.DISC_FFMPEG_PATH.get(),
+                DiscSource opened = DiscReaders.open(ClientFiles.DIR.resolve("ffmpeg"), ClientConfig.DISC_FFMPEG_PATH.get(),
                         ClientConfig.DISC_FFPROBE_PATH.get(), disc, title, () -> mc.execute(() -> {
                             if (request == generation) {
                                 reader.downloading();

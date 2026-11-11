@@ -3,6 +3,8 @@ package org.haruyq.createmediasystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.haruyq.createmediasystems.video.VideoFeature;
+
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -19,24 +21,24 @@ public class ServerConfigGameTests {
         Path file = ServerConfig.file().getFullPath();
         String original = Files.readString(file);
         try {
-            server.getCommands().performPrefixedCommand(source, "create_media_systems config allowedHosts add Example.ORG");
+            server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config allowedHosts add Example.ORG");
             helper.assertTrue(ServerConfig.isAllowed("https://www.example.org/a"), "added host is allowed");
-            server.getCommands().performPrefixedCommand(source, "create_media_systems config remoteRange 99");
-            server.getCommands().performPrefixedCommand(source, "create_media_systems config apiUrl ftp://nope");
-            helper.assertTrue(ServerConfig.REMOTE_RANGE.get() == 99, "remoteRange set");
+            server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config remoteRange 99");
+            server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config apiUrl ftp://nope");
+            helper.assertTrue(VideoFeature.REMOTE_RANGE.get() == 99, "remoteRange set");
             helper.assertTrue(ServerConfig.API_URL.get().startsWith("http"), "non-http apiUrl rejected");
             String saved = Files.readString(file);
             helper.assertTrue(saved.contains("example.org") && saved.contains("remoteRange = 99"), "saved to file");
 
             Files.writeString(file, saved.replace("remoteRange = 99", "remoteRange = 7"));
-            server.getCommands().performPrefixedCommand(source, "create_media_systems config reload");
-            helper.assertTrue(ServerConfig.REMOTE_RANGE.get() == 7, "reload reads the file");
+            server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config reload");
+            helper.assertTrue(VideoFeature.REMOTE_RANGE.get() == 7, "reload reads the file");
 
-            server.getCommands().performPrefixedCommand(source, "create_media_systems config allowedHosts remove example.org");
+            server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config allowedHosts remove example.org");
             helper.assertFalse(ServerConfig.isAllowed("https://www.example.org/a"), "removed host is rejected");
         } finally {
             Files.writeString(file, original);
-            server.getCommands().performPrefixedCommand(source, "create_media_systems config reload");
+            server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config reload");
         }
         helper.succeed();
     }

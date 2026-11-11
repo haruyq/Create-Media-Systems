@@ -6,7 +6,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.PercentSetting;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.stream.VideoSource;
@@ -121,7 +120,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         // Both sides: Create's value box lives on the client too.
-        return type != CreateMediaSystems.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+        return type != VideoFeature.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
     /** The Blu-ray player's volume: a block entity keeps one behaviour per type, and lighting has the default one. */
@@ -165,7 +164,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private int finished;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
+            super(VideoFeature.VIDEO_PLAYER_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -189,7 +188,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         public List<String> playlist() {
             DriveEmulatorBlock.Entity drive = drive();
-            return drive != null ? List.of(drive.link()) : cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+            return drive != null ? List.of(drive.link()) : cd.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
         }
 
         /** Plays the disc of the drive beside it from the top, or stops with it, unless it has its own. */

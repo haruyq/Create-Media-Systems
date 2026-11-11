@@ -112,7 +112,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return type != CreateMediaSystems.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+        return type != VideoFeature.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
     /** What plays a drive's disc while it has none of its own: a Blu-ray player, a disc reader. */
@@ -312,7 +312,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         private List<String> viewerNames = List.of();
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.DRIVE_EMULATOR_ENTITY.get(), pos, state);
+            super(VideoFeature.DRIVE_EMULATOR_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -402,10 +402,10 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             host = next == Drive.OPEN ? null : player.getUUID();
             hostName = player.getGameProfile().getName();
             if (wasOpen || next == Drive.OPEN) {
-                sound(next == Drive.OPEN ? CreateMediaSystems.DRIVE_TRAY_OPEN.get() : CreateMediaSystems.DRIVE_TRAY.get());
+                sound(next == Drive.OPEN ? VideoFeature.DRIVE_TRAY_OPEN.get() : VideoFeature.DRIVE_TRAY.get());
             }
             if (next == Drive.READING) {
-                sound(CreateMediaSystems.DRIVE_SEEK.get());
+                sound(VideoFeature.DRIVE_SEEK.get());
             }
             changed(player);
         }

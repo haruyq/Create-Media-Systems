@@ -10,6 +10,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.audio.CustomDiscItem;
@@ -147,7 +149,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
         return level.getBlockEntity(pos) instanceof Entity stack && !stack.units.isEmpty()
-                ? new ItemStack(CreateMediaSystems.hifiUnit(stack.units.getLast())) : ItemStack.EMPTY;
+                ? new ItemStack(HifiFeature.hifiUnit(stack.units.getLast())) : ItemStack.EMPTY;
     }
 
     @Override
@@ -159,7 +161,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         // Both sides: a client counts its displays on between the server's words.
-        return type != CreateMediaSystems.HIFI_STACK_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+        return type != HifiFeature.HIFI_STACK_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
     /** What the amplifier plays. */
@@ -286,7 +288,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         }
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.HIFI_STACK_ENTITY.get(), pos, state);
+            super(HifiFeature.HIFI_STACK_ENTITY.get(), pos, state);
             Arrays.fill(stations, "");
         }
 
@@ -417,7 +419,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             changed();
         }
 
-        /** Sets it up as a scene shows it (see CreateMediaSystemsPonder): switched on or not, with {@code wired} plugged in. */
+        /** Sets it up as a scene shows it (see HifiClient): switched on or not, with {@code wired} plugged in. */
         public void arrange(boolean on, Cable... wired) {
             power = on;
             cables = 0;
@@ -434,7 +436,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
             Unit unit = units.getLast();
             List<ItemStack> items = new ArrayList<>(contents(unit));
-            items.add(new ItemStack(CreateMediaSystems.hifiUnit(unit)));
+            items.add(new ItemStack(HifiFeature.hifiUnit(unit)));
             units.removeLast();
             if (unit == Unit.AMPLIFIER) {
                 power = false;
@@ -453,7 +455,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             List<ItemStack> items = new ArrayList<>();
             for (Unit unit : List.copyOf(units)) {
                 items.addAll(contents(unit));
-                items.add(new ItemStack(CreateMediaSystems.hifiUnit(unit)));
+                items.add(new ItemStack(HifiFeature.hifiUnit(unit)));
             }
             units.clear();
             return items;
@@ -470,7 +472,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 }
             }
             if (unplugged > 0) {
-                items.add(new ItemStack(CreateMediaSystems.HIFI_CABLE.get(), unplugged));
+                items.add(new ItemStack(HifiFeature.HIFI_CABLE.get(), unplugged));
             }
             if (unit == Unit.DISC_PLAYER) {
                 if (!disc.isEmpty()) {
@@ -496,14 +498,14 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         @Override
         public List<String> playlist() {
             if (disc.getItem() instanceof VideoDiscItem) {
-                return disc.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+                return disc.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
             }
-            String url = disc.get(CreateMediaSystems.URL.get());
+            String url = disc.get(AudioFeature.URL.get());
             return url == null ? List.of() : List.of(url);
         }
 
         public List<String> tracks(int deck) {
-            return tapes[deck].getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+            return tapes[deck].getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
         }
 
         @Override
@@ -806,13 +808,13 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         private static boolean playable(ItemStack stack) {
             return stack.getItem() instanceof CustomDiscItem
-                    || stack.getItem() instanceof VideoDiscItem && !stack.is(CreateMediaSystems.CASSETTE.get());
+                    || stack.getItem() instanceof VideoDiscItem && !stack.is(HifiFeature.CASSETTE.get());
         }
 
         /** Takes the tape out of {@code deck}, which remembers where it was stopped. */
         private ItemStack eject(int deck) {
             ItemStack tape = tapes[deck];
-            tape.set(CreateMediaSystems.TAPE_POSITION.get(), new TapePosition(tapeTracks[deck], (int) tapeTicks[deck]));
+            tape.set(HifiFeature.TAPE_POSITION.get(), new TapePosition(tapeTracks[deck], (int) tapeTicks[deck]));
             tapes[deck] = ItemStack.EMPTY;
             motions[deck] = Motion.STOP;
             tapeTracks[deck] = 0;
@@ -839,9 +841,9 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             } else if (control == Control.DOOR_1 || control == Control.DOOR_2) {
                 // A door is opened by hand, live or not.
                 int deck = control.index;
-                if (tapes[deck].isEmpty() && held.is(CreateMediaSystems.CASSETTE.get())) {
+                if (tapes[deck].isEmpty() && held.is(HifiFeature.CASSETTE.get())) {
                     tapes[deck] = held.split(1);
-                    TapePosition at = tapes[deck].getOrDefault(CreateMediaSystems.TAPE_POSITION.get(), TapePosition.START);
+                    TapePosition at = tapes[deck].getOrDefault(HifiFeature.TAPE_POSITION.get(), TapePosition.START);
                     tapeTracks[deck] = Mth.clamp(at.track(), 0, tracks(deck).size());
                     tapeTicks[deck] = Math.max(0, at.ticks());
                     click(1.2f);
@@ -984,7 +986,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         private void plug(ServerPlayer player, Cable cable) {
             if (wired(cable)) {
                 cables &= ~cable.bit();
-                player.getInventory().placeItemBackInInventory(new ItemStack(CreateMediaSystems.HIFI_CABLE.get()));
+                player.getInventory().placeItemBackInInventory(new ItemStack(HifiFeature.HIFI_CABLE.get()));
                 click(0.8f);
                 return;
             }
@@ -994,7 +996,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 return;
             }
             ItemStack held = player.getMainHandItem();
-            if (!held.is(CreateMediaSystems.HIFI_CABLE.get())) {
+            if (!held.is(HifiFeature.HIFI_CABLE.get())) {
                 player.displayClientMessage(Component.translatable("create_media_systems.hifi.needs_cable")
                         .withStyle(ChatFormatting.RED), true);
                 return;
@@ -1067,7 +1069,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 };
                 boolean dead = unit != Unit.AMPLIFIER && !wired(Cable.system(unit));
                 tooltip.add(Component.literal("     ").append(Component.translatable(
-                        CreateMediaSystems.hifiUnit(unit).getDescriptionId()).withStyle(ChatFormatting.GOLD)));
+                        HifiFeature.hifiUnit(unit).getDescriptionId()).withStyle(ChatFormatting.GOLD)));
                 tooltip.add(Component.literal("       ").append(dead ? line("unplugged_short") : status)
                         .withStyle(dead ? ChatFormatting.RED : ChatFormatting.GRAY));
             }

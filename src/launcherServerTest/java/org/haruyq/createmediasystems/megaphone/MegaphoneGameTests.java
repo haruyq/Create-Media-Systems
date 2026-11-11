@@ -6,14 +6,15 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.*;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID) @PrefixGameTestTemplate(false)
 public final class MegaphoneGameTests {
-    private static ItemStack horn(GameTestHelper h,int energy){var horn=new ItemStack(CreateMediaSystems.MEGAPHONE_WHITE.get());var battery=new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get());PartyBoxBatteryItem.setEnergy(battery,energy);MegaphoneData.contents(horn,h.getLevel(),new ItemStack(Items.MUSIC_DISC_CAT),battery);return horn;}
+    private static ItemStack horn(GameTestHelper h,int energy){var horn=new ItemStack(MegaphoneFeature.MEGAPHONE_WHITE.get());var battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());PartyBoxBatteryItem.setEnergy(battery,energy);MegaphoneData.contents(horn,h.getLevel(),new ItemStack(Items.MUSIC_DISC_CAT),battery);return horn;}
     @GameTest(template="empty") public static void serverClockBatteryAndSettingsRemainIndependentOfDecoderReloads(GameTestHelper h){
         var item=horn(h,10000);MegaphoneData.play(item,h.getLevel(),true);var id=MegaphoneData.id(item).orElseThrow();
-        var tag=MegaphoneData.state(item).copy();tag.putLong("Start",h.getLevel().getGameTime()-120);tag.putLong("PowerAt",h.getLevel().getGameTime()-20);item.set(CreateMediaSystems.MEGAPHONE_STATE.get(),tag);
+        var tag=MegaphoneData.state(item).copy();tag.putLong("Start",h.getLevel().getGameTime()-120);tag.putLong("PowerAt",h.getLevel().getGameTime()-20);item.set(MegaphoneFeature.MEGAPHONE_STATE.get(),tag);
         MegaphoneData.tick(item,h.getLevel());int energy=PartyBoxBatteryItem.energy(MegaphoneData.battery(item,h.getLevel()));MegaphoneData.tick(item,h.getLevel());MegaphoneData.controls(item,30,2);
         h.assertTrue(energy<10000 && energy==PartyBoxBatteryItem.energy(MegaphoneData.battery(item,h.getLevel())),"Repeated settlement in one tick must not drain twice");
         h.assertTrue(MegaphoneData.position(item,h.getLevel())==120 && MegaphoneData.id(item).orElseThrow().equals(id),"Changing distortion/volume cannot reset the clock or identity");
@@ -22,7 +23,7 @@ public final class MegaphoneGameTests {
     }
     @GameTest(template="empty") public static void exhaustedBatteryPausesAtTheLastPoweredSampleAndRetainsTheOriginalDisc(GameTestHelper h){
         var item=horn(h,10);MegaphoneData.controls(item,32,2);MegaphoneData.play(item,h.getLevel(),true);
-        var tag=MegaphoneData.state(item).copy();tag.putLong("Start",h.getLevel().getGameTime()-20);tag.putLong("PowerAt",h.getLevel().getGameTime()-20);item.set(CreateMediaSystems.MEGAPHONE_STATE.get(),tag);MegaphoneData.tick(item,h.getLevel());
+        var tag=MegaphoneData.state(item).copy();tag.putLong("Start",h.getLevel().getGameTime()-20);tag.putLong("PowerAt",h.getLevel().getGameTime()-20);item.set(MegaphoneFeature.MEGAPHONE_STATE.get(),tag);MegaphoneData.tick(item,h.getLevel());
         h.assertTrue(!MegaphoneData.playing(item) && MegaphoneData.position(item,h.getLevel())==1 && PartyBoxBatteryItem.energy(MegaphoneData.battery(item,h.getLevel()))==0,"10 FE at 8 FE/t powers exactly one full tick");
         h.assertTrue(MegaphoneData.disc(item,h.getLevel()).is(Items.MUSIC_DISC_CAT),"A dead battery cannot consume the original CD");h.succeed();
     }

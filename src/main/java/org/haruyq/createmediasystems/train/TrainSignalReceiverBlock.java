@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.train;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -68,7 +67,7 @@ public class TrainSignalReceiverBlock extends Block implements EntityBlock {
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.TRAIN_SIGNAL_RECEIVER_ENTITY.get() ? null
+        return level.isClientSide || type != TrainFeature.TRAIN_SIGNAL_RECEIVER_ENTITY.get() ? null
                 : (l, pos, s, be) -> ((Entity) be).tick((ServerLevel) l, pos, s);
     }
 
@@ -76,7 +75,7 @@ public class TrainSignalReceiverBlock extends Block implements EntityBlock {
         private String channel = "";
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.TRAIN_SIGNAL_RECEIVER_ENTITY.get(), pos, state);
+            super(TrainFeature.TRAIN_SIGNAL_RECEIVER_ENTITY.get(), pos, state);
         }
 
         @Override

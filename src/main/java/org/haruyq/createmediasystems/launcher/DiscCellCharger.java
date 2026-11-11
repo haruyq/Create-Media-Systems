@@ -1,7 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
 import java.util.List;
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import net.minecraft.core.BlockPos;
@@ -46,7 +46,7 @@ public final class DiscCellCharger extends KineticBlockEntity {
     }
 
     public DiscCellCharger(BlockEntityType<?> type, BlockPos pos, BlockState state) { super(type, pos, state); }
-    public DiscCellCharger(BlockPos pos, BlockState state) { this(CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), pos, state); }
+    public DiscCellCharger(BlockPos pos, BlockState state) { this(LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), pos, state); }
     @Override public void addBehaviours(List<BlockEntityBehaviour> behaviours) {}
     public ItemStack cell() { return inventory.getStackInSlot(0); }
     public void insert(ItemStack cell) { inventory.insertItem(0, cell, false); }
@@ -84,10 +84,10 @@ public final class DiscCellCharger extends KineticBlockEntity {
     }
     public static void registerCapabilities(RegisterCapabilitiesEvent event) {
         event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.storage(stack),
-                CreateMediaSystems.PARTYBOX_BATTERY.get());
+                PartyBoxFeature.PARTYBOX_BATTERY.get());
         event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> new DiscCellEnergy(stack),
-                CreateMediaSystems.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
-        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.energy);
-        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.inventory);
+                LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
+        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.energy);
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.inventory);
     }
 }

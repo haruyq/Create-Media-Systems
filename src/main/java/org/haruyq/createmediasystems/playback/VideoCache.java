@@ -19,6 +19,7 @@ import java.util.function.LongSupplier;
 import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 
 import org.apache.commons.io.FileUtils;
@@ -28,7 +29,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 
-import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * Displays' videos kept on this computer, so playing one again starts at once and needs no origin: up to the client
@@ -60,7 +60,7 @@ final class VideoCache {
     /** The game's cache, sized by the client config. */
     static synchronized VideoCache get() {
         if (shared == null) {
-            shared = new VideoCache(FMLPaths.GAMEDIR.get().resolve("create_media_systems-video-cache"),
+            shared = new VideoCache(ClientFiles.VIDEO_CACHE,
                     () -> ClientConfig.VIDEO_CACHE_MEGABYTES.get() * (1L << 20));
         }
         return shared;

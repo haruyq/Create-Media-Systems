@@ -1,6 +1,6 @@
 package org.haruyq.createmediasystems.mixin;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +20,7 @@ import net.minecraft.client.sounds.SoundEngine;
 @Mixin(SoundEngine.class)
 abstract class SoundEngineMixin {
     private static boolean create_media_systems$stream(SoundInstance sound) {
-        return CreateMediaSystems.STREAM.getId().equals(sound.getLocation());
+        return StreamFeature.STREAM.getId().equals(sound.getLocation());
     }
 
     @ModifyExpressionValue(method = "play", at = @At(value = "INVOKE",

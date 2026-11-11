@@ -5,7 +5,6 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.*;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.LauncherMagazine;
 import org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem;
 
@@ -14,7 +13,7 @@ public final class MegaphoneMenu extends AbstractContainerMenu {
     private final SimpleContainer contents=new SimpleContainer(2);private boolean updating;
     public MegaphoneMenu(int id,Inventory inventory,RegistryFriendlyByteBuf data){this(id,inventory,data.readVarInt());}
     public MegaphoneMenu(int id,Inventory inventory,int index) {
-        super(CreateMediaSystems.MEGAPHONE_MENU.get(),id);this.inventory=inventory;this.index=index;original=inventory.getItem(index);
+        super(MegaphoneFeature.MEGAPHONE_MENU.get(),id);this.inventory=inventory;this.index=index;original=inventory.getItem(index);
         var level=inventory.player.level();contents.setItem(0,MegaphoneData.disc(original,level));contents.setItem(1,MegaphoneData.battery(original,level));
         contents.addListener(c->{if(!updating && !level.isClientSide && stillValid(inventory.player)){
             MegaphoneData.contents(original,level,c.getItem(0),c.getItem(1));inventory.setChanged();}});

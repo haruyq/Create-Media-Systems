@@ -4,6 +4,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -13,6 +15,7 @@ import com.electronwill.nightconfig.core.file.FileNotFoundAction;
 import com.electronwill.nightconfig.toml.TomlFormat;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 
 import io.netty.buffer.ByteBuf;
@@ -37,7 +40,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
- * The server config, synced to clients (they stream from the API it points them at) but for its secret, and
+ * The server config, synced to clients (they stream from the API it points them at) but for its secrets, and
  * {@code /cms config ...}, with which operators read, change and reload it without restarting.
  */
 public final class ServerConfig {
@@ -50,23 +53,34 @@ public final class ServerConfig {
             .defineListAllowEmpty("allowedHosts",
                     List.of("youtube.com", "youtu.be", "discordapp.com", "discordapp.net", "tver.jp"),
                     () -> "", o -> o instanceof String);
-    private static final int MAX_REMOTE_RANGE = 4096;
-    public static final ModConfigSpec.IntValue REMOTE_RANGE = BUILDER
-            .comment("Farthest (in blocks) a remote reaches the Blu-ray player it is paired with.")
-            .defineInRange("remoteRange", 64, 1, MAX_REMOTE_RANGE);
-    /** Read by P2p only. Never sent: emptied in what players get of this file (see {@link #withoutSecrets}). */
-    public static final ModConfigSpec.ConfigValue<String> P2P_SERVER_TOKEN = BUILDER
-            .comment("Direct P2P's secret: the CMS-API's P2P_SERVER_TOKEN, 16 to 512 characters without spaces. Empty turns P2P off; the CMS_P2P_SERVER_TOKEN environment variable takes its place if set. Players never receive it, unlike the rest of this file: never give it to them.")
-            .define("p2pServerToken", "", o -> o instanceof String);
-    private static final ModConfigSpec SPEC = BUILDER.build();
+    /** Built once every feature has added its settings (see register). */
+    private static ModConfigSpec spec;
+    private static final List<IntSetting> INT_SETTINGS = new ArrayList<>();
+    /** The keys of the settings players never receive (see {@link #secret}). */
+    private static final Set<String> SECRETS = ConcurrentHashMap.newKeySet();
     /** The file's name, which NeoForge also sends players by (see ConfigSyncMixin). */
     public static final String FILE = "cms-server.toml";
 
     private ServerConfig() {
     }
 
+    /** A whole-number setting of this file, which {@code /cms config <key>} shows and sets. */
+    public static ModConfigSpec.IntValue intSetting(String key, String comment, int defaultValue, int min, int max) {
+        ModConfigSpec.IntValue value = BUILDER.comment(comment).defineInRange(key, defaultValue, min, max);
+        INT_SETTINGS.add(new IntSetting(key, value, min, max));
+        return value;
+    }
+
+    /** A text setting players never receive: emptied in what they get of this file (see {@link #withoutSecrets}). */
+    public static ModConfigSpec.ConfigValue<String> secret(String key, String comment) {
+        SECRETS.add(key);
+        return BUILDER.comment(comment).define(key, "", o -> o instanceof String);
+    }
+
+    /** After every feature has added its settings. */
     static void register(IEventBus modBus, ModContainer container) {
-        container.registerConfig(ModConfig.Type.SERVER, SPEC, FILE);
+        spec = BUILDER.build();
+        container.registerConfig(ModConfig.Type.SERVER, spec, FILE);
         modBus.addListener(ServerConfig::onReload);
         NeoForge.EVENT_BUS.addListener(ServerConfig::registerCommand);
     }
@@ -87,34 +101,36 @@ public final class ServerConfig {
     }
 
     private static void registerCommand(RegisterCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("cms").requires(source -> source.hasPermission(2))
-                .then(Commands.literal("config")
-                        .then(Commands.literal("reload").executes(c -> reload(c.getSource())))
-                        .then(Commands.literal("apiUrl")
-                                .executes(c -> show(c, "apiUrl", API_URL.get()))
-                                .then(Commands.argument("url", StringArgumentType.greedyString())
-                                        .executes(ServerConfig::setApiUrl)))
-                        .then(Commands.literal("remoteRange")
-                                .executes(c -> show(c, "remoteRange", REMOTE_RANGE.get()))
-                                .then(Commands.argument("blocks", IntegerArgumentType.integer(1, MAX_REMOTE_RANGE))
-                                        .executes(c -> set(c, REMOTE_RANGE, "remoteRange",
-                                                IntegerArgumentType.getInteger(c, "blocks")))))
-                        .then(Commands.literal("allowedHosts")
-                                .executes(c -> show(c, "allowedHosts", String.join(", ", ALLOWED_HOSTS.get())))
-                                .then(Commands.literal("add")
-                                        .then(Commands.argument("host", StringArgumentType.word())
-                                                .executes(c -> editHosts(c, true))))
-                                .then(Commands.literal("remove")
-                                        .then(Commands.argument("host", StringArgumentType.word())
-                                                .suggests((c, builder) -> SharedSuggestionProvider.suggest(
-                                                        ALLOWED_HOSTS.get().stream().map(String::valueOf), builder))
-                                                .executes(c -> editHosts(c, false)))))));
+        LiteralArgumentBuilder<CommandSourceStack> config = Commands.literal("config")
+                .then(Commands.literal("reload").executes(c -> reload(c.getSource())))
+                .then(Commands.literal("apiUrl")
+                        .executes(c -> show(c, "apiUrl", API_URL.get()))
+                        .then(Commands.argument("url", StringArgumentType.greedyString())
+                                .executes(ServerConfig::setApiUrl)))
+                .then(Commands.literal("allowedHosts")
+                        .executes(c -> show(c, "allowedHosts", String.join(", ", ALLOWED_HOSTS.get())))
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("host", StringArgumentType.word())
+                                        .executes(c -> editHosts(c, true))))
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("host", StringArgumentType.word())
+                                        .suggests((c, builder) -> SharedSuggestionProvider.suggest(
+                                                ALLOWED_HOSTS.get().stream().map(String::valueOf), builder))
+                                        .executes(c -> editHosts(c, false)))));
+        for (IntSetting setting : INT_SETTINGS) {
+            config.then(Commands.literal(setting.key())
+                    .executes(c -> show(c, setting.key(), setting.value().get()))
+                    .then(Commands.argument("value", IntegerArgumentType.integer(setting.min(), setting.max()))
+                            .executes(c -> set(c, setting.value(), setting.key(), IntegerArgumentType.getInteger(c, "value")))));
+        }
+        event.getDispatcher().register(Commands.literal(CreateMediaSystems.COMMAND)
+                .requires(source -> source.hasPermission(2)).then(config));
     }
 
     /** Every change, by command or by editing the file, reaches the clients that stream with it. */
     private static void onReload(ModConfigEvent.Reloading event) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (event.getConfig().getSpec() == SPEC && server != null) {
+        if (event.getConfig().getSpec() == spec && server != null) {
             server.execute(ServerConfig::sync);
         }
     }
@@ -161,7 +177,7 @@ public final class ServerConfig {
             return 0;
         }
         ALLOWED_HOSTS.set(hosts);
-        SPEC.save();
+        spec.save();
         context.getSource().sendSuccess(() -> Component.translatable("create_media_systems.command.config.host." + result, host), true);
         return 1;
     }
@@ -169,7 +185,7 @@ public final class ServerConfig {
     private static <T> int set(CommandContext<CommandSourceStack> context, ModConfigSpec.ConfigValue<T> value,
             String key, T newValue) {
         value.set(newValue);
-        SPEC.save();
+        spec.save();
         context.getSource().sendSuccess(() -> Component.translatable("create_media_systems.command.config.set", key, String.valueOf(newValue)), true);
         return 1;
     }
@@ -181,11 +197,11 @@ public final class ServerConfig {
 
     /** Swaps in a whole config only if every value is valid, so a typo keeps the working settings. */
     private static boolean apply(CommentedConfig fresh) {
-        if (!SPEC.isCorrect(fresh)) {
+        if (!spec.isCorrect(fresh)) {
             return false;
         }
         file().getLoadedConfig().config().putAll(fresh);
-        SPEC.afterReload();
+        spec.afterReload();
         return true;
     }
 
@@ -195,8 +211,8 @@ public final class ServerConfig {
     }
 
     /**
-     * {@code toml} (this file's) as players may have it: p2pServerToken emptied, not removed, so it stays a valid
-     * config for them. Nothing at all if it can't be read, as then the token can't be found to empty.
+     * {@code toml} (this file's) as players may have it: every {@link #secret} emptied, not removed, so it stays a
+     * valid config for them. Nothing at all if it can't be read, as then the secrets can't be found to empty.
      */
     public static String withoutSecrets(String toml) {
         CommentedConfig config;
@@ -205,8 +221,10 @@ public final class ServerConfig {
         } catch (RuntimeException unreadable) {
             return "";
         }
-        if (config.contains("p2pServerToken")) {
-            config.set("p2pServerToken", "");
+        for (String secret : SECRETS) {
+            if (config.contains(secret)) {
+                config.set(secret, "");
+            }
         }
         return TomlFormat.instance().createWriter().writeToString(config);
     }
@@ -218,6 +236,9 @@ public final class ServerConfig {
     static ModConfig file() {
         return ModConfigs.getModConfigs(CreateMediaSystems.MOD_ID).stream()
                 .filter(c -> c.getType() == ModConfig.Type.SERVER).findFirst().orElseThrow();
+    }
+
+    private record IntSetting(String key, ModConfigSpec.IntValue value, int min, int max) {
     }
 
     /** Server → client: the config's TOML after it changed while players were on. */

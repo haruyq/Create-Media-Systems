@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.display.DisplayFeature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -120,7 +121,7 @@ public final class LightingRaycastGameTests {
     public static void displayPanelOccludesItsWholeRectangleAndClearsOnRemoval(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos display = helper.absolutePos(new BlockPos(4, 2, 4));
-        level.setBlockAndUpdate(display, CreateMediaSystems.DISPLAY.get().defaultBlockState()
+        level.setBlockAndUpdate(display, DisplayFeature.DISPLAY.get().defaultBlockState()
                 .setValue(DisplayBlock.FACING, Direction.NORTH));
         if (level.getBlockEntity(display) instanceof DisplayBlock.Entity entity) {
             entity.resize(32, 16, DisplayBlock.Ratio.WIDE);
@@ -156,7 +157,7 @@ public final class LightingRaycastGameTests {
     public static void enlargedDisplayOnRotatedScaledShipUsesMovedBlockEntityRegistration(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(2, 3, 2));
-        BlockState state = CreateMediaSystems.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING,
+        BlockState state = DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING,
                 Direction.NORTH);
         level.setBlockAndUpdate(origin, state);
         ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),

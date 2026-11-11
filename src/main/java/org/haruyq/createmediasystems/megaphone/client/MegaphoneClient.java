@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
+import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
@@ -46,11 +47,11 @@ public final class MegaphoneClient {
     private static final Map<UUID,Playing> PLAYING=new HashMap<>();private static int ticks;
     private MegaphoneClient(){}
     public static void register(IEventBus bus) {
-        bus.addListener((RegisterMenuScreensEvent e)->e.register(CreateMediaSystems.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
+        bus.addListener((RegisterMenuScreensEvent e)->e.register(MegaphoneFeature.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
         bus.addListener((RegisterClientExtensionsEvent e)->e.registerItem(new IClientItemExtensions(){
             private MegaphoneItemRenderer renderer;
             @Override public BlockEntityWithoutLevelRenderer getCustomRenderer(){if(renderer==null)renderer=new MegaphoneItemRenderer();return renderer;}
-        },CreateMediaSystems.MEGAPHONE_WHITE.get(),CreateMediaSystems.MEGAPHONE_BLACK.get()));
+        },MegaphoneFeature.MEGAPHONE_WHITE.get(),MegaphoneFeature.MEGAPHONE_BLACK.get()));
         bus.addListener((net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent e)->Minecraft.getInstance().execute(MegaphoneClient::stopAll));
         NeoForge.EVENT_BUS.addListener(MegaphoneClient::tick);
     }

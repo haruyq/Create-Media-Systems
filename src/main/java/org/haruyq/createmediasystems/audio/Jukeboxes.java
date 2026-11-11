@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -22,8 +21,8 @@ public final class Jukeboxes {
 
     @Nullable
     public static Streams.Source nowPlaying(JukeboxBlockEntity jukebox) {
-        return jukebox.getTheItem().is(CreateMediaSystems.CUSTOM_DISC.get()) && jukebox.getSongPlayer().isPlaying()
-                ? new Streams.Source(jukebox.getTheItem().get(CreateMediaSystems.URL.get()),
+        return jukebox.getTheItem().is(AudioFeature.CUSTOM_DISC.get()) && jukebox.getSongPlayer().isPlaying()
+                ? new Streams.Source(jukebox.getTheItem().get(AudioFeature.URL.get()),
                         jukebox.getSongPlayer().getTicksSinceSongStarted(), null)
                 : null;
     }
@@ -47,6 +46,6 @@ public final class Jukeboxes {
             jukebox.setChanged();
         }
         Streams.relay(level, jukebox, new Streams.Sound(jukebox.getBlockPos().getCenter(), Optional.empty(), Streams.Channel.MIX,
-                jukebox.getBlockPos()), jukebox.getData(CreateMediaSystems.JUKEBOX_SETTINGS));
+                jukebox.getBlockPos()), jukebox.getData(AudioFeature.JUKEBOX_SETTINGS));
     }
 }

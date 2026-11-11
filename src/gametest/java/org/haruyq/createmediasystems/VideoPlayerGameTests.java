@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +44,7 @@ public class VideoPlayerGameTests {
     @GameTest(template = "empty")
     public static void wrenchSetsLightingAndVolumeApart(GameTestHelper helper) {
         BlockPos pos = new BlockPos(1, 2, 1);
-        helper.setBlock(pos, CreateMediaSystems.VIDEO_PLAYER.get());
+        helper.setBlock(pos, VideoFeature.VIDEO_PLAYER.get());
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos);
         ServerPlayer wrencher = FakePlayerFactory.getMinecraft(helper.getLevel());
         wrencher.setPos(Vec3.atCenterOf(helper.absolutePos(pos.north())));
@@ -61,10 +63,10 @@ public class VideoPlayerGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos source = helper.absolutePos(new BlockPos(1, 2, 1));
         BlockPos speakerPos = helper.absolutePos(new BlockPos(3, 2, 1));
-        level.setBlockAndUpdate(source, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(speakerPos, CreateMediaSystems.SPEAKER.get().defaultBlockState());
-        ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=listener"));
+        level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
+        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+        disc.set(VideoFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=listener"));
         ((VideoPlayerBlock.Entity) level.getBlockEntity(source)).insert(disc, null);
         SpeakerBlock.Entity speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);
 
@@ -116,11 +118,11 @@ public class VideoPlayerGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos source = helper.absolutePos(new BlockPos(1, 2, 1));
         BlockPos speakerPos = helper.absolutePos(new BlockPos(3, 2, 1));
-        level.setBlockAndUpdate(source, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(speakerPos, CreateMediaSystems.SPEAKER.get().defaultBlockState());
+        level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
         String url = "cms-disc://" + UUID.randomUUID() + "/" + UUID.randomUUID();
-        ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        disc.set(CreateMediaSystems.PLAYLIST.get(), List.of(url));
+        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+        disc.set(VideoFeature.PLAYLIST.get(), List.of(url));
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(source);
         player.insert(disc, null);
         SpeakerBlock.Entity speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);

@@ -109,7 +109,7 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         public int individualColor;
 
         public Entity(BlockPos pos, BlockState state) {
-            this(CreateMediaSystems.STAGE_LIGHT_ENTITY.get(), pos, state);
+            this(LightingFeature.STAGE_LIGHT_ENTITY.get(), pos, state);
         }
 
         /** For other mods' fixtures, each under its own block entity type. */
@@ -118,7 +118,7 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         }
 
         public boolean laser() {
-            return getBlockState().is(CreateMediaSystems.LASER_PROJECTOR.get());
+            return getBlockState().is(LightingFeature.LASER_PROJECTOR.get());
         }
 
         /** The family stage lights and laser projectors share: the console's own page runs them. */

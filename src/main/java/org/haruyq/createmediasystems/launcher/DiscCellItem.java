@@ -2,7 +2,8 @@ package org.haruyq.createmediasystems.launcher;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -27,25 +28,25 @@ public final class DiscCellItem extends Item {
     }
 
     public static ItemStack master(ItemStack cell) {
-        return cell.getOrDefault(CreateMediaSystems.CELL_MASTER.get(), ItemContainerContents.EMPTY).copyOne();
+        return cell.getOrDefault(LauncherFeature.CELL_MASTER.get(), ItemContainerContents.EMPTY).copyOne();
     }
 
     public static void setMaster(ItemStack cell, ItemStack master) {
-        if (master.isEmpty()) cell.remove(CreateMediaSystems.CELL_MASTER.get());
+        if (master.isEmpty()) cell.remove(LauncherFeature.CELL_MASTER.get());
         else {
             if (!LauncherMagazine.isDisc(master)) throw new IllegalArgumentException("A cell accepts only a media disc");
-            cell.set(CreateMediaSystems.CELL_MASTER.get(), ItemContainerContents.fromItems(List.of(master.copyWithCount(1))));
+            cell.set(LauncherFeature.CELL_MASTER.get(), ItemContainerContents.fromItems(List.of(master.copyWithCount(1))));
         }
     }
 
     public static int energy(ItemStack cell) {
         return cell.getItem() instanceof DiscCellItem item
-                ? Math.clamp(cell.getOrDefault(CreateMediaSystems.CELL_ENERGY.get(), 0), 0, item.tier.capacity()) : 0;
+                ? Math.clamp(cell.getOrDefault(LauncherFeature.CELL_ENERGY.get(), 0), 0, item.tier.capacity()) : 0;
     }
 
     public static void setEnergy(ItemStack cell, int energy) {
         if (cell.getItem() instanceof DiscCellItem item)
-            cell.set(CreateMediaSystems.CELL_ENERGY.get(), Math.clamp(energy, 0, item.tier.capacity()));
+            cell.set(LauncherFeature.CELL_ENERGY.get(), Math.clamp(energy, 0, item.tier.capacity()));
     }
 
     public static int shots(ItemStack cell) {
@@ -56,21 +57,21 @@ public final class DiscCellItem extends Item {
         ItemStack disc = master(cell);
         if (!LauncherMagazine.isDisc(disc)) return false;
         String url = DiscPlayback.mediaUrl(disc);
-        return !(disc.is(CreateMediaSystems.CUSTOM_DISC.get()) || disc.is(CreateMediaSystems.DVD.get())
-                || disc.is(CreateMediaSystems.BLU_RAY.get())) || url != null && !url.isBlank();
+        return !(disc.is(AudioFeature.CUSTOM_DISC.get()) || disc.is(VideoFeature.DVD.get())
+                || disc.is(VideoFeature.BLU_RAY.get())) || url != null && !url.isBlank();
     }
 
     /** Makes a projection, spending exactly one shot's energy. Does not modify the original or its playback state. */
     public static ItemStack project(ItemStack cell) {
         if (!(cell.getItem() instanceof DiscCellItem item) || !hasMaster(cell) || shots(cell) == 0) return ItemStack.EMPTY;
         ItemStack projection = master(cell).copyWithCount(1);
-        projection.remove(CreateMediaSystems.DISC_PLAYBACK.get());
+        projection.remove(LauncherFeature.DISC_PLAYBACK.get());
         setEnergy(cell, energy(cell) - item.tier.energyPerShot);
         return projection;
     }
 
     public static ItemStack upgrade(ItemStack previous, DiscCellTier target) {
-        ItemStack result = new ItemStack(CreateMediaSystems.cell(target));
+        ItemStack result = new ItemStack(LauncherFeature.cell(target));
         setMaster(result, master(previous));
         setEnergy(result, energy(previous));
         return result;
@@ -97,7 +98,7 @@ public final class DiscCellItem extends Item {
                 (int) tier.damage).withStyle(ChatFormatting.AQUA));
         ItemStack master = master(stack);
         tooltip.add(master.isEmpty() ? Component.translatable("cell.create_media_systems.empty").withStyle(ChatFormatting.YELLOW)
-                : Component.translatable("cell.create_media_systems.master", master.getOrDefault(CreateMediaSystems.TITLE.get(),
+                : Component.translatable("cell.create_media_systems.master", master.getOrDefault(AudioFeature.TITLE.get(),
                         master.getHoverName().getString())).withStyle(ChatFormatting.WHITE));
         tooltip.add(Component.translatable("cell.create_media_systems.energy", energy(stack), tier.capacity())
                 .withStyle(ChatFormatting.GRAY));

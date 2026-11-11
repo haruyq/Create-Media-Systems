@@ -1,27 +1,15 @@
 package org.haruyq.createmediasystems.client;
 
-import java.nio.file.Path;
-
-import org.haruyq.createmediasystems.CreateMediaSystems;
-
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-/** This computer's own settings, and where CMS keeps its files here. */
+/** This computer's own settings. */
 public final class ClientConfig {
     public static final String FILE_NAME = "cms-client.toml";
-    /** CMS's folder in the game directory: its tools, VLC and cookies. */
-    public static final Path DIR = FMLPaths.GAMEDIR.get().resolve(CreateMediaSystems.MOD_ID);
 
-    private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
-    public static final ModConfigSpec.EnumValue<org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Mode> LAUNCHER_DAMAGE_NUMBERS=BUILDER
-            .comment("Weapon damage numbers: STACKING combines recent hits on the same target, FLOATING shows individual hits, BOTH shows both, OFF hides numbers.")
-            .defineEnum("launcherDamageNumbers",org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Mode.STACKING);
-    public static final ModConfigSpec.EnumValue<org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Crosshair> LAUNCHER_CROSSHAIR_FEEDBACK=BUILDER
-            .comment("X_WITH_SHIELD shows a confirmed-hit X plus Minecraft absorption shield feedback; X shows only the X; OFF hides both.")
-            .defineEnum("launcherCrosshairFeedback",org.haruyq.createmediasystems.launcher.client.LauncherDamageDisplay.Crosshair.X_WITH_SHIELD);
+    /** Features add their own settings to it while they register (see ClientFeature), before the file is built. */
+    public static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
     public static final ModConfigSpec.IntValue AUDIO_CACHE_DAYS = BUILDER
             .comment("Days a record's audio (YouTube and the like) is kept on this computer after it last played, so it plays again without downloading. 0 keeps none.")
             .defineInRange("audioCacheDays", 7, 0, 365);
@@ -52,13 +40,13 @@ public final class ClientConfig {
     public static final ModConfigSpec.ConfigValue<String> DISC_DRIVE = BUILDER
             .comment("The real drive a disc drive emulator shows, like 'E:/'; a folder holding BDMV, VIDEO_TS or a CD image (.bin) works too. Empty takes the first optical drive of this computer with a disc in it.")
             .define("discDrive", "");
-    private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {
     }
 
-    static void register(ModContainer container) {
-        container.registerConfig(ModConfig.Type.CLIENT, SPEC, FILE_NAME);
+    /** After every feature has added its settings. */
+    public static void register(ModContainer container) {
+        container.registerConfig(ModConfig.Type.CLIENT, BUILDER.build(), FILE_NAME);
     }
 
     /** The tallest picture to play: {@code disc}'s, or this computer's limit (maxVideoHeight) if lower. */

@@ -20,7 +20,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class DiscAirCleanupGameTests {
     private static DiscProjectile flying(GameTestHelper h) {
-        var d=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),h.getLevel());
+        var d=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),h.getLevel());
         d.setItem(new ItemStack(Items.MUSIC_DISC_CAT));d.setNoGravity(true);
         d.setPos(Vec3.atCenterOf(h.absolutePos(new BlockPos(1,40,1))));d.setDeltaMovement(0,0,2);
         d.tickPlayback();return d;

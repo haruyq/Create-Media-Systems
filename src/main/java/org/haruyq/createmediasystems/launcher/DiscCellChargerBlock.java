@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.launcher;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
@@ -31,7 +30,7 @@ public final class DiscCellChargerBlock extends KineticBlock implements IBE<Disc
     @Override public Direction.Axis getRotationAxis(BlockState state) { return Direction.Axis.Y; }
     @Override public boolean hasShaftTowards(LevelReader level, BlockPos pos, BlockState state, Direction face) { return face == Direction.DOWN; }
     @Override public Class<DiscCellCharger> getBlockEntityClass() { return DiscCellCharger.class; }
-    @Override public BlockEntityType<? extends DiscCellCharger> getBlockEntityType() { return CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(); }
+    @Override public BlockEntityType<? extends DiscCellCharger> getBlockEntityType() { return LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(); }
     @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return Block.box(2, 0, 2, 14, 11, 14);
     }

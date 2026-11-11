@@ -4,7 +4,7 @@ import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.annul
 import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.box;
 import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.quad;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
 
@@ -53,7 +53,7 @@ public final class DriveScreen extends Screen {
     }
 
     private DriveScreen(BlockPos pos) {
-        super(CreateMediaSystems.DRIVE_EMULATOR.get().getName());
+        super(VideoFeature.DRIVE_EMULATOR.get().getName());
         this.pos = pos;
     }
 

@@ -68,7 +68,7 @@ public final class DisplayQuill {
 
     @Nullable
     static DisplayBlock.Entity quillDisplay(ServerPlayer player, BlockPos pos) {
-        return Reach.withQuill(player, CreateMediaSystems.DISPLAY_QUILL.get(), pos, DisplayBlock.Entity.class);
+        return Reach.withQuill(player, DisplayFeature.DISPLAY_QUILL.get(), pos, DisplayBlock.Entity.class);
     }
 
     static void linkDisplay(ServerPlayer player, LinkDisplay payload) {

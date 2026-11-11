@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Locale;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.display.DisplayFeature;
+import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
@@ -154,7 +156,7 @@ public final class LightingBenchmark {
             BlockPos at = displays.get(i);
             Direction facing = DENSE ? i == 1 || i == 4 ? Direction.EAST : i == 2 ? Direction.WEST : Direction.SOUTH
                     : i == 4 ? Direction.WEST : Direction.SOUTH;
-            level.setBlockAndUpdate(at, CreateMediaSystems.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, facing));
+            level.setBlockAndUpdate(at, DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, facing));
             if (level.getBlockEntity(at) instanceof DisplayBlock.Entity display) {
                 var link = DisplayBlock.Entity.class.getDeclaredMethod("link", BlockPos.class);
                 link.setAccessible(true);
@@ -166,7 +168,7 @@ public final class LightingBenchmark {
     }
 
     private static void configure(ServerLevel level, LightingConsoleBlock.Entity console, Mode mode) {
-        var kind = mode.laser ? CreateMediaSystems.LASER_PROJECTOR.get() : CreateMediaSystems.STAGE_LIGHT.get();
+        var kind = mode.laser ? LightingFeature.LASER_PROJECTOR.get() : LightingFeature.STAGE_LIGHT.get();
         for (int i = 0; i < FIXTURES; i++) {
             int group = i < 11 ? 0 : i < 22 ? 1 : i - 20;
             BlockPos pos = i < 22 ? new BlockPos(-13 + group * 2, FLOOR + 5 + group * 3, -22 + i % 11 * 2)

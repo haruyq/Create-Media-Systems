@@ -3,7 +3,9 @@ package org.haruyq.createmediasystems.dev;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.lighting.LightingFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
@@ -214,12 +216,12 @@ public final class SableLightingDemo {
         for (int x = 0; x < 4; x++) {
             for (int z = 0; z < 2; z++) {
                 BlockPos pos = LightingConsoleBlock.at(board, Direction.SOUTH, x, 0, z);
-                level.setBlockAndUpdate(pos, CreateMediaSystems.LIGHTING_CONSOLE.get().defaultBlockState()
+                level.setBlockAndUpdate(pos, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState()
                         .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
                 platform.add(pos);
             }
             BlockPos pos = LightingConsoleBlock.at(board, Direction.SOUTH, x, 1, 1);
-            level.setBlockAndUpdate(pos, CreateMediaSystems.LIGHTING_MONITOR.get().defaultBlockState()
+            level.setBlockAndUpdate(pos, LightingFeature.LIGHTING_MONITOR.get().defaultBlockState()
                     .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
             platform.add(pos);
         }
@@ -227,9 +229,9 @@ public final class SableLightingDemo {
         aboard.updateStructure();
         light(level, aboard, PLATFORM.offset(-2, 1, 0), 0, Direction.SOUTH);
         platform.add(PLATFORM.offset(-2, 1, 0));
-        level.setBlockAndUpdate(PLATFORM.offset(3, 1, 0), CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(PLATFORM.offset(3, 1, 0), VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         platform.add(PLATFORM.offset(3, 1, 0));
-        level.setBlockAndUpdate(PLATFORM.offset(3, 1, 3), CreateMediaSystems.SPEAKER.get().defaultBlockState());
+        level.setBlockAndUpdate(PLATFORM.offset(3, 1, 3), AudioFeature.SPEAKER.get().defaultBlockState());
         platform.add(PLATFORM.offset(3, 1, 3));
         aboard.setAudioSource(PLATFORM.offset(3, 1, 0));
         aboard.setVideoSource(PLATFORM.offset(3, 1, 0));
@@ -282,7 +284,7 @@ public final class SableLightingDemo {
     }
 
     private static void light(ServerLevel level, LightingConsoleBlock.Entity console, BlockPos pos, int group, Direction facing) {
-        level.setBlockAndUpdate(pos, CreateMediaSystems.STAGE_LIGHT.get().defaultBlockState().setValue(StageLightBlock.FACING, facing));
+        level.setBlockAndUpdate(pos, LightingFeature.STAGE_LIGHT.get().defaultBlockState().setValue(StageLightBlock.FACING, facing));
         console.bind((StageLightBlock.Entity) level.getBlockEntity(pos), group);
     }
 
@@ -335,8 +337,8 @@ public final class SableLightingDemo {
             if (level.getBlockEntity(playerPos) instanceof VideoPlayerBlock.Entity player
                     && level.getBlockEntity(plot.offset(3, 1, 3)) instanceof SpeakerBlock.Entity speaker
                     && level.getBlockEntity(plot.offset(0, 1, 2)) instanceof LightingConsoleBlock.Entity aboard) {
-                ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-                disc.set(CreateMediaSystems.PLAYLIST.get(), List.copyOf(ground.playlist()));
+                ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+                disc.set(VideoFeature.PLAYLIST.get(), List.copyOf(ground.playlist()));
                 player.insert(disc, null);
                 speaker.configure(level, playerPos, 1, Streams.Channel.MIX);
                 aboard.setAudioSource(playerPos);

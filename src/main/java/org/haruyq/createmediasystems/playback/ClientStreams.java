@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.DoubleFunction;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
@@ -525,7 +525,7 @@ public final class ClientStreams {
     /** The vanilla jukebox also plays the custom song's placeholder event; only our stream should be heard. */
     private static void muteVanillaJukeboxSound(PlaySoundEvent event) {
         if (event.getSound() != null && !(event.getSound() instanceof StreamSound)
-                && event.getSound().getLocation().equals(CreateMediaSystems.STREAM.getId())) {
+                && event.getSound().getLocation().equals(StreamFeature.STREAM.getId())) {
             event.setSound(null);
         }
     }

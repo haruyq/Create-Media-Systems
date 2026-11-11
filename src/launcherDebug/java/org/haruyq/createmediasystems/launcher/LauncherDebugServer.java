@@ -3,7 +3,10 @@ package org.haruyq.createmediasystems.launcher;
 import java.nio.file.*;
 import java.util.*;
 import com.mojang.logging.LogUtils;
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
+import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -111,7 +114,7 @@ public final class LauncherDebugServer {
     }
 
     static ItemStack cell(DiscCellTier tier, String kind) {
-        ItemStack cell = new ItemStack(CreateMediaSystems.cell(tier));
+        ItemStack cell = new ItemStack(LauncherFeature.cell(tier));
         DiscCellItem.setMaster(cell, disc(kind));
         DiscCellItem.setEnergy(cell, tier.capacity());
         return cell;
@@ -155,15 +158,15 @@ public final class LauncherDebugServer {
         try {Files.writeString(DIR.resolve("server-checks.log"),text+"\n",StandardOpenOption.CREATE,StandardOpenOption.APPEND);}catch(Exception e){throw new RuntimeException(e);}
     }
     static ItemStack disc(String kind) {
-        ItemStack d=new ItemStack(switch(kind){case "vanilla"->Items.MUSIC_DISC_CAT;case "dvd"->CreateMediaSystems.DVD.get();case "blu"->CreateMediaSystems.BLU_RAY.get();default->CreateMediaSystems.CUSTOM_DISC.get();});
-        if(kind.equals("custom"))d.set(CreateMediaSystems.URL.get(),URL);
-        if(kind.equals("blocked"))d.set(CreateMediaSystems.URL.get(),"http://blocked.invalid/song.wav");
-        if(kind.equals("dvd")||kind.equals("blu"))d.set(CreateMediaSystems.PLAYLIST.get(),List.of(URL,URL+"?next=1"));
+        ItemStack d=new ItemStack(switch(kind){case "vanilla"->Items.MUSIC_DISC_CAT;case "dvd"->VideoFeature.DVD.get();case "blu"->VideoFeature.BLU_RAY.get();default->AudioFeature.CUSTOM_DISC.get();});
+        if(kind.equals("custom"))d.set(AudioFeature.URL.get(),URL);
+        if(kind.equals("blocked"))d.set(AudioFeature.URL.get(),"http://blocked.invalid/song.wav");
+        if(kind.equals("dvd")||kind.equals("blu"))d.set(VideoFeature.PLAYLIST.get(),List.of(URL,URL+"?next=1"));
         return d;
     }
     static void equip(ServerPlayer p,String kind) {
         p.getInventory().clearContent();select(p,0);
-        p.getInventory().setItem(0,new ItemStack(CreateMediaSystems.DISC_LAUNCHER.get()));
+        p.getInventory().setItem(0,new ItemStack(LauncherFeature.DISC_LAUNCHER.get()));
         for(int i=1;i<=6;i++) if (!DiscCellTier.at(i).optional() || net.neoforged.fml.ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID))
             p.getInventory().setItem(i,cell(DiscCellTier.at(i),kind));
         p.inventoryMenu.broadcastChanges();
@@ -177,7 +180,7 @@ public final class LauncherDebugServer {
         Path cmd=DIR.resolve("command");
         try {
             if (previewAge >= 0 && LauncherMagazine.reloading(p.getMainHandItem()))
-                p.getMainHandItem().set(CreateMediaSystems.LAUNCHER_RELOAD_START.get(), p.level().getGameTime() - previewAge);
+                p.getMainHandItem().set(LauncherFeature.LAUNCHER_RELOAD_START.get(), p.level().getGameTime() - previewAge);
             if (p.level().getGameTime() % 20 == 0) {
                 Map<String, Double> clocks = new LinkedHashMap<>();
                 Map<String, Map<String,Object>> partyClocks=new LinkedHashMap<>();
@@ -208,10 +211,10 @@ public final class LauncherDebugServer {
                     p.getInventory().clearContent();select(p,0);p.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
                     p.teleportTo(event.getServer().overworld(),700.5,116,688.5,0,0);p.getAbilities().flying=true;p.onUpdateAbilities();
                     for(int i=0;i<2;i++){
-                        var horn=new ItemStack(i==0?CreateMediaSystems.MEGAPHONE_WHITE.get():CreateMediaSystems.MEGAPHONE_BLACK.get());
-                        var battery=new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get());org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                        var horn=new ItemStack(i==0?MegaphoneFeature.MEGAPHONE_WHITE.get():MegaphoneFeature.MEGAPHONE_BLACK.get());
+                        var battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
                         var media=disc(parts.length>1?parts[1]:"vanilla");
-                        if(parts.length>1 && parts[1].equals("youtube"))media.set(CreateMediaSystems.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
+                        if(parts.length>1 && parts[1].equals("youtube"))media.set(AudioFeature.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
                         org.haruyq.createmediasystems.megaphone.MegaphoneData.contents(horn,p.level(),media,battery);
                         org.haruyq.createmediasystems.megaphone.MegaphoneData.controls(horn,26,1);
                         if(i==0)org.haruyq.createmediasystems.megaphone.MegaphoneData.play(horn,p.level(),true);
@@ -250,9 +253,9 @@ public final class LauncherDebugServer {
                         dragon.moveTo(dragon.getX()+3,dragon.getY()+2,dragon.getZ()+4,dragon.getYRot()+70,0);
                 }
                 case "partybox-grant" -> {
-                    if(p.getInventory().countItem(CreateMediaSystems.PARTYBOX.get())==0){
-                        p.getInventory().placeItemBackInInventory(new ItemStack(CreateMediaSystems.PARTYBOX.get()));
-                        ItemStack battery=new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get());
+                    if(p.getInventory().countItem(PartyBoxFeature.PARTYBOX.get())==0){
+                        p.getInventory().placeItemBackInInventory(new ItemStack(PartyBoxFeature.PARTYBOX.get()));
+                        ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
                         org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
                         p.getInventory().placeItemBackInInventory(battery);p.inventoryMenu.broadcastChanges();
                     }
@@ -267,15 +270,15 @@ public final class LauncherDebugServer {
                             .stream().filter(box->box.getTags().contains("cms_partybox_check")).forEach(Entity::discard);
                     p.getInventory().clearContent();select(p,0);p.getAbilities().flying=false;p.onUpdateAbilities();
                     p.teleportTo(l,.5,100,9.5,180,25);
-                    var box=new org.haruyq.createmediasystems.partybox.PartyBoxEntity(CreateMediaSystems.PARTYBOX_ENTITY.get(),l);
+                    var box=new org.haruyq.createmediasystems.partybox.PartyBoxEntity(PartyBoxFeature.PARTYBOX_ENTITY.get(),l);
                     box.setPos(.5,100,7.8);box.setYRot(180);box.addTag("cms_partybox_check");
-                    ItemStack battery=new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get());
+                    ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
                     org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
                     box.inventory.setItem(1,battery);ItemStack media=disc(parts.length>1?parts[1]:"vanilla");
-                    if(parts.length>1 && parts[1].equals("youtube"))media.set(CreateMediaSystems.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
+                    if(parts.length>1 && parts[1].equals("youtube"))media.set(AudioFeature.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
                     box.inventory.setItem(0,media);
                     l.addFreshEntity(box);p.getInventory().setItem(1,battery.copy());
-                    p.getInventory().setItem(2,new ItemStack(CreateMediaSystems.PARTYBOX.get()));p.inventoryMenu.broadcastChanges();
+                    p.getInventory().setItem(2,new ItemStack(PartyBoxFeature.PARTYBOX.get()));p.inventoryMenu.broadcastChanges();
                 }
                 case "cell-demo" -> {
                     if (savedInventory == null) {
@@ -289,16 +292,16 @@ public final class LauncherDebugServer {
                     p.teleportTo(event.getServer().overworld(), .5, 100, 9.5, 180, 0);
                 }
                 case "cell-grant" -> {
-                    ItemStack media = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-                    media.set(CreateMediaSystems.URL.get(), "https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
-                    media.set(CreateMediaSystems.TITLE.get(), "YouTube playback test");
+                    ItemStack media = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+                    media.set(AudioFeature.URL.get(), "https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
+                    media.set(AudioFeature.TITLE.get(), "YouTube playback test");
                     for (DiscCellTier tier : DiscCellTier.values()) if (!tier.optional()) {
                         ItemStack kit = cell(tier, "vanilla"); DiscCellItem.setMaster(kit, media);
-                        if (tier == DiscCellTier.DIAMOND && p.getMainHandItem().is(CreateMediaSystems.DISC_LAUNCHER.get())
+                        if (tier == DiscCellTier.DIAMOND && p.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get())
                                 && LauncherMagazine.cell(p.getMainHandItem()).isEmpty()) LauncherMagazine.setCell(p.getMainHandItem(), kit);
                         else p.getInventory().placeItemBackInInventory(kit);
                     }
-                    p.getInventory().placeItemBackInInventory(new ItemStack(CreateMediaSystems.DISC_CELL_CHARGER.get()));
+                    p.getInventory().placeItemBackInInventory(new ItemStack(LauncherFeature.DISC_CELL_CHARGER.get()));
                     p.inventoryMenu.broadcastChanges();
                 }
                 case "cell-charger" -> {
@@ -310,7 +313,7 @@ public final class LauncherDebugServer {
                     }
                     l.setBlockAndUpdate(motor, com.simibubi.create.AllBlocks.CREATIVE_MOTOR.getDefaultState()
                             .setValue(net.minecraft.world.level.block.DirectionalBlock.FACING, net.minecraft.core.Direction.UP));
-                    l.setBlockAndUpdate(pos, CreateMediaSystems.DISC_CELL_CHARGER.get().defaultBlockState());
+                    l.setBlockAndUpdate(pos, LauncherFeature.DISC_CELL_CHARGER.get().defaultBlockState());
                     var charger = (DiscCellCharger) l.getBlockEntity(pos);
                     charger.take();
                     ItemStack demo = cell(DiscCellTier.RESONANT, "vanilla");
@@ -355,10 +358,10 @@ public final class LauncherDebugServer {
                     if (savedInventory == null) throw new IllegalStateException("Start cell-demo before changing its fixture");
                     previewAge = -1;
                     ItemStack gun = p.getMainHandItem();
-                    if (!gun.is(CreateMediaSystems.DISC_LAUNCHER.get())) throw new IllegalStateException("Hold the demo launcher");
-                    gun.remove(CreateMediaSystems.LAUNCHER_PENDING_CELL.get());
-                    gun.remove(CreateMediaSystems.LAUNCHER_RELOAD_START.get());
-                    gun.remove(CreateMediaSystems.LAUNCHER_EJECT_ONLY.get());
+                    if (!gun.is(LauncherFeature.DISC_LAUNCHER.get())) throw new IllegalStateException("Hold the demo launcher");
+                    gun.remove(LauncherFeature.LAUNCHER_PENDING_CELL.get());
+                    gun.remove(LauncherFeature.LAUNCHER_RELOAD_START.get());
+                    gun.remove(LauncherFeature.LAUNCHER_EJECT_ONLY.get());
                     DiscCellTier tier = DiscCellTier.at(Integer.parseInt(parts[1]));
                     ItemStack fixture = cell(tier, "vanilla");
                     if (parts.length > 2) DiscCellItem.setEnergy(fixture, Integer.parseInt(parts[2]));
@@ -374,7 +377,7 @@ public final class LauncherDebugServer {
                     if(savedInventory==null)throw new IllegalStateException("Start cell-demo before showing ground items");
                     for(int i=0;i<2;i++) {
                         var item=new net.minecraft.world.entity.item.ItemEntity(l,i==0?0:1.15,101.05,7.5,
-                                new ItemStack(i==0?CreateMediaSystems.DISC_LAUNCHER.get():Items.DIAMOND_SWORD));
+                                new ItemStack(i==0?LauncherFeature.DISC_LAUNCHER.get():Items.DIAMOND_SWORD));
                         item.addTag("cms_ground_check");item.setPickUpDelay(32767);item.setDeltaMovement(Vec3.ZERO);l.addFreshEntity(item);
                     }
                     p.teleportTo(l,.6,100,9.7,180,25);select(p,8);p.inventoryMenu.broadcastChanges();
@@ -389,8 +392,8 @@ public final class LauncherDebugServer {
                     if(projection) {
                         clearTargets(l);all.stream().filter(d->d.getTags().contains("cms_launcher_check")).forEach(Entity::discard);
                         var target=net.minecraft.world.entity.EntityType.IRON_GOLEM.create(l);target.setPos(center.add(2,0,0));target.setNoAi(true);target.setNoGravity(true);target.setInvulnerable(true);target.addTag("cms_gun_target");l.addFreshEntity(target);
-                        var media=new ItemStack(parts[1].equals("disc-youtube")?CreateMediaSystems.CUSTOM_DISC.get():Items.MUSIC_DISC_CAT);
-                        if(parts[1].equals("disc-youtube"))media.set(CreateMediaSystems.URL.get(),"https://www.youtube.com/watch?v=tVSCbJZ54tc");
+                        var media=new ItemStack(parts[1].equals("disc-youtube")?AudioFeature.CUSTOM_DISC.get():Items.MUSIC_DISC_CAT);
+                        if(parts[1].equals("disc-youtube"))media.set(AudioFeature.URL.get(),"https://www.youtube.com/watch?v=tVSCbJZ54tc");
                         var disc=new DiscProjectile(l,p,media);disc.addTag("cms_launcher_check");disc.setDeltaMovement(3,0,0);
                         disc.onHitEntity(new EntityHitResult(target,target.position().add(-.76,1,0)));
                         var tag=new net.minecraft.nbt.CompoundTag();disc.save(tag);tag.putLong("CmsDiscMusicStart",l.getGameTime()-620);disc.load(tag);l.addFreshEntity(disc);
@@ -448,8 +451,8 @@ public final class LauncherDebugServer {
                 }
                 case "playback-check" -> {
                     for (int i = 0; i < 2; i++) {
-                        ItemStack item = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-                        item.set(CreateMediaSystems.URL.get(), parts[1]);
+                        ItemStack item = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+                        item.set(AudioFeature.URL.get(), parts[1]);
                         var d = new DiscProjectile(l, p, item);
                         d.setPos(p.getX() + 2 + i * 3, p.getY() + 12, p.getZ());
                         d.addTag("cms_playback_check");

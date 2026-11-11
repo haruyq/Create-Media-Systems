@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.stream.MediaSource;
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.SourceLinks;
@@ -30,23 +29,23 @@ public class LightingLinkItem extends Item {
     }
 
     public static LightingConsoleBlock.Entity selected(Player player) {
-        GlobalPos target = player.getMainHandItem().get(CreateMediaSystems.LIGHTING_TARGET.get());
+        GlobalPos target = player.getMainHandItem().get(LightingFeature.LIGHTING_TARGET.get());
         if (target == null || !target.dimension().equals(player.level().dimension())) {
             return null;
         }
         BlockPos pos = target.pos();
         if (!player.level().isClientSide) {
-            UUID id = player.getMainHandItem().get(CreateMediaSystems.LIGHTING_SOURCE.get());
+            UUID id = player.getMainHandItem().get(LightingFeature.LIGHTING_SOURCE.get());
             LightingConsoleBlock.Entity legacy = id == null ? LightingConsoleBlock.find(player.level(), pos) : null;
             if (legacy != null) {
                 id = legacy.identity();
                 if (id != null) {
-                    player.getMainHandItem().set(CreateMediaSystems.LIGHTING_SOURCE.get(), id);
+                    player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), id);
                 }
             }
             pos = SourceLinks.resolve(player.level(), id, pos);
             if (pos != null && !pos.equals(target.pos())) {
-                player.getMainHandItem().set(CreateMediaSystems.LIGHTING_TARGET.get(), GlobalPos.of(target.dimension(), pos));
+                player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(target.dimension(), pos));
             }
         }
         return pos == null ? null : LightingConsoleBlock.find(player.level(), pos);
@@ -54,7 +53,7 @@ public class LightingLinkItem extends Item {
 
     public static void link(Player player, BlockPos pos) {
         Level level = player.level();
-        if (!player.getMainHandItem().is(CreateMediaSystems.LIGHTING_LINK.get()) || !player.mayBuild()
+        if (!player.getMainHandItem().is(LightingFeature.LIGHTING_LINK.get()) || !player.mayBuild()
                 || !level.isLoaded(pos) || !SableCompat.mayInteract(level, player, pos)
                 || player.distanceToSqr(SableCompat.toWorld(level, pos.getCenter())) > Reach.QUILL * Reach.QUILL) {
             return;
@@ -65,9 +64,9 @@ public class LightingLinkItem extends Item {
         }
         LightingConsoleBlock.Entity clicked = LightingConsoleBlock.find(level, pos);
         if (clicked != null) {
-            player.getMainHandItem().set(CreateMediaSystems.LIGHTING_TARGET.get(),
+            player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(),
                     GlobalPos.of(level.dimension(), clicked.getBlockPos()));
-            player.getMainHandItem().set(CreateMediaSystems.LIGHTING_SOURCE.get(), clicked.identity());
+            player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), clicked.identity());
             clicked.refreshLinks();
             say(player, "picked", LightingText.group(clicked.settings, clicked.settings.selectedGroup));
             return;

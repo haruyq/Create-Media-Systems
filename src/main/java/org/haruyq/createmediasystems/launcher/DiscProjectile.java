@@ -1,6 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import net.minecraft.nbt.CompoundTag;
@@ -71,10 +71,10 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     }
 
     public DiscProjectile(Level level, LivingEntity owner, ItemStack disc) {
-        super(CreateMediaSystems.DISC_PROJECTILE.get(), owner, level);
+        super(LauncherFeature.DISC_PROJECTILE.get(), owner, level);
         ItemStack original = disc.copyWithCount(1);
         DiscPlayback playback = DiscPlayback.prepare(level, original);
-        original.set(CreateMediaSystems.DISC_PLAYBACK.get(), playback);
+        original.set(LauncherFeature.DISC_PLAYBACK.get(), playback);
         setItem(original);
         setNoGravity(true);
         spawnedAtTick = level.getGameTime();
@@ -107,7 +107,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     /** Snapshot this CD's server clock when it leaves the world, without affecting any other CD. */
     public ItemStack playbackItem() {
         ItemStack item = getItem().copy();
-        item.set(CreateMediaSystems.DISC_PLAYBACK.get(), DiscPlayback.prepare(level(), item).at(playbackPositionTicks()));
+        item.set(LauncherFeature.DISC_PLAYBACK.get(), DiscPlayback.prepare(level(), item).at(playbackPositionTicks()));
         return item;
     }
 
@@ -227,9 +227,9 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     boolean tickPlayback() {
         if (isRemoved()) return false;
         if (!level().isClientSide) {
-            if (!getItem().has(CreateMediaSystems.DISC_PLAYBACK.get())) {
+            if (!getItem().has(LauncherFeature.DISC_PLAYBACK.get())) {
                 ItemStack original = getItem().copyWithCount(1);
-                original.set(CreateMediaSystems.DISC_PLAYBACK.get(), DiscPlayback.prepare(level(), original));
+                original.set(LauncherFeature.DISC_PLAYBACK.get(), DiscPlayback.prepare(level(), original));
                 setItem(original);
             }
             if (spawnedAtTick == Long.MIN_VALUE) spawnedAtTick = level().getGameTime();
@@ -268,7 +268,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
 
     @Override
     protected Item getDefaultItem() {
-        return CreateMediaSystems.CUSTOM_DISC.get();
+        return AudioFeature.CUSTOM_DISC.get();
     }
 
     @Override

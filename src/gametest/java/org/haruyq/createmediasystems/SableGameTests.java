@@ -1,5 +1,8 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.display.DisplayFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,14 +45,14 @@ public class SableGameTests {
     public static void linksFollowAssemblyAndRotatedDisassembly(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(2, 2, 2));
-        level.setBlockAndUpdate(origin, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(origin.east(), CreateMediaSystems.DISPLAY.get().defaultBlockState());
-        level.setBlockAndUpdate(origin.east(2), CreateMediaSystems.SPEAKER.get().defaultBlockState());
+        level.setBlockAndUpdate(origin, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(origin.east(), DisplayFeature.DISPLAY.get().defaultBlockState());
+        level.setBlockAndUpdate(origin.east(2), AudioFeature.SPEAKER.get().defaultBlockState());
         BlockPos ground = origin.south(3);
-        level.setBlockAndUpdate(ground, CreateMediaSystems.SPEAKER.get().defaultBlockState());
+        level.setBlockAndUpdate(ground, AudioFeature.SPEAKER.get().defaultBlockState());
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(origin);
-        ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://example.com/test.mp4"));
+        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+        disc.set(VideoFeature.PLAYLIST.get(), List.of("https://example.com/test.mp4"));
         player.insert(disc, null);
         CompoundTag legacy = new CompoundTag();
         legacy.put("Source", NbtUtils.writeBlockPos(origin));
@@ -58,16 +61,16 @@ public class SableGameTests {
         ((SpeakerBlock.Entity) level.getBlockEntity(origin.east(2))).configure(level, origin, 1, Streams.Channel.LEFT);
         ((SpeakerBlock.Entity) level.getBlockEntity(ground)).configure(level, origin, 1, Streams.Channel.RIGHT);
         UUID id = SourceLinks.identify(level, origin);
-        ItemStack remote = new ItemStack(CreateMediaSystems.REMOTE.get());
-        remote.set(CreateMediaSystems.REMOTE_TARGET.get(), GlobalPos.of(level.dimension(), origin));
-        remote.set(CreateMediaSystems.REMOTE_SOURCE.get(), id);
+        ItemStack remote = new ItemStack(VideoFeature.REMOTE.get());
+        remote.set(VideoFeature.REMOTE_TARGET.get(), GlobalPos.of(level.dimension(), origin));
+        remote.set(VideoFeature.REMOTE_SOURCE.get(), id);
         Streams.played(player, Streams.MAX_LOAD_TICKS);
         BlockEntity groundBefore = level.getBlockEntity(ground);
         CompoundTag groundSaved = groundBefore.saveWithFullMetadata(level.registryAccess());
         level.removeBlockEntity(ground);
         BlockPos groundSource = origin.north();
-        level.setBlockAndUpdate(groundSource, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(origin.east(3), CreateMediaSystems.SPEAKER.get().defaultBlockState());
+        level.setBlockAndUpdate(groundSource, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(origin.east(3), AudioFeature.SPEAKER.get().defaultBlockState());
         ((SpeakerBlock.Entity) level.getBlockEntity(origin.east(3))).configure(level, groundSource, 1, Streams.Channel.MIX);
 
         ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin,
@@ -113,7 +116,7 @@ public class SableGameTests {
         level.setBlockEntity(reloaded);
         checkLinks(helper, destination, display, speaker, ground, remote, id);
         level.setBlockAndUpdate(destination, Blocks.AIR.defaultBlockState());
-        level.setBlockAndUpdate(destination, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(destination, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         helper.assertTrue(SourceLinks.resolve(level, id, destination) == null, "replacement players do not inherit links");
         helper.succeed();
     }
@@ -122,7 +125,7 @@ public class SableGameTests {
     public static void equalizerFadersWorkOnATurnedShip(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(2, 2, 2));
-        level.setBlockAndUpdate(origin, CreateMediaSystems.EQUALIZER.get().defaultBlockState());
+        level.setBlockAndUpdate(origin, VideoFeature.EQUALIZER.get().defaultBlockState());
         ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
         BlockPos plot = ship.getPlot().getCenterBlock();

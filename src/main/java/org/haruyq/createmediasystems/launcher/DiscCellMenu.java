@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.launcher;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.SimpleContainer;
@@ -21,7 +20,7 @@ public final class DiscCellMenu extends AbstractContainerMenu {
     public DiscCellMenu(int id, Inventory inventory, RegistryFriendlyByteBuf data) { this(id, inventory, data.readVarInt()); }
 
     public DiscCellMenu(int id, Inventory inventory, int cellSlot) {
-        super(CreateMediaSystems.DISC_CELL_MENU.get(), id);
+        super(LauncherFeature.DISC_CELL_MENU.get(), id);
         this.inventory = inventory;
         this.cellSlot = cellSlot;
         this.cell = inventory.getItem(cellSlot);

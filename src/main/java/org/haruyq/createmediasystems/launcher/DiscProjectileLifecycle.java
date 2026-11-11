@@ -4,17 +4,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** Attachment and expiry keep working when a loaded CD stops receiving movement ticks. */
-@EventBusSubscriber(modid = CreateMediaSystems.MOD_ID)
 public final class DiscProjectileLifecycle {
     private static final Set<DiscProjectile> LOADED = ConcurrentHashMap.newKeySet();
 

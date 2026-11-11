@@ -2,7 +2,8 @@ package org.haruyq.createmediasystems.partybox;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.launcher.DiscPlayback;
 import org.haruyq.createmediasystems.launcher.LauncherMagazine;
@@ -92,7 +93,7 @@ public final class PartyBoxEntity extends Entity {
     public boolean play() {
         if (disc().isEmpty() || energy() <= 0) return false;
         String url = DiscPlayback.mediaUrl(disc());
-        if ((disc().is(CreateMediaSystems.CUSTOM_DISC.get()) || disc().is(CreateMediaSystems.DVD.get()) || disc().is(CreateMediaSystems.BLU_RAY.get()))
+        if ((disc().is(AudioFeature.CUSTOM_DISC.get()) || disc().is(VideoFeature.DVD.get()) || disc().is(VideoFeature.BLU_RAY.get()))
                 && (url==null || url.isBlank())) return false;
         if (url != null && !ServerConfig.isAllowed(url)) return false;
         if (playing()) return true;
@@ -147,7 +148,7 @@ public final class PartyBoxEntity extends Entity {
     @Override public boolean isPushable() { return false; }
     @Override public boolean canBeCollidedWith() { return !isRemoved(); }
     @Override public float maxUpStep() { return .6f; }
-    @Override public ItemStack getPickResult() { return new ItemStack(CreateMediaSystems.PARTYBOX.get()); }
+    @Override public ItemStack getPickResult() { return new ItemStack(PartyBoxFeature.PARTYBOX.get()); }
     @Override public boolean hurt(DamageSource source, float amount) {
         if (!level().isClientSide && !isRemoved() && amount > 0) {
             // One item owns both inventory slots. Creative destruction also cannot spill duplicate originals.
@@ -228,10 +229,10 @@ public final class PartyBoxEntity extends Entity {
     }
     public void settlePower(){if(!changing && !level().isClientSide && playing())tickPower();}
     public ItemStack portableItem() {
-        ItemStack item = new ItemStack(CreateMediaSystems.PARTYBOX.get());
+        ItemStack item = new ItemStack(PartyBoxFeature.PARTYBOX.get());
         CompoundTag tag = new CompoundTag(); writeContents(tag);
         tag.putLong("Offset", positionTicks()); tag.putBoolean("Playing", false);
-        item.set(CreateMediaSystems.PARTYBOX_STATE.get(), tag);
+        item.set(PartyBoxFeature.PARTYBOX_STATE.get(), tag);
         return item;
     }
     public void loadPortable(CompoundTag tag) { if (tag != null) readContents(tag, false); }

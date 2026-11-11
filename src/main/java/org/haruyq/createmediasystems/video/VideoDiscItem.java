@@ -53,14 +53,14 @@ public class VideoDiscItem extends Item {
             return InteractionResultHolder.pass(stack);
         }
         if (level.isClientSide) {
-            PlaylistScreen.open(stack.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of()), entries);
+            PlaylistScreen.open(stack.getOrDefault(VideoFeature.PLAYLIST.get(), List.of()), entries);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        List<String> playlist = stack.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+        List<String> playlist = stack.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
         if (playlist.isEmpty()) {
             tooltip.add(Component.translatable("create_media_systems.url.unset").withStyle(ChatFormatting.DARK_GRAY));
             return;
@@ -100,7 +100,7 @@ public class VideoDiscItem extends Item {
         for (int i = 0; i < playlist.size(); i++) {
             var physical = DiscUrl.parse(playlist.get(i));
             if (!ServerConfig.isAllowed(playlist.get(i)) || physical != null && !physical.owner().equals(player.getUUID())
-                    && !held.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of()).contains(playlist.get(i))) {
+                    && !held.getOrDefault(VideoFeature.PLAYLIST.get(), List.of()).contains(playlist.get(i))) {
                 player.displayClientMessage(Component.translatable(disc.maxHeight > 0 ? "create_media_systems.disc.rejected"
                         : "create_media_systems.disc.rejected_track", i + 1)
                         .withStyle(ChatFormatting.RED), true);
@@ -108,9 +108,9 @@ public class VideoDiscItem extends Item {
             }
         }
         if (playlist.isEmpty()) {
-            held.remove(CreateMediaSystems.PLAYLIST.get());
+            held.remove(VideoFeature.PLAYLIST.get());
         } else {
-            held.set(CreateMediaSystems.PLAYLIST.get(), playlist);
+            held.set(VideoFeature.PLAYLIST.get(), playlist);
         }
         player.displayClientMessage(Component.translatable(disc.maxHeight > 0 ? "create_media_systems.disc.saved"
                 : "create_media_systems.disc.saved_tracks", playlist.size())

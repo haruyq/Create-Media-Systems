@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
@@ -171,7 +170,7 @@ public final class RangeQuillHandler {
             return true;
         }
         BlockState hovered = hoveredBlock == null ? null : player.level().getBlockState(hoveredBlock);
-        if (firstPos == null && hovered != null && hovered.is(CreateMediaSystems.SPEAKER.get())) {
+        if (firstPos == null && hovered != null && hovered.is(AudioFeature.SPEAKER.get())) {
             pendingSpeaker = hoveredBlock;
             PacketDistributor.sendToServer(new RangeQuill.QueryBlockSettings(hoveredBlock));
             return true;
@@ -273,7 +272,7 @@ public final class RangeQuillHandler {
     }
 
     private static boolean isActive() {
-        return Quill.held(CreateMediaSystems.RANGE_QUILL.get());
+        return Quill.held(AudioFeature.RANGE_QUILL.get());
     }
 
     private static AABB currentSelectionBox() {

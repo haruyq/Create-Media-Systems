@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.lighting;
 import java.util.List;
 
 import org.haruyq.createmediasystems.stream.MediaSource;
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -137,6 +136,6 @@ final class LightingLinkHandler {
     }
 
     private static boolean isActive() {
-        return Quill.held(CreateMediaSystems.LIGHTING_LINK.get());
+        return Quill.held(LightingFeature.LIGHTING_LINK.get());
     }
 }

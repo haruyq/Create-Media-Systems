@@ -20,7 +20,7 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 import javax.sound.sampled.AudioFormat;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.client.Reports;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -144,7 +144,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 @Nullable Supplier<Vec3> tracedFrom, BooleanSupplier present,
                 BooleanSupplier nearby, DoubleSupplier gain, @Nullable Streams.Video video, Streams.Channel channel,
                 DoubleConsumer started) {
-        super(CreateMediaSystems.STREAM.get(), source, SoundInstance.createUnseededRandom());
+        super(StreamFeature.STREAM.get(), source, SoundInstance.createUnseededRandom());
         this.urlAt = urlAt;
         this.track = track;
         this.playback = playback;

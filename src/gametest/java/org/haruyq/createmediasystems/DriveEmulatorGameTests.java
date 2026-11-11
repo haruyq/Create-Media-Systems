@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,9 +37,9 @@ public class DriveEmulatorGameTests {
     @GameTest(template = "empty")
     public static void whatIsBesideADrivePlaysItsHostsDisc(GameTestHelper helper) {
         BlockPos pos = new BlockPos(1, 2, 1);
-        helper.setBlock(pos.west(), CreateMediaSystems.DISC_READER.get());
-        helper.setBlock(pos.east(), CreateMediaSystems.VIDEO_PLAYER.get());
-        helper.setBlock(pos, CreateMediaSystems.DRIVE_EMULATOR.get());
+        helper.setBlock(pos.west(), AudioFeature.DISC_READER.get());
+        helper.setBlock(pos.east(), VideoFeature.VIDEO_PLAYER.get());
+        helper.setBlock(pos, VideoFeature.DRIVE_EMULATOR.get());
         DriveEmulatorBlock.Entity emulator = helper.getBlockEntity(pos);
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos.east());
         DiscReaderBlock.Entity reader = helper.getBlockEntity(pos.west());
@@ -85,8 +87,8 @@ public class DriveEmulatorGameTests {
         helper.assertTrue(player.nowPlaying() != null, "played again from its remote: " + player.state().getString());
 
         // A disc of the player's own comes first; taken out, the drive's plays again.
-        ItemStack own = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        own.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));
+        ItemStack own = new ItemStack(VideoFeature.BLU_RAY.get());
+        own.set(VideoFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));
         player.insert(own, host);
         helper.assertTrue(player.playlist().equals(List.of("https://www.youtube.com/watch?v=own")), "its own disc: " + player.playlist());
         player.insert(ItemStack.EMPTY, host);

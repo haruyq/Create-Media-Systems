@@ -6,7 +6,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.launcher.DiscPlayback;
 import org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem;
@@ -15,8 +14,8 @@ import org.haruyq.createmediasystems.stream.Streams;
 /** The physical item owns the media, controls, battery and server playback clock. */
 public final class MegaphoneData {
     private MegaphoneData() {}
-    public static CompoundTag state(ItemStack item) {return item.getOrDefault(CreateMediaSystems.MEGAPHONE_STATE.get(),new CompoundTag());}
-    private static void commit(ItemStack item,CompoundTag tag){item.set(CreateMediaSystems.MEGAPHONE_STATE.get(),tag);}
+    public static CompoundTag state(ItemStack item) {return item.getOrDefault(MegaphoneFeature.MEGAPHONE_STATE.get(),new CompoundTag());}
+    private static void commit(ItemStack item,CompoundTag tag){item.set(MegaphoneFeature.MEGAPHONE_STATE.get(),tag);}
     public static Optional<UUID> id(ItemStack item){var t=state(item);return t.hasUUID("Id")?Optional.of(t.getUUID("Id")):Optional.empty();}
     public static int volume(ItemStack item){var t=state(item);return Math.clamp(t.contains("Volume")?t.getInt("Volume"):22,0,32);}
     public static int drive(ItemStack item){var t=state(item);return Math.clamp(t.contains("Drive")?t.getInt("Drive"):1,0,2);}

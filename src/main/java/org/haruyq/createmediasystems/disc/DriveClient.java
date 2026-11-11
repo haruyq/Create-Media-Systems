@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.p2p.Transport;
@@ -411,7 +411,7 @@ public final class DriveClient {
         private float speed;
 
         Spin(BlockPos pos) {
-            super(CreateMediaSystems.DRIVE_SPIN.get(), SoundSource.BLOCKS, SoundInstance.createUnseededRandom());
+            super(VideoFeature.DRIVE_SPIN.get(), SoundSource.BLOCKS, SoundInstance.createUnseededRandom());
             this.pos = pos;
             looping = true;
             delay = 0;

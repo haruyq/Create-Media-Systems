@@ -9,14 +9,12 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 
 /** The server meters automatic fire; input packets cannot increase fire rate or invent ammunition. */
-@EventBusSubscriber(modid=CreateMediaSystems.MOD_ID)
 public final class DiscLauncherTrigger {
     private record Held(ItemStack weapon,long updated,float yaw,float pitch) {}
     private static final Map<UUID,Held> HELD=new HashMap<>();

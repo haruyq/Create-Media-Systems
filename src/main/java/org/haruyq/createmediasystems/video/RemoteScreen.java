@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.video;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +32,7 @@ final class RemoteScreen extends Screen {
     }
 
     private RemoteScreen(GlobalPos target) {
-        super(CreateMediaSystems.REMOTE.get().getDescription());
+        super(VideoFeature.REMOTE.get().getDescription());
         this.target = target;
     }
 
@@ -42,7 +41,7 @@ final class RemoteScreen extends Screen {
         var mc = Minecraft.getInstance();
         var level = mc.level;
         ItemStack remote = RemoteItem.held(mc.player);
-        GlobalPos current = remote.getOrDefault(CreateMediaSystems.REMOTE_TARGET.get(), target);
+        GlobalPos current = remote.getOrDefault(VideoFeature.REMOTE_TARGET.get(), target);
         return level != null && level.dimension() == current.dimension() && level.isLoaded(current.pos())
                 && level.getBlockEntity(current.pos()) instanceof Remotable found ? found : null;
     }
@@ -188,7 +187,7 @@ final class RemoteScreen extends Screen {
             }
         }
         seek.show(url == null || videoPlayer == null ? null
-                : NativeAudio.progress(RemoteItem.held(minecraft.player).getOrDefault(CreateMediaSystems.REMOTE_TARGET.get(), target).pos(), url));
+                : NativeAudio.progress(RemoteItem.held(minecraft.player).getOrDefault(VideoFeature.REMOTE_TARGET.get(), target).pos(), url));
         graphics.drawCenteredString(font, status, width / 2, top - 22, 0xF0C040);
         if (url != null) {
             graphics.drawCenteredString(font, font.plainSubstrByWidth(url, 300), width / 2, top - 11, 0x909090);

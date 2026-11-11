@@ -3,7 +3,9 @@ package org.haruyq.createmediasystems.partybox.client;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.launcher.DiscPlayback;
 import org.haruyq.createmediasystems.launcher.DopplerMath;
@@ -36,12 +38,12 @@ public final class PartyBoxClient {
                 .stream().anyMatch(box->box.puller().filter(player.getUUID()::equals).isPresent());
     }
     public static void register(IEventBus bus) {
-        bus.addListener((EntityRenderersEvent.RegisterRenderers event)->event.registerEntityRenderer(CreateMediaSystems.PARTYBOX_ENTITY.get(),PartyBoxRenderer::new));
-        bus.addListener((RegisterMenuScreensEvent event)->event.register(CreateMediaSystems.PARTYBOX_MENU.get(),PartyBoxScreen::new));
+        bus.addListener((EntityRenderersEvent.RegisterRenderers event)->event.registerEntityRenderer(PartyBoxFeature.PARTYBOX_ENTITY.get(),PartyBoxRenderer::new));
+        bus.addListener((RegisterMenuScreensEvent event)->event.register(PartyBoxFeature.PARTYBOX_MENU.get(),PartyBoxScreen::new));
         bus.addListener((RegisterClientExtensionsEvent event)->event.registerItem(new IClientItemExtensions() {
             private PartyBoxItemRenderer renderer;
             @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() { if(renderer==null)renderer=new PartyBoxItemRenderer();return renderer; }
-        },CreateMediaSystems.PARTYBOX.get(),CreateMediaSystems.PARTYBOX_BATTERY.get()));
+        },PartyBoxFeature.PARTYBOX.get(),PartyBoxFeature.PARTYBOX_BATTERY.get()));
         bus.addListener((net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent event)->Minecraft.getInstance().execute(PartyBoxClient::stopAll));
         NeoForge.EVENT_BUS.addListener(PartyBoxClient::tick);
     }
@@ -90,7 +92,7 @@ public final class PartyBoxClient {
                 sound.setDiscPlayback(box.getUUID(),box::seconds);sound.setDynamicPitch(()->pitchAt(box));
                 sound.setBassMode(box::bass);sound.setPcmMeter(meter::sample);
                 ClientStreams.play(box.getUUID(),sound);PLAYING.put(box.getUUID(),new Playing(box,revision,true,null,ticks,meter));
-            } else if(!box.disc().is(CreateMediaSystems.CUSTOM_DISC.get()) && !box.disc().is(CreateMediaSystems.DVD.get()) && !box.disc().is(CreateMediaSystems.BLU_RAY.get())) {
+            } else if(!box.disc().is(AudioFeature.CUSTOM_DISC.get()) && !box.disc().is(VideoFeature.DVD.get()) && !box.disc().is(VideoFeature.BLU_RAY.get())) {
                 JukeboxSong.fromStack(mc.level.registryAccess(),box.disc()).ifPresent(song->{
                     var sound=new PartyBoxSound(box,song.value().soundEvent().value(),meter);mc.getSoundManager().play(sound);
                     PLAYING.put(box.getUUID(),new Playing(box,revision,false,sound,ticks,meter));
