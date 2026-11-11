@@ -19,6 +19,13 @@ final class DiscRun implements AutoCloseable {
     /** A frame's PTS this far before a boundary already starts the next segment: frames sit exactly on it. */
     private static final long BOUNDARY_TOLERANCE_TICKS = 1000;
     private static final byte[] END = new byte[0];
+    /**
+     * How many segments on from its next a pass still goes for one asked for, rather than a new pass seeking there:
+     * a player that asks again for one that failed, seeks a little on to catch up, or plays beside another.
+     * ponytail: a fixed 16 s, which any encoder that keeps up with playback is through sooner than a drive seeks
+     * (10 s and more on a real one); measure both if a drive ever makes a new pass the cheaper way.
+     */
+    static final int REACH = 4;
 
     final DiscSource.Quality quality;
     final String encoder;
@@ -70,13 +77,14 @@ final class DiscRun implements AutoCloseable {
     }
 
     /**
-     * Whether the next segment it hands over is {@code index}, at this picture size and frame rate and encoder. A
-     * bit rate alone changing doesn't restart it: below 2 Mbps that changes with every measure of the connection, and
+     * How many segments it hands over before {@code index} (0: that is its next), at this picture size and frame
+     * rate and encoder; -1 if it doesn't get there: it is past it, or more than {@link #REACH} short of it. A bit
+     * rate alone changing doesn't restart it: below 2 Mbps that changes with every measure of the connection, and
      * each restart seeks again, which takes seconds and lands off the boundary.
      */
-    boolean continues(int index, DiscSource.Quality quality, String encoder) {
-        return !ended && next == index && this.quality.height() == quality.height() && this.quality.fps() == quality.fps()
-                && this.encoder.equals(encoder);
+    int ahead(int index, DiscSource.Quality quality, String encoder) {
+        return !ended && index >= next && index - next <= REACH && this.quality.height() == quality.height()
+                && this.quality.fps() == quality.fps() && this.encoder.equals(encoder) ? index - next : -1;
     }
 
     /** The next segment, waiting up to 30 s for it to be encoded. */
@@ -108,8 +116,8 @@ final class DiscRun implements AutoCloseable {
             synchronized (errors) {
                 text = errors.toString();
             }
-            String failed = DiscSource.failure(process.exitValue(), text, access);
-            throw new IOException(failed != null ? failed : "The disc title ended before this segment");
+            IOException failed = DiscSource.failure(process.exitValue(), text, access);
+            throw failed != null ? failed : new IOException("The disc title ended before this segment");
         }
         next++;
         return segment;

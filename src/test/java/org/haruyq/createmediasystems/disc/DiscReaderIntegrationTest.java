@@ -96,8 +96,12 @@ class DiscReaderIntegrationTest {
             // Each segment decodes on its own, and the second goes on from the first's last frame.
             int last = nearest(reference, first[first.length - 1]), next = nearest(reference, second[0]);
             assertTrue(next - last >= 0 && next - last <= 2, "segment boundary jumps from frame " + last + " to " + next);
-            assertTrue(run.continues(3, new DiscSource.Quality(480, 30, 700), "libx264"), "a bit rate alone goes on");
-            assertFalse(run.continues(3, new DiscSource.Quality(720, 30, 2500), "libx264"));
+            assertEquals(0, run.ahead(3, new DiscSource.Quality(480, 30, 700), "libx264"), "a bit rate alone goes on");
+            assertEquals(-1, run.ahead(3, new DiscSource.Quality(720, 30, 2500), "libx264"));
+            DiscSource.Quality same = new DiscSource.Quality(480, 30, 1100);
+            assertEquals(2, run.ahead(5, same, "libx264"), "asked out of order, it goes on past the two before");
+            assertEquals(-1, run.ahead(2, same, "libx264"), "behind it, only a new pass gets there");
+            assertEquals(-1, run.ahead(3 + DiscRun.REACH + 1, same, "libx264"), "far on, a new pass seeks there sooner");
         }
     }
 
