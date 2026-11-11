@@ -50,7 +50,7 @@ public final class LauncherServerGameTests {
         helper.assertTrue(first.playbackPositionTicks() == 400 && second.playbackPositionTicks() == 60,
                 "The server holds a separate playback clock for each CD of the same song");
         ItemStack returned = first.playbackItem();
-        var cell = new ItemStack(LauncherFeature.COPPER_DISC_CELL.get());
+        var cell = new ItemStack(LauncherFeature.cell(DiscCellTier.COPPER));
         DiscCellItem.setMaster(cell, returned);
         ChargeableItem.setEnergy(cell, DiscCellTier.COPPER.capacity());
         var launcher = new ItemStack(LauncherFeature.DISC_LAUNCHER.get());

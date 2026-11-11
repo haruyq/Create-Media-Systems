@@ -34,7 +34,7 @@ public final class DiscCellUpgradeRecipe extends CustomRecipe {
         for (int i = 0; i < input.size(); i++) {
             ItemStack item = input.getItem(i);
             if (item.isEmpty()) continue;
-            if (item.getItem() instanceof DiscCellItem cell && cell.tier.level == target.level - 1) cells++;
+            if (item.getItem() instanceof DiscCellItem cell && cell.tier == target.previous()) cells++;
             else if (!needed.remove(BuiltInRegistries.ITEM.getKey(item.getItem()).toString())) return false;
         }
         return cells == 1 && needed.isEmpty();
@@ -42,7 +42,7 @@ public final class DiscCellUpgradeRecipe extends CustomRecipe {
 
     @Override public ItemStack assemble(CraftingInput input, HolderLookup.Provider registries) {
         for (int i = 0; i < input.size(); i++)
-            if (input.getItem(i).getItem() instanceof DiscCellItem cell && cell.tier.level == target.level - 1)
+            if (input.getItem(i).getItem() instanceof DiscCellItem cell && cell.tier == target.previous())
                 return DiscCellItem.upgrade(input.getItem(i), target);
         return ItemStack.EMPTY;
     }
@@ -51,14 +51,14 @@ public final class DiscCellUpgradeRecipe extends CustomRecipe {
     @Override public RecipeSerializer<?> getSerializer() { return LauncherFeature.CELL_UPGRADE_RECIPE.get(); }
     @Override public NonNullList<Ingredient> getIngredients() {
         NonNullList<Ingredient> ingredients = NonNullList.create();
-        ingredients.add(Ingredient.of(LauncherFeature.cell(DiscCellTier.at(target.level - 1))));
+        ingredients.add(Ingredient.of(LauncherFeature.cell(target.previous())));
         for (String id : target.upgradeMaterials())
             ingredients.add(Ingredient.of(BuiltInRegistries.ITEM.get(ResourceLocation.parse(id))));
         return ingredients;
     }
 
     public static final class Serializer implements RecipeSerializer<DiscCellUpgradeRecipe> {
-        private static final MapCodec<DiscCellUpgradeRecipe> CODEC = Codec.intRange(2, 6).fieldOf("level")
+        private static final MapCodec<DiscCellUpgradeRecipe> CODEC = Codec.intRange(2, DiscCellTier.values().length).fieldOf("level")
                 .xmap(DiscCellUpgradeRecipe::new, recipe -> recipe.target.level);
         private static final StreamCodec<RegistryFriendlyByteBuf, DiscCellUpgradeRecipe> STREAM = StreamCodec.of(
                 (buf, recipe) -> buf.writeVarInt(recipe.target.level), buf -> new DiscCellUpgradeRecipe(buf.readVarInt()));

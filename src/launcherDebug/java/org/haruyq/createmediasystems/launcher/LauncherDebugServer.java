@@ -170,8 +170,8 @@ public final class LauncherDebugServer {
     static void equip(ServerPlayer p,String kind) {
         p.getInventory().clearContent();select(p,0);
         p.getInventory().setItem(0,new ItemStack(LauncherFeature.DISC_LAUNCHER.get()));
-        for(int i=1;i<=6;i++) if (!DiscCellTier.at(i).optional() || net.neoforged.fml.ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID))
-            p.getInventory().setItem(i,cell(DiscCellTier.at(i),kind));
+        for(DiscCellTier tier:DiscCellTier.values()) if (tier.available())
+            p.getInventory().setItem(tier.level,cell(tier,kind));
         p.inventoryMenu.broadcastChanges();
     }
     @SubscribeEvent

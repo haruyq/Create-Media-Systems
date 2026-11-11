@@ -23,7 +23,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class LauncherGunGameTests {
     private static ItemStack gun() {
-        var cell=new ItemStack(LauncherFeature.COPPER_DISC_CELL.get());
+        var cell=new ItemStack(LauncherFeature.cell(DiscCellTier.COPPER));
         DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));ChargeableItem.setEnergy(cell,24000);
         var gun=new ItemStack(LauncherFeature.DISC_LAUNCHER.get());LauncherMagazine.setCell(gun,cell);return gun;
     }

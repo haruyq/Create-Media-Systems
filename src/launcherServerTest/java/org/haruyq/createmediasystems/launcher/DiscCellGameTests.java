@@ -27,7 +27,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -213,7 +212,7 @@ public final class DiscCellGameTests {
     public static void plantRecipeIsConditionalButOrdinaryCellsAlwaysExist(GameTestHelper h) {
         for (DiscCellTier tier : DiscCellTier.values()) {
             var recipe = h.getLevel().getRecipeManager().byKey(CreateMediaSystems.id(tier.id + "_disc_cell"));
-            h.assertTrue(recipe.isPresent() == (!tier.optional() || ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID)),
+            h.assertTrue(recipe.isPresent() == tier.available(),
                     "Only the Chemi Apex recipe depends on Create Plant");
         }
         h.succeed();
@@ -221,9 +220,9 @@ public final class DiscCellGameTests {
 
     @GameTest(template="empty")
     public static void loadedCellUpgradesExposeCompleteCraftingInputsAndOutputsToRecipeViewers(GameTestHelper h) {
-        for(int level=2;level<=6;level++) {
+        for(int level=2;level<=DiscCellTier.values().length;level++) {
             var holder=h.getLevel().getRecipeManager().byKey(CreateMediaSystems.id(DiscCellTier.at(level).id+"_disc_cell"));
-            if(holder.isEmpty()) {h.assertTrue(level==6 && !ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID),"Only the optional top-tier recipe may be absent");continue;}
+            if(holder.isEmpty()) {h.assertTrue(!DiscCellTier.at(level).available(),"Only the optional top-tier recipe may be absent");continue;}
             var recipe=(DiscCellUpgradeRecipe)holder.get().value();
             h.assertTrue(!recipe.isSpecial() && recipe.getType()==net.minecraft.world.item.crafting.RecipeType.CRAFTING,"Recipe viewers must handle the loaded upgrade as ordinary crafting");
             var ingredients=recipe.getIngredients();h.assertTrue(ingredients.size()==9,"Expose the previous cell and all eight materials");
@@ -239,8 +238,8 @@ public final class DiscCellGameTests {
     @GameTest(template="empty")
     public static void plantMaterialsUpgradeToTheUltimateCellWhenPresent(GameTestHelper h) {
         if (Boolean.getBoolean("cms.cellPlantTest"))
-            h.assertTrue(ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID), "The requested optional-mod fixture must actually load");
-        if (!ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID)) { h.succeed(); return; }
+            h.assertTrue(DiscCellTier.CHEMI.available(), "The requested optional-mod fixture must actually load");
+        if (!DiscCellTier.CHEMI.available()) { h.succeed(); return; }
         var holder = h.getLevel().getRecipeManager().byKey(CreateMediaSystems.id("chemi_disc_cell")).orElseThrow();
         var recipe = (DiscCellUpgradeRecipe) holder.value();
         ItemStack previous = cell(DiscCellTier.RESONANT, 123456);
@@ -253,7 +252,7 @@ public final class DiscCellGameTests {
         var grid = CraftingInput.of(3, 3, inputs);
         h.assertTrue(recipe.matches(grid, h.getLevel()), "The condition-enabled recipe accepts the verified Plant materials");
         ItemStack apex = recipe.assemble(grid, h.getLevel().registryAccess());
-        h.assertTrue(apex.is(LauncherFeature.CHEMI_DISC_CELL.get()) && ChargeableItem.energy(apex) == 123456
+        h.assertTrue(apex.is(LauncherFeature.cell(DiscCellTier.CHEMI)) && ChargeableItem.energy(apex) == 123456
                 && ItemStack.matches(DiscCellItem.master(previous), DiscCellItem.master(apex)), "The ultimate upgrade preserves the original and energy");
         h.succeed();
     }
