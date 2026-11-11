@@ -354,7 +354,7 @@ public final class ClientStreams {
                 seconds -> Minecraft.getInstance().execute(() -> {
                     LogUtils.getLogger().info("CMS stream {} loaded, {}s long (0: unknown)", side, seconds);
                     fresh.emitters.keySet().stream().findFirst()
-                            .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(at, (float) seconds)));
+                            .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.Started(at, (float) seconds)));
                 })));
     }
 

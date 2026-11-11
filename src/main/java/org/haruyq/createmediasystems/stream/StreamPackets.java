@@ -4,6 +4,8 @@ import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 
+import org.jetbrains.annotations.Nullable;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -38,6 +40,54 @@ public final class StreamPackets {
 
     public static void client(Client handler) {
         client = handler;
+    }
+
+    /**
+     * The emitter a client tells the server about: a block's, by its place, or one that is no block, by the channel its
+     * clients play it on (a train's disc reader's; see MediaSource.Keyed). A channel's clients play it as soon as they
+     * have it and stop it themselves (getting off the train), so the server tells them neither.
+     */
+    public sealed interface Target {
+        StreamCodec<ByteBuf, Target> CODEC = ByteBufCodecs.BOOL.dispatch(target -> target instanceof Channel,
+                channel -> channel ? Channel.CODEC : Block.CODEC);
+
+        /** What tells its listener to play what it has loaded, from {@code seconds} in; null for none. */
+        @Nullable
+        CustomPacketPayload sync(float seconds);
+
+        /** What tells its listener it stopped; null for none. */
+        @Nullable
+        CustomPacketPayload stop();
+
+        record Block(BlockPos pos) implements Target {
+            static final StreamCodec<ByteBuf, Block> CODEC = BlockPos.STREAM_CODEC.map(Block::new, Block::pos);
+
+            @Override
+            public CustomPacketPayload sync(float seconds) {
+                return new SyncAtBlock(pos, seconds);
+            }
+
+            @Override
+            public CustomPacketPayload stop() {
+                return new StopAtBlock(pos);
+            }
+        }
+
+        record Channel(String id) implements Target {
+            static final StreamCodec<ByteBuf, Channel> CODEC = ByteBufCodecs.STRING_UTF8.map(Channel::new, Channel::id);
+
+            @Override
+            @Nullable
+            public CustomPacketPayload sync(float seconds) {
+                return null;
+            }
+
+            @Override
+            @Nullable
+            public CustomPacketPayload stop() {
+                return null;
+            }
+        }
     }
 
     /**
@@ -81,18 +131,22 @@ public final class StreamPackets {
     }
 
     /**
-     * Client → server: the stream of the block at {@code pos} is loaded here, paused until SyncAtBlock says to play
-     * it, its track {@code duration} seconds long (0 if unknown; see Streams#started).
+     * Client → server: the stream of the emitter {@code target} is loaded here, its track {@code duration} seconds long
+     * (0 if unknown; see Streams#started); a block's waits paused until SyncAtBlock says to play it.
      */
-    public record StartedAtBlock(BlockPos pos, float duration) implements CustomPacketPayload {
-        public static final Type<StartedAtBlock> TYPE = new Type<>(CreateMediaSystems.id("started_at_block"));
-        public static final StreamCodec<ByteBuf, StartedAtBlock> CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC, StartedAtBlock::pos,
-                ByteBufCodecs.FLOAT, StartedAtBlock::duration,
-                StartedAtBlock::new);
+    public record Started(Target target, float duration) implements CustomPacketPayload {
+        public static final Type<Started> TYPE = new Type<>(CreateMediaSystems.id("started_at_block"));
+        public static final StreamCodec<ByteBuf, Started> CODEC = StreamCodec.composite(
+                Target.CODEC, Started::target,
+                ByteBufCodecs.FLOAT, Started::duration,
+                Started::new);
+
+        public Started(BlockPos pos, float duration) {
+            this(new Target.Block(pos), duration);
+        }
 
         @Override
-        public Type<StartedAtBlock> type() {
+        public Type<Started> type() {
             return TYPE;
         }
     }
@@ -150,8 +204,8 @@ public final class StreamPackets {
         registrar.playToClient(RetuneAtBlock.TYPE, RetuneAtBlock.CODEC, (payload, context) -> client.retune(payload));
         registrar.playToClient(SyncAtBlock.TYPE, SyncAtBlock.CODEC, (payload, context) -> client.sync(payload));
         registrar.playToClient(StopAtBlock.TYPE, StopAtBlock.CODEC, (payload, context) -> client.stop(payload));
-        registrar.playToServer(StartedAtBlock.TYPE, StartedAtBlock.CODEC,
-                (payload, context) -> Streams.started((ServerPlayer) context.player(), payload.pos(), payload.duration()));
+        registrar.playToServer(Started.TYPE, Started.CODEC,
+                (payload, context) -> Streams.started((ServerPlayer) context.player(), payload.target(), payload.duration()));
         registrar.playToServer(DownloadedAtBlock.TYPE, DownloadedAtBlock.CODEC,
                 (payload, context) -> downloaded((ServerPlayer) context.player(), payload));
     }

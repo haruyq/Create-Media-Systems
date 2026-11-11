@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.train;
 import static org.haruyq.createmediasystems.client.PonderScenes.notes;
 import static org.haruyq.createmediasystems.client.PonderScenes.say;
 
-import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.client.ClientFeature;
 
 import com.simibubi.create.AllItems;
@@ -77,7 +76,7 @@ public final class TrainClient implements ClientFeature {
         say(scene, 90, util.vector().centerOf(jukeboxPos), "Put it in a Train Disc Reader on the carriage. It can be swapped even after the train is assembled.");
 
         scene.world().setBlock(speakerPos,
-                TrainFeature.TRAIN_SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, Direction.WEST), false);
+                TrainFeature.TRAIN_SPEAKER.get().defaultBlockState().setValue(TrainSpeakerBlock.FACING, Direction.WEST), false);
         scene.world().showSectionAndMerge(speaker, Direction.DOWN, trainElement);
         scene.idle(15);
         say(scene, 90, util.vector().centerOf(speakerPos), "Train Speakers on the same train play it, without linking. Each is heard only in its own carriage.");
