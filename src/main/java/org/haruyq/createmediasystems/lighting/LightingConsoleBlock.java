@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.haruyq.createmediasystems.stream.BlockIdentity;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.Link;
 import org.jetbrains.annotations.Nullable;
 
@@ -49,7 +50,8 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class LightingConsoleBlock extends HorizontalDirectionalBlock implements EntityBlock {
+public class LightingConsoleBlock extends HorizontalDirectionalBlock implements EntityBlock,
+        SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<LightingConsoleBlock> CODEC = simpleCodec(LightingConsoleBlock::new);
     public static final IntegerProperty COLUMN = IntegerProperty.create("column", 0, 3);
     public static final BooleanProperty BACK = BooleanProperty.create("back");

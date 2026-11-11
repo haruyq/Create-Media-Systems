@@ -27,6 +27,15 @@ public final class SableCompat {
     private SableCompat() {
     }
 
+    /**
+     * A block whose removal does what moving it must not: it drops the item it holds, unlinks what it is linked to or
+     * lets go of what it holds. Sable removes the blocks it assembles a ship from, so each of these is listed in
+     * data/sable/tags/block/silent_assembly_removal.json (BlockResourcesTest checks the list), which has it removed
+     * without that; else the ship's copy and the dropped item would be two.
+     */
+    public interface SilentAssemblyRemoval {
+    }
+
     /** {@code global} as seen from the blocks around {@code pos}. */
     public static Vec3 toBlockSpace(Level level, BlockPos pos, Vec3 global) {
         SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, pos);

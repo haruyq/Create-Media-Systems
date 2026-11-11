@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.PercentSetting;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
@@ -59,7 +60,8 @@ import net.minecraft.world.phys.BlockHitResult;
  * (in front) are set like any Create value, by holding right-click on it with a wrench. Right-click with a disc to put it in, with an empty hand to take it out.
  * With no disc of its own, the DVD or Blu-ray in a disc drive emulator beside it is its disc (see DriveEmulatorBlock).
  */
-public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable {
+public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
+        SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<VideoPlayerBlock> CODEC = simpleCodec(VideoPlayerBlock::new);
 
     public VideoPlayerBlock(Properties properties) {
@@ -96,7 +98,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        ItemSlot.onRemove(state, level, pos, newState);
+        ItemSlot.onRemove(this, state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 

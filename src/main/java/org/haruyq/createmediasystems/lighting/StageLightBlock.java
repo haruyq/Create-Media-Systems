@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.Link;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,7 +36,7 @@ import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class StageLightBlock extends HorizontalDirectionalBlock implements EntityBlock {
+public class StageLightBlock extends HorizontalDirectionalBlock implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<StageLightBlock> CODEC = simpleCodec(StageLightBlock::new);
     private final Spec spec;
     public static final BooleanProperty HANGING = BooleanProperty.create("hanging");

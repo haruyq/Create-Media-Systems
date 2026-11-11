@@ -122,10 +122,11 @@ public final class ItemSlot {
     }
 
     /**
-     * Its block is gone (not just changed state): it drops its item. Sable assembling a ship removes it too:
-     * data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
+     * Its block is gone (not just changed state): it drops its item. A block that does this is one that Sable must
+     * remove silently, which {@code block} (the caller) declares.
      */
-    public static void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState) {
+    public static void onRemove(SableCompat.SilentAssemblyRemoval block, BlockState state, Level level, BlockPos pos,
+                                BlockState newState) {
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Holder holder) {
             Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), holder.slot().get());
         }

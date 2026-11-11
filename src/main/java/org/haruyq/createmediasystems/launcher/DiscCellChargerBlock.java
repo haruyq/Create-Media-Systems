@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.SableCompat;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
@@ -24,7 +25,8 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** A bottom shaft supplies kinetic power; standard FE cables can supply this same dock instead. */
-public final class DiscCellChargerBlock extends KineticBlock implements IBE<DiscCellCharger> {
+public final class DiscCellChargerBlock extends KineticBlock implements IBE<DiscCellCharger>,
+        SableCompat.SilentAssemblyRemoval {
     public static final BooleanProperty CHARGING = BooleanProperty.create("charging");
     public DiscCellChargerBlock(Properties properties) { super(properties); registerDefaultState(defaultBlockState().setValue(CHARGING, false)); }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(CHARGING); }

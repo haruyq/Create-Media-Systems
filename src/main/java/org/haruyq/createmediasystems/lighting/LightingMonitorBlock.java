@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.SableCompat;
+
 import com.mojang.serialization.MapCodec;
 
 import net.minecraft.core.BlockPos;
@@ -16,7 +18,7 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class LightingMonitorBlock extends HorizontalDirectionalBlock {
+public class LightingMonitorBlock extends HorizontalDirectionalBlock implements SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<LightingMonitorBlock> CODEC = simpleCodec(LightingMonitorBlock::new);
     public static final IntegerProperty COLUMN = LightingConsoleBlock.COLUMN;
     public static final BooleanProperty FORMED = LightingConsoleBlock.FORMED;
