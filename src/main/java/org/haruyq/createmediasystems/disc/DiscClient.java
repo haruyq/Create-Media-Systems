@@ -16,9 +16,12 @@ import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.p2p.P2pOverlay;
 import org.haruyq.createmediasystems.p2p.Transport;
+import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.MediaSources;
 import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.MediaKind;
+
+import org.jetbrains.annotations.Nullable;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -221,6 +224,41 @@ public final class DiscClient {
             }
         });
         return request;
+    }
+
+    /** The sound and subtitle streams of the disc this player shares, to choose from; null without one. */
+    @Nullable
+    public static DiscSource.Tracks tracks() {
+        DiscSource disc = source;
+        return disc == null || shared == null ? null : disc.tracks();
+    }
+
+    /**
+     * The disc this player shares goes on with sound stream {@code audio} and subtitle stream {@code subtitle} (-1:
+     * none) of its title. Under a new link, which this says (null if it can't now): what this computer and its viewers
+     * have of the old one was encoded with the streams chosen before, and goes with it.
+     */
+    @Nullable
+    public static synchronized DiscUrl choose(int audio, int subtitle) {
+        DiscSource disc = source;
+        DiscUrl before = shared;
+        Transport session = before == null ? null : P2pClient.session(before.owner());
+        if (disc == null || session == null || !session.host()) {
+            return null;
+        }
+        DiscUrl url = new DiscUrl(before.owner(), UUID.randomUUID());
+        try {
+            DiscStream next = new DiscStream(session, url.source(), disc, DiscClient::log);
+            disc.tracks().choose(audio, subtitle);
+            shared = url;
+            // Before its stream closes under it: this computer's own load of the old link fails then, and says nothing.
+            ClientStreams.drop(before.toString());
+            stream(url.owner(), next);
+            return url;
+        } catch (IOException failed) {
+            say("failed", true, failed.getMessage());
+            return null;
+        }
     }
 
     /** What the P2P debug overlay shows of the disc streams (see DiscStream#stats); nothing without one. */

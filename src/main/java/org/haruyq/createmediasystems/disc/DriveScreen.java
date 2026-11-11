@@ -3,6 +3,10 @@ package org.haruyq.createmediasystems.disc;
 import static org.haruyq.createmediasystems.client.mesh.Mesh.box;
 import static org.haruyq.createmediasystems.client.mesh.Mesh.quad;
 
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.IntStream;
+
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Drive;
 
@@ -16,6 +20,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.RenderType;
@@ -27,7 +32,8 @@ import net.minecraft.util.Mth;
 /**
  * A drive emulator's drive, in the middle of the screen: an external disc drive whose tray is open with no disc and
  * closes on the one in the real drive (see DriveClient), its lamp flickering as the disc is read. What it shows is
- * what this client has of the emulator, so everyone who opens it sees the drive of whoever uses it.
+ * what this client has of the emulator, so everyone who opens it sees the drive of whoever uses it. Whose disc it is
+ * also chooses there which of its sound and subtitle streams everyone gets, where it has any to choose from.
  */
 public final class DriveScreen extends Screen {
     /** How long (seconds) the disc takes to be put on the tray and the tray to close on it, or the other way. */
@@ -45,6 +51,9 @@ public final class DriveScreen extends Screen {
     /** How far the drive has closed on a disc, 0 (open, empty) to 1; NaN before it is first drawn. */
     private float closed = Float.NaN;
     private Button eject;
+    /** The disc's streams its buttons choose from (see DriveClient#tracks): they are made again as those change. */
+    @Nullable
+    private DiscSource.Tracks tracks;
 
     public static void open(BlockPos pos) {
         Minecraft.getInstance().setScreen(new DriveScreen(pos));
@@ -77,8 +86,43 @@ public final class DriveScreen extends Screen {
     @Override
     protected void init() {
         DriveClient.opened(pos);
+        int y = (int) (middle() + size() * .6f) + 44;
         eject = addRenderableWidget(Button.builder(Component.literal("⏏"), b -> DriveClient.eject())
-                .bounds(width / 2 - 10, (int) (middle() + size() * .6f) + 44, 20, 20).build());
+                .bounds(width / 2 - 10, y, 20, 20).build());
+        DiscSource.Tracks tracks = this.tracks = DriveClient.tracks(pos);
+        if (tracks == null) {
+            return;
+        }
+        int wide = Math.min(150, width / 2 - 18);
+        Locale locale = minecraft.getLocale();
+        // Sound to choose between from two streams on; subtitles from one, as they can be off.
+        if (tracks.audio.size() > 1) {
+            addRenderableWidget(CycleButton.<Integer>builder(i -> name(tracks.audio, i, locale))
+                    .withValues(IntStream.range(0, tracks.audio.size()).boxed().toList())
+                    .withInitialValue(tracks.audio())
+                    .create(width / 2 - 14 - wide, y, wide, 20, Component.translatable("create_media_systems.drive.audio"),
+                            (button, value) -> DriveClient.choose(value, tracks.subtitle())));
+        }
+        if (!tracks.subtitles.isEmpty()) {
+            addRenderableWidget(CycleButton.<Integer>builder(i -> i < 0
+                            ? Component.translatable("create_media_systems.drive.subtitles.off")
+                            : name(tracks.subtitles, i, locale))
+                    .withValues(IntStream.range(-1, tracks.subtitles.size()).boxed().toList())
+                    .withInitialValue(tracks.subtitle())
+                    .create(width / 2 + 14, y, wide, 20, Component.translatable("create_media_systems.drive.subtitles"),
+                            (button, value) -> DriveClient.choose(tracks.audio(), value)));
+        }
+    }
+
+    /**
+     * Stream {@code index} of {@code tracks} as its button names it: which of them it is, its language in the game's
+     * if the disc says it, and a sound stream's codec and channels, which tell two of one language apart.
+     */
+    static Component name(List<DiscSource.Track> tracks, int index, Locale locale) {
+        DiscSource.Track track = tracks.get(index);
+        String language = track.languageName(locale);
+        return Component.literal(index + 1 + "/" + tracks.size() + (language.isEmpty() ? "" : " " + language)
+                + (track.channels() == 0 ? "" : " " + track.codec().toUpperCase(Locale.ROOT) + " " + track.channels() + "ch"));
     }
 
     @Override
@@ -90,6 +134,8 @@ public final class DriveScreen extends Screen {
     public void tick() {
         if (emulator() == null) {
             onClose();
+        } else if (DriveClient.tracks(pos) != tracks) {
+            rebuildWidgets();
         }
     }
 

@@ -18,11 +18,17 @@ import com.google.gson.JsonParser;
 
 /**
  * A disc as FFmpeg reads it for sharing: a Blu-ray's playlist, a DVD's title, or (with {@code cd}) an audio CD from
- * its first track to its last.
+ * its first track to its last. A Blu-ray's or DVD's with the sound stream chosen of its title's, and the subtitles
+ * chosen drawn into its picture (see Tracks).
  */
 public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration,
-                         BlurayPlaylist playlist, Access access, CdAudio cd) implements AutoCloseable {
+                         BlurayPlaylist playlist, Access access, CdAudio cd, Tracks tracks) implements AutoCloseable {
     public static final int SEGMENT_SECONDS = 4;
+    /**
+     * How long (seconds) before a Blu-ray's segment its subtitles are read from: one that came up before the segment
+     * and is still up in it is in the picture only if it is read, and few stay up longer than this.
+     */
+    private static final int SUBTITLE_PREROLL = 12;
     public static final int MAX_SEGMENT_BYTES = 8 * 1024 * 1024;
     public static final double MAX_DURATION = 12 * 60 * 60;
     /** The most a DVD is encoded at: its own picture, which a larger one only takes longer to encode and send. */
@@ -47,13 +53,65 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         }
     }
 
+    /**
+     * A sound or subtitle stream of a title: its language (ISO 639-2, or empty if the disc doesn't say), its codec as
+     * FFmpeg calls it, and how many channels it has (0 for subtitles).
+     */
+    public record Track(String language, String codec, int channels) {
+        /** Its language's name in {@code locale}; its code if that has no name, and empty for none. */
+        public String languageName(Locale locale) {
+            if (language.isEmpty() || language.equals("und")) {
+                return "";
+            }
+            String name = Locale.of(language).getDisplayLanguage(locale);
+            if (name.equals(language)) {
+                // Java names a language by its two-letter code, or the three-letter one libraries use ("fre"): not
+                // by the other three-letter one ("fra"), which discs use as well.
+                for (String code : Locale.getISOLanguages()) {
+                    if (Locale.of(code).getISO3Language().equals(language)) {
+                        return Locale.of(code).getDisplayLanguage(locale);
+                    }
+                }
+            }
+            return name;
+        }
+    }
+
+    /**
+     * A title's sound and subtitle streams, in the order FFmpeg numbers them, and which of them its player has chosen:
+     * the sound heard, and the subtitles in the picture (-1: none). What is encoded from then on has them, so what was
+     * encoded before is dropped with its stream (see DiscClient#choose).
+     */
+    public static final class Tracks {
+        public final List<Track> audio, subtitles;
+        private volatile int sound, subtitle = -1;
+
+        public Tracks(List<Track> audio, List<Track> subtitles) {
+            this.audio = List.copyOf(audio);
+            this.subtitles = List.copyOf(subtitles);
+        }
+
+        public int audio() {
+            return sound;
+        }
+
+        public int subtitle() {
+            return subtitle;
+        }
+
+        public void choose(int audio, int subtitle) {
+            sound = Math.clamp(audio, 0, Math.max(0, this.audio.size() - 1));
+            this.subtitle = Math.clamp(subtitle, -1, subtitles.size() - 1);
+        }
+    }
+
     public DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration, BlurayPlaylist playlist) {
         this(ffmpeg, root, bluray, title, duration, playlist, null);
     }
 
     public DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration, BlurayPlaylist playlist,
                       Access access) {
-        this(ffmpeg, root, bluray, title, duration, playlist, access, null);
+        this(ffmpeg, root, bluray, title, duration, playlist, access, null, new Tracks(List.of(), List.of()));
     }
 
     public static DiscSource open(String ffmpeg, String ffprobe, Path path, int title) throws IOException {
@@ -95,7 +153,7 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
                 cd.close();
                 throw new IOException("This CD has no usable length");
             }
-            return new DiscSource(ffmpeg, root, false, -1, duration, null, null, cd);
+            return new DiscSource(ffmpeg, root, false, -1, duration, null, null, cd, new Tracks(List.of(), List.of()));
         }
         if (title < -1 || title > (bluray ? 99999 : 99)) {
             throw new IOException("The DVD title or Blu-ray playlist number is out of range");
@@ -105,17 +163,34 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         DiscSource source = new DiscSource(ffmpeg, root, bluray, title, 0, playlist, access);
         List<String> command = new ArrayList<>(List.of(ffprobe, "-v", "error"));
         command.addAll(source.input());
-        command.addAll(List.of("-show_entries", "format=duration:stream=codec_type", "-of", "json"));
+        command.addAll(List.of("-show_entries", "format=duration:stream=codec_type,codec_name,channels:stream_tags=language",
+                "-of", "json"));
         try {
             var info = JsonParser.parseString(new String(run(command, source.stdin(), 256 * 1024, 60, access), java.nio.charset.StandardCharsets.UTF_8))
                     .getAsJsonObject();
             double duration = playlist == null ? info.getAsJsonObject("format").get("duration").getAsDouble() : playlist.duration();
-            boolean video = info.getAsJsonArray("streams").asList().stream()
-                    .anyMatch(stream -> "video".equals(stream.getAsJsonObject().get("codec_type").getAsString()));
+            boolean video = false;
+            List<Track> audio = new ArrayList<>(), subtitles = new ArrayList<>();
+            for (var each : info.getAsJsonArray("streams")) {
+                var stream = each.getAsJsonObject();
+                String type = stream.get("codec_type").getAsString();
+                video |= type.equals("video");
+                if (type.equals("audio") || type.equals("subtitle")) {
+                    boolean sound = type.equals("audio");
+                    List<Track> tracks = sound ? audio : subtitles;
+                    // A Blu-ray's clips don't say their languages: its playlist does.
+                    List<String> named = playlist == null ? List.of() : sound ? playlist.audio() : playlist.subtitles();
+                    var tags = stream.getAsJsonObject("tags");
+                    tracks.add(new Track(tracks.size() < named.size() ? named.get(tracks.size())
+                            : tags != null && tags.has("language") ? tags.get("language").getAsString() : "",
+                            stream.has("codec_name") ? stream.get("codec_name").getAsString() : "",
+                            stream.has("channels") ? stream.get("channels").getAsInt() : 0));
+                }
+            }
             if (!video || !Double.isFinite(duration) || duration <= 0 || duration > MAX_DURATION) {
                 throw new IOException("The disc title has no video or no usable duration (maximum 12 hours)");
             }
-            return new DiscSource(ffmpeg, root, bluray, title, duration, playlist, access);
+            return new DiscSource(ffmpeg, root, bluray, title, duration, playlist, access, null, new Tracks(audio, subtitles));
         } catch (RuntimeException invalid) {
             throw new IOException("FFprobe could not read this disc title; check the selected title and FFmpeg's disc support");
         }
@@ -239,8 +314,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         if (cd != null) {
             return encodeCd(segment, seconds);
         }
-        return run(command(segment, seconds, quality, encoder, false),
-                playlist == null ? new byte[0] : playlist.concat(root, segment * SEGMENT_SECONDS, seconds, SEGMENT_SECONDS, access),
+        int subtitle = tracks.subtitle();
+        return run(command(segment, seconds, quality, encoder, false, subtitle),
+                playlist == null ? new byte[0] : playlist.concat(root, segment * SEGMENT_SECONDS, seconds, preroll(subtitle), access),
                 MAX_SEGMENT_BYTES, 30, access);
     }
 
@@ -278,26 +354,40 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
      * back and forth at every boundary; one pass only seeks where it starts.
      */
     DiscRun run(int segment, Quality quality, String encoder) throws IOException {
-        return new DiscRun(command(segment, duration - (double) segment * SEGMENT_SECONDS, quality, encoder, true),
-                access, quality, encoder, segment);
+        return new DiscRun(command(segment, duration - (double) segment * SEGMENT_SECONDS, quality, encoder, true,
+                tracks.subtitle()), access, quality, encoder, segment);
     }
 
-    private List<String> command(int segment, double seconds, Quality quality, String encoder, boolean continuous) {
+    /** How long (seconds) before a Blu-ray's segment it is read from, with subtitle stream {@code subtitle} (-1: none). */
+    private static int preroll(int subtitle) {
+        return subtitle < 0 ? SEGMENT_SECONDS : SUBTITLE_PREROLL;
+    }
+
+    private List<String> command(int segment, double seconds, Quality quality, String encoder, boolean continuous,
+                                 int subtitle) {
         List<String> command = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-v", "error", "-nostdin"));
         if (continuous) {
             command.add("-xerror");
         }
         if (bluray) {
             // Decode references before each in-point; select removes the preroll on the playlist's timeline.
-            command.addAll(List.of("-copyts", "-itsoffset", Integer.toString(-SEGMENT_SECONDS)));
+            command.addAll(List.of("-copyts", "-itsoffset", Integer.toString(-preroll(subtitle))));
         } else {
             command.addAll(List.of("-ss", Integer.toString(segment * SEGMENT_SECONDS)));
         }
         command.addAll(input());
-        command.addAll(List.of("-t", Double.toString(seconds), "-map", "0:v:0", "-map", "0:a:0?",
-                "-sn", "-dn", "-vf", (bluray ? "select=concatdec_select," : "")
-                        + "bwdif=deint=interlaced,scale=w=trunc(oh*dar/2)*2:h=" + quality.height()
-                        + ",setsar=1,fps=" + quality.fps() + ",setpts=PTS-STARTPTS",
+        String picture = (bluray ? "select=concatdec_select," : "") + "bwdif=deint=interlaced";
+        String sized = "scale=w=trunc(oh*dar/2)*2:h=" + quality.height() + ",setsar=1,fps=" + quality.fps()
+                + ",setpts=PTS-STARTPTS";
+        command.addAll(List.of("-t", Double.toString(seconds)));
+        if (subtitle < 0) {
+            command.addAll(List.of("-map", "0:v:0", "-vf", picture + "," + sized));
+        } else {
+            // A disc's subtitles are pictures the size of its video: laid over it before it is scaled.
+            command.addAll(List.of("-filter_complex", "[0:v:0]" + picture + "[v];[v][0:s:" + subtitle + "]overlay,"
+                    + sized + "[out]", "-map", "[out]"));
+        }
+        command.addAll(List.of("-map", "0:a:" + tracks.audio() + "?", "-sn", "-dn",
                 "-c:v", encoder, "-pix_fmt", "yuv420p", "-bf", "0", "-g", Integer.toString(quality.fps() * 2),
                 "-b:v", quality.kbps() + "k", "-maxrate", quality.kbps() + "k", "-bufsize", quality.kbps() * 2 + "k"));
         if (encoder.equals("libx264")) {

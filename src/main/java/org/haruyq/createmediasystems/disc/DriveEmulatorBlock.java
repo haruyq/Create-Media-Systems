@@ -378,6 +378,8 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 }
             }
             boolean wasOpen = drive == Drive.OPEN;
+            // The disc it shares already, under another link (see DriveClient#choose).
+            boolean relinked = drive == Drive.READY && next == Drive.READY;
             switch (next) {
                 case OPEN, LOADING -> label = "";
                 case READING, DOWNLOADING -> label = text;
@@ -398,7 +400,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             if (next == Drive.READING) {
                 sound(DiscFeature.DRIVE_SEEK.get());
             }
-            changed(player);
+            changed(player, relinked);
         }
 
         void viewers(ServerPlayer player, List<Viewer> told) {
@@ -425,7 +427,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 host = null;
                 label = "";
                 link = "";
-                changed(null);
+                changed(null, false);
             }
         }
 
@@ -433,7 +435,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             level.playSound(null, worldPosition, sound, SoundSource.BLOCKS, 0.5f, 1);
         }
 
-        private void changed(@Nullable Player by) {
+        private void changed(@Nullable Player by, boolean relinked) {
             if (drive != Drive.READY) {
                 viewers = List.of();
                 viewerNames = List.of();
@@ -448,7 +450,11 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             }
             for (Direction side : Direction.values()) {
                 if (level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed) {
-                    fed.driveChanged(by);
+                    if (relinked) {
+                        fed.driveRelinked(by);
+                    } else {
+                        fed.driveChanged(by);
+                    }
                 }
             }
             turn();

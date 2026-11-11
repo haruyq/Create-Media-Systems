@@ -142,6 +142,26 @@ public final class DriveClient {
         }
     }
 
+    /**
+     * The sound and subtitle streams the screen of the emulator at {@code pos} chooses from: those of this drive's
+     * disc in it, once it is shared; null otherwise.
+     */
+    @Nullable
+    static DiscSource.Tracks tracks(BlockPos pos) {
+        return ready && pos.equals(block) ? DiscClient.tracks() : null;
+    }
+
+    /**
+     * The screen's choice of them: the disc is shared again with those (see DiscClient#choose), and the emulator is
+     * told its new link, which what plays it goes on with from where it is.
+     */
+    static void choose(int audio, int subtitle) {
+        DiscUrl url = ready ? DiscClient.choose(audio, subtitle) : null;
+        if (url != null) {
+            send(block, Drive.READY, url.toString(), null);
+        }
+    }
+
     private static void tick() {
         var mc = Minecraft.getInstance();
         if (block == null || mc.level == null || mc.player == null) {

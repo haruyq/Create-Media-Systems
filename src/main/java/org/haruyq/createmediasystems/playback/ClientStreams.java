@@ -423,6 +423,15 @@ public final class ClientStreams {
                 })).from(side.source(), payload.load(), payload.video().orElse(null))));
     }
 
+    /**
+     * What plays {@code track} here stops, as what it played from is gone: it starts over when the server next sends
+     * it. A load of it still under way then ends without word to the server, which would take that word for the load
+     * that follows (see Streams#started).
+     */
+    public static void drop(String track) {
+        GROUPS.values().stream().filter(group -> group.playback.track().equals(track)).forEach(group -> group.slot.stop());
+    }
+
     private static void leave(Side side, BlockPos pos) {
         Group group = GROUPS.get(side);
         if (group != null && group.emitters.remove(pos) != null && group.emitters.isEmpty()) {

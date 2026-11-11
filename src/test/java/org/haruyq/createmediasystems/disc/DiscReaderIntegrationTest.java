@@ -73,6 +73,44 @@ class DiscReaderIntegrationTest {
     }
 
     @Test
+    @EnabledIfEnvironmentVariable(named = "CMS_DISC_TRACKS_FIXTURE", matches = ".+")
+    void encodesTheSoundAndSubtitlesChosen() throws Exception {
+        DiscSource source = DiscSource.open("ffmpeg", "ffprobe", Path.of(System.getenv("CMS_DISC_TRACKS_FIXTURE")), -1);
+        assertEquals(List.of("jpn", "eng"), source.tracks().audio.stream().map(DiscSource.Track::language).toList());
+        assertEquals(List.of("eng"), source.tracks().subtitles.stream().map(DiscSource.Track::language).toList());
+        DiscSource.Quality quality = new DiscSource.Quality(480, 30, 1100);
+        String encoder = source.encoder();
+        byte[] first = source.encode(4, quality, encoder);
+        source.tracks().choose(1, 0);
+        byte[] chosen = source.encode(4, quality, encoder);
+        // The subtitle came up seven seconds before this segment, and is still up in it: at the bottom of the picture.
+        byte[] plain = picture(first), drawn = picture(chosen);
+        int bottom = 160 * 60;
+        double above = difference(java.util.Arrays.copyOf(plain, bottom), java.util.Arrays.copyOf(drawn, bottom));
+        double below = difference(java.util.Arrays.copyOfRange(plain, bottom, plain.length),
+                java.util.Arrays.copyOfRange(drawn, bottom, drawn.length));
+        assertTrue(below > 100 && above < below / 10, "The subtitles are in the picture, at its bottom: " + above + "/" + below);
+        // The second sound stream is a louder tone than the first.
+        assertTrue(loudness(chosen) > 4 * loudness(first), "The sound is the stream chosen: " + loudness(first) + "/" + loudness(chosen));
+    }
+
+    private static byte[] picture(byte[] segment) throws IOException {
+        return DiscSource.run(List.of("ffmpeg", "-v", "error", "-f", "mpegts", "-i", "pipe:0", "-frames:v", "1",
+                "-vf", "scale=160:90,format=gray", "-f", "rawvideo", "pipe:1"), segment, 160 * 90, 10);
+    }
+
+    private static double loudness(byte[] segment) throws IOException {
+        ByteBuffer samples = ByteBuffer.wrap(DiscSource.run(List.of("ffmpeg", "-v", "error", "-f", "mpegts", "-i", "pipe:0",
+                "-vn", "-ac", "1", "-f", "s16be", "pipe:1"), segment, 1 << 20, 10));
+        double sum = 0;
+        int count = samples.remaining() / 2;
+        while (samples.remaining() >= 2) {
+            sum += Math.pow(samples.getShort(), 2);
+        }
+        return Math.sqrt(sum / count);
+    }
+
+    @Test
     @EnabledIfEnvironmentVariable(named = "CMS_DISC_DVD_FIXTURE", matches = ".+")
     void readsDvdTitles() throws Exception {
         DiscSource source = DiscSource.open("ffmpeg", "ffprobe", Path.of(System.getenv("CMS_DISC_DVD_FIXTURE")), 1);

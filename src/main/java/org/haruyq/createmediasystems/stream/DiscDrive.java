@@ -21,6 +21,14 @@ public interface DiscDrive {
 
         /** The drive beside it took a disc ({@code by} put it in) or lost it. */
         void driveChanged(@Nullable Player by);
+
+        /**
+         * The drive beside it shares the disc it has under another link, as {@code by} chose another of its sound or
+         * subtitle streams: the same disc, to go on with from where it is.
+         */
+        default void driveRelinked(@Nullable Player by) {
+            driveChanged(by);
+        }
     }
 
     /** The drive beside {@code fed}, at {@code pos}, whose disc is ready and of a kind it plays; null for none. */

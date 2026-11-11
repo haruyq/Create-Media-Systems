@@ -14,6 +14,40 @@ import org.junit.jupiter.api.Test;
 
 class DiscStreamTest {
     @Test
+    void readsABlurayPlaylistsLanguagesInTheOrderOfItsStreams() throws Exception {
+        // tsMuxeR's playlist for a clip with video, sound in Japanese and English, and subtitles in English and Japanese.
+        byte[] bytes = java.util.HexFormat.of().parseHex(""
+                + "4d504c53303230300000003a000000c60000000000000000000000000000000000000000000000000000000e00010000"
+                + "0000000000000000400000000088000000010000008030303030304d325453000100019bfcc001c5386a000000000000"
+                + "000000000000005e000001020200000000000000000009011011000000000000051b6000000009011100000000000000"
+                + "0581116a706e09011101000000000000058131656e67090112000000000000000590656e670009011201000000000000"
+                + "05906a706e0000000010000100010000019bfcc0ffff00000000");
+        BlurayPlaylist playlist = BlurayPlaylist.parse(bytes, 0);
+        assertEquals(List.of("jpn", "eng"), playlist.audio());
+        assertEquals(List.of("eng", "jpn"), playlist.subtitles());
+        // Its streams in another order in the table are still in the clip's: by PID.
+        bytes[0x89] = 1;
+        bytes[0x99] = 0;
+        assertEquals(List.of("eng", "jpn"), BlurayPlaylist.parse(bytes, 0).audio());
+        // A table cut short names none, and the playlist still reads.
+        bytes[0x45] = 0x40;
+        assertEquals(List.of(), BlurayPlaylist.parse(bytes, 0).audio());
+    }
+
+    @Test
+    void namesAStreamsLanguageFromEitherOfItsCodes() {
+        assertEquals("Japanese", new DiscSource.Track("jpn", "ac3", 2).languageName(java.util.Locale.ENGLISH));
+        assertEquals("French", new DiscSource.Track("fre", "ac3", 2).languageName(java.util.Locale.ENGLISH));
+        assertEquals("French", new DiscSource.Track("fra", "ac3", 2).languageName(java.util.Locale.ENGLISH));
+        assertEquals("qzz", new DiscSource.Track("qzz", "ac3", 2).languageName(java.util.Locale.ENGLISH));
+        assertEquals("", new DiscSource.Track("und", "ac3", 2).languageName(java.util.Locale.ENGLISH));
+        DiscSource.Tracks tracks = new DiscSource.Tracks(List.of(new DiscSource.Track("jpn", "ac3", 2)), List.of());
+        tracks.choose(3, 0);
+        assertEquals(0, tracks.audio());
+        assertEquals(-1, tracks.subtitle());
+    }
+
+    @Test
     void readsShortBlurayPlaylistsAndRejectsPathsAndInvalidBounds() throws Exception {
         byte[] bytes = new byte[84];
         ByteBuffer data = ByteBuffer.wrap(bytes);

@@ -87,6 +87,17 @@ public class DriveEmulatorGameTests {
         player.control(Action.SELECT, 1, host);
         helper.assertTrue(player.nowPlaying() != null, "played again from its remote: " + player.state().getString());
 
+        // Its host chooses another of the disc's sound or subtitle streams: the same disc under another link.
+        player.control(Action.SEEK, 30, host);
+        String relinked = new DiscUrl(host.getUUID(), UUID.randomUUID()).toString();
+        emulator.update(host, Drive.READY, relinked, null);
+        helper.assertTrue(player.playlist().equals(List.of(relinked)) && player.nowPlaying() != null
+                        && player.nowPlaying().url().equals(relinked) && player.transport().clock().position() == 30 * 20
+                        && emulator.disc() == Disc.BLU_RAY,
+                "the player goes on with the disc's new link from where it was: " + player.playlist() + " at "
+                        + player.transport().clock().position());
+        link = relinked;
+
         // A disc of the player's own comes first; taken out, the drive's plays again.
         ItemStack own = new ItemStack(DiscFeature.BLU_RAY.get());
         own.set(DiscFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));

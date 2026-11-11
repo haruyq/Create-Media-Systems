@@ -30,9 +30,25 @@ foreach ($kind in @('short', 'long')) {
 MUXOPT --blu-ray --vbr --vbv-len=500
 V_MPEG4/ISO/AVC, "$inputFile", fps=60, track=4113
 A_AC3, "$inputFile", track=4352
-"@ | Set-Content -LiteralPath $meta -Encoding utf8
+"@ | ForEach-Object { [IO.File]::WriteAllText($meta, $_) }
     Invoke-FixtureTool $TsMuxer @($meta, (Join-Path $destination "bluray-$kind"))
 }
+
+# A Blu-ray with two sound streams, the second a louder tone, and a subtitle stream: to choose between them.
+$tone = Join-Path $destination 'tone.ac3'
+Invoke-FixtureTool $Ffmpeg @('-v', 'error', '-nostdin', '-f', 'lavfi', '-i', 'sine=frequency=1000:sample_rate=48000,volume=6',
+    '-t', '32', '-c:a', 'ac3', '-b:a', '192k', '-ac', '2', $tone)
+$subtitles = Join-Path $destination 'subtitles.srt'
+"1`n00:00:09,000 --> 00:00:19,000`nSUBTITLE`n`n" | ForEach-Object { [IO.File]::WriteAllText($subtitles, $_) }
+$meta = Join-Path $destination 'tracks.meta'
+@"
+MUXOPT --blu-ray --vbr --vbv-len=500
+V_MPEG4/ISO/AVC, "$short", fps=60, track=4113
+A_AC3, "$short", track=4352, lang=jpn
+A_AC3, "$tone", lang=eng
+S_TEXT/UTF8, "$subtitles", font-name="Arial", font-size=120, font-color=0xffffffff, bottom-offset=24, font-border=5, text-align=center, video-width=1920, video-height=1080, fps=60, lang=eng
+"@ | ForEach-Object { [IO.File]::WriteAllText($meta, $_) }
+Invoke-FixtureTool $TsMuxer @($meta, (Join-Path $destination 'bluray-tracks'))
 
 $dvdVideo = Join-Path $destination 'dvd.mpg'
 Invoke-FixtureTool $Ffmpeg @('-v', 'error', '-nostdin', '-f', 'lavfi', '-i', 'testsrc2=size=720x480:rate=30000/1001',

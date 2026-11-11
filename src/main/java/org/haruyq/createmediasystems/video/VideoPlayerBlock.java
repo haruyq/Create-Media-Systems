@@ -163,6 +163,14 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         @Override
+        public void driveRelinked(@Nullable Player by) {
+            if (cd.isEmpty() && level != null) {
+                // A seek to where it is: every listener loads the new link there, and they start together.
+                transport.control(Action.SEEK_BY, 0, by, level.getGameTime());
+            }
+        }
+
+        @Override
         public int index() {
             return transport.index();
         }

@@ -8,8 +8,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.TreeMap;
 
-record BlurayPlaylist(int title, List<Clip> clips) {
+/**
+ * A Blu-ray's playlist: its clips, and the languages of the first clip's sound and subtitle streams in the order of
+ * their PIDs, which is the order FFmpeg numbers them in. Only the playlist names them: the clips themselves do not.
+ */
+record BlurayPlaylist(int title, List<Clip> clips, List<String> audio, List<String> subtitles) {
     record Clip(String id, double in, double out) {}
 
     double duration() {
@@ -76,6 +81,7 @@ record BlurayPlaylist(int title, List<Clip> clips) {
                 throw new IllegalArgumentException();
             }
             List<Clip> clips = new ArrayList<>();
+            TreeMap<Integer, String> audio = new TreeMap<>(), subtitles = new TreeMap<>();
             for (int i = 0; i < count; i++) {
                 int size = Short.toUnsignedInt(data.getShort());
                 int at = data.position();
@@ -94,15 +100,55 @@ record BlurayPlaylist(int title, List<Clip> clips) {
                     throw new IllegalArgumentException();
                 }
                 clips.add(new Clip(id, in / 45000.0, out / 45000.0));
+                if (i == 0) {
+                    languages(bytes, at, at + size, audio, subtitles);
+                }
                 data.position(at + size);
             }
-            BlurayPlaylist playlist = new BlurayPlaylist(title, List.copyOf(clips));
+            BlurayPlaylist playlist = new BlurayPlaylist(title, List.copyOf(clips), List.copyOf(audio.values()),
+                    List.copyOf(subtitles.values()));
             if (playlist.duration() > DiscSource.MAX_DURATION) {
                 throw new IllegalArgumentException();
             }
             return playlist;
         } catch (RuntimeException invalid) {
             throw new IOException("The Blu-ray playlist is damaged or contains unsupported still pictures");
+        }
+    }
+
+    /**
+     * The languages in the stream table of the play item from {@code at} to {@code end}, by PID: its primary sound
+     * streams and its subtitle pictures (PGS), as far as they are in its own clip. A table it can't read names none.
+     */
+    private static void languages(byte[] bytes, int at, int end, TreeMap<Integer, String> audio,
+                                  TreeMap<Integer, String> subtitles) {
+        try {
+            // After the item's angles, if it has more than one: ten bytes each.
+            int table = at + 32 + ((bytes[at + 10] & 0x10) == 0 ? 0 : 2 + ((bytes[at + 32] & 255) - 1) * 10);
+            if (table + 16 > end) {
+                throw new IllegalArgumentException();
+            }
+            int video = bytes[table + 4] & 255, sound = bytes[table + 5] & 255, pictures = bytes[table + 6] & 255;
+            int entry = table + 16;
+            for (int i = 0; i < video + sound + pictures; i++) {
+                int attributes = entry + 1 + (bytes[entry] & 255);
+                if (attributes + 6 > end) {
+                    throw new IllegalArgumentException();
+                }
+                // Type 1 is a stream of the clip itself; then its coding, a sound stream's format, and the language.
+                if (i >= video && bytes[entry + 1] == 1) {
+                    int pid = (bytes[entry + 2] & 255) << 8 | bytes[entry + 3] & 255;
+                    boolean picture = (bytes[attributes + 1] & 255) == 0x90;
+                    if (picture || i < video + sound) {
+                        (picture ? subtitles : audio).put(pid,
+                                new String(bytes, attributes + (picture ? 2 : 3), 3, StandardCharsets.US_ASCII));
+                    }
+                }
+                entry = attributes + 1 + (bytes[attributes] & 255);
+            }
+        } catch (RuntimeException unreadable) {
+            audio.clear();
+            subtitles.clear();
         }
     }
 
