@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -33,9 +35,14 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class DiscClient {
+    /** The disc this player shares, and its link; null without one. */
     private static volatile DiscSource source;
     private static volatile DiscUrl shared;
-    private static volatile DiscStream stream;
+    /**
+     * The streams of the discs here, by their owner: this player's own, which it shares, and each other player's it
+     * plays, all at once. One stream for all, every player sharing a disc lost their own to the next one they saw.
+     */
+    private static final Map<UUID, DiscStream> STREAMS = new ConcurrentHashMap<>();
     private static Thread reading;
     private static volatile int generation;
 
@@ -47,23 +54,21 @@ public final class DiscClient {
         MediaSources.opens(MediaKind.DISC, DiscClient::open);
         P2pOverlay.add(DiscClient::overlay);
         NeoForge.EVENT_BUS.addListener(DiscClient::commands);
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clear());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
+            clear();
+            STREAMS.keySet().forEach(owner -> stream(owner, null));
+        });
         P2pClient.changed(DiscClient::changed);
         P2pClient.media(new Transport.Listener() {
             @Override
             public void data(UUID from, byte[] payload) {
-                DiscStream current = stream;
-                if (current != null) {
-                    current.data(from, payload);
-                }
+                // Each takes its own: its host's, for its disc.
+                STREAMS.values().forEach(stream -> stream.data(from, payload));
             }
 
             @Override
             public void control(UUID from, byte[] payload) {
-                DiscStream current = stream;
-                if (current != null) {
-                    current.control(from, payload);
-                }
+                STREAMS.values().forEach(stream -> stream.control(from, payload));
             }
 
             @Override
@@ -72,18 +77,24 @@ public final class DiscClient {
         });
     }
 
-    private static synchronized void changed(Transport transport) {
-        DiscStream current = stream;
-        stream = null;
-        if (current != null) {
-            current.close();
-        }
+    /** {@code owner}'s room has another session, or none (null): its disc's stream went with the one before. */
+    private static synchronized void changed(UUID owner, Transport transport) {
+        DiscStream next = null;
         if (transport != null && transport.host() && source != null && shared != null) {
             try {
-                stream = new DiscStream(transport, shared.source(), source, DiscClient::log);
+                next = new DiscStream(transport, shared.source(), source, DiscClient::log);
             } catch (IOException failed) {
                 say("failed", true, failed.getMessage());
             }
+        }
+        stream(owner, next);
+    }
+
+    /** {@code owner}'s disc is now streamed by {@code next} (null: not at all), in place of what streamed it. */
+    private static void stream(UUID owner, DiscStream next) {
+        DiscStream before = next == null ? STREAMS.remove(owner) : STREAMS.put(owner, next);
+        if (before != null && before != next) {
+            before.close();
         }
     }
 
@@ -187,7 +198,7 @@ public final class DiscClient {
                     DiscUrl url = new DiscUrl(owner, UUID.randomUUID());
                     DiscStream prepared = new DiscStream(connected, url.source(), opened, DiscClient::log);
                     mc.execute(() -> {
-                        if (request != generation || mc.player == null || connected != P2pClient.current()
+                        if (request != generation || mc.player == null || connected != P2pClient.session(owner)
                                 || !reader.loaded(url, opened)) {
                             prepared.close();
                             opened.close();
@@ -195,7 +206,7 @@ public final class DiscClient {
                         }
                         source = opened;
                         shared = url;
-                        stream = prepared;
+                        stream(owner, prepared);
                     });
                 } catch (IOException | RuntimeException failed) {
                     opened.close();
@@ -212,9 +223,10 @@ public final class DiscClient {
         return request;
     }
 
-    private static List<P2pOverlay.Line> overlay(boolean hosting, long now) {
-        DiscStream current = stream;
-        return current == null ? List.of() : current.stats().lines(hosting, now);
+    /** What the P2P debug overlay shows of the disc streams (see DiscStream#stats); nothing without one. */
+    private static List<P2pOverlay.Line> overlay(long now) {
+        return STREAMS.values().stream().map(DiscStream::stats)
+                .flatMap(stats -> stats.lines(stats.host(), now).stream()).toList();
     }
 
     /**
@@ -226,10 +238,9 @@ public final class DiscClient {
         if (url == null) {
             throw new IOException("Not a disc's link");
         }
-        int request = generation;
         var mc = Minecraft.getInstance();
         CompletableFuture<Boolean> joined = new CompletableFuture<>();
-        mc.execute(() -> joined.complete(request == generation && P2pClient.connect(url.owner())));
+        mc.execute(() -> joined.complete(P2pClient.connect(url.owner())));
         try {
             if (!joined.get(10, TimeUnit.SECONDS)) {
                 throw new IOException("Could not join the disc host's P2P session");
@@ -243,19 +254,17 @@ public final class DiscClient {
         Transport connected = connection(url.owner());
         DiscStream current;
         synchronized (DiscClient.class) {
-            if (request != generation || connected != P2pClient.current()) {
+            // Its room's session went while this waited: left, logged out, or the host's ended.
+            if (connected != P2pClient.session(url.owner())) {
                 throw new IOException("Disc loading was cancelled");
             }
-            current = stream;
+            current = STREAMS.get(url.owner());
             if (current == null || !current.matches(connected, url.source())) {
                 if (connected.host() && !url.equals(shared)) {
                     throw new IOException("Load this disc again with /cms disc load");
                 }
-                if (current != null) {
-                    current.close();
-                }
                 current = new DiscStream(connected, url.source(), connected.host() ? source : null, DiscClient::log);
-                stream = current;
+                stream(url.owner(), current);
             }
         }
         // Opened at the top, VLC buffers on from there until it is told where to play: segments nobody watches,
@@ -268,7 +277,7 @@ public final class DiscClient {
     private static Transport connection(UUID owner) throws IOException {
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(40);
         while (System.nanoTime() < until) {
-            Transport current = P2pClient.current();
+            Transport current = P2pClient.session(owner);
             if (current != null && current.hostId().equals(owner) && current.state() != Transport.State.CLOSED
                     && (current.host() || current.connected().contains(owner))) {
                 return current;
@@ -283,18 +292,18 @@ public final class DiscClient {
         throw new IOException("Could not connect directly to the disc host; check /cms p2p status");
     }
 
+    /** Stops reading and sharing this player's disc: the others' it plays go on. */
     public static synchronized void clear() {
         generation++;
         if (reading != null) {
             reading.interrupt();
         }
-        DiscStream current = stream;
-        stream = null;
+        DiscUrl own = shared;
         shared = null;
         DiscSource loaded = source;
         source = null;
-        if (current != null) {
-            current.close();
+        if (own != null) {
+            stream(own.owner(), null);
         }
         if (loaded != null) loaded.close();
     }

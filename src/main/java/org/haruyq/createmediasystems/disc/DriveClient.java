@@ -259,7 +259,7 @@ public final class DriveClient {
 
     /** Tells the emulator how each viewer's direct connection does (see DriveEmulatorBlock.Viewer), asking each for its round trip. */
     private static void viewers() {
-        Transport transport = P2pClient.current();
+        Transport transport = P2pClient.session(Minecraft.getInstance().player.getUUID());
         if (transport == null || !transport.host()) {
             return;
         }

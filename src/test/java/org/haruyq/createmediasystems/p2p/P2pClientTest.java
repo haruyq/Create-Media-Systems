@@ -89,6 +89,35 @@ class P2pClientTest {
     }
 
     @Test
+    void aRoomOfItsOwnAndAnothersOpenSideBySide() throws Exception {
+        // This client is the viewer of the tickets: it hosts a room of its own and joins the host's.
+        P2pClient.request(P2p.Action.HOST, P2pTest.VIEWER, "");
+        int own = ((P2p.Request) sent.getLast()).id();
+        P2pClient.request(P2p.Action.JOIN, P2pTest.HOST, "Host");
+        int joined = ((P2p.Request) sent.getLast()).id();
+        P2pClient.ticket(new P2p.Ticket(Protocol.Ticket.parse(P2pTest.ticket("host", P2pTest.VIEWER, "")
+                .replace("\"host_id\":\"" + P2pTest.HOST, "\"host_id\":\"" + P2pTest.VIEWER)), own));
+        P2pClient.ticket(new P2p.Ticket(Protocol.Ticket.parse(P2pTest.ticket("viewer", P2pTest.VIEWER, "")), joined));
+        await(() -> opening.size() == 2);
+        fail(1);
+        assertEquals(List.of(joined), leaves(), "the joined room ending leaves the one it hosts alone");
+        fail(0);
+        assertEquals(List.of(joined, own), leaves());
+    }
+
+    @Test
+    void aRefusedRequestIsAskedForNoLonger() {
+        P2pClient.request(P2p.Action.JOIN, P2pTest.HOST, "Host");
+        int refused = ((P2p.Request) sent.getLast()).id();
+        int own = hostOwn();
+        P2pClient.notice(net.minecraft.network.chat.Component.empty(), refused);
+        P2pClient.ticket(new P2p.Ticket(Protocol.Ticket.parse(P2pTest.ticket("viewer", P2pTest.VIEWER, "")), refused));
+        assertEquals(List.of(), opening, "its ticket, were one to come, opens nothing");
+        P2pClient.leave();
+        assertEquals(List.of(own), leaves(), "and there is nothing of it to leave");
+    }
+
+    @Test
     void aTicketOpensAtItsOwnServersApiOnly() throws Exception {
         int request = host();
         P2pClient.ticket(ticket(request));
@@ -100,7 +129,12 @@ class P2pClientTest {
     }
 
     private int host() {
-        P2pClient.request(P2p.Action.HOST, "");
+        P2pClient.request(P2p.Action.HOST, P2pTest.HOST, "");
+        return ((P2p.Request) sent.getLast()).id();
+    }
+
+    private int hostOwn() {
+        P2pClient.request(P2p.Action.HOST, P2pTest.VIEWER, "");
         return ((P2p.Request) sent.getLast()).id();
     }
 
