@@ -10,15 +10,12 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 
 /** A source a remote works from afar: its transport, its volume, and what the remote shows of them. */
-public interface Remotable extends PlaylistView {
+public interface Remotable extends PlaylistView, MediaSource {
     /**
      * {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, the volume in percent,
      * the second to seek to, or the seconds to seek by.
      */
     void control(Action action, int value, @Nullable Player by);
-
-    /** How loud it plays, 0 to 1, as its remote's slider shows it. */
-    float remoteVolume();
 
     /** Empty, stopped, paused or playing, as its remote shows it. */
     Component state();

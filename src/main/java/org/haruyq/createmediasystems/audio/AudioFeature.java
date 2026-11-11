@@ -11,7 +11,7 @@ import static org.haruyq.createmediasystems.CreateMediaSystems.id;
 import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 
 import com.mojang.serialization.Codec;
@@ -57,9 +57,10 @@ public final class AudioFeature implements Feature {
     /** Range quill: selects a vanilla jukebox's playback area and sets its volume (client-side UI only). */
     public static final DeferredItem<Item> RANGE_QUILL = ITEMS.register("range_quill",
             () -> new Item(new Item.Properties().stacksTo(1)));
-    public static final Supplier<AttachmentType<JukeboxSettings>> JUKEBOX_SETTINGS = ATTACHMENTS.register(
-            "jukebox_settings", () -> AttachmentType.builder(() -> JukeboxSettings.DEFAULT)
-                    .serialize(JukeboxSettings.SERIALIZER).build());
+    /** A jukebox's range and volume, as the range quill set them (see RangeQuill). */
+    public static final Supplier<AttachmentType<EmitterRange>> JUKEBOX_SETTINGS = ATTACHMENTS.register(
+            "jukebox_settings", () -> AttachmentType.builder(() -> EmitterRange.DEFAULT)
+                    .serialize(RangeQuill.JUKEBOX_SERIALIZER).build());
     /**
      * Where a jukebox's custom disc is in its track (see Jukeboxes). Not saved: its song player keeps that, and the clock
      * takes it up from there.

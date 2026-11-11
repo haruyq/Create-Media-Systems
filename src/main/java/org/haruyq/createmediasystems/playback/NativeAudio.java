@@ -17,6 +17,7 @@ import javax.sound.sampled.AudioFormat;
 
 import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
 

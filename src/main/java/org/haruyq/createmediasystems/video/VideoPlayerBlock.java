@@ -11,6 +11,7 @@ import org.haruyq.createmediasystems.stream.Downloads;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Remotable;
+import org.haruyq.createmediasystems.stream.Tone;
 import org.haruyq.createmediasystems.stream.VideoSource;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -31,6 +32,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
@@ -146,8 +148,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                     new CenteredSideValueBoxTransform((state, side) -> side == Direction.UP), VOLUME, "Volume");
             lighting = PercentSetting.create(this, "create_media_systems.video_player.lighting",
                     new CenteredSideValueBoxTransform((state, side) -> side == state.getValue(FACING)));
-            volume.withCallback(percent -> changed());
-            lighting.withCallback(percent -> changed());
+            volume.withCallback(percent -> soundChanged());
+            lighting.withCallback(percent -> soundChanged());
             behaviours.add(volume);
             behaviours.add(lighting);
         }
@@ -196,6 +198,20 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         public float lighting() {
             return lighting == null ? 1 : lighting.getValue() / 100f;
+        }
+
+        /** What the equalizers touching it are set to. */
+        @Override
+        public Tone tone() {
+            return level == null ? Tone.FLAT : new Tone(EqualizerBlock.bands(level, worldPosition), 1);
+        }
+
+        /** Its volume or lighting changed: its speakers and displays take it up now. */
+        private void soundChanged() {
+            changed();
+            if (level instanceof ServerLevel server) {
+                Streams.changed(server, worldPosition);
+            }
         }
 
         @Override
@@ -266,11 +282,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /** Empty (no disc, or none with links), stopped, paused or playing, as its remote and goggles show it. */
-        @Override
-        public float remoteVolume() {
-            return volume();
-        }
-
         @Override
         public Component state() {
             return transport.state();

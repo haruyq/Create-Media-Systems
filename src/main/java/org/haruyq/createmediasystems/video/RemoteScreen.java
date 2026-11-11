@@ -68,7 +68,7 @@ final class RemoteScreen extends Screen {
         }).bounds(left + 104, top + 28, 96, 20).build());
         Remotable videoPlayer = videoPlayer();
         addRenderableWidget(new AbstractSliderButton(left, top + 56, 200, 20, Component.empty(),
-                videoPlayer == null ? 1 : videoPlayer.remoteVolume()) {
+                videoPlayer == null ? 1 : videoPlayer.volume()) {
             {
                 updateMessage();
             }

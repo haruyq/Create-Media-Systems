@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.Remotable;
@@ -78,7 +78,7 @@ public class VideoPlayerGameTests {
             helper.assertTrue(received.stream().anyMatch(StreamPackets.PlayAtBlock.class::isInstance),
                     "a listener in range got no stream: " + received);
             received.clear();
-            listener.setPos(speakerPos.getCenter().add(JukeboxSettings.DEFAULT_RANGE + JukeboxSettings.DROP_MARGIN + 1, 0, 0));
+            listener.setPos(speakerPos.getCenter().add(EmitterRange.DEFAULT_RANGE + EmitterRange.DROP_MARGIN + 1, 0, 0));
             speaker.configure(level, source, 1, Streams.Channel.MIX);
             helper.assertTrue(received.contains(new StreamPackets.StopAtBlock(speakerPos)),
                     "a listener out of range wasn't told to stop: " + received);

@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
+import org.haruyq.createmediasystems.stream.Emitter;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -84,10 +85,10 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return level.isClientSide || type != AudioFeature.SPEAKER_ENTITY.get() ? null
-                : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l, s);
+                : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l);
     }
 
-    public static class Entity extends BlockEntity {
+    public static class Entity extends BlockEntity implements Emitter {
         private Link source = Link.NONE;
         private float volume = 1;
         private Streams.Channel channel = Streams.Channel.MIX;
@@ -120,17 +121,12 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
             this.channel = channel;
             setChanged();
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
-            relay(level, getBlockState());
+            relay(level);
         }
 
-        /** Its source plays louder or quieter: its listeners hear that now, not at its next relay. */
-        public void refresh(ServerLevel level) {
-            relay(level, getBlockState());
-        }
-
-        public void tick(ServerLevel level, BlockState state) {
+        public void tick(ServerLevel level) {
             if (Streams.relayDue(level)) {
-                relay(level, state);
+                relay(level);
             }
         }
 
@@ -143,9 +139,10 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
             }
         }
 
-        private void relay(ServerLevel level, BlockState state) {
+        @Override
+        public void relay(ServerLevel level) {
             followSource(level);
-            Direction facing = state.getValue(FACING);
+            Direction facing = getBlockState().getValue(FACING);
             Streams.relay(level, this, source(), mouth(worldPosition, facing), Optional.of(facing), channel, volume);
         }
 

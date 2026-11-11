@@ -41,20 +41,20 @@ public final class StreamPackets {
     }
 
     /**
-     * Server → client: stream {@code url} from the emitter at {@code pos}, sounding as {@code sound}, from
-     * {@code startSeconds} in. {@code video} is the source whose video it is (and its disc's quality), which its
-     * player also plays for that source's displays to show. {@code load} says which load of its source's
+     * Server → client: stream {@code url} from the emitter at {@code pos}, sounding as {@code sound} and heard over
+     * {@code range}, from {@code startSeconds} in. {@code video} is the source whose video it is (and its disc's
+     * quality), which its player also plays for that source's displays to show. {@code load} says which load of its source's
      * track it is (see Streams.Load): streams of one load are one playback, however far apart they come (while it
      * loads, every one of them says 0 s, so their time can't tell); 0 if unknown.
      */
-    public record PlayAtBlock(String url, BlockPos pos, float startSeconds, JukeboxSettings settings,
+    public record PlayAtBlock(String url, BlockPos pos, float startSeconds, EmitterRange range,
                               Streams.Sound sound, Optional<Streams.Video> video, long load) implements CustomPacketPayload {
         public static final Type<PlayAtBlock> TYPE = new Type<>(CreateMediaSystems.id("play_at_block"));
         public static final StreamCodec<ByteBuf, PlayAtBlock> CODEC = NeoForgeStreamCodecs.composite(
                 ByteBufCodecs.STRING_UTF8, PlayAtBlock::url,
                 BlockPos.STREAM_CODEC, PlayAtBlock::pos,
                 ByteBufCodecs.FLOAT, PlayAtBlock::startSeconds,
-                JukeboxSettings.STREAM_CODEC, PlayAtBlock::settings,
+                EmitterRange.STREAM_CODEC, PlayAtBlock::range,
                 Streams.Sound.CODEC, PlayAtBlock::sound,
                 ByteBufCodecs.optional(Streams.Video.CODEC), PlayAtBlock::video,
                 ByteBufCodecs.VAR_LONG, PlayAtBlock::load,
@@ -67,11 +67,11 @@ public final class StreamPackets {
     }
 
     /** Server → client: the stream from the block at {@code pos} keeps playing with new range and volume. */
-    public record RetuneAtBlock(BlockPos pos, JukeboxSettings settings) implements CustomPacketPayload {
+    public record RetuneAtBlock(BlockPos pos, EmitterRange range) implements CustomPacketPayload {
         public static final Type<RetuneAtBlock> TYPE = new Type<>(CreateMediaSystems.id("retune_at_block"));
         public static final StreamCodec<ByteBuf, RetuneAtBlock> CODEC = StreamCodec.composite(
                 BlockPos.STREAM_CODEC, RetuneAtBlock::pos,
-                JukeboxSettings.STREAM_CODEC, RetuneAtBlock::settings,
+                EmitterRange.STREAM_CODEC, RetuneAtBlock::range,
                 RetuneAtBlock::new);
 
         @Override

@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.MediaSource;
 
 import org.jetbrains.annotations.Nullable;
@@ -54,7 +54,7 @@ public final class RangeQuillHandler {
     /** The picked jukebox or disc reader: range settings apply to it, speakers get linked to it. */
     private static BlockPos source;
     /** The picked jukebox's saved settings, as last reported by the server; null until then, or for a reader. */
-    private static JukeboxSettings current;
+    private static EmitterRange current;
     /** Speaker whose screen opens once the server reports its settings. */
     private static BlockPos pendingSpeaker;
     /** Corners and the one pointed at, in the source's block space. */
@@ -87,7 +87,7 @@ public final class RangeQuillHandler {
     }
 
     @Nullable
-    static JukeboxSettings current() {
+    static EmitterRange current() {
         return current;
     }
 

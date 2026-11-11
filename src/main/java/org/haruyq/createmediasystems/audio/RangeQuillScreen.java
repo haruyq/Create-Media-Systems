@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -69,10 +69,10 @@ final class RangeQuillScreen extends AbstractSimiScreen {
     }
 
     static RangeQuillScreen forJukebox() {
-        JukeboxSettings current = RangeQuillHandler.current();
+        EmitterRange current = RangeQuillHandler.current();
         return new RangeQuillScreen(Component.translatable("create_media_systems.range.title"), new ItemStack(Items.JUKEBOX),
                 current == null ? 1 : current.volume(), null, 0, RangeQuillScreen::rangeStatus,
-                Component.translatable("create_media_systems.range.reset", (int) JukeboxSettings.DEFAULT_RANGE),
+                Component.translatable("create_media_systems.range.reset", (int) EmitterRange.DEFAULT_RANGE),
                 (volume, reset, option) -> RangeQuillHandler.save(volume, reset), RangeQuillHandler::discard);
     }
 
@@ -166,9 +166,9 @@ final class RangeQuillScreen extends AbstractSimiScreen {
         if (selection != null) {
             return Component.translatable("create_media_systems.range.status_new", size(selection));
         }
-        JukeboxSettings current = RangeQuillHandler.current();
+        EmitterRange current = RangeQuillHandler.current();
         return current == null || current.area().isEmpty()
-                ? Component.translatable("create_media_systems.range.status_default", (int) JukeboxSettings.DEFAULT_RANGE)
+                ? Component.translatable("create_media_systems.range.status_default", (int) EmitterRange.DEFAULT_RANGE)
                 : Component.translatable("create_media_systems.range.status_kept", size(current.area().get()));
     }
 

@@ -10,8 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
-import org.haruyq.createmediasystems.audio.SpeakerBlock;
-import org.haruyq.createmediasystems.playback.Tone;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.DiscTransport;
 import org.haruyq.createmediasystems.stream.Downloads;
@@ -20,6 +18,7 @@ import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.Tone;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 import org.haruyq.createmediasystems.stream.VideoSource;
 
@@ -204,8 +203,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
     /** The middle of each of the equalizer's seven bands (Hz); each reaches {@link #BAND_REACH} either way. */
     public static final float[] BAND_CENTRES = {63, 160, 400, 1000, 2500, 6300, 16000};
     private static final float BAND_REACH = 1.58f;
-    /** The most any band is raised or lowered (dB), however far the effect level is turned. */
-    public static final float MAX_GAIN = 12;
     public static final int STATIONS = 6;
     /** How many times faster than it plays a deck winds its tape. */
     static final int WIND = 30;
@@ -570,21 +567,23 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     : new Streams.Source(playing.url, clock(playing).position(), null);
         }
 
-        /** The amplifier's volume knob, turned up slowly at first as a real one. */
+        /** The amplifier's volume knob. */
         @Override
         public float volume() {
-            return power() ? (float) Math.pow(volume / 100.0, 1.5) : 0;
+            return volume / 100f;
         }
 
+        /** Its volume knob turned up slowly at first, as a real one; silent while switched off. */
         @Override
-        public float remoteVolume() {
-            return volume / 100f;
+        public float gain() {
+            return power() ? (float) Math.pow(volume(), 1.5) : 0;
         }
 
         /**
          * How it sounds: the equalizer's preset at its effect level (unless the amplifier plays a disc direct), the
          * amplifier's bass boost and wide stereo, and a tape's duller top.
          */
+        @Override
         public Tone tone() {
             if (!power()) {
                 return Tone.FLAT;
@@ -592,7 +591,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             List<Float> bands = new ArrayList<>();
             if (live(Unit.EQUALIZER) && !(direct && input == Input.DISC)) {
                 for (int band = 0; band < BAND_CENTRES.length; band++) {
-                    float gain = Mth.clamp(preset.gains[band] * effect / 50f, -MAX_GAIN, MAX_GAIN);
+                    float gain = Mth.clamp(preset.gains[band] * effect / 50f, -Tone.MAX_GAIN, Tone.MAX_GAIN);
                     if (gain != 0) {
                         bands.add(BAND_CENTRES[band] / BAND_REACH);
                         bands.add(BAND_CENTRES[band] * BAND_REACH);
@@ -883,11 +882,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         private void setVolume(int value) {
             volume = Mth.clamp(value, 0, 100);
             if (level instanceof ServerLevel server) {
-                for (BlockEntity emitter : Streams.emitters(server, worldPosition)) {
-                    if (emitter instanceof SpeakerBlock.Entity speaker) {
-                        speaker.refresh(server);
-                    }
-                }
+                Streams.changed(server, worldPosition);
             }
         }
 

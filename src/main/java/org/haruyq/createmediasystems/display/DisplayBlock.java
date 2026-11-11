@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.client.Occluders;
+import org.haruyq.createmediasystems.stream.Emitter;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -179,7 +179,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 corner.add(screen.at((float) width + margin, (float) height + margin, front)));
     }
 
-    public static class Entity extends BlockEntity implements IHaveGoggleInformation, Occluders.Occluder {
+    public static class Entity extends BlockEntity implements IHaveGoggleInformation, Occluders.Occluder, Emitter {
         private Link source = Link.NONE;
         private int width = UNIT;
         private int height = UNIT;
@@ -289,11 +289,15 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             return box(0, 0.004f);
         }
 
-        /** Plays its Blu-ray player's video's sound from the screen's middle, unless a speaker plays it. */
         private void tick(ServerLevel level) {
-            if (!Streams.relayDue(level)) {
-                return;
+            if (Streams.relayDue(level)) {
+                relay(level);
             }
+        }
+
+        /** Plays its Blu-ray player's video's sound from the screen's middle, unless a speaker plays it. */
+        @Override
+        public void relay(ServerLevel level) {
             followSource(level);
             Optional<BlockPos> linked = source();
             VideoSource videoPlayer = linked.filter(level::isLoaded).map(level::getBlockEntity)
@@ -302,9 +306,13 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 lighting = Math.round(videoPlayer.lighting() * 100);
                 changed();
             }
-            boolean speakers = linked.isPresent() && Streams.relayedBy(level, linked.get(), SpeakerBlock.Entity.class);
-            Streams.relay(level, this, linked, center(), Optional.empty(), Streams.Channel.MIX,
-                    videoPlayer == null || speakers ? 0 : 1);
+            Streams.relay(level, this, linked, center(), Optional.empty(), Streams.Channel.MIX, videoPlayer == null ? 0 : 1);
+        }
+
+        /** Its sound is the speakers' to play, where its Blu-ray player has any. */
+        @Override
+        public boolean givesWay() {
+            return true;
         }
 
         /** Its source as it is now, where Sable moved it; resent if that changed. */

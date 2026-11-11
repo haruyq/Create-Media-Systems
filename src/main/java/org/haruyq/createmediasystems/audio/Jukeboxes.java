@@ -3,7 +3,7 @@ package org.haruyq.createmediasystems.audio;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.stream.DiscKind;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
@@ -16,7 +16,7 @@ import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 
 /**
  * A vanilla jukebox with a custom disc: a {@link MediaSource} that is also its own emitter, heard over its
- * {@link JukeboxSettings}. Its clock follows its song player. Hooked into the jukebox by JukeboxBlockEntityMixin.
+ * {@link EmitterRange}, as the range quill set it. Its clock follows its song player. Hooked into the jukebox by JukeboxBlockEntityMixin.
  */
 public final class Jukeboxes {
     private Jukeboxes() {

@@ -7,6 +7,7 @@ import java.util.Locale;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -47,7 +48,6 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public class EqualizerBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final MapCodec<EqualizerBlock> CODEC = simpleCodec(EqualizerBlock::new);
     public static final int FADERS = 3;
-    public static final float MAX_GAIN = 12;
 
     public EqualizerBlock(Properties properties) {
         super(properties);
@@ -131,9 +131,9 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
         return above > 0 && along.y < 0 ? from.add(along.scale(above / -along.y)) : null;
     }
 
-    /** {@code gain} as a fader can set it: in half-dB steps, within {@link #MAX_GAIN} either way. */
+    /** {@code gain} as a fader can set it: in half-dB steps, within {@link Tone#MAX_GAIN} either way. */
     static float snap(float gain) {
-        return Mth.clamp(Math.round(gain * 2) / 2f, -MAX_GAIN, MAX_GAIN);
+        return Mth.clamp(Math.round(gain * 2) / 2f, -Tone.MAX_GAIN, Tone.MAX_GAIN);
     }
 
     public static String db(float gain) {

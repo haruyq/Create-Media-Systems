@@ -1,9 +1,7 @@
 package org.haruyq.createmediasystems.video;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.hifi.HifiStackBlock;
-import org.haruyq.createmediasystems.playback.NativeAudio;
-import org.haruyq.createmediasystems.playback.Tone;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -62,17 +60,6 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(VideoFeature.EQUALIZER_ENTITY.get(), EqualizerFaders::new));
         modBus.addListener((ModelEvent.RegisterAdditional event) -> event.register(KNOB));
-        // Every Blu-ray player's video playing here plays through the equalizers touching it, and what a hi-fi
-        // stack plays through its own controls.
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
-            var level = Minecraft.getInstance().level;
-            if (level != null) {
-                NativeAudio.equalize(source -> level.getBlockEntity(source) instanceof HifiStackBlock.Entity stack
-                        ? stack.tone()
-                        : level.getBlockState(source).is(VideoFeature.VIDEO_PLAYER.get())
-                        ? new Tone(EqualizerBlock.bands(level, source), 1) : Tone.FLAT);
-            }
-        });
         NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {
             if (event.isUseItem() && (held != null || grab())) {
                 event.setCanceled(true);
@@ -93,7 +80,7 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         VertexConsumer consumer = buffers.getBuffer(Sheets.solidBlockSheet());
         for (int i = 0; i < EqualizerBlock.FADERS; i++) {
             float across = (i - MIDDLE) * SPACING / 16;
-            float along = equalizer.gain(i) / EqualizerBlock.MAX_GAIN * TRAVEL / 16;
+            float along = equalizer.gain(i) / Tone.MAX_GAIN * TRAVEL / 16;
             int color = equalizer.band(i).color;
             poseStack.pushPose();
             poseStack.translate(right.getStepX() * across + back.getStepX() * along, 0,
@@ -145,7 +132,7 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         }
         Vec3 at = aim(equalizer);
         if (at != null) {
-            equalizer.set(fader, (float) (at.z / TRAVEL * EqualizerBlock.MAX_GAIN));
+            equalizer.set(fader, (float) (at.z / TRAVEL * Tone.MAX_GAIN));
         }
         EqualizerBlock.Band band = equalizer.band(fader);
         mc.player.displayClientMessage(Component.literal(band.label + "  " + EqualizerBlock.db(equalizer.gain(fader)))

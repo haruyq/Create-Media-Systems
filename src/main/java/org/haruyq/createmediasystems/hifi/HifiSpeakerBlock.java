@@ -121,7 +121,7 @@ public class HifiSpeakerBlock extends SpeakerBlock {
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return level.isClientSide || type != HifiFeature.HIFI_SPEAKER_ENTITY.get() ? null
-                : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l, s);
+                : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l);
     }
 
     public static class Entity extends SpeakerBlock.Entity {

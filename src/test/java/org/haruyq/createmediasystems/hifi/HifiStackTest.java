@@ -6,7 +6,7 @@ import java.util.List;
 
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
-import org.haruyq.createmediasystems.playback.Tone;
+import org.haruyq.createmediasystems.stream.Tone;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -119,7 +119,7 @@ class HifiStackTest {
         with(stack, tag -> tag.putInt("Input", HifiStackBlock.Input.TAPE.ordinal()));
         bands = stack.tone().bands();
         assertEquals((6 + 2) * 3, bands.length, "the preset, the bass boost and a tape's dull top");
-        assertEquals(HifiStackBlock.MAX_GAIN, bands[2], "twice 6 dB at the full effect level");
+        assertEquals(Tone.MAX_GAIN, bands[2], "twice 6 dB at the full effect level");
         assertTrue(bands[bands.length - 1] < 0);
     }
 

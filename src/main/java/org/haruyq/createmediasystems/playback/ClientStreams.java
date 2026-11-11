@@ -13,10 +13,12 @@ import org.haruyq.createmediasystems.client.Reports;
 import org.haruyq.createmediasystems.mixin.ChannelAccessor;
 import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
 import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
+import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL;
@@ -49,8 +51,8 @@ public final class ClientStreams {
     public static double audibleSeconds(Object key){var sound=PLAYING.get(key);return sound==null?-1:sound.audibleSeconds();}
     public static double requestedSeconds(Object key){var sound=PLAYING.get(key);return sound==null?-1:sound.requestedSeconds();}
     private static final Map<Object, StreamSound> PLAYING = new HashMap<>();
-    /** Live settings per emitter block; RetuneAtBlock updates them without restarting the audio. */
-    private static final Map<BlockPos, JukeboxSettings> SETTINGS = new HashMap<>();
+    /** Live range per emitter block; RetuneAtBlock updates it without restarting the audio. */
+    private static final Map<BlockPos, EmitterRange> RANGES = new HashMap<>();
     private static final Map<Side, Group> GROUPS = new HashMap<>();
     /** The side each emitter block playing here plays. */
     private static final Map<BlockPos, Side> SIDES = new HashMap<>();
@@ -129,7 +131,7 @@ public final class ClientStreams {
                 present = true;
                 nearby |= inRange(pos, sound.origin());
                 Vec3 ear = toBlockSpace(pos, camera);
-                mix.add(world, settings(pos).gain(pos, sound.origin(), ear) * sound.directivity(ear));
+                mix.add(world, range(pos).gain(pos, sound.origin(), ear) * sound.directivity(ear));
             }
             gain = mix.gain();
             Vec3 heard = mix.at();
@@ -299,6 +301,14 @@ public final class ClientStreams {
             group.update();
             group.spread(PLAYING.get(side));
         }));
+        // Every playback here plays through the tone its source has here now (see NativeAudio#equalize).
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            var level = Minecraft.getInstance().level;
+            if (level != null) {
+                NativeAudio.equalize(source -> level.getBlockEntity(source) instanceof MediaSource media
+                        ? media.tone() : Tone.FLAT);
+            }
+        });
         NeoForge.EVENT_BUS.addListener(ClientStreams::releaseFinished);
         NeoForge.EVENT_BUS.addListener(ClientStreams::resolveNext);
         NeoForge.EVENT_BUS.addListener(ClientStreams::reportDownloads);
@@ -314,7 +324,7 @@ public final class ClientStreams {
     public static void play(StreamPackets.PlayAtBlock payload) {
         BlockPos pos = payload.pos().immutable();
         Streams.Sound sound = payload.sound();
-        SETTINGS.put(pos, payload.settings());
+        RANGES.put(pos, payload.range());
         Side side = new Side(sound.source(), sound.channel());
         Side was = SIDES.put(pos, side);
         if (was != null && !was.equals(side)) {
@@ -366,7 +376,7 @@ public final class ClientStreams {
     }
 
     public static void retune(StreamPackets.RetuneAtBlock payload) {
-        SETTINGS.put(payload.pos(), payload.settings());
+        RANGES.put(payload.pos(), payload.range());
     }
 
     public static void sync(StreamPackets.SyncAtBlock payload) {
@@ -381,7 +391,7 @@ public final class ClientStreams {
     }
 
     public static void stop(StreamPackets.StopAtBlock payload) {
-        SETTINGS.remove(payload.pos());
+        RANGES.remove(payload.pos());
         Side side = SIDES.remove(payload.pos());
         if (side != null) {
             leave(side, payload.pos());
@@ -430,8 +440,8 @@ public final class ClientStreams {
         });
     }
 
-    private static JukeboxSettings settings(BlockPos pos) {
-        return SETTINGS.getOrDefault(pos, JukeboxSettings.DEFAULT);
+    private static EmitterRange range(BlockPos pos) {
+        return RANGES.getOrDefault(pos, EmitterRange.DEFAULT);
     }
 
     /**
@@ -510,7 +520,7 @@ public final class ClientStreams {
                 if (group != null) {
                     group.emitters.keySet().forEach(pos -> {
                         SIDES.remove(pos, entry.getKey());
-                        SETTINGS.remove(pos);
+                        RANGES.remove(pos);
                     });
                 }
             }
@@ -524,11 +534,10 @@ public final class ClientStreams {
         return level != null && level.getBlockEntity(pos) != null;
     }
 
-    /** Within the range past which the server stops tracking us (it resends on return). */
+    /** Within the range past which the server stops tracking us (it resends on return): the server's own check. */
     private static boolean inRange(BlockPos pos, Vec3 origin) {
         var player = Minecraft.getInstance().player;
-        return player != null
-                && settings(pos).inRange(pos, origin, toBlockSpace(pos, player.position()), JukeboxSettings.DROP_MARGIN);
+        return player != null && range(pos).hears(player.level(), pos, origin, player.position(), EmitterRange.DROP_MARGIN);
     }
 
     /** Where the block-space position {@code local} is in the world now (see SableCompat). */
