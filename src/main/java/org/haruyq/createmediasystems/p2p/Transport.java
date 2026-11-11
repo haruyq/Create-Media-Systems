@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.net.http.WebSocketHandshakeException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -151,16 +153,11 @@ public final class Transport implements AutoCloseable {
     public static Transport open(String apiBase, Protocol.Ticket ticket, Listener listener) {
         URI uri = Protocol.endpoint(apiBase, "p2p/sessions/" + ticket.sessionId() + "/signal", true);
         HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-        Socket socket = new Socket();
-        Transport transport = new Transport(ticket, listener, socket::send, () -> socket.close(http));
-        socket.transport = transport;
-        http.newWebSocketBuilder().header("Authorization", "Bearer " + ticket.token())
-                .connectTimeout(Duration.ofSeconds(10)).buildAsync(uri, socket)
-                .whenComplete((ws, error) -> {
-                    if (error != null) {
-                        transport.fail("Could not reach the API's signaling: " + ApiHttp.reason(error));
-                    }
-                });
+        Socket socket = new Socket(http, uri, ticket.token());
+        Transport transport = new Transport(ticket, listener, socket::send, socket::close);
+        socket.signal = transport::signal;
+        socket.fail = transport::fail;
+        socket.connect();
         return transport;
     }
 
@@ -989,14 +986,78 @@ public final class Transport implements AutoCloseable {
         return type.find() ? type.group(1) : "?";
     }
 
-    /** The JDK WebSocket to the API's signaling: text in, at most {@link #MAX_SIGNAL} per message, in order out. */
+    /**
+     * The JDK WebSocket to the API's signaling: text in, at most {@link #MAX_SIGNAL} per message, in order out. One
+     * lost after it opened is opened again with the same ticket, for as long as the API keeps the ticket's seat: a
+     * proxy in front of the API cuts these sockets, while the direct connections they set up carry on without them.
+     */
     static final class Socket implements WebSocket.Listener {
-        Transport transport;
+        /** The API keeps a lost socket's seat for 120 s: one not back shortly before that is given up. */
+        private static final long RETURN_NANOS = TimeUnit.SECONDS.toNanos(110);
+        private final HttpClient http;
+        private final URI uri;
+        private final String token;
         private final StringBuilder partial = new StringBuilder();
+        /** What the API sent, and why this gave up: the session's {@link Transport#signal} and {@link Transport#fail}. */
+        Consumer<String> signal, fail;
+        /** How long after a socket is lost, or could not be opened again, the next is tried. */
+        long retryMillis = 2_000;
         private WebSocket ws;
         private CompletableFuture<?> sending = CompletableFuture.completedFuture(null);
         private int outstanding;
-        private boolean closed;
+        private boolean opened, closed;
+        private long lostAt;
+
+        Socket(HttpClient http, URI uri, String token) {
+            this.http = http;
+            this.uri = uri;
+            this.token = token;
+        }
+
+        synchronized void connect() {
+            if (closed) {
+                return;
+            }
+            http.newWebSocketBuilder().header("Authorization", "Bearer " + token)
+                    .connectTimeout(Duration.ofSeconds(10)).buildAsync(uri, this)
+                    .whenComplete((socket, error) -> {
+                        if (error != null) {
+                            unreachable(error);
+                        }
+                    });
+        }
+
+        private synchronized void unreachable(Throwable error) {
+            if (closed) {
+                return;
+            }
+            Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+            if (!opened) {
+                fail.accept("Could not reach the API's signaling: " + ApiHttp.reason(error));
+            } else if (cause instanceof WebSocketHandshakeException refused) {
+                // The API answered and refused: the ticket's seat is gone (its room closed, or the API restarted).
+                fail.accept("The API ended this P2P session (HTTP " + refused.getResponse().statusCode() + ").");
+            } else if (System.nanoTime() - lostAt > RETURN_NANOS) {
+                fail.accept("Lost signaling with the API: " + ApiHttp.reason(error));
+            } else {
+                retry();
+            }
+        }
+
+        /** {@code socket} is gone: another is opened, unless this is closed or already has one in its place. */
+        private synchronized void lost(WebSocket socket, String how) {
+            if (closed || socket != ws) {
+                return;
+            }
+            ws = null;
+            lostAt = System.nanoTime();
+            LOGGER.info("Lost P2P signaling ({}); connecting again", how);
+            retry();
+        }
+
+        private void retry() {
+            CompletableFuture.delayedExecutor(retryMillis, TimeUnit.MILLISECONDS).execute(this::connect);
+        }
 
         @Override
         public synchronized void onOpen(WebSocket webSocket) {
@@ -1004,7 +1065,13 @@ public final class Transport implements AutoCloseable {
                 webSocket.abort();
                 return;
             }
+            if (opened) {
+                LOGGER.info("P2P signaling is back");
+            }
+            opened = true;
             ws = webSocket;
+            partial.setLength(0);
+            sending = CompletableFuture.completedFuture(null);
             webSocket.request(1);
         }
 
@@ -1013,11 +1080,11 @@ public final class Transport implements AutoCloseable {
             partial.append(data);
             if (partial.length() > MAX_SIGNAL) {
                 webSocket.abort();
-                transport.fail("The API sent a signaling message over 64 KiB.");
+                fail.accept("The API sent a signaling message over 64 KiB.");
                 return null;
             }
             if (last) {
-                transport.signal(partial.toString());
+                signal.accept(partial.toString());
                 partial.setLength(0);
             }
             webSocket.request(1);
@@ -1027,29 +1094,34 @@ public final class Transport implements AutoCloseable {
         @Override
         public CompletionStage<?> onBinary(WebSocket webSocket, ByteBuffer data, boolean last) {
             webSocket.abort();
-            transport.fail("The API sent binary data over signaling.");
+            fail.accept("The API sent binary data over signaling.");
             return null;
         }
 
+        /** Also for a socket cut without a Close frame, which the JDK reports as closed with 1006. */
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            transport.fail("The API closed signaling" + (reason.isBlank() ? "." : ": " + reason));
+            lost(webSocket, "closed with " + statusCode + (reason.isBlank() ? "" : ": " + reason));
             return null;
         }
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            transport.fail("Signaling failed: " + ApiHttp.reason(error));
+            lost(webSocket, ApiHttp.reason(error));
         }
 
         synchronized void send(String text) {
-            // Only ever answers to what came in, so never before onOpen.
-            if (++outstanding > 256) {
-                ws.abort();
-                transport.fail("Signaling could not keep up.");
+            WebSocket socket = ws;
+            if (socket == null) {
+                // ponytail: what is signalled while the socket is away is dropped. That is only an offer or candidate
+                // made in the moment it was lost, whose connection then times out; queue them if that ever shows.
                 return;
             }
-            WebSocket socket = ws;
+            if (++outstanding > 256) {
+                socket.abort();
+                fail.accept("Signaling could not keep up.");
+                return;
+            }
             sending = sending.thenCompose(v -> socket.sendText(text, true)).whenComplete((v, e) -> {
                 synchronized (this) {
                     outstanding--;
@@ -1057,7 +1129,7 @@ public final class Transport implements AutoCloseable {
             });
         }
 
-        synchronized void close(HttpClient http) {
+        synchronized void close() {
             closed = true;
             WebSocket socket = ws;
             if (socket == null) {
