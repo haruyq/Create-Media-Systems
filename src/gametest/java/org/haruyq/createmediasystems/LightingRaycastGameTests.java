@@ -57,7 +57,7 @@ public final class LightingRaycastGameTests {
             level.setBlockAndUpdate(target, states[i % states.length]);
             targets.add(target);
         }
-        LightingRaycast rays = new LightingRaycast(level, center.above(70), true);
+        LightingRaycast rays = LightingRaycast.rendered(level, center.above(70));
         helper.assertTrue(rays.clip(Vec3.ZERO, Vec3.ZERO).block().getType() == HitResult.Type.MISS
                         && rays.clip(Vec3.ZERO, new Vec3(-Double.MIN_VALUE, 0, 0)).block().getType() == HitResult.Type.MISS,
                 "zero and subnormal rays must finish without a hit");
@@ -96,12 +96,12 @@ public final class LightingRaycastGameTests {
         Vec3 from = source.getCenter();
         Vec3 to = from.add(4, 0, 0);
         level.setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
-        LightingRaycast rays = new LightingRaycast(level, source, true);
+        LightingRaycast rays = LightingRaycast.rendered(level, source);
         helper.assertTrue(!rays.visible(from, to) && !rays.visible(from, to), "the cached corner stays occluded");
         helper.assertTrue(rays.visible(to.add(1, 0, 0), to), "another origin must not reuse the occlusion");
         helper.assertTrue(!rays.visible(from, to), "returning to the first origin must still hit the wall");
         level.removeBlock(wall, false);
-        helper.assertTrue(new LightingRaycast(level, source, true).visible(from, to), "the next snapshot must see the removed wall");
+        helper.assertTrue(LightingRaycast.rendered(level, source).visible(from, to), "the next snapshot must see the removed wall");
         helper.succeed();
     }
 
@@ -111,7 +111,7 @@ public final class LightingRaycastGameTests {
         BlockPos wall = helper.absolutePos(new BlockPos(4, 2, 2));
         helper.getLevel().setBlockAndUpdate(source, Blocks.STONE.defaultBlockState());
         helper.getLevel().setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
-        LightingRaycast.Hit hit = new LightingRaycast(helper.getLevel(), source, false)
+        LightingRaycast.Hit hit = LightingRaycast.logical(helper.getLevel(), source)
                 .clip(source.getCenter(), wall.getCenter().add(1, 0, 0));
         helper.assertTrue(hit.block().getBlockPos().equals(wall), "beam did not stop at wall: " + hit.block().getBlockPos());
         helper.succeed();
@@ -135,17 +135,17 @@ public final class LightingRaycastGameTests {
             BlockPos farWall = BlockPos.containing(target.subtract(new DisplayBlock.Screen(Direction.NORTH).out().scale(4)));
             level.setBlockAndUpdate(nearWall, Blocks.STONE.defaultBlockState());
             level.setBlockAndUpdate(farWall, Blocks.STONE.defaultBlockState());
-            LightingRaycast.Hit nearHit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            LightingRaycast.Hit nearHit = LightingRaycast.logical(level, BlockPos.containing(from)).clip(from, to);
             helper.assertTrue(nearHit.block().getType() == HitResult.Type.BLOCK
                             && nearHit.block().getBlockPos().equals(nearWall),
                     "a closer wall must win before the screen: " + nearHit.block().getBlockPos());
             level.setBlockAndUpdate(nearWall, Blocks.AIR.defaultBlockState());
-            LightingRaycast.Hit screenHit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            LightingRaycast.Hit screenHit = LightingRaycast.logical(level, BlockPos.containing(from)).clip(from, to);
             helper.assertTrue(screenHit.block().getType() == HitResult.Type.BLOCK
                             && screenHit.block().getBlockPos().equals(display),
                     "screen must occlude the full framed rectangle before the wall: " + screenHit.block().getBlockPos());
             level.setBlockAndUpdate(display, Blocks.AIR.defaultBlockState());
-            LightingRaycast.Hit wallHit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            LightingRaycast.Hit wallHit = LightingRaycast.logical(level, BlockPos.containing(from)).clip(from, to);
             helper.assertTrue(wallHit.block().getType() == HitResult.Type.BLOCK
                             && wallHit.block().getBlockPos().equals(farWall),
                     "removed screen must no longer occlude the wall: " + wallHit.block().getBlockPos());
@@ -179,7 +179,7 @@ public final class LightingRaycastGameTests {
             Vec3 local = Vec3.atLowerCornerOf(plot).add(screen.at(3.5f, 0.5f, 0));
             Vec3 from = world(ship, local.add(screen.out().scale(3)));
             Vec3 to = world(ship, local.subtract(screen.out().scale(5)));
-            LightingRaycast.Hit hit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            LightingRaycast.Hit hit = LightingRaycast.logical(level, BlockPos.containing(from)).clip(from, to);
             helper.assertTrue(hit.block().getType() == HitResult.Type.BLOCK
                             && hit.block().getBlockPos().equals(plot),
                     "moved enlarged display must occlude outside its anchor: " + hit.block().getBlockPos());
@@ -205,7 +205,7 @@ public final class LightingRaycastGameTests {
             Vec3 to = world(ship, plot.getCenter().add(0, 0, 3));
             loadPath(level, from, to);
             level.setBlockAndUpdate(BlockPos.containing(to), Blocks.STONE.defaultBlockState());
-            LightingRaycast.Hit hit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            LightingRaycast.Hit hit = LightingRaycast.logical(level, BlockPos.containing(from)).clip(from, to);
             assertHit(helper, hit, plot, world(ship, new Vec3(plot.getX() + 0.5, plot.getY() + 0.5, plot.getZ() + 7 / 16.0)));
         } finally {
             remove(ship);
@@ -226,7 +226,7 @@ public final class LightingRaycastGameTests {
             Vec3 to = new Vec3(wall.getX() + 2, from.y, from.z);
             loadPath(level, from, to);
             level.setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
-            LightingRaycast.Hit hit = new LightingRaycast(level, plot, false).clip(from, to);
+            LightingRaycast.Hit hit = LightingRaycast.logical(level, plot).clip(from, to);
             assertHit(helper, hit, wall, new Vec3(wall.getX(), from.y, from.z));
         } finally {
             remove(ship);
@@ -252,7 +252,7 @@ public final class LightingRaycastGameTests {
             Vec3 to = from.add(8, 0, 0);
             loadPath(level, from, to);
             level.setBlockAndUpdate(BlockPos.containing(from.add(6, 0, 0)), Blocks.STONE.defaultBlockState());
-            LightingRaycast.Hit hit = new LightingRaycast(level, sourcePlot, false).clip(from, to);
+            LightingRaycast.Hit hit = LightingRaycast.logical(level, sourcePlot).clip(from, to);
             helper.assertTrue(hit.block().getType() == HitResult.Type.BLOCK && hit.block().getBlockPos().equals(targetPlot),
                     "ship-to-ship beam must choose the nearer ship, got " + hit.block().getBlockPos());
             helper.assertTrue(hit.point().distanceTo(from) < 5, "hit distance must be measured in world space");
@@ -273,7 +273,7 @@ public final class LightingRaycastGameTests {
             Vec3 to = world(ship, plot.getCenter().add(0, 0, 3));
             loadPath(level, from, to);
             BlockPos ignored = BlockPos.containing(from).below(10);
-            LightingRaycast frame = new LightingRaycast(level, ignored, false);
+            LightingRaycast frame = LightingRaycast.logical(level, ignored);
             AABB nearby = new AABB(from, to).inflate(1);
             helper.assertTrue(frame.hasSubLevels(nearby), "the ship intersects the beam's region");
             helper.assertTrue(!frame.hasSubLevels(nearby.move(0, 1000, 0)),
@@ -284,17 +284,17 @@ public final class LightingRaycastGameTests {
             ship.logicalPose().orientation().rotationY(1.1).rotateX(0.35);
             update(ship);
             helper.assertTrue(frame.hasSubLevels(nearby), "the current frame keeps its captured bounds");
-            helper.assertTrue(!new LightingRaycast(level, ignored, false).hasSubLevels(nearby),
+            helper.assertTrue(!LightingRaycast.logical(level, ignored).hasSubLevels(nearby),
                     "the next frame must release the region after the ship leaves");
             LightingRaycast.Hit sameFrame = frame.clip(from, to);
             helper.assertTrue(sameFrame.point().distanceTo(before.point()) < 1e-6,
                     "all rays in one frame use the same pose snapshot");
-            helper.assertTrue(new LightingRaycast(level, ignored, false).clip(from, to).block().getType() == HitResult.Type.MISS,
+            helper.assertTrue(LightingRaycast.logical(level, ignored).clip(from, to).block().getType() == HitResult.Type.MISS,
                     "next frame must not hit the ship at its old position");
             Vec3 movedFrom = world(ship, plot.getCenter().add(0, 0, -3));
             Vec3 movedTo = world(ship, plot.getCenter().add(0, 0, 3));
             loadPath(level, movedFrom, movedTo);
-            LightingRaycast.Hit moved = new LightingRaycast(level, ignored, false).clip(movedFrom, movedTo);
+            LightingRaycast.Hit moved = LightingRaycast.logical(level, ignored).clip(movedFrom, movedTo);
             helper.assertTrue(moved.point().distanceTo(world(ship, plot.getCenter().add(0, 0, -0.5))) < 1e-5,
                     "moved native hit=" + moved.block().getLocation() + ", plot=" + plot
                             + ", state=" + level.getBlockState(plot) + ", inside=" + moved.block().isInside());
@@ -317,7 +317,7 @@ public final class LightingRaycastGameTests {
             Vec3 from = world(ship, plot.getCenter().add(-3, 0, 0));
             Vec3 to = world(ship, plot.getCenter().add(3, 0, 0));
             loadPath(level, from, to);
-            LightingRaycast.Hit hit = new LightingRaycast(level, BlockPos.containing(from), false).clip(from, to);
+            LightingRaycast.Hit hit = LightingRaycast.logical(level, BlockPos.containing(from)).clip(from, to);
             Vec3 localImpact = plot.getCenter().add(-0.5, 0, 0);
             assertHit(helper, hit, plot, world(ship, localImpact));
             Vec3 tangentY = world(ship, localImpact.add(0, 1, 0)).subtract(hit.point());
@@ -339,7 +339,7 @@ public final class LightingRaycastGameTests {
         BlockPos pos = BlockPos.containing(from);
         helper.assertTrue(level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, ChunkStatus.FULL, false) == null,
                 "test location starts unloaded");
-        LightingRaycast.Hit hit = new LightingRaycast(level, helper.absolutePos(BlockPos.ZERO), false).clip(from, from.add(4, 0, 0));
+        LightingRaycast.Hit hit = LightingRaycast.logical(level, helper.absolutePos(BlockPos.ZERO)).clip(from, from.add(4, 0, 0));
         helper.assertTrue(hit.block().getType() == HitResult.Type.BLOCK && hit.point().distanceTo(from) < 0.01,
                 "unknown terrain must stop the beam at its boundary");
         helper.assertTrue(level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, ChunkStatus.FULL, false) == null,

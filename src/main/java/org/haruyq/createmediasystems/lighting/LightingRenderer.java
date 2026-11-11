@@ -32,7 +32,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 
-import dev.ryanhcode.sable.companion.SableCompanion;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -226,8 +225,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             Player target = level.getPlayerByUUID(group.target);
             if (target != null) {
                 holdAim = false;
-                Vec3 targetCenter = SableCompanion.INSTANCE.getEyePositionInterpolated(target, partialTick)
-                        .add(0, target.getBbHeight() * 0.5 - target.getEyeHeight(), 0);
+                Vec3 targetCenter = SableCompat.bodyCenter(target, partialTick);
                 Vec3 at = SableCompat.toRenderBlockSpace(level, lamp.getBlockPos(), targetCenter)
                         .subtract(Vec3.atLowerCornerOf(lamp.getBlockPos()));
                 Vector3f local = new Matrix4f().translate(0.5f, hanging ? 0.44f : 0.56f, 0.5f).rotateY(facing)
@@ -359,7 +357,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     }
 
     private static Vec3 worldCamera(Level level, BlockPos anchor, Vec3 camera) {
-        return SableCompanion.INSTANCE.isInPlotGrid(level, camera)
+        return SableCompat.inPlotGrid(level, camera)
                 ? SableCompat.toRenderWorld(level, anchor, camera) : camera;
     }
 
@@ -376,7 +374,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             this.lamp = lamp;
             this.anchor = Vec3.atLowerCornerOf(lamp.getBlockPos());
             this.origin = origin;
-            this.rays = new LightingRaycast(lamp.getLevel(), lamp.getBlockPos(), true);
+            this.rays = LightingRaycast.rendered(lamp.getLevel(), lamp.getBlockPos());
             Vec3 zero = world(Vec3.ZERO);
             basisX = world(new Vec3(1, 0, 0)).subtract(zero);
             basisY = world(new Vec3(0, 1, 0)).subtract(zero);
@@ -441,7 +439,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             long now = LightingIllumination.frame();
             Vec3 world = frame.world(frame.origin);
             double scale = Math.max(frame.basisX.length(), Math.max(frame.basisY.length(), frame.basisZ.length()));
-            boolean moving = SableCompanion.INSTANCE.getContaining(frame.lamp) != null
+            boolean moving = SableCompat.containing(frame.lamp.getLevel(), frame.lamp.getBlockPos()) != null
                     || frame.rays.hasSubLevels(new AABB(world, world).inflate(range * scale));
             // Off the world (a Ponder scene), or with sub-levels that move under it, every frame.
             boolean still = now - traced <= 1 && frame.lamp.getLevel() == Minecraft.getInstance().level

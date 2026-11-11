@@ -15,7 +15,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.simibubi.create.AllItems;
 import com.simibubi.create.foundation.utility.RaycastHelper;
 
-import dev.ryanhcode.sable.companion.SableCompanion;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -335,13 +334,13 @@ public final class LightingControls {
 
     private static double distance(LightingConsoleBlock.Entity console, Vec3 point) {
         return point.distanceToSqr(eye(console,
-                SableCompanion.INSTANCE.getEyePositionInterpolated(Minecraft.getInstance().player, 1)));
+                SableCompat.eye(Minecraft.getInstance().player, 1)));
     }
 
     @Nullable
     private static Vec3 intersect(LightingConsoleBlock.Entity console, boolean monitor) {
         Minecraft mc = Minecraft.getInstance();
-        Vec3 eye = SableCompanion.INSTANCE.getEyePositionInterpolated(mc.player, 1);
+        Vec3 eye = SableCompat.eye(mc.player, 1);
         Vec3 from = eye(console, eye);
         Vec3 to = eye(console, eye.add(mc.player.getViewVector(1)));
         return ConsoleLayout.intersect(from, to.subtract(from), monitor, Reach.HAND);
