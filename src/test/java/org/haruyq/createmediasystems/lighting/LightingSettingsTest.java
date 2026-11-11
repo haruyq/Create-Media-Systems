@@ -6,6 +6,11 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import org.haruyq.createmediasystems.lighting.LightingSettings.ColorMode;
+import org.haruyq.createmediasystems.lighting.LightingSettings.Mapping;
+import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
+import org.haruyq.createmediasystems.lighting.LightingSettings.Pattern;
+import org.haruyq.createmediasystems.lighting.LightingSettings.Preset;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.nbt.CompoundTag;
@@ -20,44 +25,44 @@ class LightingSettingsTest {
         group.pan = 25;
         group.tilt = -30;
         UUID player = UUID.randomUUID();
-        group.preset(4, player);
-        assertEquals(4, group.pattern);
+        group.preset(Preset.SHEET, player);
+        assertEquals(Pattern.LASER_SHEET, group.pattern);
         assertTrue(group.audio);
         assertTrue(group.colorCycle);
-        group.colorMode = 1;
-        group.preset(5, player);
-        assertEquals(3, group.motion);
-        assertEquals(0, group.pattern);
+        group.colorMode = ColorMode.VIDEO;
+        group.preset(Preset.TRACK, player);
+        assertEquals(Motion.TRACK, group.motion);
+        assertEquals(Pattern.SPOT, group.pattern);
         assertEquals(30, group.spread);
         assertEquals(player, group.target);
         assertFalse(group.audio);
         assertFalse(group.colorCycle);
-        assertEquals(0, group.colorMode);
+        assertEquals(ColorMode.OWN, group.colorMode);
         assertArrayEquals(new int[]{0x123456, 0xABCDEF}, java.util.Arrays.copyOf(group.colors, 2));
         assertEquals(48, group.range);
         assertEquals(0.65f, group.brightness);
         assertEquals(25, group.pan);
         assertEquals(-30, group.tilt);
-        group.preset(0, player);
-        assertEquals(0, group.motion);
-        assertEquals(0, group.pattern);
+        group.preset(Preset.FIXED, player);
+        assertEquals(Motion.FIXED, group.motion);
+        assertEquals(Pattern.SPOT, group.pattern);
     }
 
     @Test
     void savedPresetSurvivesApplyingAndEditingBasicEffects() {
         LightingSettings.Group source = colors(0x123456, 0xABCDEF);
-        source.motion = 2;
+        source.motion = Motion.CIRCLE;
         source.speed = 2.5f;
-        source.colorMode = 1;
+        source.colorMode = ColorMode.VIDEO;
         CompoundTag saved = source.save();
-        source.preset(1, UUID.randomUUID());
+        source.preset(Preset.SWEEP, UUID.randomUUID());
         source.colors[0] = 0;
         LightingSettings.Group target = new LightingSettings.Group();
         target.load(saved);
         assertEquals(0x123456, target.colors[0]);
-        assertEquals(2, target.motion);
+        assertEquals(Motion.CIRCLE, target.motion);
         assertEquals(2.5f, target.speed);
-        assertEquals(1, target.colorMode);
+        assertEquals(ColorMode.VIDEO, target.colorMode);
     }
 
     private static LightingSettings.Group colors(int... colors) {
@@ -79,7 +84,7 @@ class LightingSettingsTest {
     void usesMultipleColorsSimultaneouslyInAlternatingAndContiguousGroups() {
         LightingSettings.Group group = colors(0x2040FF, 0xA040FF, 0xFF3080);
         assertArrayEquals(new int[]{0x2040FF, 0xA040FF, 0xFF3080, 0x2040FF, 0xA040FF, 0xFF3080, 0x2040FF}, row(group, 7));
-        group.mapping = 1;
+        group.mapping = Mapping.SPLIT;
         assertArrayEquals(new int[]{0x2040FF, 0x2040FF, 0x2040FF, 0xA040FF, 0xA040FF, 0xFF3080, 0xFF3080}, row(group, 7));
         group.colorCount = 1;
         for (int color : row(group, 7)) {
@@ -90,11 +95,11 @@ class LightingSettingsTest {
     @Test
     void gradientReachesBothEndsAndInterpolatesAcrossEveryRegisteredColor() {
         LightingSettings.Group group = colors(0xFF0000, 0x0000FF);
-        group.mapping = 2;
+        group.mapping = Mapping.GRADIENT;
         assertArrayEquals(new int[]{0xFF0000, 0x800080, 0x0000FF}, row(group, 3));
         assertArrayEquals(new int[]{0xFF0000}, row(group, 1));
         group = colors(0xFF0000, 0x00FF00, 0x0000FF);
-        group.mapping = 2;
+        group.mapping = Mapping.GRADIENT;
         assertArrayEquals(new int[]{0xFF0000, 0x808000, 0x00FF00, 0x008080, 0x0000FF}, row(group, 5));
     }
 
@@ -103,13 +108,13 @@ class LightingSettingsTest {
         for (int colors = 1; colors <= LightingSettings.COLORS; colors++) {
             LightingSettings.Group group = new LightingSettings.Group();
             group.colorCount = colors;
-            for (int mapping = 0; mapping < 3; mapping++) {
+            for (Mapping mapping : new Mapping[]{Mapping.SEQUENCE, Mapping.SPLIT, Mapping.GRADIENT}) {
                 group.mapping = mapping;
                 for (int fixtures : new int[]{1, 2, 7, 64}) {
                     for (int color : row(group, fixtures)) {
                         assertEquals(0, color & 0xFF000000);
                     }
-                    if (mapping == 2 && fixtures > 1) {
+                    if (mapping == Mapping.GRADIENT && fixtures > 1) {
                         assertEquals(group.colors[0], row(group, fixtures)[0]);
                         assertEquals(group.colors[colors - 1], row(group, fixtures)[fixtures - 1]);
                     }
@@ -138,11 +143,11 @@ class LightingSettingsTest {
     @Test
     void videoUsesIndependentLeftAndRightColorsAndFallsBackToTheSavedPalette() {
         LightingSettings.Group group = colors(0x123456, 0x789ABC, 0xFEDCBA);
-        group.colorMode = 1;
+        group.colorMode = ColorMode.VIDEO;
         assertEquals(0xFF0000, LightingSettings.color(group, 0, 4, 0, 0xFF0000, 0x0000FF, true));
         assertEquals(0x0000FF, LightingSettings.color(group, 1, 4, 0, 0xFF0000, 0x0000FF, true));
         assertEquals(0x789ABC, LightingSettings.color(group, 1, 4, 0, 0xFF0000, 0x0000FF, false));
-        group.mapping = 2;
+        group.mapping = Mapping.GRADIENT;
         assertEquals(0x800080, LightingSettings.color(group, 1, 3, 0, 0xFF0000, 0x0000FF, true));
     }
 
@@ -194,11 +199,11 @@ class LightingSettingsTest {
         assertEquals(5, settings.selectedGroup);
         assertEquals(0, settings.selectedColor);
         assertEquals(1, restored.colorCount);
-        assertEquals(3, restored.mapping);
-        assertEquals(0, restored.colorMode);
-        assertEquals(3, restored.motion);
-        assertEquals(0, restored.pattern);
-        assertEquals(3, restored.audioBand);
+        assertEquals(Mapping.PER_FIXTURE, restored.mapping);
+        assertEquals(ColorMode.OWN, restored.colorMode);
+        assertEquals(Motion.TRACK, restored.motion);
+        assertEquals(Pattern.SPOT, restored.pattern);
+        assertEquals(LightingSettings.Band.HIGH, restored.audioBand);
         assertEquals(0x123456, restored.colors[0]);
         assertEquals(0xFFFFFF, restored.colors[1]);
         assertEquals(1, restored.brightness);
@@ -268,17 +273,17 @@ class LightingSettingsTest {
     @Test
     void savedPresetIsIndependentOfLaterEditsAndOfItsLoadedCopies() {
         LightingSettings.Group original = colors(0x123456, 0xABCDEF);
-        original.motion = 3;
+        original.motion = Motion.TRACK;
         original.audio = true;
         original.target = UUID.randomUUID();
         CompoundTag preset = original.save();
         original.colors[0] = 0xFF0000;
-        original.motion = 0;
+        original.motion = Motion.FIXED;
         original.audio = false;
         LightingSettings.Group recalled = new LightingSettings.Group();
         recalled.load(preset);
         assertEquals(0x123456, recalled.colors[0]);
-        assertEquals(3, recalled.motion);
+        assertEquals(Motion.TRACK, recalled.motion);
         assertTrue(recalled.audio);
         assertEquals(original.target, recalled.target);
         recalled.colors[1] = 0;

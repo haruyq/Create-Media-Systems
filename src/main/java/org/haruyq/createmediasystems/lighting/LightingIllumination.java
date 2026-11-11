@@ -16,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Workers;
+import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.display.ScreenLight;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -505,7 +506,7 @@ public final class LightingIllumination {
     }
 
     public static int light(Entity entity, float partialTick, int original) {
-        if (knownLevel.get() != entity.level() || LightTexture.block(original) == 15 || LightingRenderer.shadowPass()) {
+        if (knownLevel.get() != entity.level() || LightTexture.block(original) == 15 || IrisCompat.shadowPass()) {
             return original;
         }
         Vec3 target = SableCompanion.INSTANCE.getEyePositionInterpolated(entity, partialTick)

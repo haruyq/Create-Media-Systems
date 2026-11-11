@@ -17,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
  * chosen as ever, unless the page takes it too (ownsLeftBay). A group holds one family only (LightingConsoleBlock.Entity.accepts), so each shows one page.
  *
  * <p>Deck points are (x across, from 0 at the left to 4; z from the front edge, 0, back to 1.55), monitor points
- * (x across; y up, from 1.12 to 1.86), as LightingConsoleSurface draws them. Settings the console keeps are changed
+ * (x across; y up, from 1.12 to 1.86), as LightingConsoleSurface draws them (see ConsoleLayout). Settings the console keeps are changed
  * with {@link #send}; a page's own are best kept in {@link LightingConsoleBlock.Entity#extras}, saved and synced
  * with the console, changed through its own packets.
  */
@@ -95,7 +95,7 @@ public interface LightingConsolePage {
      */
     static void send(LightingConsoleBlock.Entity console, LightingPackets.Control control, int group, int index,
                      float value, float other) {
-        LightingPackets.Change change = new LightingPackets.Change(console.getBlockPos(), group, control.ordinal(), index,
+        LightingPackets.Change change = new LightingPackets.Change(console.getBlockPos(), group, control, index,
                 value, other);
         LightingPackets.apply(console, change, Minecraft.getInstance().player);
         net.neoforged.neoforge.network.PacketDistributor.sendToServer(change);

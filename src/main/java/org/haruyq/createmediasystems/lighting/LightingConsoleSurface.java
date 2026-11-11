@@ -30,8 +30,8 @@ public final class LightingConsoleSurface {
     /**
      * For drawing what the rest of this class doesn't: the console's space into the frame's, where x runs across the
      * console from its left edge (0) to its right (4), y up from its foot (the deck at height(z), the monitors from
-     * 1.12 to 1.86), and z back from the deck's front edge (0; the monitors lean back, at z = 1.455 + (y - 1) *
-     * 0.4142). A copy, to transform freely.
+     * 1.12 to 1.86), and z back from the deck's front edge (0; the monitors lean back, at ConsoleLayout.monitorZ(y)).
+     * A copy, to transform freely.
      */
     public Matrix4f pose() {
         return new Matrix4f(matrix);
@@ -49,7 +49,7 @@ public final class LightingConsoleSurface {
 
     /** The deck's height at {@code z}. */
     public float height(float z) {
-        return LightingRenderer.Console.height(z);
+        return ConsoleLayout.deckHeight(z);
     }
 
     /** A flat coloured rectangle on the deck. */
@@ -76,20 +76,16 @@ public final class LightingConsoleSurface {
 
     /** A fader at {@code x}, as the group faders: {@code value} 0 at the front (z 0.25) to 1 at the back (z 1.2). */
     public void fader(float x, float value, int color) {
-        LightingRenderer.Console.panel(ink, matrix, x - 0.023f, 0.23f, x + 0.023f, 1.23f, 0x0B0D14);
-        float z = 0.25f + value * 0.95f;
-        LightingRenderer.box(metal, matrix, x - 0.055f, height(z) + 0.015f, z - 0.065f,
-                x + 0.055f, height(z) + 0.11f, z + 0.065f, color, light);
-        LightingRenderer.Console.faderCap(ink, matrix, x, z, color);
+        LightingRenderer.Console.fader(metal, ink, matrix, x, value, color, light);
     }
 
     /** The z a fader's {@code value} puts its cap at, and the value at a z (as a drag reads it). */
     public static float faderZ(float value) {
-        return 0.25f + value * 0.95f;
+        return ConsoleLayout.faderZ(value);
     }
 
     public static float faderValue(double z) {
-        return (float) ((z - 0.25) / 0.95);
+        return ConsoleLayout.faderValue(z);
     }
 
     /** A knob at ({@code x}, {@code z}), its pointer at {@code value} (0 to 1) of its sweep, in {@code accent}. */

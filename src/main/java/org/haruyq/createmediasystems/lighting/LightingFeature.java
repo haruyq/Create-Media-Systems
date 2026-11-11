@@ -28,7 +28,8 @@ public final class LightingFeature implements Feature {
             () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
     public static final DeferredItem<?> STAGE_LIGHT_ITEM = ITEMS.registerSimpleBlockItem("stage_light", STAGE_LIGHT);
     public static final DeferredBlock<StageLightBlock> LASER_PROJECTOR = BLOCKS.register("laser_projector",
-            () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
+            () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion(),
+                    StageLightBlock.Spec.LASER));
     public static final DeferredItem<?> LASER_PROJECTOR_ITEM = ITEMS.registerSimpleBlockItem("laser_projector", LASER_PROJECTOR);
     public static final Supplier<BlockEntityType<StageLightBlock.Entity>> STAGE_LIGHT_ENTITY = BLOCK_ENTITIES.register(
             "stage_light", () -> BlockEntityType.Builder.of(StageLightBlock.Entity::new, STAGE_LIGHT.get(), LASER_PROJECTOR.get())

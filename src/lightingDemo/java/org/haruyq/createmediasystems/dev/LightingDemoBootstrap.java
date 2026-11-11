@@ -14,8 +14,11 @@ import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
+import org.haruyq.createmediasystems.lighting.ConsoleLayout;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.LightingSettings;
+import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
+import org.haruyq.createmediasystems.lighting.LightingSettings.Pattern;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
 import org.haruyq.createmediasystems.playback.LightingDemoCache;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -149,16 +152,7 @@ public final class LightingDemoBootstrap {
         for (int x = -10; x <= 10; x++) {
             level.setBlock(new BlockPos(x, 65, -8), Blocks.IRON_BLOCK.defaultBlockState(), 3);
         }
-        Direction facing = Direction.SOUTH;
-        BlockState consoleState = LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState().setValue(LightingConsoleBlock.FACING,
-                facing);
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 2; z++) {
-                level.setBlock(LightingConsoleBlock.at(origin, facing, x, 0, z), consoleState, 3);
-            }
-            level.setBlock(LightingConsoleBlock.at(origin, facing, x, 1, 1),
-                    LightingFeature.LIGHTING_MONITOR.get().defaultBlockState().setValue(LightingConsoleBlock.FACING, facing), 3);
-        }
+        ConsoleLayout.place(level, origin, Direction.SOUTH, 3);
         if (level.getBlockEntity(origin) instanceof LightingConsoleBlock.Entity console) {
             console.updateStructure();
             configure(console);
@@ -288,28 +282,30 @@ public final class LightingDemoBootstrap {
     }
 
     private static void configure(LightingConsoleBlock.Entity console) {
-        int[] patterns = {0, 1, 2, 3, 4, 1};
-        int[] colors = {0x20C0FF, 0xA040FF, 0xFF3080, 0xFFD060, 0x40FF80, 0x2040FF};
+        Pattern[] patterns = {Pattern.SPOT, Pattern.BEAM, Pattern.LASER_RAY, Pattern.LASER_FAN, Pattern.LASER_SHEET,
+                Pattern.BEAM};
+        int[] palette = LightingSettings.DEFAULT_COLORS;
+        int[] colors = {palette[0], palette[1], palette[2], palette[3], palette[5], palette[6]};
         for (int i = 0; i < LightingSettings.GROUPS; i++) {
             LightingSettings.Group group = console.settings.groups[i];
             group.pattern = patterns[i];
-            group.motion = i == 5 ? 3 : i == 0 ? 0 : 1;
+            group.motion = i == 5 ? Motion.TRACK : i == 0 ? Motion.FIXED : Motion.SWEEP;
             group.audio = i != 0;
-            group.audioBand = i % 4;
+            group.audioBand = LightingSettings.Band.values()[i % 4];
             group.colorCount = 2;
             group.colors[0] = colors[i];
             group.colors[1] = colors[(i + 1) % colors.length];
-            group.mapping = i % 4;
+            group.mapping = LightingSettings.Mapping.values()[i % 4];
             group.range = i == 2 ? 48 : 32;
             group.spread = i == 4 ? 4 : 18;
             if (i >= 2 && i <= 4) {
-                group.motion = 1;
-                group.pattern = i;
+                group.motion = Motion.SWEEP;
+                group.pattern = patterns[i];
                 group.spread = 40;
                 group.tilt = -25;
             }
             group.colorCycle = i == 5;
-            group.colorMode = i == 5 ? 1 : 0;
+            group.colorMode = i == 5 ? LightingSettings.ColorMode.VIDEO : LightingSettings.ColorMode.OWN;
         }
         console.changed();
     }

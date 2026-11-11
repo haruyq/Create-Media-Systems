@@ -13,6 +13,7 @@ import org.haruyq.createmediasystems.display.DisplayFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
+import org.haruyq.createmediasystems.lighting.LightingSettings;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.stream.Remotable;
@@ -185,7 +186,7 @@ public final class LightingBenchmark {
         console.settings.master = 1;
         for (int i = 0; i < console.settings.groups.length; i++) {
             var group = console.settings.groups[i];
-            group.pattern = mode.laser ? 3 : 0;
+            group.pattern = mode.pattern();
             group.range = 64;
             group.spread = mode.laser && !mode.depth() ? 34 : 24;
             group.brightness = mode.brightness(i);
@@ -193,7 +194,7 @@ public final class LightingBenchmark {
             group.speed = 1;
             group.audio = false;
             group.colorCycle = false;
-            group.colorMode = 0;
+            group.colorMode = LightingSettings.ColorMode.OWN;
             group.colorCount = 1;
             group.colors[0] = i == 2 ? 0xff3040 : i == 3 ? 0x30eaff : 0xbcb8ff;
             group.pan = 0;
@@ -260,8 +261,13 @@ public final class LightingBenchmark {
             };
         }
 
-        int motion() {
-            return this == LASER_MOVE || this == SPOT_MOVE || this == SPOT_ONLY || this == SPOT_AWAY ? 1 : 0;
+        LightingSettings.Motion motion() {
+            return this == LASER_MOVE || this == SPOT_MOVE || this == SPOT_ONLY || this == SPOT_AWAY
+                    ? LightingSettings.Motion.SWEEP : LightingSettings.Motion.FIXED;
+        }
+
+        LightingSettings.Pattern pattern() {
+            return laser ? LightingSettings.Pattern.LASER_FAN : LightingSettings.Pattern.SPOT;
         }
 
         boolean fixtures() {
@@ -385,7 +391,7 @@ public final class LightingBenchmark {
                 var video = NativeAudio.screen(PLAYER);
                 if (!(minecraft.level.getBlockEntity(CONSOLE) instanceof LightingConsoleBlock.Entity console)
                         || console.fixtures().size() != FIXTURES || console.settings.enabled != current.mode.fixtures()
-                        || console.settings.groups[0].pattern != (current.mode.laser ? 3 : 0)
+                        || console.settings.groups[0].pattern != current.mode.pattern()
                         || console.settings.groups[0].tilt != current.mode.tilt(0)
                         || console.settings.groups[2].brightness != current.mode.brightness(2)
                         || console.settings.groups[3].brightness != current.mode.brightness(3)
