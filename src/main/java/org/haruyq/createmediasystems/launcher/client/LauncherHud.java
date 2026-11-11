@@ -9,7 +9,7 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
@@ -89,9 +89,9 @@ public final class LauncherHud {
         }
         g.pose().popPose();
         if(mc.options.getCameraType().isFirstPerson() && !mc.getDebugOverlay().showDebugScreen()) {
-            Entity locked = reload ? null : LauncherClient.lockedPart(mc);
-            if (locked != null) lockMarker(g, mc, locked, unit, partial);
-            reticle(g,mc,unit,aim,reload,locked != null);
+            Vec3 point = reload ? null : LauncherClient.lockedPoint(mc);
+            if (point != null) lockMarker(g, mc, point, unit, partial);
+            reticle(g,mc,unit,aim,reload,point != null);
             damageNumbers(g,mc,unit,partial);
         }
     }
@@ -120,9 +120,8 @@ public final class LauncherHud {
     }
     private static final int LOCK_COLOR = 0xFFC1ACFF;
 
-    private static void lockMarker(GuiGraphics g, Minecraft mc, Entity target, float unit, float partial) {
-        var center = target.getPosition(partial).add(0, target.getBbHeight() * .5, 0);
-        var at = project(mc, g, center.x, center.y, center.z, partial);
+    private static void lockMarker(GuiGraphics g, Minecraft mc, Vec3 point, float unit, float partial) {
+        var at = project(mc, g, point.x, point.y, point.z, partial);
         if (at == null) return;
         g.pose().pushPose();
         g.pose().translate(at[0], at[1], 0);

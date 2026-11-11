@@ -9,7 +9,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.boss.EnderDragonPart;
-import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
@@ -23,9 +22,10 @@ final class DiscAimAssist {
     private static final double RETAIN_ALIGNMENT = Math.cos(Math.toRadians(24));
     private static final double LEAD_ALIGNMENT = Math.cos(Math.toRadians(30));
 
-    record Solution(Vec3 direction, @Nullable Entity target) {}
-    private record Intercept(Vec3 direction, Vec3 point) {}
-    private record Aim(Player shooter, Vec3 origin, Vec3 forward, double range, double drag, Predicate<Entity> canHit) {
+    record Focus(Entity part, int zone) {}
+    record Solution(Focus focus, Vec3 point) {}
+    private record Aim(Player shooter, Vec3 origin, Vec3 forward, double range, double drag, int inputDelay,
+                       Predicate<Entity> canHit) {
         HitResult trace(Vec3 point) {
             return DiscBallistics.trace(shooter, origin, point, canHit);
         }
@@ -39,53 +39,53 @@ final class DiscAimAssist {
 
     private DiscAimAssist() {}
 
-    static Solution select(Player shooter, Vec3 forward, @Nullable LivingEntity locked) {
+    @Nullable
+    static Solution select(Player shooter, @Nullable Focus locked, int inputDelay) {
         boolean submerged = shooter.isEyeInFluid(FluidTags.WATER);
         // The disc travels in a straight line and uses vanilla throwable drag at each step.
-        Aim aim = new Aim(shooter, shooter.getEyePosition(), forward.normalize(),
-                submerged ? 24 : 64, submerged ? .8f : .99f,
+        Aim aim = new Aim(shooter, shooter.getEyePosition(), shooter.getLookAngle(),
+                submerged ? 24 : 64, submerged ? .8f : .99f, inputDelay,
                 entity -> entity.canBeHitByProjectile() && !shooter.isPassengerOfSameVehicle(entity));
-        if (eligible(shooter, locked)) {
-            List<? extends Entity> parts = locked instanceof EnderDragon dragon
-                    ? List.of(dragon.getSubEntities()) : List.of(locked);
-            Solution retained = choose(aim, parts, RETAIN_ALIGNMENT);
-            if (retained != null) return retained;
+        if (locked != null && eligible(shooter, parent(locked.part)) && aim.canHit.test(locked.part)) {
+            List<AABB> boxes = DiscBallistics.hitBoxes(locked.part);
+            if (locked.zone < boxes.size()) {
+                AABB box = boxes.get(locked.zone);
+                Solution retained = aimAt(aim, locked, box);
+                if (retained != null && Math.max(alignment(aim, box.getCenter()), alignment(aim, retained.point))
+                        >= RETAIN_ALIGNMENT) return retained;
+            }
         }
 
         Vec3 end = aim.origin.add(aim.forward.scale(aim.range));
         if (aim.trace(end) instanceof EntityHitResult direct) {
             Entity target = direct.getEntity();
-            if (!eligible(shooter, parent(target))) return new Solution(forward, null);
-            Solution solution = aimAt(aim, target);
+            if (!eligible(shooter, parent(target))) return null;
+            int zone = hitZone(direct);
+            Solution solution = aimAt(aim, new Focus(target, zone), DiscBallistics.hitBoxes(target).get(zone));
             if (solution != null) return solution;
         }
 
         AABB search = new AABB(aim.origin, end).inflate(aim.range * Math.sin(ACQUIRE_ANGLE));
         var candidates = shooter.level().getEntities(shooter, search, entity -> aim.canHit.test(entity)
                 && eligible(shooter, parent(entity)));
-        Solution acquired = choose(aim, candidates, ACQUIRE_ALIGNMENT);
-        return acquired != null ? acquired : new Solution(forward, null);
+        return choose(aim, candidates);
     }
 
     @Nullable
-    private static Solution choose(Aim aim, List<? extends Entity> candidates, double minimumAlignment) {
+    private static Solution choose(Aim aim, List<Entity> candidates) {
         Solution best = null;
-        double bestAlignment = minimumAlignment;
+        double bestAlignment = ACQUIRE_ALIGNMENT;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (Entity target : candidates) {
-            if (!aim.canHit.test(target)) continue;
-            Vec3 center = DiscBallistics.hitBoxes(target).getFirst().getCenter();
-            Vec3 offset = center.subtract(aim.origin);
-            double distance = offset.lengthSqr();
-            if (distance < 1e-6 || distance > aim.range * aim.range) continue;
-            double alignment = aim.forward.dot(offset.scale(1 / Math.sqrt(distance)));
-            if (alignment < minimumAlignment) continue;
-            if (!(aim.trace(center) instanceof EntityHitResult visible) || visible.getEntity() != target) continue;
-
-            Solution solution = aimAt(aim, target);
-            if (solution == null) continue;
-            if (solution.direction.equals(aim.forward)) return solution;
-            if (alignment > bestAlignment || alignment == bestAlignment && distance < bestDistance) {
+            var boxes = DiscBallistics.hitBoxes(target);
+            for (int zone = 0; zone < boxes.size(); zone++) {
+                AABB box = boxes.get(zone);
+                Vec3 center = box.getCenter();
+                double distance = center.distanceToSqr(aim.origin);
+                double alignment = alignment(aim, center);
+                if (alignment < bestAlignment || alignment == bestAlignment && distance >= bestDistance) continue;
+                Solution solution = aimAt(aim, new Focus(target, zone), box);
+                if (solution == null) continue;
                 best = solution;
                 bestAlignment = alignment;
                 bestDistance = distance;
@@ -94,19 +94,21 @@ final class DiscAimAssist {
         return best;
     }
 
-    @Nullable
-    private static Solution aimAt(Aim aim, Entity target) {
-        Intercept direct = intercept(aim, target, aim.forward);
-        if (direct != null && aim.clearTo(target, direct.point)) return new Solution(aim.forward, target);
-        Intercept lead = intercept(aim, target, null);
-        return lead != null && aim.forward.dot(lead.direction) >= LEAD_ALIGNMENT && aim.clearTo(target, lead.point)
-                ? new Solution(lead.direction, target) : null;
+    private static double alignment(Aim aim, Vec3 point) {
+        return aim.forward.dot(point.subtract(aim.origin).normalize());
+    }
+
+    private static int hitZone(EntityHitResult hit) {
+        return hit.getEntity() instanceof LivingEntity living && DiscHitZones.headshot(living, hit.getLocation()) ? 1 : 0;
     }
 
     @Nullable
-    private static Intercept intercept(Aim aim, Entity target, @Nullable Vec3 fixedDirection) {
-        var boxes = DiscBallistics.hitBoxes(target);
-        Vec3 center = boxes.getFirst().getCenter();
+    private static Solution aimAt(Aim aim, Focus focus, AABB box) {
+        Entity target = focus.part;
+        Vec3 center = box.getCenter();
+        if (center.distanceToSqr(aim.origin) > aim.range * aim.range
+                || !(aim.trace(center) instanceof EntityHitResult visible)
+                || visible.getEntity() != target || hitZone(visible) != focus.zone) return null;
         // The dragon updates each part's old position separately, including when its body turns.
         Vec3 motion = target instanceof Player ? target.getKnownMovement()
                 : target.position().subtract(target.xo, target.yo, target.zo);
@@ -118,17 +120,23 @@ final class DiscAimAssist {
         double travelled = 0;
         double speed = DiscProjectile.LAUNCH_SPEED;
         Vec3 shift = Vec3.ZERO;
+        // Advance the target while the steering sample travels to the client and the trigger travels back.
+        for (int tick = 0; tick < aim.inputDelay; tick++) {
+            if (turn != 0) motion = motion.yRot(turn);
+            shift = shift.add(motion);
+        }
         while (travelled < aim.range) {
             double reach = Math.min(aim.range, travelled + speed);
             if (turn != 0) motion = motion.yRot(turn);
             shift = shift.add(motion);
             Vec3 origin = aim.origin.subtract(shift);
-            Vec3 direction = fixedDirection != null ? fixedDirection : center.subtract(origin).normalize();
+            Vec3 direction = center.subtract(origin).normalize();
             Vec3 start = origin.add(direction.scale(travelled));
             Vec3 end = origin.add(direction.scale(reach));
-            for (AABB box : boxes) {
-                var contact = DiscBallistics.contact(box, start, end);
-                if (contact.isPresent()) return new Intercept(direction, contact.get().add(shift));
+            var contact = DiscBallistics.contact(box, start, end);
+            if (contact.isPresent() && aim.forward.dot(direction) >= LEAD_ALIGNMENT
+                    && aim.clearTo(target, contact.get().add(shift))) {
+                return new Solution(focus, center.add(shift));
             }
             travelled = reach;
             speed *= aim.drag;
