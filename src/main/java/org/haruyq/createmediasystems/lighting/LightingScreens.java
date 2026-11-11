@@ -2,10 +2,12 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Occluders;
 
+import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import net.minecraft.core.BlockPos;
@@ -21,11 +23,12 @@ public final class LightingScreens {
     private LightingScreens() {
     }
 
-    static List<Panel> snapshot(Level level, boolean render) {
+    /** The level's occluders, each where {@code pose} puts its sub-level (see SableCompat). */
+    static List<Panel> snapshot(Level level, Function<SubLevelAccess, Pose3dc> pose) {
         List<Panel> panels = new ArrayList<>();
         for (Occluders.Occluder occluder : Occluders.in(level)) {
-            Pose3dc pose = SableCompat.pose(level, occluder.getBlockPos(), render);
-            panels.add(new Panel(occluder.getBlockPos(), occluder.occluderBox(), pose));
+            Pose3dc at = pose.apply(SableCompat.containing(level, occluder.getBlockPos()));
+            panels.add(new Panel(occluder.getBlockPos(), occluder.occluderBox(), at));
         }
         return List.copyOf(panels);
     }

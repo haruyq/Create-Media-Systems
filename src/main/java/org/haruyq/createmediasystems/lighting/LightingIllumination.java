@@ -22,7 +22,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
-import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -524,8 +523,7 @@ public final class LightingIllumination {
         if (knownLevel.get() != entity.level() || LightTexture.block(original) == 15 || IrisCompat.shadowPass()) {
             return original;
         }
-        Vec3 target = SableCompanion.INSTANCE.getEyePositionInterpolated(entity, partialTick)
-                .add(0, entity.getBbHeight() * 0.5 - entity.getEyeHeight(), 0);
+        Vec3 target = SableCompat.bodyCenter(entity, partialTick);
         float intensity = 0;
         long now = entity.level().getGameTime();
         for (var entry : BEAMS.entrySet()) {
@@ -547,7 +545,7 @@ public final class LightingIllumination {
                     entity.getBbWidth() * 0.35) * beam.strength;
             Vec3 origin = SableCompat.toRenderWorld(entity.level(), lamp.getBlockPos(),
                     beam.origin.add(Vec3.atLowerCornerOf(lamp.getBlockPos())));
-            if (value > 0 && new LightingRaycast(entity.level(), lamp.getBlockPos(), true).visible(origin, target)) {
+            if (value > 0 && LightingRaycast.rendered(entity.level(), lamp.getBlockPos()).visible(origin, target)) {
                 intensity += value;
             }
         }
@@ -604,7 +602,7 @@ public final class LightingIllumination {
         }
         BlockPos center = hit.block().getBlockPos();
         Vec3 offset = Vec3.atLowerCornerOf(lamp.getBlockPos());
-        Pose3dc lampPose = SableCompat.pose(level, lamp.getBlockPos(), true);
+        Pose3dc lampPose = SableCompat.renderPose(level, lamp.getBlockPos());
         Vec3 impact = (lampPose == null ? hit.point() : lampPose.transformPositionInverse(hit.point())).subtract(offset);
         int radius = Mth.ceil(Math.min(Mth.clamp(maxRadius, 1, MAX_RADIUS), origin.distanceTo(impact) * beam.tangent)) + 1;
         Direction.Axis axis = hit.block().getDirection().getAxis();
@@ -614,7 +612,7 @@ public final class LightingIllumination {
         }
         Vec3 absoluteOrigin = origin.add(offset);
         Vec3 from = lampPose == null ? absoluteOrigin : lampPose.transformPosition(absoluteOrigin);
-        Pose3dc targetPose = SableCompat.pose(level, center, true);
+        Pose3dc targetPose = SableCompat.renderPose(level, center);
         boolean moving = lampPose != null || targetPose != null
                 || rays.hasSubLevels(new AABB(from, hit.point()).inflate((radius + SCAN_MARGIN + 2) * Math.sqrt(3)));
         if (moving != beam.moving) {
@@ -678,10 +676,9 @@ public final class LightingIllumination {
         boolean check = beam.at - beam.checked >= CHECK_TICKS;
         // On different sub-levels (or one on none), the faces move in the lamp's space: each frame sees them anew.
         BlockPos surface = beam.center == null ? center : beam.center;
-        boolean posed = SableCompanion.INSTANCE.getContaining(level, lamp.getBlockPos())
-                != SableCompanion.INSTANCE.getContaining(level, surface);
+        boolean posed = !SableCompat.sameSubLevel(level, lamp.getBlockPos(), surface);
         // Every face found belongs to the scanned centre's sub-level, or to the world.
-        Pose3dc facePose = SableCompat.pose(level, surface, true);
+        Pose3dc facePose = SableCompat.renderPose(level, surface);
         // On the same moving sub-level, only where they are in the world (to trace to) changes.
         boolean carried = posed || facePose != null;
         // A still light with every face in its beam traced has nothing to look at till something changes.
@@ -1173,7 +1170,7 @@ public final class LightingIllumination {
             this.radius = radius;
             this.axis = axis;
             this.sable = sable;
-            owner = sable ? SableCompanion.INSTANCE.getContaining(level, center) : null;
+            owner = sable ? SableCompat.containing(level, center) : null;
             lampOffset = Vec3.atLowerCornerOf(lamp);
             for (Face face : previous) {
                 if (face != null) {
@@ -1230,7 +1227,7 @@ public final class LightingIllumination {
 
         private void read(BlockPos pos) {
             if (!level.isLoaded(pos) || pos.equals(lamp)
-                    || sable && SableCompanion.INSTANCE.getContaining(level, pos) != owner) {
+                    || sable && SableCompat.containing(level, pos) != owner) {
                 return;
             }
             BlockState state = level.getBlockState(pos);

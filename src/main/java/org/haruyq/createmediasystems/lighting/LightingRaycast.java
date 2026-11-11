@@ -2,13 +2,12 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.haruyq.createmediasystems.SableCompat;
 
-import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
-import dev.ryanhcode.sable.companion.math.BoundingBox3d;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -66,7 +65,20 @@ public final class LightingRaycast {
     private record Scene(Level level, long frame, List<Snapshot> subLevels, List<LightingScreens.Panel> screens) {
     }
 
-    public LightingRaycast(Level level, BlockPos ignored, boolean render) {
+    /**
+     * This frame's traces on the render thread: sub-levels where they are drawn, with the block shapes and the scene
+     * shared by every trace of the frame. Elsewhere (a server), where they logically are.
+     */
+    public static LightingRaycast rendered(Level level, BlockPos ignored) {
+        return new LightingRaycast(level, ignored, true);
+    }
+
+    /** Traces against where sub-levels logically are, with a cache of their own. */
+    public static LightingRaycast logical(Level level, BlockPos ignored) {
+        return new LightingRaycast(level, ignored, false);
+    }
+
+    private LightingRaycast(Level level, BlockPos ignored, boolean render) {
         this.level = level;
         this.ignored = ignored;
         if (render && level.isClientSide) {
@@ -79,25 +91,24 @@ public final class LightingRaycast {
             cache = new Cache(level);
         }
         cacheShapes = render;
-        Scene scene = scene(level, render);
+        Scene scene = scene(level, render, render ? SableCompat::renderPose : SableCompat::logicalPose);
         subLevels = scene.subLevels;
         screens = scene.screens;
     }
 
-    private static Scene scene(Level level, boolean render) {
+    private static Scene scene(Level level, boolean render, Function<SubLevelAccess, Pose3dc> poseOf) {
         boolean shared = render && level.isClientSide && level == Minecraft.getInstance().level;
         long frame = shared ? LightingIllumination.frame() : -1;
         if (shared && renderScene != null && renderScene.level == level && renderScene.frame == frame) {
             return renderScene;
         }
         List<Snapshot> snapshots = new ArrayList<>();
-        for (SubLevelAccess subLevel : SableCompanion.INSTANCE.getAllIntersecting(level,
-                new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000))) {
-            Pose3d pose = new Pose3d(SableCompat.pose(subLevel, render));
+        for (SubLevelAccess subLevel : SableCompat.subLevels(level)) {
+            Pose3d pose = new Pose3d(poseOf.apply(subLevel));
             snapshots.add(new Snapshot(subLevel, pose, pose.bakeIntoMatrix(new Matrix4d()).normal(new Matrix3d()),
                     bounds(subLevel, pose)));
         }
-        Scene scene = new Scene(level, frame, List.copyOf(snapshots), LightingScreens.snapshot(level, render));
+        Scene scene = new Scene(level, frame, List.copyOf(snapshots), LightingScreens.snapshot(level, poseOf));
         if (shared) {
             renderScene = scene;
         }
@@ -155,7 +166,7 @@ public final class LightingRaycast {
             }
         }
         Vec3 end = best == null ? toWorld : best.point();
-        Hit nativeHit = result(trace(fromWorld, end, pos -> !SableCompanion.INSTANCE.isInPlotGrid(level, pos)), null);
+        Hit nativeHit = result(trace(fromWorld, end, pos -> !SableCompat.inPlotGrid(level, pos)), null);
         if (nativeHit != null && (best == null || fromWorld.distanceToSqr(nativeHit.point()) < fromWorld.distanceToSqr(best.point()))) {
             best = nativeHit;
         }
@@ -169,7 +180,7 @@ public final class LightingRaycast {
                 continue;
             }
             Hit candidate = result(trace(snapshot.pose.transformPositionInverse(from), snapshot.pose.transformPositionInverse(to),
-                    pos -> SableCompanion.INSTANCE.getContaining(level, pos) == snapshot.owner), snapshot);
+                    pos -> SableCompat.containing(level, pos) == snapshot.owner), snapshot);
             if (candidate != null && (best == null || fromWorld.distanceToSqr(candidate.point()) < fromWorld.distanceToSqr(best.point()))) {
                 best = candidate;
             }

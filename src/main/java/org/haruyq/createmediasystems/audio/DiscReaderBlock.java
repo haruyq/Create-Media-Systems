@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.audio;
 
 import org.haruyq.createmediasystems.ItemSlot;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
@@ -31,7 +32,7 @@ import net.minecraft.world.phys.BlockHitResult;
  * Plays a custom disc silently: it keeps the track's position so linked speakers can play it in sync. A disc plays
  * once inserted; a redstone signal turning on plays it from the start, and turning off stops it.
  */
-public class DiscReaderBlock extends Block implements EntityBlock {
+public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     public DiscReaderBlock(Properties properties) {
         super(properties);
     }
@@ -50,7 +51,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        ItemSlot.onRemove(state, level, pos, newState);
+        ItemSlot.onRemove(this, state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 

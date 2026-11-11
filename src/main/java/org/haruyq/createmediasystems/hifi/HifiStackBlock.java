@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.Downloads;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
@@ -72,7 +73,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * HifiSpeakerBlock), and the others only work once joined to it with cables at the back (see Cable). Everything is
  * worked by pointing at its controls (see Control); sneak and right-click with an empty hand to take the top unit off.
  */
-public class HifiStackBlock extends HorizontalDirectionalBlock implements EntityBlock {
+public class HifiStackBlock extends HorizontalDirectionalBlock implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<HifiStackBlock> CODEC = simpleCodec(HifiStackBlock::new);
     /** Its shape for each height (in half sixteenths) and whether it faces along x. */
     private static final Map<Integer, VoxelShape> SHAPES = new ConcurrentHashMap<>();
@@ -128,7 +129,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // Sable assembling a ship removes it too: data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity stack) {
             for (ItemStack item : stack.everything()) {
                 Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), item);

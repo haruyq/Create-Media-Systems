@@ -64,7 +64,7 @@ public final class LightingBenchmark {
 
     @SubscribeEvent
     public static void tick(ServerTickEvent.Post event) {
-        if (!enabled() || event.getServer().getTickCount() % 10 != 0) {
+        if (event.getServer().getTickCount() % 10 != 0) {
             return;
         }
         ServerLevel level = event.getServer().overworld();
@@ -95,11 +95,6 @@ public final class LightingBenchmark {
     @SubscribeEvent
     public static void stopping(ServerStoppingEvent event) {
         active = null;
-    }
-
-    private static boolean enabled() {
-        return Boolean.getBoolean("cms.lightingBenchmark")
-                && FMLPaths.GAMEDIR.get().getFileName().toString().equals("run-lighting-benchmark");
     }
 
     private static Mode mode() {
@@ -327,9 +322,6 @@ public final class LightingBenchmark {
 
         @SubscribeEvent
         public static void tick(ClientTickEvent.Post event) {
-            if (!enabled()) {
-                return;
-            }
             Minecraft minecraft = Minecraft.getInstance();
             long now = System.nanoTime();
             if (now - nextStopCheck >= 0) {

@@ -16,8 +16,9 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      # The tag (v1.2.3 -> 1.2.3) sets the mod version, so the jar and mods.toml match the release.
-      - run: ./gradlew build -Pmod_version=${GITHUB_REF_NAME#v}
+      # The tag (v1.2.3 -> 1.2.3) sets the mod version, so the jar and mods.toml match the release. Nothing is
+      # released unless the unit and game tests pass.
+      - run: ./gradlew build runGameTestServer -Pmod_version=${GITHUB_REF_NAME#v}
       - run: gh release create "$GITHUB_REF_NAME" build/libs/*.jar --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

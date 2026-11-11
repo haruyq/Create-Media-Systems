@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.disc.DriveClient;
 import org.haruyq.createmediasystems.disc.DriveScreen;
 import org.haruyq.createmediasystems.stream.DiscDrive;
@@ -63,7 +64,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * reads the disc and shares it directly (see DriveClient). Right-click for the drive, which opens and closes as the
  * real one does, for everyone who looks (see DriveScreen); goggles show how well each viewer's connection holds up.
  */
-public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable {
+public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
+        SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<DriveEmulatorBlock> CODEC = simpleCodec(DriveEmulatorBlock::new);
     /** Its lamp: lit while a disc is in. */
     public static final BooleanProperty LIT = BlockStateProperties.LIT;

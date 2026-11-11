@@ -44,7 +44,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * speaker terminals with an audio cable, then the speaker. Sneak and right-click it with an empty hand to pull the
  * cable out.
  */
-public class HifiSpeakerBlock extends SpeakerBlock {
+public class HifiSpeakerBlock extends SpeakerBlock implements SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<HifiSpeakerBlock> CODEC = simpleCodec(HifiSpeakerBlock::new);
     private static final VoxelShape ALONG_Z = Shapes.or(Block.box(2.5, 0, 3, 13.5, 1, 13), Block.box(3.5, 1, 4, 12.5, 16, 12));
     private static final VoxelShape ALONG_X = Shapes.or(Block.box(3, 0, 2.5, 13, 1, 13.5), Block.box(4, 1, 3.5, 12, 16, 12.5));
@@ -105,7 +105,6 @@ public class HifiSpeakerBlock extends SpeakerBlock {
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // Sable assembling a ship removes it too: data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity speaker && speaker.cabled) {
             Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), new ItemStack(HifiFeature.HIFI_CABLE.get()));
         }

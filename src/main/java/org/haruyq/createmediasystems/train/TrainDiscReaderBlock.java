@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.train;
 import java.util.List;
 
 import org.haruyq.createmediasystems.ItemSlot;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.PercentSetting;
 
 import org.jetbrains.annotations.Nullable;
@@ -32,7 +33,8 @@ import net.neoforged.neoforge.common.Tags;
  * Holds one announcement schedule; {@link TrainDiscReaderBehaviour} plays it on a train through the train's
  * {@link TrainSpeakerBlock}s. Their volume is set here, on the placed block: hold right-click on it with a wrench.
  */
-public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBlock.Entity> {
+public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBlock.Entity>,
+        SableCompat.SilentAssemblyRemoval {
     static final String ITEM_TAG = "Item";
 
     public TrainDiscReaderBlock(Properties properties) {
@@ -67,7 +69,7 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         // Create removes the block entity before assembling a train, so this only fires on real removal.
-        ItemSlot.onRemove(state, level, pos, newState);
+        ItemSlot.onRemove(this, state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
