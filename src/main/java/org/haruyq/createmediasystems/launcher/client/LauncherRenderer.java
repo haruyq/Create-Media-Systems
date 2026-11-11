@@ -42,8 +42,8 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         var mc = Minecraft.getInstance();
         var level = mc.level;
         float partial = mc.getTimer().getGameTimeDeltaPartialTick(true);
-        LauncherTimeline.Frame motion = LauncherClient.frame(stack, level, partial);
         var visual = LauncherClient.cellVisual(stack, level, partial);
+        LauncherTimeline.Frame motion = visual.motion();
         int color = visual.color();
         // One pass: acquiring a second unfixed render type would invalidate the first BufferBuilder.
         // Core vertices supply full-bright light; receiver vertices receive a tier-colored point light.
@@ -112,8 +112,7 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
                     ChargeableItem.charge(visual.stack()), light, overlay);
 
         box(pose, glow, 7.2f, 11.3f, 16.1f, 8.8f, 12, 16.25f, METAL, FULL_BRIGHT, overlay);
-        Long shot=stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
-        float shotAge=shot==null || level==null?-1:level.getGameTime()-shot+partial;
+        float shotAge=LauncherTimeline.shotAge(stack,level,partial);
         if(shotAge>=0 && shotAge<1.2f) {
             var flash=new Tint(luminous,color,210);
             float pulse=1-shotAge/1.2f;

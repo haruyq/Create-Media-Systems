@@ -25,7 +25,7 @@ class LauncherMechanicsTest {
                 assertEquals(1, motion.tray(), 1e-6, "Cell hits door at " + age);
                 assertEquals(1, motion.latch(), 1e-6);
             }
-            if (age >= LauncherMechanics.HAND_END) assertEquals(0, motion.supportHand());
+            if (age >= LauncherTimeline.HAND_OUT.end()) assertEquals(0, motion.supportHand());
             if (age > 63) assertEquals(LauncherMechanics.DOCK_Y, cell.y(), 1e-6);
         }
         var outside = LauncherMechanics.cellPose(31, LauncherTimeline.sample(31, -1));

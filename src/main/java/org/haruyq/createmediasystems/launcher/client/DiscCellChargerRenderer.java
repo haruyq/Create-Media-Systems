@@ -14,7 +14,6 @@ public final class DiscCellChargerRenderer implements BlockEntityRenderer<DiscCe
     public DiscCellChargerRenderer(BlockEntityRendererProvider.Context context) {}
     @Override public void render(DiscCellCharger charger, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         if (charger.cell().isEmpty()) return;
-        CellGlowRenderer.track(charger);
         pose.pushPose();
         // Rest the actual bottom on the socket, including each item's FIXED transform.
         pose.translate(.5, charger.cell().getItem() instanceof DiscCellItem ? .55125 : .61125, .5);

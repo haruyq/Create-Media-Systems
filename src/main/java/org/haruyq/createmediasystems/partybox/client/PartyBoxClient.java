@@ -43,6 +43,7 @@ public final class PartyBoxClient {
         },PartyBoxFeature.PARTYBOX.get()));
         bus.addListener((net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent event)->Minecraft.getInstance().execute(PartyBoxClient::stopAll));
         NeoForge.EVENT_BUS.addListener(PartyBoxClient::tick);
+        org.haruyq.createmediasystems.client.PointLights.add(PartyBoxRenderer.LIGHTS);
     }
     public static boolean audible(PartyBoxEntity box) {
         var camera=Minecraft.getInstance().getCameraEntity();

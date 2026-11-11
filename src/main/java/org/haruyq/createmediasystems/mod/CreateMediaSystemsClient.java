@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.mod;
 
+import org.haruyq.createmediasystems.client.PointLights;
 import org.haruyq.createmediasystems.power.client.BatteryRenderer;
 import java.util.List;
 
@@ -43,6 +44,7 @@ public final class CreateMediaSystemsClient {
         FEATURES.forEach(feature -> feature.register(modBus));
         ClientConfig.register(container);
         ScreenLight.register();
+        PointLights.register(modBus);
         modBus.addListener((FMLClientSetupEvent event) -> PonderIndex.addPlugin(new PonderPlugin() {
             @Override
             public String getModId() {

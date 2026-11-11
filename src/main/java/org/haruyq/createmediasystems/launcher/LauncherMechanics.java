@@ -8,7 +8,6 @@ public final class LauncherMechanics {
     public static final float WELL_FRONT = 8.8f, WELL_BACK = 14.9f;
     public static final float DOOR_Y = 7.1f, LID_BOTTOM = 15.75f, GRIP_FRONT = 16.1f;
     public static final float TRAVEL = 12.2f;
-    public static final int INCOMING_AT = 30, HAND_END = 63;
 
     private LauncherMechanics() {}
 
@@ -17,7 +16,7 @@ public final class LauncherMechanics {
     public static CellPose cellPose(float reloadAge, LauncherTimeline.Frame motion) {
         if (reloadAge < 0 || reloadAge >= LauncherTimeline.RELOAD_TICKS)
             return new CellPose(DOCK_X, DOCK_Y, DOCK_Z, false);
-        boolean incoming = reloadAge >= INCOMING_AT;
+        boolean incoming = reloadAge >= LauncherTimeline.INCOMING_AT;
         float travel = incoming ? 1 - motion.disc() : motion.cellOut();
         return new CellPose(DOCK_X, DOCK_Y - TRAVEL * travel, DOCK_Z, incoming);
     }

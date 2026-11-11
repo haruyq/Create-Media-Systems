@@ -108,10 +108,10 @@ public final class DiscLauncherItem extends Item {
             LauncherMagazine.finish(player, stack);
             level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
                     LauncherFeature.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, 0.65f, 1.4f);
-        } else if (isSelected && (age == 12 || age == 28 || age == 50 || age == 74)) {
+        } else if (isSelected && LauncherTimeline.Cue.at(age) instanceof LauncherTimeline.Cue cue) {
             level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
-                    age == 74 ? LauncherFeature.DISC_CHARGE_SOUND.get() : LauncherFeature.DISC_INSERT_SOUND.get(),
-                    SoundSource.PLAYERS, 0.65f, age == 12 ? 0.7f : 1.15f);
+                    cue == LauncherTimeline.Cue.CHARGE ? LauncherFeature.DISC_CHARGE_SOUND.get() : LauncherFeature.DISC_INSERT_SOUND.get(),
+                    SoundSource.PLAYERS, 0.65f, cue.pitch);
         }
     }
 
