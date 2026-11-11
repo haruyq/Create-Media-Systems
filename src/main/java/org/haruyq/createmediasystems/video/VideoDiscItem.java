@@ -3,9 +3,11 @@ package org.haruyq.createmediasystems.video;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.disc.DiscUrl;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.StreamPackets;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
@@ -24,26 +26,33 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
- * A playlist of links for a Blu-ray player or a hi-fi stack (not a jukebox): a DVD or a Blu-ray, which differ in how
- * many videos they hold and how sharp they play, or a CD or a cassette, which have no picture and play in a hi-fi
- * stack only. Use in the air to edit the list.
+ * A disc (or tape) that holds a playlist of links: a DVD or a Blu-ray, which differ in how many videos they hold and
+ * how sharp they play, or a CD or a cassette, which have no picture. Its kind says what plays it (see DiscKind). Use
+ * in the air to edit the list.
  */
-public class VideoDiscItem extends Item {
+public class VideoDiscItem extends Item implements MediaItem {
     /** Most links any disc holds (the network's limit). */
     public static final int MAX_ENTRIES = 64;
     private static final int SHOWN_ENTRIES = 5;
 
-    /** How many links it holds, and the tallest picture (pixels) it plays: 0 for sound alone. */
-    public final int entries;
-    public final int maxHeight;
+    private final DiscKind kind;
 
-    public VideoDiscItem(Properties properties, int entries, int maxHeight) {
+    public VideoDiscItem(Properties properties, DiscKind kind) {
         super(properties);
-        if (entries > MAX_ENTRIES) {
+        if (kind.entries > MAX_ENTRIES) {
             throw new IllegalArgumentException("A disc holds at most " + MAX_ENTRIES + " links");
         }
-        this.entries = entries;
-        this.maxHeight = maxHeight;
+        this.kind = kind;
+    }
+
+    @Override
+    public DiscKind kind() {
+        return kind;
+    }
+
+    @Override
+    public List<String> links(ItemStack stack) {
+        return stack.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
     }
 
     @Override
@@ -53,19 +62,19 @@ public class VideoDiscItem extends Item {
             return InteractionResultHolder.pass(stack);
         }
         if (level.isClientSide) {
-            PlaylistScreen.open(stack.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of()), entries);
+            PlaylistScreen.open(links(stack), kind.entries);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        List<String> playlist = stack.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+        List<String> playlist = links(stack);
         if (playlist.isEmpty()) {
             tooltip.add(Component.translatable("create_media_systems.url.unset").withStyle(ChatFormatting.DARK_GRAY));
             return;
         }
-        tooltip.add(Component.translatable(maxHeight > 0 ? "create_media_systems.disc.entries" : "create_media_systems.disc.tracks", playlist.size()).withStyle(ChatFormatting.GOLD));
+        tooltip.add(Component.translatable(kind.hasPicture() ? "create_media_systems.disc.entries" : "create_media_systems.disc.tracks", playlist.size()).withStyle(ChatFormatting.GOLD));
         for (int i = 0; i < Math.min(playlist.size(), SHOWN_ENTRIES); i++) {
             tooltip.add(Component.literal((i + 1) + ". " + playlist.get(i)).withStyle(ChatFormatting.GRAY));
         }
@@ -96,23 +105,22 @@ public class VideoDiscItem extends Item {
             return;
         }
         List<String> playlist = urls.stream().map(String::trim).filter(url -> !url.isEmpty())
-                .limit(disc.entries).toList();
+                .limit(disc.kind.entries).toList();
         for (int i = 0; i < playlist.size(); i++) {
-            var physical = DiscUrl.parse(playlist.get(i));
-            if (!ServerConfig.isAllowed(playlist.get(i)) || physical != null && !physical.owner().equals(player.getUUID())
-                    && !held.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of()).contains(playlist.get(i))) {
-                player.displayClientMessage(Component.translatable(disc.maxHeight > 0 ? "create_media_systems.disc.rejected"
+            String url = playlist.get(i);
+            if (!UrlPolicy.isAllowed(url) || !MediaKind.writableBy(url, player.getUUID()) && !disc.links(held).contains(url)) {
+                player.displayClientMessage(Component.translatable(disc.kind.hasPicture() ? "create_media_systems.disc.rejected"
                         : "create_media_systems.disc.rejected_track", i + 1)
                         .withStyle(ChatFormatting.RED), true);
                 return;
             }
         }
         if (playlist.isEmpty()) {
-            held.remove(CreateMediaSystems.PLAYLIST.get());
+            held.remove(VideoFeature.PLAYLIST.get());
         } else {
-            held.set(CreateMediaSystems.PLAYLIST.get(), playlist);
+            held.set(VideoFeature.PLAYLIST.get(), playlist);
         }
-        player.displayClientMessage(Component.translatable(disc.maxHeight > 0 ? "create_media_systems.disc.saved"
+        player.displayClientMessage(Component.translatable(disc.kind.hasPicture() ? "create_media_systems.disc.saved"
                 : "create_media_systems.disc.saved_tracks", playlist.size())
                 .withStyle(ChatFormatting.GREEN), true);
     }

@@ -19,9 +19,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -51,13 +51,13 @@ final class NativeMediaResolver {
      */
     record Prepared(URI uri, boolean live, @Nullable Map<String, String> download, double duration, List<String> options) {
         Prepared(URI uri, boolean live) {
-            this(uri, live, null, 0, defaults(uri, List.of()));
+            this(uri, live, null, 0, defaults(List.of()));
         }
 
         /** {@code resolved}: the VLC options the resolver found it needs (origin headers, captions), on top of CMS's own. */
         static Prepared of(URI uri, boolean live, @Nullable Map<String, String> download, double duration,
                            List<String> resolved) {
-            return new Prepared(uri, live, download, duration, defaults(uri, resolved));
+            return new Prepared(uri, live, download, duration, defaults(resolved));
         }
 
         /** The API's relay of an extension's page, which plays with VLC's defaults. */
@@ -65,16 +65,16 @@ final class NativeMediaResolver {
             return new Prepared(uri, true, null, 0, List.of());
         }
 
-        private static List<String> defaults(URI media, List<String> resolved) {
+        /** An RTSP stream (see MediaKind#RTSP), live: over TCP, with little buffered, as a camera is watched. */
+        static Prepared rtsp(URI uri) {
+            return of(uri, true, null, 0, List.of(":network-caching=200", ":live-caching=200", ":rtsp-tcp",
+                    // Allocation size, not a time buffer: accommodates large high-resolution I-frames.
+                    ":rtsp-frame-buffer-size=4194304"));
+        }
+
+        private static List<String> defaults(List<String> resolved) {
             List<String> options = new ArrayList<>();
             options.add(":adaptive-logic=highest");
-            if (UrlPolicy.isRtsp(media)) {
-                options.add(":network-caching=200");
-                options.add(":live-caching=200");
-                options.add(":rtsp-tcp");
-                // Allocation size, not a time buffer: accommodates large high-resolution I-frames.
-                options.add(":rtsp-frame-buffer-size=4194304");
-            }
             options.addAll(resolved);
             return List.copyOf(options);
         }
@@ -139,7 +139,7 @@ final class NativeMediaResolver {
             }
         }
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(UrlPolicy.endpoint(ServerConfig.API_URL.get(), "resolve",
+            HttpRequest request = HttpRequest.newBuilder(URI.create(ApiHttp.endpoint(ServerConfig.API_URL.get(), "resolve",
                     ProviderUrls.canonical(source).toString()))).timeout(Duration.ofSeconds(60))
                     .header("Accept", "application/json").build();
             HttpResponse<String> reply = HTTP.send(request, HttpResponse.BodyHandlers.ofString());

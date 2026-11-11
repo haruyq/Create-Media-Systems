@@ -2,16 +2,15 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.WeakHashMap;
+import java.util.function.Function;
 
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.display.DisplayBlock;
-import org.haruyq.createmediasystems.display.ImageViewerBlock;
+import org.haruyq.createmediasystems.client.Occluders;
 
+import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -19,29 +18,17 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
+/** What stops a stage light's rays besides blocks' collision shapes: the Occluders (screens) in its level, as traced. */
 public final class LightingScreens {
-    private static final WeakHashMap<DisplayBlock.Entity, Boolean> SCREENS = new WeakHashMap<>();
-
     private LightingScreens() {
     }
 
-    public static synchronized void add(DisplayBlock.Entity display) {
-        SCREENS.put(display, Boolean.TRUE);
-    }
-
-    public static synchronized void remove(DisplayBlock.Entity display) {
-        SCREENS.remove(display);
-    }
-
-    static synchronized List<Panel> snapshot(Level level, boolean render) {
+    /** The level's occluders, each where {@code pose} puts its sub-level (see SableCompat). */
+    static List<Panel> snapshot(Level level, Function<SubLevelAccess, Pose3dc> pose) {
         List<Panel> panels = new ArrayList<>();
-        for (DisplayBlock.Entity display : SCREENS.keySet()) {
-            if (display.isRemoved() || display.getLevel() != level
-                    || display.isImageViewer() && !display.getBlockState().getValue(ImageViewerBlock.FRAMED)) {
-                continue;
-            }
-            Pose3dc pose = SableCompat.pose(level, display.getBlockPos(), render);
-            panels.add(new Panel(display.getBlockPos(), display.facing(), display.width(), display.height(), pose));
+        for (Occluders.Occluder occluder : Occluders.in(level)) {
+            Pose3dc at = pose.apply(SableCompat.containing(level, occluder.getBlockPos()));
+            panels.add(new Panel(occluder.getBlockPos(), occluder.occluderBox(), at));
         }
         return List.copyOf(panels);
     }
@@ -52,13 +39,11 @@ public final class LightingScreens {
         private final Pose3dc pose;
         private final AABB bounds;
 
-        Panel(BlockPos anchor, Direction facing, double width, double height, Pose3dc pose) {
+        /** {@code box} (in its level's block space) at {@code anchor}, moved by {@code pose} if on a sub-level. */
+        Panel(BlockPos anchor, AABB box, Pose3dc pose) {
             this.anchor = anchor.immutable();
             this.pose = pose == null ? null : new Pose3d(pose);
-            DisplayBlock.Screen screen = new DisplayBlock.Screen(facing);
-            Vec3 offset = Vec3.atLowerCornerOf(anchor);
-            shape = Shapes.create(new AABB(offset.add(screen.at(0, 0, -(float) DisplayBlock.DEPTH)),
-                    offset.add(screen.at((float) width, (float) height, 0.004f))));
+            shape = Shapes.create(box);
             AABB local = shape.bounds();
             bounds = (this.pose == null ? local : SableCompat.transform(local, this.pose::transformPosition)).inflate(1e-6);
         }

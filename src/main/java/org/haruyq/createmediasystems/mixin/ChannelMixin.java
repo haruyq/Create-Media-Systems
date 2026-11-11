@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.mixin;
 
+import org.haruyq.createmediasystems.playback.CmsStream;
 import org.haruyq.createmediasystems.playback.DeviceClock;
 import org.haruyq.createmediasystems.playback.StreamPump;
 
@@ -19,7 +20,10 @@ import com.mojang.blaze3d.audio.Channel;
 
 import net.minecraft.client.sounds.AudioStream;
 
-/** Starts CMS's streams when they ask to (see DeviceClock), so the speakers of one playback start together. */
+/**
+ * Starts CMS's streams (see CmsStream) when they ask to (see DeviceClock), so the speakers of one playback start
+ * together, and has StreamPump refill them.
+ */
 @Mixin(Channel.class)
 abstract class ChannelMixin {
     @Shadow
@@ -38,9 +42,11 @@ abstract class ChannelMixin {
 
     @Inject(method = "attachBufferStream", at = @At("HEAD"))
     private void create_media_systems$attach(AudioStream stream, CallbackInfo ci) {
-        create_media_systems$startAt = stream instanceof DeviceClock.Timed timed ? timed.attach(source, DeviceClock.now()) : 0;
-        if (stream instanceof DeviceClock.Timed) {
+        if (stream instanceof CmsStream cms) {
+            create_media_systems$startAt = cms.attach(source, DeviceClock.now());
             StreamPump.add((Channel) (Object) this);
+        } else {
+            create_media_systems$startAt = 0;
         }
     }
 
@@ -51,7 +57,7 @@ abstract class ChannelMixin {
 
     @WrapOperation(method = {"play", "unpause"}, at = @At(value = "INVOKE", target = "Lorg/lwjgl/openal/AL10;alSourcePlay(I)V"))
     private void create_media_systems$playOnTime(int source, Operation<Void> original) {
-        if (stream instanceof DeviceClock.Timed timed && timed.advancesWhilePaused()
+        if (stream instanceof CmsStream cms && cms.advancesWhilePaused()
                 && (AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE) == AL10.AL_PAUSED
                 || create_media_systems$startAt > 0 && DeviceClock.now() >= create_media_systems$startAt)) {
             if (AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE) == AL10.AL_INITIAL) {

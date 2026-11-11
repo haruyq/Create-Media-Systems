@@ -2,8 +2,9 @@ package org.haruyq.createmediasystems.video;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Remotable;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -33,7 +34,7 @@ final class RemoteScreen extends Screen {
     }
 
     private RemoteScreen(GlobalPos target) {
-        super(CreateMediaSystems.REMOTE.get().getDescription());
+        super(VideoFeature.REMOTE.get().getDescription());
         this.target = target;
     }
 
@@ -42,7 +43,7 @@ final class RemoteScreen extends Screen {
         var mc = Minecraft.getInstance();
         var level = mc.level;
         ItemStack remote = RemoteItem.held(mc.player);
-        GlobalPos current = remote.getOrDefault(CreateMediaSystems.REMOTE_TARGET.get(), target);
+        GlobalPos current = remote.getOrDefault(VideoFeature.REMOTE_TARGET.get(), target);
         return level != null && level.dimension() == current.dimension() && level.isLoaded(current.pos())
                 && level.getBlockEntity(current.pos()) instanceof Remotable found ? found : null;
     }
@@ -51,10 +52,10 @@ final class RemoteScreen extends Screen {
     protected void init() {
         int left = width / 2 - 100;
         int top = height / 2 - 40;
-        button(left, top, "⏮", VideoPlayerBlock.Action.PREVIOUS);
-        button(left + 52, top, "⏯", VideoPlayerBlock.Action.PLAY_PAUSE);
-        button(left + 104, top, "⏹", VideoPlayerBlock.Action.STOP);
-        button(left + 156, top, "⏭", VideoPlayerBlock.Action.NEXT);
+        button(left, top, "⏮", Remotable.Action.PREVIOUS);
+        button(left + 52, top, "⏯", Remotable.Action.PLAY_PAUSE);
+        button(left + 104, top, "⏹", Remotable.Action.STOP);
+        button(left + 156, top, "⏭", Remotable.Action.NEXT);
         number = addRenderableWidget(new EditBox(font, left, top + 28, 96, 20,
                 Component.translatable("create_media_systems.screen.remote.number")));
         number.setMaxLength(3);
@@ -62,12 +63,12 @@ final class RemoteScreen extends Screen {
         number.setHint(Component.translatable("create_media_systems.screen.remote.number"));
         addRenderableWidget(Button.builder(Component.translatable("create_media_systems.screen.remote.play_number"), b -> {
             if (!number.getValue().isEmpty()) {
-                send(VideoPlayerBlock.Action.SELECT, Integer.parseInt(number.getValue()));
+                send(Remotable.Action.SELECT, Integer.parseInt(number.getValue()));
             }
         }).bounds(left + 104, top + 28, 96, 20).build());
         Remotable videoPlayer = videoPlayer();
         addRenderableWidget(new AbstractSliderButton(left, top + 56, 200, 20, Component.empty(),
-                videoPlayer == null ? 1 : videoPlayer.remoteVolume()) {
+                videoPlayer == null ? 1 : videoPlayer.volume()) {
             {
                 updateMessage();
             }
@@ -84,13 +85,13 @@ final class RemoteScreen extends Screen {
             @Override
             public void onRelease(double mouseX, double mouseY) {
                 super.onRelease(mouseX, mouseY);
-                send(VideoPlayerBlock.Action.VOLUME, (int) Math.round(value * 100));
+                send(Remotable.Action.VOLUME, (int) Math.round(value * 100));
             }
         });
-        addRenderableWidget(Button.builder(Component.literal("-10s"), b -> send(VideoPlayerBlock.Action.SEEK_BY, -10))
+        addRenderableWidget(Button.builder(Component.literal("-10s"), b -> send(Remotable.Action.SEEK_BY, -10))
                 .bounds(left, top + 84, 30, 20).build());
         seek = addRenderableWidget(new SeekBar(left + 34, top + 84, 132));
-        addRenderableWidget(Button.builder(Component.literal("+10s"), b -> send(VideoPlayerBlock.Action.SEEK_BY, 10))
+        addRenderableWidget(Button.builder(Component.literal("+10s"), b -> send(Remotable.Action.SEEK_BY, 10))
                 .bounds(left + 170, top + 84, 30, 20).build());
     }
 
@@ -123,8 +124,7 @@ final class RemoteScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            setMessage(Component.literal(VideoPlayerBlock.Entity.clock(value * length) + " / "
-                    + VideoPlayerBlock.Entity.clock(length)));
+            setMessage(Component.literal(PlaybackClock.format(value * length) + " / " + PlaybackClock.format(length)));
         }
 
         @Override
@@ -147,7 +147,7 @@ final class RemoteScreen extends Screen {
         void release() {
             if (dragging) {
                 dragging = false;
-                send(VideoPlayerBlock.Action.SEEK, (int) (value * length));
+                send(Remotable.Action.SEEK, (int) (value * length));
             }
         }
     }
@@ -158,12 +158,12 @@ final class RemoteScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    private void button(int x, int y, String label, VideoPlayerBlock.Action action) {
+    private void button(int x, int y, String label, Remotable.Action action) {
         addRenderableWidget(Button.builder(Component.literal(label), b -> send(action, 0)).bounds(x, y, 44, 20).build());
     }
 
-    private static void send(VideoPlayerBlock.Action action, int value) {
-        PacketDistributor.sendToServer(new RemoteItem.RemoteControl(action.ordinal(), value));
+    private static void send(Remotable.Action action, int value) {
+        PacketDistributor.sendToServer(new RemoteItem.RemoteControl(action, value));
     }
 
     @Override
@@ -181,14 +181,13 @@ final class RemoteScreen extends Screen {
             if (playlist.isEmpty()) {
                 status = videoPlayer.state();
             } else {
-                int index = Math.min(videoPlayer.index(), playlist.size() - 1);
-                status = Component.translatable("create_media_systems.video_player.track", index + 1, playlist.size())
-                        .append("  ").append(videoPlayer.state());
-                url = playlist.get(index);
+                status = videoPlayer.track().append("  ").append(videoPlayer.state());
+                url = playlist.get(videoPlayer.shownIndex());
             }
         }
-        seek.show(url == null || videoPlayer == null ? null
-                : NativeAudio.progress(RemoteItem.held(minecraft.player).getOrDefault(CreateMediaSystems.REMOTE_TARGET.get(), target).pos(), url));
+        NativeAudio.Playback playback = url == null || videoPlayer == null ? null : NativeAudio.playback(
+                RemoteItem.held(minecraft.player).getOrDefault(VideoFeature.REMOTE_TARGET.get(), target).pos(), url);
+        seek.show(playback == null ? null : playback.progress());
         graphics.drawCenteredString(font, status, width / 2, top - 22, 0xF0C040);
         if (url != null) {
             graphics.drawCenteredString(font, font.plainSubstrByWidth(url, 300), width / 2, top - 11, 0x909090);

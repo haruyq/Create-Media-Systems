@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import java.nio.file.*;
 import java.lang.reflect.Field;
 import java.util.*;
@@ -8,6 +10,7 @@ import com.mojang.logging.LogUtils;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 import org.haruyq.createmediasystems.launcher.LauncherMagazine;
 import org.haruyq.createmediasystems.mixin.*;
+import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -33,7 +36,7 @@ public final class LauncherDebugClient {
     private static boolean firing,crouchFire;
     private static boolean inputCapture,aimHeld;
     private static boolean savedPauseOnLostFocus;
-    static {LauncherClient.additionalInputActive=()->inputCapture;}
+    static {LauncherClient.additionalInput(()->inputCapture);}
     private static final Gson JSON = new Gson();
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) {
@@ -72,7 +75,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("partybox-action ")){
                     String[] bits=action.split(" ");var target=mc.level.getEntity(Integer.parseInt(bits[1]));
                     if(target instanceof org.haruyq.createmediasystems.partybox.PartyBoxEntity box)
-                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),Integer.parseInt(bits[2]),Integer.parseInt(bits[3]),box.revision()));
+                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),org.haruyq.createmediasystems.partybox.PartyBoxAction.Kind.byId(Integer.parseInt(bits[2])),Integer.parseInt(bits[3])));
                 }
                 if(action.equals("launcher-reload")) net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                         org.haruyq.createmediasystems.launcher.DiscLauncherReloadPacket.INSTANCE);
@@ -81,7 +84,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("launcher-aim ")){aimHeld=action.substring(13).equals("1");mc.options.keyUse.setDown(aimHeld);}
                 if(action.equals("megaphone-open") && mc.player!=null && mc.gameMode!=null)mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);
                 if(action.startsWith("megaphone-action ") && mc.player!=null){var bits=action.split(" ");net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                    new org.haruyq.createmediasystems.megaphone.MegaphoneAction(mc.player.containerMenu.containerId,Integer.parseInt(bits[1]),Integer.parseInt(bits[2])));}
+                    new org.haruyq.createmediasystems.megaphone.MegaphoneAction(mc.player.containerMenu.containerId,org.haruyq.createmediasystems.megaphone.MegaphoneAction.Kind.byId(Integer.parseInt(bits[1])),Integer.parseInt(bits[2])));}
                 if(action.startsWith("input-capture ")) {
                     boolean capture=action.substring(14).equals("1");
                     if(capture && !inputCapture){savedPauseOnLostFocus=mc.options.pauseOnLostFocus;mc.options.pauseOnLostFocus=false;}
@@ -89,7 +92,7 @@ public final class LauncherDebugClient {
                     inputCapture=action.substring(14).equals("1");fireTicks=0;aimHeld=false;
                     mc.options.keyAttack.setDown(false);mc.options.keyUse.setDown(false);
                 }
-                if(action.startsWith("damage-mode "))org.haruyq.createmediasystems.client.ClientConfig.LAUNCHER_DAMAGE_NUMBERS.set(
+                if(action.startsWith("damage-mode "))LauncherClient.DAMAGE_NUMBERS.set(
                         LauncherDamageDisplay.Mode.valueOf(action.substring(12).toUpperCase(java.util.Locale.ROOT)));
                 if(action.equals("launcher-crouch-fire") && mc.player!=null && mc.gameMode!=null) {
                     mc.player.input.shiftKeyDown=true;
@@ -149,13 +152,13 @@ public final class LauncherDebugClient {
             row.put("screen",mc.screen==null?"none":mc.screen.getClass().getSimpleName());
             row.put("camera",mc.options.getCameraType().name());
             row.put("guiScale",mc.getWindow().getGuiScale());
-            row.put("megaphonePlaybacks",org.haruyq.createmediasystems.megaphone.client.MegaphoneClient.playbacks());
+            row.put("emitters",EmitterAudioManager.heard());
             var groundItems=new ArrayList<Map<String,Object>>();
-            for(var entity:mc.level.entitiesForRendering())if(entity instanceof net.minecraft.world.entity.item.ItemEntity item && item.getItem().is(org.haruyq.createmediasystems.CreateMediaSystems.DISC_LAUNCHER.get()))
+            for(var entity:mc.level.entitiesForRendering())if(entity instanceof net.minecraft.world.entity.item.ItemEntity item && item.getItem().is(LauncherFeature.DISC_LAUNCHER.get()))
                 groundItems.add(Map.of("x",item.getX(),"y",item.getY(),"z",item.getZ(),"item",item.getItem().toString()));
             row.put("groundLaunchers",groundItems);
             if(mc.level.getBlockEntity(new net.minecraft.core.BlockPos(2,100,7)) instanceof org.haruyq.createmediasystems.launcher.DiscCellCharger charger)
-                row.put("charger",Map.of("speed",charger.getSpeed(),"energy",org.haruyq.createmediasystems.launcher.DiscCellItem.energy(charger.cell()),"cell",charger.cell().toString()));
+                row.put("charger",Map.of("speed",charger.getSpeed(),"energy",ChargeableItem.energy(charger.cell()),"cell",charger.cell().toString()));
             row.put("player",mc.player.getName().getString());
             row.put("spectator",mc.player.isSpectator());
             row.put("allowedHosts",org.haruyq.createmediasystems.ServerConfig.ALLOWED_HOSTS.get());
@@ -165,18 +168,18 @@ public final class LauncherDebugClient {
             row.put("crouching",mc.player.isCrouching());row.put("bodyYaw",mc.player.yBodyRot);row.put("headYaw",mc.player.yHeadRot);
             row.put("loaded",LauncherMagazine.count(mc.player.getMainHandItem()));
             row.put("capacity",org.haruyq.createmediasystems.launcher.LauncherReadout.of(mc.player.getMainHandItem()).capacity());
-            row.put("reserved",LauncherMagazine.reserved(mc.player.getMainHandItem()).size());
+            row.put("reserved",LauncherMagazine.pending(mc.player.getMainHandItem()).isEmpty()?0:1);
             row.put("reloading",LauncherMagazine.reloading(mc.player.getMainHandItem()));
             row.put("ejecting",LauncherMagazine.ejecting(mc.player.getMainHandItem()));
             row.put("aim",LauncherClient.aim(1));row.put("gunKick",LauncherClient.kick(1));
-            row.put("reticleDrawn",LauncherHud.reticleDrawn);
+            var diagnostics=LauncherClient.diagnostics();row.put("reticleDrawn",diagnostics.reticleDrawn());
             row.put("trigger",mc.options.keyAttack.isDown());row.put("aimKey",mc.options.keyUse.isDown());
             row.put("usingItem",mc.player.isUsingItem());row.put("yaw",mc.player.getYRot());row.put("pitch",mc.player.getXRot());
-            row.put("confirmedShots",LauncherClient.confirmedShots);row.put("confirmedHits",LauncherClient.confirmedHits);row.put("confirmedHeadshots",LauncherClient.confirmedHeadshots);
-            row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",LauncherClient.hitDamage());
+            row.put("confirmedShots",diagnostics.confirmedShots());row.put("confirmedHits",diagnostics.confirmedHits());row.put("confirmedHeadshots",diagnostics.confirmedHeadshots());
+            row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",diagnostics.hitDamage());
             row.put("damageTotal",LauncherClient.damageDisplay().total());
             double damageAge=LauncherClient.damageDisplay().age(System.nanoTime()/1_000_000_000.0);row.put("damageAge",Double.isFinite(damageAge)?damageAge:-1);
-            row.put("damageMode",org.haruyq.createmediasystems.client.ClientConfig.LAUNCHER_DAMAGE_NUMBERS.get().name());
+            row.put("damageMode",LauncherClient.DAMAGE_NUMBERS.get().name());
             var damage=LauncherClient.damageDisplay().latest();
             if(damage!=null){row.put("damageTarget",damage.target());row.put("healthDamage",damage.health());row.put("shieldDamage",damage.shield());row.put("shieldBroken",damage.shieldBroken());}
             var pose=LauncherGunPose.sample(LauncherClient.frame(mc.player.getMainHandItem(),mc.level,1),1,LauncherClient.aim(1),LauncherClient.kick(1),0);
@@ -193,7 +196,7 @@ public final class LauncherDebugClient {
             row.put("dragons",dragons);
             var cell = LauncherMagazine.cell(mc.player.getMainHandItem());
             row.put("cellLevel", cell.getItem() instanceof org.haruyq.createmediasystems.launcher.DiscCellItem item ? item.tier.level : 0);
-            row.put("cellEnergy", org.haruyq.createmediasystems.launcher.DiscCellItem.energy(cell));
+            row.put("cellEnergy", ChargeableItem.energy(cell));
             row.put("master", org.haruyq.createmediasystems.launcher.DiscCellItem.master(cell).toString());
             row.put("inventory", mc.player.getInventory().items.toString());
             row.put("flying",mc.player.getAbilities().flying);
@@ -203,7 +206,7 @@ public final class LauncherDebugClient {
                     "playing",org.haruyq.createmediasystems.megaphone.MegaphoneData.playing(item),"black",horn.black,
                     "seconds",org.haruyq.createmediasystems.megaphone.MegaphoneData.seconds(item,mc.level),"volume",org.haruyq.createmediasystems.megaphone.MegaphoneData.volume(item),
                     "drive",org.haruyq.createmediasystems.megaphone.MegaphoneData.drive(item),"revision",org.haruyq.createmediasystems.megaphone.MegaphoneData.revision(item),
-                    "energy",org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.energy(org.haruyq.createmediasystems.megaphone.MegaphoneData.battery(item,mc.level))));
+                    "energy",ChargeableItem.energy(org.haruyq.createmediasystems.megaphone.MegaphoneData.battery(item,mc.level))));
             }
             var playerRenderer=(net.minecraft.client.renderer.entity.player.PlayerRenderer)mc.getEntityRenderDispatcher().getRenderer(mc.player);
             row.put("arm",List.of(playerRenderer.getModel().rightArm.xRot,playerRenderer.getModel().rightArm.yRot,playerRenderer.getModel().rightArm.zRot));
@@ -212,13 +215,14 @@ public final class LauncherDebugClient {
                 Map<String,Object> b=new LinkedHashMap<>();b.put("id",box.getId());b.put("uuid",box.getUUID().toString());
                 b.put("x",box.getX());b.put("y",box.getY());b.put("z",box.getZ());b.put("playing",box.playing());
                 b.put("lean",box.lean);b.put("yaw",box.getYRot());
-                b.put("pitchTarget",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.pitchAt(box));
+                var heard=EmitterAudioManager.heard(box.getUUID());
+                b.put("pitchTarget",heard==null?-1:heard.pitch());
                 b.put("vx",box.getX()-box.xo);b.put("vy",box.getY()-box.yo);b.put("vz",box.getZ()-box.zo);
                 b.put("seconds",box.seconds());b.put("energy",box.energy());b.put("volume",box.volume());b.put("bass",box.bass());b.put("lights",box.lights());
-                b.put("audibleSeconds",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.audibleSeconds(box.getUUID()));
-                b.put("apiRequestStart",org.haruyq.createmediasystems.playback.ClientStreams.requestedSeconds(box.getUUID()));
+                b.put("audibleSeconds",heard==null?-1:heard.audibleSeconds());
+                b.put("apiRequestStart",heard==null?-1:heard.requestedSeconds());
                 b.put("puller",box.puller().map(UUID::toString).orElse(""));b.put("beat",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.beat(box));
-                b.put("native",org.haruyq.createmediasystems.playback.NativeAudio.discProgress(box.getUUID()));partyBoxes.add(b);
+                b.put("native",decoded(box.getUUID()));partyBoxes.add(b);
             }
             row.put("partyBoxes",partyBoxes);
             List<Map<String,Object>> discs=new ArrayList<>();
@@ -227,19 +231,21 @@ public final class LauncherDebugClient {
                 m.put("id",d.getId());m.put("uuid",d.getUUID().toString());m.put("x",d.getX());m.put("y",d.getY());m.put("z",d.getZ());
                 m.put("vx",d.getDeltaMovement().x);m.put("vy",d.getDeltaMovement().y);m.put("vz",d.getDeltaMovement().z);
                 m.put("embedded",d.embedded());m.put("elapsed",d.elapsedMusicSeconds());
-                m.put("audibleSeconds",DiscAudioClient.audibleSeconds(d.getUUID()));
-                m.put("apiRequestStart",org.haruyq.createmediasystems.playback.ClientStreams.requestedSeconds(d.getUUID()));
+                var heard=EmitterAudioManager.heard(d.getUUID());
+                m.put("audibleSeconds",heard==null?-1:heard.audibleSeconds());
+                m.put("apiRequestStart",heard==null?-1:heard.requestedSeconds());
+                m.put("startSeconds",heard==null?-1:heard.startSeconds());
                 m.put("attached",d.attached());m.put("attachedHead",d.attachedToHead());m.put("attachedId",d.attachmentTargetId());
                 m.put("attachedPart",d.attachmentPart());
                 m.put("attachedBone",d.attachmentBone());
                 m.put("attachedUUID",d.attachmentTargetUUID().map(UUID::toString).orElse(""));
                 var anchor=d.attachmentPosition(1);m.put("anchor",List.of(anchor.x,anchor.y,anchor.z));
-                m.put("playback",d.getItem().get(org.haruyq.createmediasystems.CreateMediaSystems.DISC_PLAYBACK.get()));
-                m.put("audio",org.haruyq.createmediasystems.playback.NativeAudio.discProgress(d.getUUID()));
-                m.put("pitchTarget",DiscAudioClient.pitchAt(d));m.put("gainTarget",DiscAudioClient.gain(d));
+                m.put("playback",d.getItem().get(LauncherFeature.DISC_PLAYBACK.get()));
+                m.put("audio",decoded(d.getUUID()));
+                m.put("pitchTarget",heard==null?-1:heard.pitch());m.put("gainTarget",heard==null?-1:heard.gain());
                 m.put("item",d.getItem().toString());discs.add(m);
-                m.put("url", org.haruyq.createmediasystems.launcher.DiscPlayback.mediaUrl(d.getItem()));
-                m.put("managed", org.haruyq.createmediasystems.playback.ClientStreams.contains(d.getUUID()));
+                m.put("url", org.haruyq.createmediasystems.stream.MediaItem.url(d.getItem()));
+                m.put("managed", heard!=null && heard.stream());
             }
             row.put("discs",discs);
             var engine=((SoundManagerAccessor)mc.getSoundManager()).create_media_systems$soundEngine();
@@ -247,10 +253,9 @@ public final class LauncherDebugClient {
             List<Map<String,Object>> sounds=new ArrayList<>();
             for(var entry:new ArrayList<>(access.create_media_systems$instanceToChannel().entrySet())) {
                 SoundInstance s=entry.getKey();
-                if (!(s instanceof FlyingJukeboxSound) && !s.getClass().getSimpleName().equals("PartyBoxSound") && !s.getClass().getSimpleName().equals("MegaphoneSound") && !s.getLocation().getNamespace().equals("create_media_systems")) continue;
+                if (!EmitterAudioManager.plays(s) && !s.getLocation().getNamespace().equals("create_media_systems")) continue;
                 Map<String,Object> m=new LinkedHashMap<>();
                 m.put("name",s.getLocation().toString());m.put("class",s.getClass().getSimpleName());
-                if(s instanceof FlyingJukeboxSound song)m.put("initialOffset",song.initialOffsetSeconds());
                 m.put("pitch",s.getPitch());m.put("volume",s.getVolume());m.put("x",s.getX());m.put("y",s.getY());m.put("z",s.getZ());
                 sounds.add(m);
                 entry.getValue().execute(channel->{
@@ -269,5 +274,11 @@ public final class LauncherDebugClient {
                 catch(Exception e){LogUtils.getLogger().warn("Launcher probe write failed",e);}
             });
         } catch(Exception e){LogUtils.getLogger().warn("Launcher debug failed",e);}
+    }
+
+    /** Where the native player of the moving disc {@code id} actually is; null if none plays it. */
+    private static org.haruyq.createmediasystems.playback.NativeAudio.Progress decoded(java.util.UUID id) {
+        var playback=org.haruyq.createmediasystems.playback.NativeAudio.playback(id);
+        return playback==null?null:playback.decoded();
     }
 }

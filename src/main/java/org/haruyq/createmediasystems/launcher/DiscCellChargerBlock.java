@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.SableCompat;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
@@ -24,20 +25,21 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** A bottom shaft supplies kinetic power; standard FE cables can supply this same dock instead. */
-public final class DiscCellChargerBlock extends KineticBlock implements IBE<DiscCellCharger> {
+public final class DiscCellChargerBlock extends KineticBlock implements IBE<DiscCellCharger>,
+        SableCompat.SilentAssemblyRemoval {
     public static final BooleanProperty CHARGING = BooleanProperty.create("charging");
     public DiscCellChargerBlock(Properties properties) { super(properties); registerDefaultState(defaultBlockState().setValue(CHARGING, false)); }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(CHARGING); }
     @Override public Direction.Axis getRotationAxis(BlockState state) { return Direction.Axis.Y; }
     @Override public boolean hasShaftTowards(LevelReader level, BlockPos pos, BlockState state, Direction face) { return face == Direction.DOWN; }
     @Override public Class<DiscCellCharger> getBlockEntityClass() { return DiscCellCharger.class; }
-    @Override public BlockEntityType<? extends DiscCellCharger> getBlockEntityType() { return CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(); }
+    @Override public BlockEntityType<? extends DiscCellCharger> getBlockEntityType() { return LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(); }
     @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return Block.box(2, 0, 2, 14, 11, 14);
     }
     @Override protected ItemInteractionResult useItemOn(ItemStack held, BlockState state, Level level, BlockPos pos,
             Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!(held.getItem() instanceof DiscCellItem) && !(held.getItem() instanceof org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        if (!(held.getItem() instanceof ChargeableItem)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof DiscCellCharger charger && charger.cell().isEmpty()) {
             charger.insert(held.split(1));
         }

@@ -1,6 +1,6 @@
 package org.haruyq.createmediasystems.mixin;
 
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.BlockIdentity;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,6 +13,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 public abstract class BlockEntityMixin {
     @Inject(method = {"setLevel", "loadWithComponents"}, at = @At("TAIL"))
     private void create_media_systems$followSource(CallbackInfo ci) {
-        SourceLinks.loaded((BlockEntity) (Object) this);
+        BlockIdentity.loaded((BlockEntity) (Object) this);
     }
 }

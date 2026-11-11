@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -30,7 +30,7 @@ import com.sun.jna.Platform;
  * publish; the provider publishes none, so it is only as trusted as GitHub's HTTPS.
  */
 final class Tools {
-    static final Path DIR = ClientConfig.DIR.resolve("tools");
+    static final Path DIR = ClientFiles.DIR.resolve("tools");
     private static final String VERSION = ".version";
     private static final long CHECK_EVERY_MILLIS = 24 * 60 * 60 * 1000L;
     /** The PO Token provider's port; only on the loopback address. */

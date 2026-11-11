@@ -5,8 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -70,10 +69,10 @@ final class RangeQuillScreen extends AbstractSimiScreen {
     }
 
     static RangeQuillScreen forJukebox() {
-        JukeboxSettings current = RangeQuillHandler.current();
+        EmitterRange current = RangeQuillHandler.current();
         return new RangeQuillScreen(Component.translatable("create_media_systems.range.title"), new ItemStack(Items.JUKEBOX),
                 current == null ? 1 : current.volume(), null, 0, RangeQuillScreen::rangeStatus,
-                Component.translatable("create_media_systems.range.reset", (int) JukeboxSettings.DEFAULT_RANGE),
+                Component.translatable("create_media_systems.range.reset", (int) EmitterRange.DEFAULT_RANGE),
                 (volume, reset, option) -> RangeQuillHandler.save(volume, reset), RangeQuillHandler::discard);
     }
 
@@ -84,7 +83,7 @@ final class RangeQuillScreen extends AbstractSimiScreen {
                 .or(() -> info.source().map(p -> Component.translatable("create_media_systems.speaker.status_connected", xyz(p))))
                 .orElseGet(() -> Component.translatable("create_media_systems.speaker.status_unlinked"));
         List<Component> channels = Arrays.stream(Streams.Channel.values()).map(Streams.Channel::label).toList();
-        return new RangeQuillScreen(Component.translatable("create_media_systems.speaker.title"), new ItemStack(CreateMediaSystems.SPEAKER_ITEM.get()),
+        return new RangeQuillScreen(Component.translatable("create_media_systems.speaker.title"), new ItemStack(AudioFeature.SPEAKER_ITEM.get()),
                 info.volume(), channels, info.channel().ordinal(), status, Component.translatable("create_media_systems.speaker.disconnect"),
                 (volume, reset, channel) -> PacketDistributor.sendToServer(new RangeQuill.SetSpeaker(
                         info.speaker(), reset ? Optional.empty() : connectTo, reset, volume, Streams.Channel.byId(channel))),
@@ -155,7 +154,7 @@ final class RangeQuillScreen extends AbstractSimiScreen {
         graphics.drawCenteredString(font, status.get(), x + background.getWidth() / 2, y + background.getHeight() + 4,
                 0xFFFFFF);
         GuiGameElement.of(icon).at(x + 22, y + 24, 0).render(graphics);
-        GuiGameElement.of(new ItemStack(CreateMediaSystems.RANGE_QUILL.get()))
+        GuiGameElement.of(new ItemStack(AudioFeature.RANGE_QUILL.get()))
                 .scale(3)
                 .at(x + background.getWidth() + 6, y + background.getHeight() - 38, -200)
                 .render(graphics);
@@ -167,9 +166,9 @@ final class RangeQuillScreen extends AbstractSimiScreen {
         if (selection != null) {
             return Component.translatable("create_media_systems.range.status_new", size(selection));
         }
-        JukeboxSettings current = RangeQuillHandler.current();
+        EmitterRange current = RangeQuillHandler.current();
         return current == null || current.area().isEmpty()
-                ? Component.translatable("create_media_systems.range.status_default", (int) JukeboxSettings.DEFAULT_RANGE)
+                ? Component.translatable("create_media_systems.range.status_default", (int) EmitterRange.DEFAULT_RANGE)
                 : Component.translatable("create_media_systems.range.status_kept", size(current.area().get()));
     }
 

@@ -1,23 +1,28 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.launcher.DiscCellTier;
+import org.haruyq.createmediasystems.power.PowerFeature;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.*;
 import com.mojang.math.Axis;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.*;
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
+import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
+import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import org.haruyq.createmediasystems.launcher.*;
 
 /** Fixed-camera native frames for checking winding, opacity, atlas bleed and unintended flicker. */
 final class LauncherModelAuditScreen extends Screen {
     private final List<ItemStack> items=new ArrayList<>();private final int angle;
     LauncherModelAuditScreen(int angle){super(Component.literal("CMS model audit"));this.angle=angle;
-        var gun=new ItemStack(CreateMediaSystems.DISC_LAUNCHER.get());var cell=new ItemStack(CreateMediaSystems.cell(DiscCellTier.NETHERITE));
-        DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));DiscCellItem.setEnergy(cell,DiscCellTier.NETHERITE.capacity());LauncherMagazine.setCell(gun,cell);items.add(gun);
-        for(var tier:DiscCellTier.values()) {var c=new ItemStack(CreateMediaSystems.cell(tier));DiscCellItem.setEnergy(c,tier.capacity());items.add(c);}
-        items.add(new ItemStack(CreateMediaSystems.PARTYBOX.get()));items.add(new ItemStack(CreateMediaSystems.PARTYBOX_BATTERY.get()));
-        items.add(new ItemStack(CreateMediaSystems.MEGAPHONE_WHITE.get()));items.add(new ItemStack(CreateMediaSystems.MEGAPHONE_BLACK.get()));items.add(new ItemStack(CreateMediaSystems.DISC_CELL_CHARGER.get()));
+        var gun=new ItemStack(LauncherFeature.DISC_LAUNCHER.get());var cell=new ItemStack(LauncherFeature.cell(DiscCellTier.NETHERITE));
+        DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));ChargeableItem.setEnergy(cell,DiscCellTier.NETHERITE.capacity());LauncherMagazine.setCell(gun,cell);items.add(gun);
+        for(var tier:DiscCellTier.values()) {var c=new ItemStack(LauncherFeature.cell(tier));ChargeableItem.setEnergy(c,tier.capacity());items.add(c);}
+        items.add(new ItemStack(PartyBoxFeature.PARTYBOX.get()));items.add(new ItemStack(PowerFeature.BATTERY.get()));
+        items.add(new ItemStack(MegaphoneFeature.MEGAPHONE_WHITE.get()));items.add(new ItemStack(MegaphoneFeature.MEGAPHONE_BLACK.get()));items.add(new ItemStack(LauncherFeature.DISC_CELL_CHARGER.get()));
     }
     @Override public boolean isPauseScreen(){return false;}
     @Override public void render(GuiGraphics g,int mouseX,int mouseY,float partial){

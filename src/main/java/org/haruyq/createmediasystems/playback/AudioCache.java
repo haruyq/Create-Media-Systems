@@ -27,13 +27,13 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.logging.LogUtils;
 
-import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * Records' audio (YouTube and the like) kept on this computer for a while after it last played, so playing it again
@@ -60,7 +60,7 @@ final class AudioCache {
     /** The game's cache, sized by the client config. */
     static synchronized AudioCache get() {
         if (shared == null) {
-            shared = new AudioCache(FMLPaths.GAMEDIR.get().resolve("create_media_systems-cache"),
+            shared = new AudioCache(ClientFiles.AUDIO_CACHE,
                     () -> Duration.ofDays(ClientConfig.AUDIO_CACHE_DAYS.get()).toMillis(),
                     () -> ClientConfig.AUDIO_CACHE_MEGABYTES.get() * (1L << 20));
         }

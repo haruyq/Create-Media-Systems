@@ -52,8 +52,8 @@ public final class DiscAttachmentGameTests {
     public static void saveAndReloadKeepUuidClockAndAttachmentWhileTheTargetIsTemporarilyUnloaded(GameTestHelper h) {
         var owner=h.makeMockPlayer(GameType.CREATIVE);var target=EntityType.ZOMBIE.create(h.getLevel());target.setNoAi(true);target.setPos(base(h));h.getLevel().addFreshEntity(target);
         var d=disc(h,owner);d.onHitEntity(new EntityHitResult(target,target.position().add(-.36,1,0)));
-        CompoundTag tag=new CompoundTag();d.save(tag);tag.putLong("CmsDiscMusicStart",h.getLevel().getGameTime()-200);
-        var copy=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),h.getLevel());copy.load(tag);copy.tick();
+        d.musicStartedAgo(200);CompoundTag tag=new CompoundTag();d.save(tag);
+        var copy=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),h.getLevel());copy.load(tag);copy.tick();
         h.assertTrue(copy.attached() && copy.getUUID().equals(d.getUUID()) && copy.elapsedMusicSeconds()>=10 && copy.attachmentTarget()==target,"NBT keeps the same disc, target UUID and advancing server clock");
         var targetTag=new CompoundTag();target.save(targetTag);target.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);copy.tick();
         h.assertTrue(!copy.isRemoved() && copy.attached() && !copy.soundEnabled(),"A temporarily missing target cannot reset the clock or leave a ghost sound");
@@ -69,9 +69,9 @@ public final class DiscAttachmentGameTests {
         d.onHitEntity(new EntityHitResult(p,p.position().add(-.36,1,0)));p.setHealth(0);d.tick();
         h.assertTrue(d.isRemoved(),"The blade cannot transfer from a dead player to their respawn");
         var living=h.makeMockPlayer(GameType.CREATIVE);living.setPos(base(h));var expired=disc(h,living);
-        expired.onHitEntity(new EntityHitResult(living,living.position().add(-.36,1,0)));expired.noteDuration(1);
-        var tag=new CompoundTag();expired.save(tag);tag.putLong("CmsDiscMusicStart",h.getLevel().getGameTime()-21);
-        var loaded=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),h.getLevel());loaded.load(tag);loaded.tick();
+        expired.onHitEntity(new EntityHitResult(living,living.position().add(-.36,1,0)));expired.learnLength(1);
+        expired.musicStartedAgo(21);var tag=new CompoundTag();expired.save(tag);
+        var loaded=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),h.getLevel());loaded.load(tag);loaded.tick();
         h.assertTrue(loaded.isRemoved() && loaded.getPickResult().isEmpty(),"Track expiry removes the blade without an obtainable original");h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=400)

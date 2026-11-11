@@ -3,6 +3,8 @@ package org.haruyq.createmediasystems.lighting;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.haruyq.createmediasystems.lighting.LightingBeams.Clip;
+
 import net.minecraft.world.phys.Vec3;
 
 final class LightingGeometry {
@@ -28,27 +30,16 @@ final class LightingGeometry {
         }
     }
 
-    record Plane(Vec3 point, Vec3 normal) {
-        static Plane toward(Vec3 point, Vec3 normal, Vec3 source) {
-            Vec3 n = normal.normalize();
-            return new Plane(point, source.subtract(point).dot(n) < 0 ? n.scale(-1) : n);
-        }
-
-        double distance(Vec3 at) {
-            return (at.x - point.x) * normal.x + (at.y - point.y) * normal.y + (at.z - point.z) * normal.z;
-        }
-    }
-
-    static int outsideCorners(Plane plane, Vec3 a, Vec3 b, Vec3 c, Vec3 d) {
+    static int outsideCorners(Clip plane, Vec3 a, Vec3 b, Vec3 c, Vec3 d) {
         return plane == null ? 0 : outsideCorner(plane, a) + outsideCorner(plane, b)
                 + outsideCorner(plane, c) + outsideCorner(plane, d);
     }
 
-    private static int outsideCorner(Plane plane, Vec3 at) {
+    private static int outsideCorner(Clip plane, Vec3 at) {
         return plane.distance(at) >= CLEARANCE ? 0 : 1;
     }
 
-    static List<Vertex> clip(List<Vertex> polygon, Plane plane) {
+    static List<Vertex> clip(List<Vertex> polygon, Clip plane) {
         if (plane == null || polygon.isEmpty()) {
             return polygon;
         }

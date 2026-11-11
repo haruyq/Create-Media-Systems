@@ -1,6 +1,6 @@
 package org.haruyq.createmediasystems.mixin;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.train.TrainFeature;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +20,7 @@ public abstract class ScheduleEditPacketMixin {
     @Inject(method = "handle", at = @At("HEAD"), cancellable = true)
     private void create_media_systems$saveAnnouncementSchedule(ServerPlayer sender, CallbackInfo ci) {
         ItemStack held = sender.getMainHandItem();
-        if (!held.is(CreateMediaSystems.ANNOUNCEMENT_SCHEDULE.get())) {
+        if (!held.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get())) {
             return;
         }
         Schedule schedule = ((ScheduleEditPacket) (Object) this).schedule();

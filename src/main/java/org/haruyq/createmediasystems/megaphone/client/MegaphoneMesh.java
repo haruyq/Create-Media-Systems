@@ -1,18 +1,20 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
+import static org.haruyq.createmediasystems.client.mesh.Mesh.box;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.quad;
+
+import org.haruyq.createmediasystems.client.mesh.Mesh;
 import com.mojang.blaze3d.vertex.*;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.*;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import org.haruyq.createmediasystems.launcher.client.LauncherRenderer;
 
 /** A hollow flared horn, central phase plug, rear amplifier housing, trigger grip and wrist strap. */
 public final class MegaphoneMesh {
     private MegaphoneMesh(){}
     public static void draw(PoseStack p,MultiBufferSource buffers,int light,boolean black,boolean on) {
-        var v=buffers.getBuffer(LauncherRenderer.solid());
+        var v=buffers.getBuffer(Mesh.solid());
         int shell=black?0x161A20:0xE7E7E1,inner=black?0x30343B:0xF4F3EB,cap=black?0x222830:0xB92027;
         horn(p,v,shell,inner,light);
         frustum(p,v,-.29f,.033f,-.085f,.041f,black?0x191C21:0xD1D0C8,light,false);
@@ -26,7 +28,7 @@ public final class MegaphoneMesh {
         }
         box(p,v,-.031f,.061f,.022f,.031f,.071f,.145f,0x101419,light);
         box(p,v,-.019f,.071f,.045f,.005f,.075f,.069f,0x59626C,light);
-        box(p,v,.012f,.071f,.048f,.02f,.076f,.056f,on?0x66ED94:0x582B27,on?0xF000F0:light);
+        box(p,v,.012f,.071f,.048f,.02f,.076f,.056f,on?0x66ED94:0x582B27,on?Mesh.FULL_BRIGHT:light);
         // Rear USB/microSD cover, strap eyelet and a sloped pistol handle below the housing.
         box(p,v,-.037f,-.024f,.215f,.037f,.018f,.218f,0x12171C,light);
         p.pushPose();p.translate(0,-.05,.11);p.mulPose(Axis.XP.rotationDegrees(-17));
@@ -69,23 +71,7 @@ public final class MegaphoneMesh {
         }
     }
     private static void disk(PoseStack p,VertexConsumer v,float z,float r,int color,int light){annulus(p,v,z,r,0,color,light,-1);}
-    public static void annulus(PoseStack p,VertexConsumer v,float z,float r,float inner,int color,int light,int facing){
-        for(int i=0;i<48;i++){double a=i*Math.PI/24,b=(i+1)*Math.PI/24;float c=(float)Math.cos(a),s=(float)Math.sin(a),cc=(float)Math.cos(b),ss=(float)Math.sin(b);
-            quad(p,v,r*c,r*s,z,r*cc,r*ss,z,inner*cc,inner*ss,z,inner*c,inner*s,z,0,0,facing,color,light);}
-    }
-    public static void box(PoseStack p,VertexConsumer v,float x,float y,float z,float xx,float yy,float zz,int c,int l){
-        quad(p,v,x,y,z,xx,y,z,xx,yy,z,x,yy,z,0,0,-1,c,l);quad(p,v,x,y,zz,x,yy,zz,xx,yy,zz,xx,y,zz,0,0,1,c,l);
-        quad(p,v,x,y,z,x,yy,z,x,yy,zz,x,y,zz,-1,0,0,c,l);quad(p,v,xx,y,z,xx,y,zz,xx,yy,zz,xx,yy,z,1,0,0,c,l);
-        quad(p,v,x,yy,z,xx,yy,z,xx,yy,zz,x,yy,zz,0,1,0,c,l);quad(p,v,x,y,z,x,y,zz,xx,y,zz,xx,y,z,0,-1,0,c,l);
-    }
-    public static void quad(PoseStack p,VertexConsumer v,float x,float y,float z,float a,float b,float c,float d,float e,float f,float g,float h,float i,float nx,float ny,float nz,int color,int light){
-        float ux=a-x,uy=b-y,uz=c-z,vx=d-x,vy=e-y,vz=f-z,wx=g-x,wy=h-y,wz=i-z;
-        float orientation=((uy*vz-uz*vy)+(vy*wz-vz*wy))*nx+((uz*vx-ux*vz)+(vz*wx-vx*wz))*ny+((ux*vy-uy*vx)+(vx*wy-vy*wx))*nz;
-        vertex(p,v,x,y,z,nx,ny,nz,color,light);
-        if(orientation<0){vertex(p,v,g,h,i,nx,ny,nz,color,light);vertex(p,v,d,e,f,nx,ny,nz,color,light);vertex(p,v,a,b,c,nx,ny,nz,color,light);}
-        else{vertex(p,v,a,b,c,nx,ny,nz,color,light);vertex(p,v,d,e,f,nx,ny,nz,color,light);vertex(p,v,g,h,i,nx,ny,nz,color,light);}
-    }
-    private static void vertex(PoseStack p,VertexConsumer v,float x,float y,float z,float nx,float ny,float nz,int c,int l){
-        v.addVertex(p.last().pose(),x,y,z).setColor(c>>16&255,c>>8&255,c&255,255).setUv(12.5f/64,4.5f/64).setOverlay(OverlayTexture.NO_OVERLAY).setLight(l).setNormal(p.last(),nx,ny,nz);
+    private static void annulus(PoseStack p,VertexConsumer v,float z,float r,float inner,int color,int light,int facing){
+        Mesh.ring(p,v,0,0,z,r,inner,48,facing,color,light);
     }
 }

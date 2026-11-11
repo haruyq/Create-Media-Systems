@@ -13,8 +13,12 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// The -P switches: each turns on one test or dev source set (see "Test and dev source sets" below).
+def flag = { String name -> providers.gradleProperty(name).isPresent() }
+def sableTests = flag('sableTests')
+
 // Optional regression check against JEI's real crafting display predicate; never a runtime dependency.
-if (providers.gradleProperty('recipeViewerTest').isPresent()) {
+if (flag('recipeViewerTest')) {
     repositories { maven { url = 'https://maven.blamejared.com'; content { includeGroup 'mezz.jei' } } }
     sourceSets.test.java.srcDir('src/recipeViewerTest/java')
     dependencies { testImplementation 'mezz.jei:jei-1.21.1-neoforge:19.27.0.346@jar' }
@@ -34,12 +38,19 @@ repositories {
 }
 
 neoForge {
-    // Sable 2.0.6, loaded for its game tests only, needs a newer NeoForge than CMS does.
-    version = providers.gradleProperty('sableTests').isPresent() ? '21.1.228' : project.neo_version
+    // Sable 2.0.6, loaded for its game tests only, needs a newer NeoForge than CMS does; every other run, the game
+    // tests' included, is on the one CMS ships against.
+    version = sableTests ? '21.1.228' : project.neo_version
 
     parchment {
         mappingsVersion = project.parchment_mappings_version
         minecraftVersion = project.parchment_minecraft_version
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
     }
 
     runs {
@@ -54,17 +65,14 @@ neoForge {
 
         gameTestServer {
             type = 'gameTestServer'
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
         }
 
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.INFO
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
+            // Just CMS as it ships; a run that needs a test or dev source set loads it on top (see loads below).
+            loadedMods = [mods."${mod_id}"]
         }
     }
 
@@ -72,129 +80,7 @@ neoForge {
     unitTest {
         enable()
         testedMod = mods."${mod_id}"
-    }
-}
-
-// The lighting demo is opt-in so ordinary runClient saves are untouched.
-if (providers.gradleProperty('launcherServerTest').isPresent()) {
-    sourceSets.main.java.srcDir('src/launcherServerTest/java')
-    sourceSets.main.resources.srcDir('src/launcherServerTest/resources')
-    neoForge.runs.gameTestServer {
-        gameDirectory = file(providers.gradleProperty('launcherServerDirectory').orElse('run-launcher-server-test').get())
-        systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
-        jvmArgument '-Xmx2G'
-    }
-}
-
-if (providers.gradleProperty('launcherDebug').isPresent()) {
-    sourceSets.main.java.srcDir('src/launcherDebug/java')
-    neoForge.runs.client {
-        gameDirectory = file('run-launcher-debug')
-        programArguments.addAll('--username', 'DiscTester', '--width', '1280', '--height', '760')
-        jvmArgument '-Xmx3G'
-    }
-}
-
-// A tiny registry fixture verifies both branches of the optional Plant recipe without making Plant a dependency.
-if (providers.gradleProperty('cellPlantTest').isPresent()) {
-    def fixture = sourceSets.create('plantCompatFixture') {
-        java.srcDir('src/plantCompatTest/java')
-        resources.srcDir('src/plantCompatTest/resources')
-        compileClasspath = sourceSets.main.compileClasspath
-    }
-    def fixtureJar = tasks.register('plantCellCompatJar', Jar) {
-        from fixture.output
-        archiveFileName = 'cms-plant-material-fixture.jar'
-        destinationDirectory = layout.buildDirectory.dir('plant-compat-fixture')
-    }
-    neoForge.runs.gameTestServer {
-        gameDirectory = file('run-launcher-server-test-plant')
-        systemProperty 'cms.cellPlantTest', 'true'
-    }
-    tasks.matching { it.name == 'runGameTestServer' }.configureEach {
-        dependsOn fixtureJar
-        doFirst {
-            copy { from fixtureJar.flatMap { it.archiveFile }; into file('run-launcher-server-test-plant/mods') }
-        }
-    }
-}
-
-if (providers.gradleProperty('lightingDemo').isPresent() || providers.gradleProperty('lightingNetworkTest').isPresent()
-        || providers.gradleProperty('lightingBenchmark').isPresent()) {
-    sourceSets.main.java.srcDir('src/lightingDemo/java')
-    sourceSets.main.resources.srcDir('src/lightingDemo/resources')
-    def sableLightingDemo = providers.gradleProperty('sableTests').isPresent()
-    if (sableLightingDemo) {
-        sourceSets.main.java.srcDir('src/sableLightingDemo/java')
-        sourceSets.main.resources.srcDir('src/sableLightingDemo/resources')
-    }
-    neoForge.runs.client {
-        gameDirectory = file(sableLightingDemo ? 'run-sable-lighting-demo' : 'run-lighting-demo')
-        systemProperty 'cms.sableLightingDemo', Boolean.toString(sableLightingDemo)
-        programArgument '--width'
-        programArgument '1280'
-        programArgument '--height'
-        programArgument '800'
-    }
-}
-
-if (providers.gradleProperty('lightingBenchmark').isPresent()) {
-    sourceSets.main.java.srcDir('src/lightingBenchmark/java')
-    neoForge.runs.client {
-        gameDirectory = file('run-lighting-benchmark')
-        systemProperty 'cms.lightingBenchmark', 'true'
-        systemProperty 'cms.sableLightingDemo', 'false'
-        systemProperty 'cms.lightingDisplays', providers.gradleProperty('lightingDisplays').orElse('1').get()
-        systemProperty 'cms.lightingDense', providers.gradleProperty('lightingDense').isPresent().toString()
-        systemProperty 'cms.benchmarkCapture', providers.gradleProperty('benchmarkCapture').isPresent().toString()
-        jvmArgument '-Xmx3G'
-    }
-}
-
-if (providers.gradleProperty('lightingNetworkTest').isPresent()) {
-    sourceSets.main.java.srcDir('src/lightingNetworkTest/java')
-    neoForge.runs {
-        analysisServer {
-            server()
-            gameDirectory = file('build/lighting-network/server')
-            programArgument '--nogui'
-        }
-        analysisA {
-            client()
-            gameDirectory = file('build/lighting-network/a')
-            programArguments.addAll('--username', 'CMS_Analyst', '--quickPlayMultiplayer', '127.0.0.1:25584', '--width', '800', '--height', '500')
-        }
-        analysisB {
-            client()
-            gameDirectory = file('build/lighting-network/b')
-            programArguments.addAll('--username', 'CMS_Observer', '--quickPlayMultiplayer', '127.0.0.1:25585', '--width', '800', '--height', '500')
-        }
-        configureEach {
-            systemProperty 'cms.lightingNetworkTest', 'true'
-            systemProperty 'cms.demoSeconds', providers.gradleProperty('lightingNetworkSeconds').orElse('180').get()
-            jvmArgument '-Xmx2G'
-        }
-    }
-}
-
-// Speaker stress test: a dedicated server and a client that reconnects on its own (see scripts/speaker_stress.py).
-if (providers.gradleProperty('speakerStress').isPresent()) {
-    sourceSets.main.java.srcDir('src/speakerStress/java')
-    neoForge.runs {
-        stressServer {
-            server()
-            gameDirectory = file('build/speaker-stress/server')
-            programArgument '--nogui'
-        }
-        stressClient {
-            client()
-            gameDirectory = file('build/speaker-stress/client')
-            programArguments.addAll('--username', 'CMS_Listener', '--width', '960', '--height', '600')
-        }
-        configureEach {
-            systemProperty 'cms.speakerStress', 'true'
-            jvmArgument '-Xmx3G'
-        }
+        loadedMods = [mods."${mod_id}"]
     }
 }
 
@@ -233,7 +119,7 @@ dependencies {
     }
     webrtcNatives("dev.onvoid.webrtc:webrtc-java:${webrtc_version}:windows-x86_64") { transitive = false }
 
-    if (providers.gradleProperty('sableTests').isPresent()) {
+    if (sableTests) {
         implementation('maven.modrinth:sable:2.0.6+mc1.21.1') { transitive = false }
     }
 
@@ -242,12 +128,156 @@ dependencies {
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')
 }
 
-if (providers.gradleProperty('sableTests').isPresent()) {
-    sourceSets.main.java.srcDir('src/gametest/java')
-    sourceSets.main.resources.srcDir('src/gametest/resources')
+// Test and dev source sets. Each is compiled against main (and the sets it builds on) and is part of the mod only in
+// the runs that load it, so ordinary runs, the unit tests and the jar never see it; there it shares main's packages.
+def devSet = { String name, SourceSet... uses ->
+    def set = sourceSets.create(name) // src/<name>/java and resources
+    configurations[set.implementationConfigurationName].extendsFrom(configurations.implementation)
+    configurations[set.compileOnlyConfigurationName].extendsFrom(configurations.compileOnly)
+    configurations[set.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly, configurations.localRuntime)
+    dependencies.add(set.implementationConfigurationName, sourceSets.main.output)
+    uses.each { dependencies.add(set.implementationConfigurationName, it.output) }
+    neoForge.addModdingDependenciesTo(set)
+    return set
+}
+// The source sets each run loads on top of main; the last one's classpath (which has the others') is the run's.
+def loads = [:].withDefault { [] }
+
+// Game tests run on the NeoForge CMS ships, without Sable. -PsableTests adds Sable and its own tests (on the NeoForge
+// Sable needs); -PlauncherServerTest runs the launcher's tests instead, and -PcellPlantTest those with the Plant fixture.
+def gametest = devSet('gametest')
+def cellPlantTest = flag('cellPlantTest')
+if (flag('launcherServerTest') || cellPlantTest) {
+    loads.gameTestServer << devSet('launcherServerTest')
     neoForge.runs.gameTestServer {
-        gameDirectory = file('build/sable-gametest')
-        systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        gameDirectory = file(cellPlantTest ? 'run-launcher-server-test-plant'
+                : providers.gradleProperty('launcherServerDirectory').orElse('run-launcher-server-test').get())
+        jvmArgument '-Xmx2G'
+    }
+} else {
+    loads.gameTestServer << gametest
+    if (sableTests) {
+        loads.gameTestServer << devSet('sableGametest', gametest)
+    }
+    neoForge.runs.gameTestServer.gameDirectory = file(sableTests ? 'build/sable-gametest' : 'build/gametest')
+}
+
+// A tiny registry fixture verifies both branches of the optional Plant recipe without making Plant a dependency.
+if (cellPlantTest) {
+    def fixture = sourceSets.create('plantCompatFixture') {
+        java.srcDir('src/plantCompatTest/java')
+        resources.srcDir('src/plantCompatTest/resources')
+        compileClasspath = sourceSets.main.compileClasspath
+    }
+    def fixtureJar = tasks.register('plantCellCompatJar', Jar) {
+        from fixture.output
+        archiveFileName = 'cms-plant-material-fixture.jar'
+        destinationDirectory = layout.buildDirectory.dir('plant-compat-fixture')
+    }
+    neoForge.runs.gameTestServer.systemProperty 'cms.cellPlantTest', 'true'
+    tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+        dependsOn fixtureJar
+        doFirst {
+            copy { from fixtureJar.flatMap { it.archiveFile }; into neoForge.runs.gameTestServer.gameDirectory.get().dir('mods').asFile }
+        }
+    }
+}
+
+if (flag('launcherDebug')) {
+    loads.client << devSet('launcherDebug')
+    neoForge.runs.client {
+        gameDirectory = file('run-launcher-debug')
+        programArguments.addAll('--username', 'DiscTester', '--width', '1280', '--height', '760')
+        jvmArgument '-Xmx3G'
+    }
+}
+
+// The lighting lab (lightingDemo) and what builds on it: the benchmark, the network test, and with -PsableTests the
+// Sable demo. Opt-in, so ordinary runClient saves are untouched.
+def lightingBenchmark = flag('lightingBenchmark')
+def lightingNetworkTest = flag('lightingNetworkTest')
+if (flag('lightingDemo') || lightingBenchmark || lightingNetworkTest) {
+    def lightingDemo = devSet('lightingDemo')
+    def sableLightingDemo = sableTests && !lightingBenchmark
+    loads.client << lightingDemo
+    if (sableLightingDemo) {
+        loads.client << devSet('sableLightingDemo', lightingDemo)
+    }
+    neoForge.runs.client {
+        gameDirectory = file(sableLightingDemo ? 'run-sable-lighting-demo' : 'run-lighting-demo')
+        systemProperty 'cms.sableLightingDemo', Boolean.toString(sableLightingDemo)
+        programArguments.addAll('--width', '1280', '--height', '800')
+    }
+    if (lightingBenchmark) {
+        loads.client << devSet('lightingBenchmark', lightingDemo)
+        neoForge.runs.client {
+            gameDirectory = file('run-lighting-benchmark')
+            systemProperty 'cms.lightingDisplays', providers.gradleProperty('lightingDisplays').orElse('1').get()
+            systemProperty 'cms.lightingDense', flag('lightingDense').toString()
+            systemProperty 'cms.benchmarkCapture', flag('benchmarkCapture').toString()
+            jvmArgument '-Xmx3G'
+        }
+    }
+    if (lightingNetworkTest) {
+        def network = devSet('lightingNetworkTest', lightingDemo)
+        neoForge.runs {
+            analysisServer {
+                server()
+                gameDirectory = file('build/lighting-network/server')
+                programArgument '--nogui'
+            }
+            analysisA {
+                client()
+                gameDirectory = file('build/lighting-network/a')
+                programArguments.addAll('--username', 'CMS_Analyst', '--quickPlayMultiplayer', '127.0.0.1:25584', '--width', '800', '--height', '500')
+            }
+            analysisB {
+                client()
+                gameDirectory = file('build/lighting-network/b')
+                programArguments.addAll('--username', 'CMS_Observer', '--quickPlayMultiplayer', '127.0.0.1:25585', '--width', '800', '--height', '500')
+            }
+        }
+        ['analysisServer', 'analysisA', 'analysisB'].each { name ->
+            loads[name] += [lightingDemo, network]
+            neoForge.runs.named(name) {
+                systemProperty 'cms.lightingNetworkTest', 'true'
+                systemProperty 'cms.demoSeconds', providers.gradleProperty('lightingNetworkSeconds').orElse('180').get()
+                jvmArgument '-Xmx2G'
+            }
+        }
+    }
+}
+
+// Speaker stress test: a dedicated server and a client that reconnects on its own (see scripts/speaker_stress.py).
+if (flag('speakerStress')) {
+    def stress = devSet('speakerStress')
+    neoForge.runs {
+        stressServer {
+            server()
+            gameDirectory = file('build/speaker-stress/server')
+            programArgument '--nogui'
+        }
+        stressClient {
+            client()
+            gameDirectory = file('build/speaker-stress/client')
+            programArguments.addAll('--username', 'CMS_Listener', '--width', '960', '--height', '600')
+        }
+    }
+    ['stressServer', 'stressClient'].each { name ->
+        loads[name] << stress
+        neoForge.runs.named(name) { jvmArgument '-Xmx3G' }
+    }
+}
+
+// Each run that loads a set loads CMS as main plus those sets, as one mod.
+loads.each { String run, List<SourceSet> sets ->
+    def mod = neoForge.mods.create("${mod_id}_${run}") {
+        sourceSet(sourceSets.main)
+        sets.each { sourceSet(it) }
+    }
+    neoForge.runs.named(run) {
+        loadedMods = [mod]
+        sourceSet = sets.last()
     }
 }
 
@@ -302,22 +332,26 @@ var downloadVlc = tasks.register('downloadVlc') {
         }
     }
 }
+def vlcLeftOut = ['gui', 'visualization', 'lua', 'access_output', 'mux', 'services_discovery', 'control', 'video_splitter']
+def vlcStreamOut = ['libstream_out_smem_plugin.dll', 'libstream_out_transcode_plugin.dll']
+// Names what is bundled, so a client unpacks it anew (see Vlc.java) whenever the version or the parts left out change.
+def vlcStamp = "${vlcVersion}-" + "${vlcLeftOut}${vlcStreamOut}".bytes.sha256().take(8)
 var bundleVlc = tasks.register('bundleVlc', Zip) {
     dependsOn downloadVlc
+    inputs.property 'stamp', vlcStamp
     def root = "vlc-${vlcVersion}/"
     from({ zipTree(vlcDownload) }) {
         include "${root}libvlc.dll", "${root}libvlccore.dll", "${root}COPYING.txt", "${root}plugins/**"
-        exclude(['gui', 'visualization', 'lua', 'access_output', 'mux', 'services_discovery',
-                 'control', 'video_splitter'].collect { "${root}plugins/${it}/**" })
+        exclude(vlcLeftOut.collect { "${root}plugins/${it}/**" })
         exclude { entry -> entry.path.startsWith("${root}plugins/stream_out/") && !entry.directory
-                && !['libstream_out_smem_plugin.dll', 'libstream_out_transcode_plugin.dll'].contains(entry.name) }
+                && !vlcStreamOut.contains(entry.name) }
         eachFile { it.path = it.path.substring(root.length()) }
     }
     includeEmptyDirs = false
     archiveFileName = 'win-x64.zip'
     destinationDirectory = vlcResources.map { it.dir('create_media_systems/vlc') }
     doLast {
-        new File(destinationDirectory.get().asFile, 'version').text = "${vlcVersion}-analysis-1"
+        new File(destinationDirectory.get().asFile, 'version').text = vlcStamp
     }
 }
 sourceSets.main.resources.srcDir(files(vlcResources).builtBy(bundleVlc))

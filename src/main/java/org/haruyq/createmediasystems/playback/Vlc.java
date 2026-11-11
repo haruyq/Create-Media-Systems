@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -63,6 +63,14 @@ final class Vlc {
     private Vlc() {
     }
 
+    /** A VLC instance of its own, with every player's options and {@code extra}; null without VLC, or if it won't start. */
+    @Nullable
+    static Pointer instance(String... extra) {
+        String[] args = java.util.stream.Stream.concat(java.util.Arrays.stream(ARGS), java.util.Arrays.stream(extra))
+                .toArray(String[]::new);
+        return LIB == null ? null : LIB.libvlc_new(args.length, args);
+    }
+
     /** Loads VLC now, off the thread that would first need it (it unpacks the first time). */
     static void preload() {
         Thread.ofPlatform().daemon().name("CMS VLC loader").start(() -> {
@@ -96,7 +104,7 @@ final class Vlc {
         try (InputStream in = resource("version")) {
             version = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
         }
-        Path dir = ClientConfig.DIR.resolve("vlc").resolve(version);
+        Path dir = ClientFiles.DIR.resolve("vlc").resolve(version);
         Path done = dir.resolve(".unpacked");
         if (Files.exists(done)) {
             return dir;

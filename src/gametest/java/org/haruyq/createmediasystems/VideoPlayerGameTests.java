@@ -1,13 +1,16 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import org.jetbrains.annotations.Nullable;
@@ -42,7 +45,7 @@ public class VideoPlayerGameTests {
     @GameTest(template = "empty")
     public static void wrenchSetsLightingAndVolumeApart(GameTestHelper helper) {
         BlockPos pos = new BlockPos(1, 2, 1);
-        helper.setBlock(pos, CreateMediaSystems.VIDEO_PLAYER.get());
+        helper.setBlock(pos, VideoFeature.VIDEO_PLAYER.get());
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos);
         ServerPlayer wrencher = FakePlayerFactory.getMinecraft(helper.getLevel());
         wrencher.setPos(Vec3.atCenterOf(helper.absolutePos(pos.north())));
@@ -61,10 +64,10 @@ public class VideoPlayerGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos source = helper.absolutePos(new BlockPos(1, 2, 1));
         BlockPos speakerPos = helper.absolutePos(new BlockPos(3, 2, 1));
-        level.setBlockAndUpdate(source, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(speakerPos, CreateMediaSystems.SPEAKER.get().defaultBlockState());
-        ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        disc.set(CreateMediaSystems.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=listener"));
+        level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
+        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+        disc.set(VideoFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=listener"));
         ((VideoPlayerBlock.Entity) level.getBlockEntity(source)).insert(disc, null);
         SpeakerBlock.Entity speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);
 
@@ -75,7 +78,7 @@ public class VideoPlayerGameTests {
             helper.assertTrue(received.stream().anyMatch(StreamPackets.PlayAtBlock.class::isInstance),
                     "a listener in range got no stream: " + received);
             received.clear();
-            listener.setPos(speakerPos.getCenter().add(JukeboxSettings.DEFAULT_RANGE + JukeboxSettings.DROP_MARGIN + 1, 0, 0));
+            listener.setPos(speakerPos.getCenter().add(EmitterRange.DEFAULT_RANGE + EmitterRange.DROP_MARGIN + 1, 0, 0));
             speaker.configure(level, source, 1, Streams.Channel.MIX);
             helper.assertTrue(received.contains(new StreamPackets.StopAtBlock(speakerPos)),
                     "a listener out of range wasn't told to stop: " + received);
@@ -116,11 +119,11 @@ public class VideoPlayerGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos source = helper.absolutePos(new BlockPos(1, 2, 1));
         BlockPos speakerPos = helper.absolutePos(new BlockPos(3, 2, 1));
-        level.setBlockAndUpdate(source, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState());
-        level.setBlockAndUpdate(speakerPos, CreateMediaSystems.SPEAKER.get().defaultBlockState());
+        level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
         String url = "cms-disc://" + UUID.randomUUID() + "/" + UUID.randomUUID();
-        ItemStack disc = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        disc.set(CreateMediaSystems.PLAYLIST.get(), List.of(url));
+        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+        disc.set(VideoFeature.PLAYLIST.get(), List.of(url));
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(source);
         player.insert(disc, null);
         SpeakerBlock.Entity speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);
@@ -137,7 +140,7 @@ public class VideoPlayerGameTests {
             a.clear();
             b.clear();
 
-            player.control(VideoPlayerBlock.Action.SEEK, 300, first);
+            player.control(Remotable.Action.SEEK, 300, first);
             speaker.configure(level, source, 1, Streams.Channel.MIX);
             long seekLoad = Streams.loadId(player);
             helper.assertTrue(seekLoad != load, "a seek is a new load");
@@ -158,14 +161,14 @@ public class VideoPlayerGameTests {
                         "both are told to play from 300 s together: " + received);
             }
 
-            player.control(VideoPlayerBlock.Action.SEEK_BY, -10, first);
+            player.control(Remotable.Action.SEEK_BY, -10, first);
             helper.assertTrue(Streams.playing(player).ticks() == 290 * 20, "ten seconds back is 290 s");
-            player.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, first);
-            player.control(VideoPlayerBlock.Action.SEEK, 100, first);
+            player.control(Remotable.Action.PLAY_PAUSE, 0, first);
+            player.control(Remotable.Action.SEEK, 100, first);
             helper.assertTrue(player.nowPlaying() == null, "a seek leaves it paused");
-            player.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, first);
+            player.control(Remotable.Action.PLAY_PAUSE, 0, first);
             helper.assertTrue(Streams.playing(player).ticks() == 100 * 20, "and it plays on from 100 s");
-            player.control(VideoPlayerBlock.Action.SEEK, 10_000, first);
+            player.control(Remotable.Action.SEEK, 10_000, first);
             helper.assertTrue(Streams.playing(player).ticks() == 599 * 20,
                     "past the end it goes a second short of it, was " + Streams.playing(player).ticks());
         } finally {

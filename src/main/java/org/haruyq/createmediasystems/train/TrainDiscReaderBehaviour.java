@@ -2,16 +2,19 @@ package org.haruyq.createmediasystems.train;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.WeakHashMap;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.ItemSlot;
+import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -48,25 +51,17 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
  * On a train: plays the stored announcement schedule through the train's {@link TrainSpeakerBlock}s, each heard only
  * in its own carriage (the client picks the speaker). Each tick it works out where the train
  * is on its trip (see {@link AnnounceCondition.Trip}) and starts announcements as they come due, each once per
- * trip. A playing announcement is followed live: whoever boards while it plays (seated or standing) gets it from
- * where it is now, and whoever gets off stops hearing it.
+ * trip. The reader is a source like any other (see Reader), and the train's speakers its emitter, whose audience is
+ * whoever is aboard: whoever boards while one plays (seated or standing) gets it from where it is now, and whoever
+ * gets off stops hearing it.
  */
 public class TrainDiscReaderBehaviour implements MovementBehaviour {
-    /**
-     * New riders get a playing announcement for at most this long when the API didn't say how long it is.
-     * ponytail: a guess for announcements of unknown length; those already listening hear it to the end anyway.
-     */
-    private static final long UNKNOWN_LENGTH_RELAY_TICKS = 20 * 60 * 10;
-    /** Who already has the current announcement of each train disc reader. */
-    private static final Map<MovementContext, Set<ServerPlayer>> LISTENERS = new WeakHashMap<>();
-
     @Override
     public boolean isActive(MovementContext context) {
         return context.contraption instanceof CarriageContraption;
@@ -81,45 +76,19 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         }
         Train train = entity.getCarriage().train;
         long now = level.getGameTime();
-        String due = dueAnnouncement(now, context.data, train, schedule(level, context));
+        Reader reader = Reader.of(context, now);
+        String due = dueAnnouncement(now, context.data, train, reader.schedule(level, context));
         if (due != null) {
-            context.data.putString("Playing", due);
-            context.data.putLong("PlayingSince", now);
-            context.data.putBoolean("Loading", true);
-            LISTENERS.remove(context);
+            reader.play(due, now);
         }
+        reader.tick(context, now);
         if (due != null || Streams.relayDue(level)) {
-            relay(context, train, now);
-        }
-    }
-
-    private static void relay(MovementContext context, Train train, long now) {
-        String url = context.data.getString("Playing");
-        if (url.isEmpty()) {
-            return;
-        }
-        if (context.data.getBoolean("Loading") && now - context.data.getLong("PlayingSince") >= Streams.MAX_LOAD_TICKS) {
-            loaded(context, now); // nobody had it loaded in time: it plays on from here
-        }
-        // Loading doesn't count as playing (see Streams#played): riders boarding meanwhile start from the top too.
-        long ticks = context.data.getBoolean("Loading") ? 0 : now - context.data.getLong("PlayingSince");
-        if (!ServerConfig.isAllowed(url) || (Streams.duration(url) > 0 ? Streams.endedAt(url, ticks)
-                : ticks > UNKNOWN_LENGTH_RELAY_TICKS)) {
-            context.data.remove("Playing");
-            LISTENERS.remove(context);
-            return;
-        }
-        Set<ServerPlayer> aboard = passengers(train);
-        Set<ServerPlayer> listeners = LISTENERS.computeIfAbsent(context, c -> new HashSet<>());
-        // Those who got off stop on their own (the client checks too); if they board again they get it again.
-        listeners.retainAll(aboard);
-        List<Integer> carriages = carriageIds(train);
-        String channel = channel(context, train);
-        for (ServerPlayer player : aboard) {
-            if (listeners.add(player)) {
-                PacketDistributor.sendToPlayer(player, new Announce(url, channel, carriages, ticks / 20f,
-                        context.blockEntityData == null ? 1 : TrainDiscReaderBlock.volume(context.blockEntityData)));
-            }
+            float volume = context.blockEntityData == null ? 1 : TrainDiscReaderBlock.volume(context.blockEntityData);
+            String channel = channel(context, train);
+            List<Integer> carriages = carriageIds(train);
+            Streams.relay(level, reader, new StreamPackets.Target.Channel(channel), reader, passengers(train),
+                    (playing, load) -> new Announce(playing.url(), channel, carriages,
+                            playing.ticks() / (float) PlaybackClock.TICKS_PER_SECOND, volume));
         }
     }
 
@@ -128,23 +97,86 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         return train.id + "/" + context.localPos.asLong();
     }
 
-    private static void loaded(MovementContext context, long now) {
-        context.data.remove("Loading");
-        context.data.putLong("PlayingSince", now);
-    }
-
     /**
-     * {@code player} has the announcement on {@code channel} loaded and playing, so it now counts as playing, if it
-     * was still waiting. Only from a rider it was sent to.
+     * A train disc reader as a source: the announcement it plays, on a clock that stands while those aboard load it
+     * (see Streams#loading) and stops at its end. Kept with its place on the train (MovementContext#temporaryData),
+     * with its schedule parsed once per change of the stored item; what plays is saved in the context's data
+     * ("Playing", and "PlayingSince": the game time its top was at, as far as its clock has counted).
      */
-    public static void started(ServerPlayer player, String channel) {
-        LISTENERS.forEach((context, listeners) -> {
-            if (listeners.contains(player) && context.data.getBoolean("Loading")
-                    && context.contraption.entity instanceof CarriageContraptionEntity entity
-                    && entity.getCarriage() != null && channel(context, entity.getCarriage().train).equals(channel)) {
-                loaded(context, player.serverLevel().getGameTime());
+    static final class Reader implements MediaSource.Keyed {
+        private final UUID id = UUID.randomUUID();
+        private final PlaybackClock clock = new PlaybackClock();
+        @Nullable
+        private String url;
+        @Nullable
+        private CompoundTag item;
+        @Nullable
+        private Schedule schedule;
+
+        /** {@code context}'s reader, taken up from its data where it was saved. */
+        static Reader of(MovementContext context, long now) {
+            if (context.temporaryData instanceof Reader reader) {
+                return reader;
             }
-        });
+            Reader reader = new Reader();
+            String playing = context.data.getString("Playing");
+            if (!playing.isEmpty()) {
+                reader.url = playing;
+                reader.clock.load(context.data.getBoolean("Loading") ? 0 : Math.max(0, now - context.data.getLong("PlayingSince")), true);
+            }
+            context.data.remove("Loading");
+            context.temporaryData = reader;
+            return reader;
+        }
+
+        @Override
+        public UUID id() {
+            return id;
+        }
+
+        @Override
+        @Nullable
+        public Streams.Source nowPlaying() {
+            return url != null && clock.running() ? new Streams.Source(url, clock.position(), null) : null;
+        }
+
+        /** {@code url} plays from its top, cutting off what played, once those aboard have it loaded. */
+        void play(String url, long now) {
+            this.url = url;
+            clock.start(0);
+            Streams.loading(this, null, clock, now);
+        }
+
+        /** Its clock counts on, and stops at the announcement's end (or once the server no longer allows it). */
+        void tick(MovementContext context, long now) {
+            if (url == null) {
+                return;
+            }
+            Streams.tick(this, clock, now);
+            if (!UrlPolicy.isAllowed(url) || clock.ended(url, now)) {
+                url = null;
+                clock.stop();
+                context.data.remove("Playing");
+                context.data.remove("PlayingSince");
+                return;
+            }
+            context.data.putString("Playing", url);
+            context.data.putLong("PlayingSince", now - clock.position(now));
+        }
+
+        /** The stored announcement schedule, parsed once per change of the stored item (not every tick). */
+        @Nullable
+        Schedule schedule(ServerLevel level, MovementContext context) {
+            if (context.blockEntityData == null) {
+                return null;
+            }
+            CompoundTag stored = context.blockEntityData.getCompound(TrainDiscReaderBlock.ITEM_TAG);
+            if (stored != item) {
+                item = stored;
+                schedule = ScheduleItem.getSchedule(level.registryAccess(), ItemStack.parseOptional(level.registryAccess(), stored));
+            }
+            return schedule;
+        }
     }
 
     /** The announcement that came due this tick, if any (and marks every one that did as played this trip). */
@@ -271,24 +303,6 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         return found[0];
     }
 
-    /** The stored announcement schedule, parsed once per change of the stored item (not every tick). */
-    @Nullable
-    private static Schedule schedule(ServerLevel level, MovementContext context) {
-        if (context.blockEntityData == null) {
-            return null;
-        }
-        CompoundTag item = context.blockEntityData.getCompound(TrainDiscReaderBlock.ITEM_TAG);
-        if (context.temporaryData instanceof ParsedSchedule parsed && parsed.item() == item) {
-            return parsed.schedule();
-        }
-        Schedule schedule = ScheduleItem.getSchedule(level.registryAccess(), ItemStack.parseOptional(level.registryAccess(), item));
-        context.temporaryData = new ParsedSchedule(item, schedule);
-        return schedule;
-    }
-
-    private record ParsedSchedule(CompoundTag item, @Nullable Schedule schedule) {
-    }
-
     private static Set<ServerPlayer> passengers(Train train) {
         return carriages(train).filter(entity -> entity.level() instanceof ServerLevel)
                 .flatMap(entity -> ((ServerLevel) entity.level()).players().stream().filter(p -> aboard(entity, p)))
@@ -346,20 +360,18 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             }
             // Same tag object as the contraption's stored block entity data, so it survives disassembly.
             CompoundTag data = actor.right.blockEntityData;
-            ItemStack stored = ItemStack.parseOptional(player.registryAccess(), data.getCompound(TrainDiscReaderBlock.ITEM_TAG));
-            ItemStack next = TrainDiscReaderBlock.swap(player, hand, stored);
-            if (next.isEmpty()) {
-                data.remove(TrainDiscReaderBlock.ITEM_TAG);
-            } else {
-                data.put(TrainDiscReaderBlock.ITEM_TAG, next.save(player.registryAccess()));
-            }
+            ItemSlot slot = TrainDiscReaderBlock.slot();
+            slot.load(data, player.registryAccess());
+            slot.set(slot.exchange(player, hand, slot.get()));
+            slot.save(data, player.registryAccess());
             return true;
         }
     }
 
     /**
-     * Server → client: in-train announcement, played by the train speakers of {@code carriages} at {@code volume};
-     * the client stops it once it is off all of them.
+     * Server → client: in-train announcement, played by the train speakers of {@code carriages} at {@code volume} from
+     * {@code startSeconds} in, as soon as it is loaded (see StreamPackets.Target); the client stops it once it is off
+     * all of them.
      */
     public record Announce(String url, String channel, List<Integer> carriages, float startSeconds, float volume)
             implements CustomPacketPayload {
@@ -378,24 +390,7 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         }
     }
 
-    /**
-     * Client → server: the announcement on {@code channel} is loaded and plays here (see
-     * TrainDiscReaderBehaviour#started).
-     */
-    public record StartedAnnouncement(String channel) implements CustomPacketPayload {
-        public static final Type<StartedAnnouncement> TYPE = new Type<>(CreateMediaSystems.id("started_announcement"));
-        public static final StreamCodec<ByteBuf, StartedAnnouncement> CODEC =
-                ByteBufCodecs.STRING_UTF8.map(StartedAnnouncement::new, StartedAnnouncement::channel);
-
-        @Override
-        public Type<StartedAnnouncement> type() {
-            return TYPE;
-        }
-    }
-
     public static void registerPayloads(PayloadRegistrar registrar) {
         registrar.playToClient(Announce.TYPE, Announce.CODEC, (payload, context) -> Announcements.play(payload));
-        registrar.playToServer(StartedAnnouncement.TYPE, StartedAnnouncement.CODEC,
-                (payload, context) -> started((ServerPlayer) context.player(), payload.channel()));
     }
 }

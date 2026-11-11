@@ -1,8 +1,8 @@
 package org.haruyq.createmediasystems.launcher.client;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.*;
-import org.haruyq.createmediasystems.client.ClientConfig;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -26,7 +26,8 @@ public final class LauncherHud {
     private static final int WIDTH=318,HEIGHT=88;
     private static int spareCells,cachedTick=Integer.MIN_VALUE;
     private static Object cachedPlayer;
-    public static boolean reticleDrawn;
+    /** Whether the last frame drew the reticle (see LauncherClient.diagnostics). */
+    static boolean reticleDrawn;
     private LauncherHud() {}
     public static void register(IEventBus bus) {
         bus.addListener((RegisterGuiLayersEvent event)->event.registerAbove(VanillaGuiLayers.CROSSHAIR,LAYER,LauncherHud::render));
@@ -34,7 +35,7 @@ public final class LauncherHud {
     }
     private static boolean visible(Minecraft mc) {
         return mc.player!=null && mc.level!=null && mc.screen==null && !mc.options.hideGui && !mc.player.isSpectator()
-                && mc.player.getMainHandItem().is(CreateMediaSystems.DISC_LAUNCHER.get());
+                && mc.player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get());
     }
     private static void hideVanillaCrosshair(RenderGuiLayerEvent.Pre e) {
         var mc=Minecraft.getInstance();if(e.getName().equals(VanillaGuiLayers.CROSSHAIR) && visible(mc) && mc.options.getCameraType().isFirstPerson())e.setCanceled(true);
@@ -46,7 +47,7 @@ public final class LauncherHud {
         int accent=r.hasCell()?0xFF000000|tier.color:MUTED;
         int status=reload?AMBER:!r.hasOriginal()||r.shots()==0||low?RED:accent;
         float partial=delta.getGameTimeDeltaPartialTick(true),aim=LauncherClient.aim(partial);
-        float age=reload?mc.level.getGameTime()-gun.get(CreateMediaSystems.LAUNCHER_RELOAD_START.get())+partial:0;
+        float age=reload?LauncherTimeline.reloadAge(gun,mc.level,partial):0;
         float progress=Math.clamp(age/LauncherTimeline.RELOAD_TICKS,0,1);
         refreshReserves(mc);
         float pixels=Math.clamp(mc.getWindow().getHeight()/760f,.72f,2.5f),unit=pixels/(float)mc.getWindow().getGuiScale();
@@ -83,7 +84,7 @@ public final class LauncherHud {
         if(reload) {
             var incoming=LauncherMagazine.pending(gun);
             String next=incoming.getItem() instanceof DiscCellItem cell && !eject?" > LV "+cell.tier.level:"";
-            label(g,(eject?"EJECT":"RELOAD")+String.format(java.util.Locale.ROOT,"  %.1fs",Math.max(0,(80-age)/20))+next,18,-17,.9f,AMBER);
+            label(g,(eject?"EJECT":"RELOAD")+String.format(java.util.Locale.ROOT,"  %.1fs",Math.max(0,(LauncherTimeline.RELOAD_TICKS-age)/20))+next,18,-17,.9f,AMBER);
             rect(g,17,64,WIDTH-24,66,0x5C8B9488);rect(g,17,64,17+(WIDTH-41)*progress,66,AMBER);
         } else if(!r.hasCell()||!r.hasOriginal()||r.shots()==0||low) {
             label(g,tr(!r.hasCell()?"no_cell":!r.hasOriginal()?"no_original":r.shots()==0?"depleted":"low"),18,-17,.80f,status);
@@ -131,7 +132,7 @@ public final class LauncherHud {
         polygon(g,0xA0000000,0,-2.5f,2.5f,0,0,2.5f,-2.5f,0);
         polygon(g,dot,0,-1.1f,1.1f,0,0,1.1f,-1.1f,0);
         float age=LauncherClient.hitAge();
-        if(age>=0 && age<.30f && ClientConfig.LAUNCHER_CROSSHAIR_FEEDBACK.get()!=LauncherDamageDisplay.Crosshair.OFF) {
+        if(age>=0 && age<.30f && LauncherClient.CROSSHAIR_FEEDBACK.get()!=LauncherDamageDisplay.Crosshair.OFF) {
             int tint=LauncherClient.killed()?0xFF635A:LauncherClient.headHit()?0xFFD667:0xF7F8EE;
             int color=(Math.round(255*Math.min(1,(.30f-age)/.12f))<<24)|tint;
             float begin=5+Math.max(0,.06f-age)*18,end=11+Math.max(0,.06f-age)*18;
@@ -140,7 +141,7 @@ public final class LauncherHud {
                 line(g,a*begin,b*begin,a*end,b*end,1.5f,color);
             }
             var entry=LauncherClient.damageDisplay().latest();
-            if(entry!=null && entry.shield()>0 && ClientConfig.LAUNCHER_CROSSHAIR_FEEDBACK.get()==LauncherDamageDisplay.Crosshair.X_WITH_SHIELD)
+            if(entry!=null && entry.shield()>0 && LauncherClient.CROSSHAIR_FEEDBACK.get()==LauncherDamageDisplay.Crosshair.X_WITH_SHIELD)
                 shield(g,19,0,entry.shieldBroken()?RED:0xFF66C6FF,entry.shieldBroken());
         }
         g.pose().popPose();
@@ -170,7 +171,7 @@ public final class LauncherHud {
         label(g,value,x,y,size,color);
     }
     private static void damageNumbers(GuiGraphics g,Minecraft mc,float unit,float partial) {
-        var mode=ClientConfig.LAUNCHER_DAMAGE_NUMBERS.get();if(mode==LauncherDamageDisplay.Mode.OFF)return;
+        var mode=LauncherClient.DAMAGE_NUMBERS.get();if(mode==LauncherDamageDisplay.Mode.OFF)return;
         var display=LauncherClient.damageDisplay();double now=System.nanoTime()/1_000_000_000.0;
         if((mode==LauncherDamageDisplay.Mode.STACKING || mode==LauncherDamageDisplay.Mode.BOTH) && display.visible(now)) {
             var e=display.latest();var entity=mc.level.getEntity(e.target());

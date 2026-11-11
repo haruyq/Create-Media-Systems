@@ -22,15 +22,13 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 
+import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.Workers;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.client.renderer.block.BlockRenderDispatcher;
-import net.minecraft.client.renderer.block.model.BakedQuad;
-import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
@@ -45,13 +43,11 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.level.ChunkEvent;
@@ -90,12 +86,6 @@ public final class DisplayLight {
     private static final Map<Block, float[]> MATERIALS = new ConcurrentHashMap<>();
     private static final float[] MATTE_MATERIAL = {1, 0.04f};
     private static int frame;
-    /**
-     * Each side's quads, and then those on no side (null): everything of a model not flush with its block's faces,
-     * such as a seat's cushion and back or iron bars' middles.
-     */
-    private static final Direction[] SIDES = {Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH,
-            Direction.WEST, Direction.EAST, null};
     private static volatile boolean warned;
 
     static final class Refresh {
@@ -446,13 +436,12 @@ public final class DisplayLight {
     // shortcut: a chunk changing during the background read can fail the scan; the next render retries it.
     private static Found faces(Level level, BlockPos at, Bounds bounds, DisplayBlock.Screen screen, float width,
                                 float height, float range) {
-        var blocks = Minecraft.getInstance().getBlockRenderer();
         RandomSource random = RandomSource.create();
         Lighting faces = new Lighting(screen, width, height, range);
         Lighting water = new Lighting(screen, width, height, range);
         DisplayShadows.Grid grid = new DisplayShadows.Grid(bounds.min.subtract(at), bounds.max.subtract(at));
         try {
-            return faces(level, at, bounds.min, bounds.max, blocks, random, faces, water, screen, width, height, grid);
+            return faces(level, at, bounds.min, bounds.max, random, faces, water, screen, width, height, grid);
         } catch (Throwable failed) {
             faces.bytes.close();
             water.bytes.close();
@@ -461,8 +450,7 @@ public final class DisplayLight {
         }
     }
 
-    private static Found faces(Level level, BlockPos at, BlockPos min, BlockPos max, BlockRenderDispatcher blocks,
-                                RandomSource random, Lighting faces, Lighting water, DisplayBlock.Screen screen,
+    private static Found faces(Level level, BlockPos at, BlockPos min, BlockPos max, RandomSource random, Lighting faces, Lighting water, DisplayBlock.Screen screen,
                                 float width, float height, DisplayShadows.Grid grid) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int minY = Math.max(min.getY(), level.getMinBuildHeight());
@@ -486,7 +474,7 @@ public final class DisplayLight {
                             for (int z = z0; z <= z1; z++) {
                                 pos.set(x, y, z);
                                 if (!pos.equals(at)) {
-                                    block(level, at, pos, blocks, random, faces, water, grid);
+                                    block(level, at, pos, random, faces, water, grid);
                                 }
                             }
                         }
@@ -506,8 +494,8 @@ public final class DisplayLight {
         }
     }
 
-    private static void block(Level level, BlockPos at, BlockPos pos, BlockRenderDispatcher blocks,
-                              RandomSource random, Lighting faces, Lighting water, DisplayShadows.Grid grid) {
+    private static void block(Level level, BlockPos at, BlockPos pos, RandomSource random, Lighting faces,
+                              Lighting water, DisplayShadows.Grid grid) {
         Vec3 offset = Vec3.atLowerCornerOf(pos.subtract(at));
         FluidState fluid = level.getFluidState(pos);
         if (fluid.is(FluidTags.WATER) && !level.getFluidState(pos.above()).is(FluidTags.WATER)) {
@@ -519,23 +507,13 @@ public final class DisplayLight {
         if (state.canOcclude()) {
             grid.block(pos.getX() - at.getX(), pos.getY() - at.getY(), pos.getZ() - at.getZ());
         }
-        if (state.getRenderShape() != RenderShape.MODEL) {
-            return;
-        }
-        BakedModel model = blocks.getBlockModel(state);
         float[] material = material(state);
-        for (Direction side : SIDES) {
-            if (side != null && !Block.shouldRenderFace(state, level, pos, side, pos.relative(side))) {
-                continue;
-            }
-            random.setSeed(42);
-            for (BakedQuad quad : model.getQuads(state, side, random, ModelData.EMPTY, null)) {
-                Vec3[] corners = new Vec3[4];
-                float[] uv = new float[8];
-                SurfaceLight.read(quad, offset, corners, uv);
-                faces.add(corners, uv, quad.getDirection(), 1, material[0], material[1]);
-            }
-        }
+        SurfaceLight.forEachQuad(level, pos, state, random, quad -> {
+            Vec3[] corners = new Vec3[4];
+            float[] uv = new float[8];
+            SurfaceLight.read(quad, offset, corners, uv);
+            faces.add(corners, uv, quad.getDirection(), 1, material[0], material[1]);
+        });
     }
 
     /** The lit faces, whose shadows are computed from the block grid once uploaded. */

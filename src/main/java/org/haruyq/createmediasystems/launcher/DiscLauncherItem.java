@@ -2,8 +2,7 @@ package org.haruyq.createmediasystems.launcher;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -51,15 +50,14 @@ public final class DiscLauncherItem extends Item {
         if(level.isClientSide || !player.isAlive() || player.isSpectator() || !(stack.getItem() instanceof DiscLauncherItem)
                 || !Float.isFinite(yaw) || !Float.isFinite(pitch) || Math.abs(pitch)>90)return false;
         long now = level.getGameTime();
-        LauncherMagazine.migrateLegacy(player, stack);
-        Long previous=stack.get(CreateMediaSystems.LAUNCHER_SHOT_AT.get());
+        Long previous=stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
         if (LauncherMagazine.reloading(stack) || player.getCooldowns().isOnCooldown(stack.getItem())
                 || previous!=null && now>=previous && now-previous<FIRE_INTERVAL_TICKS)return false;
         if (LauncherMagazine.count(stack) == 0) {
             boolean started = LauncherMagazine.reserve(player, stack, now,true);
             if (started) {
                 level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                        CreateMediaSystems.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, .6f, 1.2f);
+                        LauncherFeature.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, .6f, 1.2f);
             } else if (!LauncherMagazine.reloading(stack) && now%20==0) player.displayClientMessage(
                     Component.translatable("cell.create_media_systems.need_cell"), true);
             return false;
@@ -70,8 +68,7 @@ public final class DiscLauncherItem extends Item {
             return false;
         }
         ItemStack master = DiscCellItem.master(before);
-        String url = DiscPlayback.mediaUrl(master);
-        if (url != null && !ServerConfig.isAllowed(url)) {
+        if (!MediaItem.allowed(master)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true);
             return false;
         }
@@ -91,13 +88,13 @@ public final class DiscLauncherItem extends Item {
             LauncherMagazine.setCell(stack, before);
             return false;
         }
-        stack.set(CreateMediaSystems.LAUNCHER_SHOT_AT.get(), now);
+        stack.set(LauncherFeature.LAUNCHER_SHOT_AT.get(), now);
         player.getCooldowns().addCooldown(stack.getItem(), FIRE_INTERVAL_TICKS);
         player.setSprinting(false);
         if(player instanceof net.minecraft.server.level.ServerPlayer server)
             net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(server,new LauncherFeedback.Shot(now));
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                CreateMediaSystems.DISC_FIRE_SOUND.get(), SoundSource.PLAYERS, 0.85f,
+                LauncherFeature.DISC_FIRE_SOUND.get(), SoundSource.PLAYERS, 0.85f,
                 1.15f + (level.random.nextFloat() * .15f));
         return true;
     }
@@ -105,19 +102,20 @@ public final class DiscLauncherItem extends Item {
     @Override
     public void inventoryTick(ItemStack stack, Level level, Entity entity, int slotId, boolean isSelected) {
         if (level.isClientSide || !(entity instanceof Player player)) return;
+        // The one place a carried launcher passes through: a pre-cell launcher refunds its discs on its first tick.
         LauncherMagazine.migrateLegacy(player, stack);
-        Long started = stack.get(CreateMediaSystems.LAUNCHER_RELOAD_START.get());
+        Long started = stack.get(LauncherFeature.LAUNCHER_RELOAD_START.get());
         if (started == null) return;
         long age = level.getGameTime() - started;
         // A world-time jump can only make the already-escrowed reload finish sooner.
         if (age >= LauncherTimeline.RELOAD_TICKS || age < -20) {
             LauncherMagazine.finish(player, stack);
             level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
-                    CreateMediaSystems.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, 0.65f, 1.4f);
-        } else if (isSelected && (age == 12 || age == 28 || age == 50 || age == 74)) {
+                    LauncherFeature.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, 0.65f, 1.4f);
+        } else if (isSelected && LauncherTimeline.Cue.at(age) instanceof LauncherTimeline.Cue cue) {
             level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
-                    age == 74 ? CreateMediaSystems.DISC_CHARGE_SOUND.get() : CreateMediaSystems.DISC_INSERT_SOUND.get(),
-                    SoundSource.PLAYERS, 0.65f, age == 12 ? 0.7f : 1.15f);
+                    cue == LauncherTimeline.Cue.CHARGE ? LauncherFeature.DISC_CHARGE_SOUND.get() : LauncherFeature.DISC_INSERT_SOUND.get(),
+                    SoundSource.PLAYERS, 0.65f, cue.pitch);
         }
     }
 

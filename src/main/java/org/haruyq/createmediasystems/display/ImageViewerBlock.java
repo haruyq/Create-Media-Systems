@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.display;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -14,6 +13,8 @@ import com.mojang.serialization.MapCodec;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -74,11 +75,74 @@ public class ImageViewerBlock extends DisplayBlock {
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
     }
 
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return new Entity(pos, state);
+    }
+
     /** Nothing to relay: its picture is fetched by each computer that shows it. */
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return null;
+    }
+
+    /** An image viewer: the link of its picture, which every client fetches itself (see Images). */
+    public static class Entity extends ScreenEntity {
+        private String image = "";
+
+        public Entity(BlockPos pos, BlockState state) {
+            super(DisplayFeature.IMAGE_VIEWER_ENTITY.get(), pos, state);
+        }
+
+        public String image() {
+            return image;
+        }
+
+        void setImage(String image) {
+            this.image = image;
+            changed();
+        }
+
+        public boolean framed() {
+            return getBlockState().getValue(FRAMED);
+        }
+
+        /** Its picture stops light only in its frame. */
+        @Override
+        public boolean occludes() {
+            return framed();
+        }
+
+        @Override
+        protected Component shows() {
+            return image.isEmpty() ? Component.translatable("create_media_systems.image_viewer.empty")
+                    : Component.literal(image.length() > 48 ? image.substring(0, 47) + "…" : image);
+        }
+
+        @Override
+        protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+            super.saveAdditional(tag, registries);
+            if (!image.isEmpty()) {
+                tag.putString("Image", image);
+            }
+        }
+
+        @Override
+        protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+            super.loadAdditional(tag, registries);
+            image = tag.getString("Image");
+        }
+
+        @Override
+        public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+            CompoundTag tag = super.getUpdateTag(registries);
+            // Every client fetches the image itself: a link the server no longer allows reaches none of them.
+            if (!UrlPolicy.isAllowed(image)) {
+                tag.remove("Image");
+            }
+            return tag;
+        }
     }
 
     /** Client → server: a wrench set the link of the image viewer at {@code viewer}; empty clears it. */
@@ -98,12 +162,12 @@ public class ImageViewerBlock extends DisplayBlock {
     /** A wrench holder set an image viewer's link (empty clears it); only to a host the server allows. */
     static void setImage(ServerPlayer player, SetImage payload) {
         BlockPos pos = payload.viewer();
-        DisplayBlock.Entity viewer = Reach.blockEntity(player, pos, Reach.HAND, DisplayBlock.Entity.class);
-        if (!player.isHolding(stack -> stack.is(Tags.Items.TOOLS_WRENCH)) || viewer == null || !viewer.isImageViewer()) {
+        Entity viewer = Reach.blockEntity(player, pos, Reach.HAND, Entity.class);
+        if (!player.isHolding(stack -> stack.is(Tags.Items.TOOLS_WRENCH)) || viewer == null) {
             return;
         }
         String url = payload.url().trim();
-        if (!url.isEmpty() && !ServerConfig.isAllowed(url)) {
+        if (!url.isEmpty() && !UrlPolicy.isAllowed(url)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected").withStyle(ChatFormatting.RED), true);
             return;
         }

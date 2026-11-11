@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
+import java.util.UUID;
+
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -20,23 +22,21 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class DiscAirCleanupGameTests {
     private static DiscProjectile flying(GameTestHelper h) {
-        var d=new DiscProjectile(CreateMediaSystems.DISC_PROJECTILE.get(),h.getLevel());
+        var d=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),h.getLevel());
         d.setItem(new ItemStack(Items.MUSIC_DISC_CAT));d.setNoGravity(true);
         d.setPos(Vec3.atCenterOf(h.absolutePos(new BlockPos(1,40,1))));d.setDeltaMovement(0,0,2);
         d.tickPlayback();return d;
     }
     @GameTest(template="empty")
     public static void missedShotsExpireEvenWithoutMovementTicksAndAfterSaveLoad(GameTestHelper h) {
-        var d=flying(h);var tag=new CompoundTag();d.save(tag);
-        tag.putLong("CmsDiscSpawnedAt",h.getLevel().getGameTime()-100);d.load(tag);d.tickPlayback();
+        var d=flying(h);d.firedAgo(100);var tag=new CompoundTag();d.save(tag);d.load(tag);d.tickPlayback();
         h.assertTrue(d.isRemoved() && d.tickCount==0 && d.getPickResult().isEmpty(),"A missed shot cannot hover until its song ends, even outside simulation distance");h.succeed();
     }
     @GameTest(template="empty")
     public static void stalledShotsAndLegacyOrphansAreRemoved(GameTestHelper h) {
-        var d=flying(h);var tag=new CompoundTag();d.save(tag);
-        tag.putLong("CmsDiscSpawnedAt",h.getLevel().getGameTime()-5);d.load(tag);d.setDeltaMovement(Vec3.ZERO);d.tickPlayback();
+        var d=flying(h);d.firedAgo(5);d.setDeltaMovement(Vec3.ZERO);d.tickPlayback();
         h.assertTrue(d.isRemoved(),"A stopped flying projection cannot remain in the air");
-        var old=flying(h);var oldTag=new CompoundTag();old.save(oldTag);oldTag.putBoolean("CmsDiscEmbedded",true);old.load(oldTag);old.tickPlayback();
+        var old=flying(h);old.stuckHere();old.tickPlayback();
         h.assertTrue(old.isRemoved(),"Unsupported embedded discs from older saves are cleaned up too");h.succeed();
     }
     @GameTest(template="empty")
@@ -62,13 +62,11 @@ public final class DiscAirCleanupGameTests {
         disc.tick();
         h.assertTrue(disc.embedded() && disc.position().distanceTo(contact) < 1e-7,
                 "The flying disc embeds at the surface of the wall");
+        h.assertTrue(!disc.blockAttachmentExpired(), "The attachment clock starts at impact");
+        disc.embeddedAgo(1199);
+        disc.musicStartedAgo(1800);
         var saved = new CompoundTag();
         disc.save(saved);
-        h.assertTrue(saved.getLong("CmsDiscEmbeddedAt") == level.getGameTime(),
-                "The attachment clock starts at impact");
-        saved.remove("UUID");
-        saved.putLong("CmsDiscEmbeddedAt", level.getGameTime() - 1199);
-        saved.putLong("CmsDiscMusicStart", level.getGameTime() - 1800);
         var restored = flying(h);
         restored.load(saved);
         h.assertTrue(restored.tickPlayback() && level.addFreshEntity(restored),
@@ -77,6 +75,7 @@ public final class DiscAirCleanupGameTests {
         h.runAfterDelay(1, () -> {
             var late = flying(h);
             late.load(saved);
+            late.setUUID(UUID.randomUUID());
             h.assertTrue(!level.addFreshEntity(late), "At 1200 ticks a saved wall disc cannot respawn");
         });
         h.runAfterDelay(2, () -> {

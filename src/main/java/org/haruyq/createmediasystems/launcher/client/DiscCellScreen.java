@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;
 import org.haruyq.createmediasystems.launcher.DiscCellMenu;
 import org.lwjgl.glfw.GLFW;
@@ -96,7 +97,7 @@ public final class DiscCellScreen extends AbstractContainerScreen<DiscCellMenu> 
             gui.fill(x + slot.x, y + slot.y, x + slot.x + 16, y + slot.y + 16, 0xFF24313B);
         }
         if (menu.cell().getItem() instanceof DiscCellItem item) {
-            int charge = Math.round(150f * DiscCellItem.energy(menu.cell()) / item.tier.capacity());
+            int charge = Math.round(150 * ChargeableItem.charge(menu.cell()));
             gui.fill(x + 13, y + 72, x + 163, y + 78, 0xFF36434B);
             gui.fill(x + 13, y + 72, x + 13 + charge, y + 78, 0xFF000000 | item.tier.color);
         }

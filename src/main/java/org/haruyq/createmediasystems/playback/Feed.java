@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.haruyq.createmediasystems.stream.UrlPolicy;
+import org.haruyq.createmediasystems.ApiHttp;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -112,7 +112,7 @@ final class Feed {
                     told = closed ? List.of() : List.copyOf(readers);
                 }
                 unshare();
-                told.forEach(reader -> reader.onInterrupted.accept(UrlPolicy.reason(e)));
+                told.forEach(reader -> reader.onInterrupted.accept(ApiHttp.reason(e)));
             } finally {
                 synchronized (this) {
                     done = true;
@@ -162,7 +162,7 @@ final class Feed {
                         write(new byte[1], 1); // finish the half sample, so the resumed audio stays 16-bit aligned
                         at++;
                     }
-                    LogUtils.getLogger().info("Stream broke off ({}); resuming at {}s", UrlPolicy.reason(broke),
+                    LogUtils.getLogger().info("Stream broke off ({}); resuming at {}s", ApiHttp.reason(broke),
                             at / Pcm.BYTES_PER_SECOND);
                     in = open.from(at / (double) Pcm.BYTES_PER_SECOND);
                 } catch (IOException e) {
@@ -265,7 +265,11 @@ final class Feed {
             }
         }
 
+        /** Where in the track the byte at {@code bytes} (a {@link #position}) is (s). */
         double mediaSeconds(long bytes) {return startSeconds+bytes/(double)Pcm.BYTES_PER_SECOND;}
+
+        /** The byte (a {@link #position}) at {@code seconds} into the track. */
+        long bytesAt(double seconds) {return Pcm.bytes(seconds-startSeconds);}
 
         @Nullable
         byte[] peek(long from, int length) {

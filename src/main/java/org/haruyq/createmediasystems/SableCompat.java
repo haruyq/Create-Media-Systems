@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems;
 import dev.ryanhcode.sable.companion.SableCompanion;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
+import dev.ryanhcode.sable.companion.math.BoundingBox3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 
 import java.util.function.UnaryOperator;
@@ -10,6 +11,7 @@ import java.util.function.UnaryOperator;
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
@@ -23,6 +25,15 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class SableCompat {
     private SableCompat() {
+    }
+
+    /**
+     * A block whose removal does what moving it must not: it drops the item it holds, unlinks what it is linked to or
+     * lets go of what it holds. Sable removes the blocks it assembles a ship from, so each of these is listed in
+     * data/sable/tags/block/silent_assembly_removal.json (BlockResourcesTest checks the list), which has it removed
+     * without that; else the ship's copy and the dropped item would be two.
+     */
+    public interface SilentAssemblyRemoval {
     }
 
     /** {@code global} as seen from the blocks around {@code pos}. */
@@ -53,20 +64,58 @@ public final class SableCompat {
                 ? client.renderPose().transformPositionInverse(global) : toBlockSpace(level, anchor, global);
     }
 
-    /**
-     * Where {@code subLevel} is: as it is drawn this frame if {@code render} (on a client), else where it logically
-     * is; null for no sub-level.
-     */
+    /** The sub-level holding {@code pos}; null without one (or without Sable). */
     @Nullable
-    public static Pose3dc pose(@Nullable SubLevelAccess subLevel, boolean render) {
-        return subLevel == null ? null
-                : render && subLevel instanceof ClientSubLevelAccess client ? client.renderPose() : subLevel.logicalPose();
+    public static SubLevelAccess containing(Level level, BlockPos pos) {
+        return SableCompanion.INSTANCE.getContaining(level, pos);
     }
 
-    /** {@link #pose(SubLevelAccess, boolean)} of the sub-level holding {@code pos}. */
+    /** Whether {@code a} and {@code b} are on the same sub-level, or both on none. */
+    public static boolean sameSubLevel(Level level, BlockPos a, BlockPos b) {
+        return containing(level, a) == containing(level, b);
+    }
+
+    /** Every sub-level in {@code level}. */
+    public static Iterable<? extends SubLevelAccess> subLevels(Level level) {
+        return SableCompanion.INSTANCE.getAllIntersecting(level,
+                new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000));
+    }
+
+    /** Whether {@code pos} lies in the far-off plots where sub-levels keep their blocks. */
+    public static boolean inPlotGrid(Level level, BlockPos pos) {
+        return SableCompanion.INSTANCE.isInPlotGrid(level, pos);
+    }
+
+    public static boolean inPlotGrid(Level level, Vec3 pos) {
+        return SableCompanion.INSTANCE.isInPlotGrid(level, pos);
+    }
+
+    /** Where {@code entity}'s eye is in the world this frame, carried along by a sub-level it rides. */
+    public static Vec3 eye(Entity entity, float partialTick) {
+        return SableCompanion.INSTANCE.getEyePositionInterpolated(entity, partialTick);
+    }
+
+    /** The middle of {@code entity}'s body in the world this frame (see {@link #eye}). */
+    public static Vec3 bodyCenter(Entity entity, float partialTick) {
+        return eye(entity, partialTick).add(0, entity.getBbHeight() * 0.5 - entity.getEyeHeight(), 0);
+    }
+
+    /** Where {@code subLevel} is drawn this frame on a client, else where it logically is; null for no sub-level. */
     @Nullable
-    public static Pose3dc pose(Level level, BlockPos pos, boolean render) {
-        return pose(SableCompanion.INSTANCE.getContaining(level, pos), render);
+    public static Pose3dc renderPose(@Nullable SubLevelAccess subLevel) {
+        return subLevel instanceof ClientSubLevelAccess client ? client.renderPose() : logicalPose(subLevel);
+    }
+
+    /** Where {@code subLevel} logically is; null for no sub-level. */
+    @Nullable
+    public static Pose3dc logicalPose(@Nullable SubLevelAccess subLevel) {
+        return subLevel == null ? null : subLevel.logicalPose();
+    }
+
+    /** {@link #renderPose(SubLevelAccess)} of the sub-level holding {@code pos}. */
+    @Nullable
+    public static Pose3dc renderPose(Level level, BlockPos pos) {
+        return renderPose(containing(level, pos));
     }
 
     /** The axis-aligned box around {@code box} with each of its corners moved by {@code move}. */

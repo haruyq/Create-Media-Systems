@@ -1,16 +1,20 @@
 package org.haruyq.createmediasystems.video;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.PercentSetting;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.DiscDrive;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.DiscTransport;
+import org.haruyq.createmediasystems.stream.Downloads;
+import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Remotable;
+import org.haruyq.createmediasystems.stream.Tone;
 import org.haruyq.createmediasystems.stream.VideoSource;
-import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +37,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -57,7 +60,8 @@ import net.minecraft.world.phys.BlockHitResult;
  * (in front) are set like any Create value, by holding right-click on it with a wrench. Right-click with a disc to put it in, with an empty hand to take it out.
  * With no disc of its own, the DVD or Blu-ray in a disc drive emulator beside it is its disc (see DriveEmulatorBlock).
  */
-public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable {
+public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
+        SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<VideoPlayerBlock> CODEC = simpleCodec(VideoPlayerBlock::new);
 
     public VideoPlayerBlock(Properties properties) {
@@ -83,32 +87,18 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        // A disc with no picture (a CD, a cassette) is a hi-fi stack's.
-        if (!(stack.getItem() instanceof VideoDiscItem disc) || disc.maxHeight <= 0) {
-            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-        }
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && videoPlayer.cd.isEmpty()) {
-            videoPlayer.insert(stack.split(1), player);
-        }
-        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useItemOn(stack, level, pos, player, hand);
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && !videoPlayer.cd.isEmpty()) {
-            player.getInventory().placeItemBackInInventory(videoPlayer.cd);
-            videoPlayer.insert(ItemStack.EMPTY, player);
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useWithoutItem(level, pos, player);
     }
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // Sable assembling a ship removes it too: data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
-        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity videoPlayer) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), videoPlayer.cd);
-        }
+        ItemSlot.onRemove(this, state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
@@ -121,51 +111,24 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         // Both sides: Create's value box lives on the client too.
-        return type != CreateMediaSystems.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+        return type != VideoFeature.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
     /** The Blu-ray player's volume: a block entity keeps one behaviour per type, and lighting has the default one. */
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
-
-    /**
-     * What a remote asks of a Blu-ray player (see Entity#control). SEEK goes to a second of the entry playing, SEEK_BY
-     * that many seconds on (or back) from where it is.
-     */
-    public enum Action {
-        PLAY_PAUSE, STOP, PREVIOUS, NEXT, SELECT, VOLUME, SEEK, SEEK_BY;
-
-        public static Action byId(int id) {
-            return values()[Mth.clamp(id, 0, values().length - 1)];
-        }
-    }
-
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
-            DriveEmulatorBlock.Fed {
-        private ItemStack cd = ItemStack.EMPTY;
-        /** The playlist entry playing (or paused, or stopped at). */
-        private int index;
-        /** Ticks since the entry was started or sought; Streams counts on from {@link #from} with them (see played). */
-        private long ticks;
-        /** Where (ticks in) it was last sought to; 0 from the top. */
-        private long from;
-        private boolean playing;
-        private boolean paused;
+            DiscDrive.Fed, DiscTransport.Deck, ItemSlot.Holder {
+        private static final DiscTransport.Keys KEYS = new DiscTransport.Keys("Index", "Playing", "Paused", "From", "Ticks");
+        private final ItemSlot cd = new ItemSlot("Cd", stack -> MediaItem.fits(stack, DiscKind.Slot.PICTURE));
+        private final DiscTransport transport = new DiscTransport(this, false, new PlaybackClock());
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
-        /**
-         * How much of the video playing each listener has downloaded, 0..1: all of it once it plays for them or is
-         * kept (see ClientStreams#reportDownloads).
-         */
-        private final Map<ServerPlayer, Float> downloads = new HashMap<>();
-        /** Their average, in percent, as goggles show it; -1 while none has told. Not saved. */
-        private int downloaded = -1;
-        /** How many it is the average of, and how many of them have all of it. */
-        private int downloaders;
-        private int finished;
+        /** How much of the video playing its listeners have downloaded. Not saved. */
+        private final Downloads downloads = new Downloads();
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
+            super(VideoFeature.VIDEO_PLAYER_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -174,22 +137,27 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                     new CenteredSideValueBoxTransform((state, side) -> side == Direction.UP), VOLUME, "Volume");
             lighting = PercentSetting.create(this, "create_media_systems.video_player.lighting",
                     new CenteredSideValueBoxTransform((state, side) -> side == state.getValue(FACING)));
-            volume.withCallback(percent -> changed());
-            lighting.withCallback(percent -> changed());
+            volume.withCallback(percent -> soundChanged());
+            lighting.withCallback(percent -> soundChanged());
             behaviours.add(volume);
             behaviours.add(lighting);
         }
 
-        /** The drive whose disc it plays: one beside it with a DVD or Blu-ray ready, while it has no disc of its own. */
+        /** The drive whose disc it plays: one beside it with a disc that has a picture, while it has no disc of its own. */
         @Nullable
-        private DriveEmulatorBlock.Entity drive() {
-            return cd.isEmpty() ? DriveEmulatorBlock.feeding(level, worldPosition, false) : null;
+        private DiscDrive drive() {
+            return cd.isEmpty() ? DiscDrive.feeding(level, worldPosition, this) : null;
         }
 
         @Override
         public List<String> playlist() {
-            DriveEmulatorBlock.Entity drive = drive();
-            return drive != null ? List.of(drive.link()) : cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+            DiscDrive drive = drive();
+            return drive != null ? List.of(drive.link()) : MediaItem.linksOf(cd.get());
+        }
+
+        @Override
+        public boolean plays(DiscKind kind) {
+            return kind.fits(DiscKind.Slot.PICTURE);
         }
 
         /** Plays the disc of the drive beside it from the top, or stops with it, unless it has its own. */
@@ -202,7 +170,11 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         @Override
         public int index() {
-            return index;
+            return transport.index();
+        }
+
+        public DiscTransport transport() {
+            return transport;
         }
 
         /** Its remote or wrench turns all of its speakers and displays up or down. */
@@ -217,154 +189,87 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return lighting == null ? 1 : lighting.getValue() / 100f;
         }
 
+        /** What the equalizers touching it are set to. */
+        @Override
+        public Tone tone() {
+            return level == null ? Tone.FLAT : new Tone(EqualizerBlock.bands(level, worldPosition), 1);
+        }
+
+        /** Its volume or lighting changed: its speakers and displays take it up now. */
+        private void soundChanged() {
+            changed();
+            if (level instanceof ServerLevel server) {
+                Streams.changed(server, worldPosition);
+            }
+        }
+
         @Override
         @Nullable
         public Streams.Source nowPlaying() {
-            if (!playing || paused) {
-                return null;
-            }
-            List<String> playlist = playlist();
-            DriveEmulatorBlock.Entity drive = drive();
-            return index < playlist.size()
-                    ? new Streams.Source(playlist.get(index), counted(), new Streams.Video(worldPosition,
-                            drive != null ? drive.disc().maxHeight : ((VideoDiscItem) cd.getItem()).maxHeight,
-                            index + 1 < playlist.size() ? Optional.of(playlist.get(index + 1)) : Optional.empty()))
-                    : null;
+            DiscDrive drive = drive();
+            DiscKind kind = drive != null ? drive.ready() : MediaItem.kindOf(cd.get());
+            return kind == null ? null : transport.source(worldPosition, kind);
         }
 
-        /**
-         * Its ticks as Streams counts on from them (see played): since it was started or sought, which its load adds
-         * {@link #from} to; with no load (the server restarted since), where it is.
-         */
-        private long counted() {
-            return Streams.loadId(this) == 0 ? from + ticks : ticks;
+        @Override
+        public ItemSlot slot() {
+            return cd;
         }
 
         /** A new disc put in by {@code by} plays its first video; with none, the disc of a drive beside it does. */
+        @Override
         public void insert(ItemStack stack, @Nullable Player by) {
-            cd = stack;
-            if (playlist().isEmpty()) {
-                playing = false;
-                changed();
-            } else {
-                play(0, by);
-            }
+            cd.set(stack);
+            transport.insert(by);
         }
 
-        /**
-         * Plays entry {@code entry} from the top, if the playlist has it, as {@code by} asked (null: the one before
-         * ended); its displays and speakers start over.
-         */
-        private void play(int entry, @Nullable Player by) {
-            if (entry < 0 || entry >= playlist().size()) {
-                return;
+        /** Every listener loads the entry from where it now is, and they start together (see Streams#loading). */
+        @Override
+        public void started(@Nullable Player by, boolean sought) {
+            if (!sought) {
+                downloads.clear();
             }
-            index = entry;
-            ticks = 0;
-            from = 0;
-            playing = true;
-            paused = false;
-            downloads.clear();
-            downloaded = -1;
-            downloaders = 0;
-            finished = 0;
-            Streams.loading(this, by);
-            changed();
+            if (level != null) {
+                Streams.loading(this, by, transport.clock(), level.getGameTime());
+            }
         }
 
         /** {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
         @Override
         public void control(Action action, int value, @Nullable Player by) {
-            switch (action) {
-                case PLAY_PAUSE -> {
-                    if (!playing) {
-                        play(index, by);
-                    } else {
-                        paused = !paused;
-                        changed();
-                    }
-                }
-                case STOP -> {
-                    playing = false;
-                    paused = false;
-                    ticks = 0;
-                    from = 0;
-                    changed();
-                }
-                case PREVIOUS -> play(Math.max(index - 1, 0), by);
-                case NEXT -> play(index + 1, by);
-                case SELECT -> play(value - 1, by);
-                case VOLUME -> volume.setValue(Mth.clamp(value, 0, 100));
-                case SEEK -> seek(value * 20L, by);
-                case SEEK_BY -> seek(Streams.played(this, counted()) + value * 20L, by);
+            if (action == Action.VOLUME) {
+                volume.setValue(Mth.clamp(value, 0, 100));
+            } else if (level != null) {
+                transport.control(action, value, by, level.getGameTime());
             }
-        }
-
-        /**
-         * The entry playing (or paused) goes on from {@code to} ticks in: every listener loads it there and they start
-         * together, as with a new entry (see Streams#loading).
-         */
-        private void seek(long to, @Nullable Player by) {
-            List<String> playlist = playlist();
-            if (!playing || index >= playlist.size()) {
-                return;
-            }
-            from = Streams.seekable(playlist.get(index), to);
-            ticks = 0;
-            Streams.loading(this, by, from, false);
-            changed();
         }
 
         @Override
         public void tick() {
             super.tick();
-            if (level == null || level.isClientSide || !playing || paused) {
+            if (level == null || level.isClientSide) {
                 return;
             }
-            ticks++;
-            setChanged();
-            Streams.Source source = Streams.playing(this);
-            if (ticks % Streams.RELAY_TICKS == 0 && source != null && Streams.endedAt(source)) {
-                if (index + 1 < playlist().size()) {
-                    play(index + 1, null);
-                } else {
-                    playing = false;
-                    changed();
-                }
+            long now = level.getGameTime();
+            Streams.tick(this, transport.clock(), now);
+            transport.advance(now);
+            if (transport.clock().running()) {
+                setChanged();
             }
         }
 
-        /**
-         * {@code player} has downloaded {@code payload.downloaded()} of the video the Blu-ray player at
-         * {@code payload.pos()} plays: counted while they listen to it and it still plays that video.
-         */
-        public static void downloaded(ServerPlayer player, StreamPackets.DownloadedAtBlock payload) {
-            ServerLevel level = player.serverLevel();
-            if (level.isLoaded(payload.pos()) && level.getBlockEntity(payload.pos()) instanceof Entity videoPlayer
-                    && Streams.listeners(level, payload.pos()).contains(player)) {
-                videoPlayer.downloaded(player, payload.url(), payload.downloaded());
-            }
-        }
-
-        void downloaded(ServerPlayer player, String url, float fraction) {
+        @Override
+        public void downloaded(ServerPlayer player, String url, float fraction) {
             List<String> playlist = playlist();
-            if (!playing || index >= playlist.size() || !playlist.get(index).equals(url)) {
-                return;
-            }
-            downloads.put(player, Mth.clamp(fraction, 0, 1));
-            downloads.keySet().removeIf(ServerPlayer::isRemoved);
-            int average = (int) (downloads.values().stream().mapToDouble(Float::doubleValue).average().orElse(0) * 100);
-            int done = (int) downloads.values().stream().filter(each -> each >= 1).count();
-            if (average != downloaded || downloads.size() != downloaders || done != finished) {
-                downloaded = average;
-                downloaders = downloads.size();
-                finished = done;
+            if (transport.playing() && transport.index() < playlist.size() && playlist.get(transport.index()).equals(url)
+                    && downloads.told(player, fraction)) {
                 changed();
             }
         }
 
         /** Saved, and sent to clients for remotes and goggles. */
-        private void changed() {
+        @Override
+        public void changed() {
             setChanged();
             if (level != null && !level.isClientSide) {
                 sendData();
@@ -373,52 +278,40 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         /** Empty (no disc, or none with links), stopped, paused or playing, as its remote and goggles show it. */
         @Override
-        public float remoteVolume() {
-            return volume();
-        }
-
-        @Override
         public Component state() {
-            return Component.translatable(playlist().isEmpty() ? "create_media_systems.video_player.empty"
-                    : !playing ? "create_media_systems.video_player.stopped"
-                    : paused ? "create_media_systems.video_player.paused" : "create_media_systems.video_player.playing");
+            return transport.state();
         }
 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             List<String> playlist = playlist();
+            boolean playing = transport.playing();
             tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
-                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
+                    : !playing ? ChatFormatting.RED : transport.paused() ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
             DriveEmulatorBlock.Entity beside = cd.isEmpty() ? DriveEmulatorBlock.beside(level, worldPosition) : null;
             if (beside != null) {
                 beside.describe(tooltip);
                 tooltip.add(Component.empty());
             } else if (!playlist.isEmpty()) {
-                tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
-                        Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
-                tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
+                tooltip.add(Component.literal("     ").append(track()).withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("     " + shorten(playlist.get(shownIndex())))
                         .withStyle(ChatFormatting.DARK_GRAY));
                 tooltip.add(Component.empty());
             }
-            if (playing && !paused && level != null && level.isClientSide) {
-                NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
+            if (playing && !transport.paused() && level != null && level.isClientSide) {
+                NativeAudio.Playback playback = NativeAudio.playback(worldPosition);
+                NativeAudio.Progress progress = playback == null ? null : playback.progress();
                 if (progress != null) {
                     tooltip.add(Component.literal("     ").append(progress.loading()
                             ? Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW)
-                            : Component.translatable("create_media_systems.video_player.position", value(clock(progress.seconds())
-                            + (progress.length() > 0 ? " / " + clock(progress.length()) : ""), ChatFormatting.WHITE)))
+                            : Component.translatable("create_media_systems.video_player.position", value(PlaybackClock.format(progress.seconds())
+                            + (progress.length() > 0 ? " / " + PlaybackClock.format(progress.length()) : ""), ChatFormatting.WHITE)))
                             .withStyle(ChatFormatting.GRAY));
                 }
             }
-            if (playing && downloaded >= 0 && finished < downloaders) {
-                // Only while any of them waits. Several: their average, then how many have it.
-                tooltip.add(Component.literal("     ")
-                        .append(Component.translatable("create_media_systems.video_player.downloaded",
-                                value(downloaded + "%", ChatFormatting.AQUA)))
-                        .append(downloaders > 1 ? value("  " + finished + "/" + downloaders, ChatFormatting.WHITE)
-                                : Component.empty())
-                        .withStyle(ChatFormatting.GRAY));
+            if (playing) {
+                downloads.addTo(tooltip, "     ");
             }
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.volume_value",
                     value(volume.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
@@ -432,13 +325,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return Component.literal(String.valueOf(value)).withStyle(color);
         }
 
-        /** {@code seconds} as m:ss, or h:mm:ss from an hour. */
-        static String clock(double seconds) {
-            long s = (long) seconds;
-            return s >= 3600 ? String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
-                    : String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
-        }
-
         private static String shorten(String url) {
             return url.length() > 40 ? url.substring(0, 39) + "…" : url;
         }
@@ -446,34 +332,20 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.write(tag, registries, clientPacket);
-            if (!cd.isEmpty()) {
-                tag.put("Cd", cd.save(registries));
-            }
-            tag.putInt("Index", index);
-            tag.putLong("Ticks", ticks);
-            tag.putLong("From", from);
-            tag.putBoolean("Playing", playing);
-            tag.putBoolean("Paused", paused);
+            cd.save(tag, registries);
+            transport.save(tag, KEYS);
             if (clientPacket) {
-                tag.putInt("Downloaded", downloaded);
-                tag.putInt("Downloaders", downloaders);
-                tag.putInt("Finished", finished);
+                downloads.write(tag);
             }
         }
 
         @Override
         protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.read(tag, registries, clientPacket);
-            cd = ItemStack.parseOptional(registries, tag.getCompound("Cd"));
-            index = tag.getInt("Index");
-            ticks = tag.getLong("Ticks");
-            from = tag.getLong("From");
-            playing = tag.getBoolean("Playing");
-            paused = tag.getBoolean("Paused");
+            cd.load(tag, registries);
+            transport.load(tag, KEYS);
             if (clientPacket) {
-                downloaded = tag.getInt("Downloaded");
-                downloaders = tag.getInt("Downloaders");
-                finished = tag.getInt("Finished");
+                downloads.read(tag);
             }
         }
     }

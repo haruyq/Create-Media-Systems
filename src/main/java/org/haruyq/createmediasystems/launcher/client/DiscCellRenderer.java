@@ -1,5 +1,8 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.client.mesh.CellLight;
+import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;
 import org.haruyq.createmediasystems.launcher.CellLighting;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -18,8 +21,8 @@ public final class DiscCellRenderer extends BlockEntityWithoutLevelRenderer {
         pose.pushPose();
         pose.translate(.5, .5, .5);
         pose.scale(1 / 12f, 1 / 12f, 1 / 12f);
-        var luminous = buffers.getBuffer(LauncherRenderer.solid());
-        float charge = (float) DiscCellItem.energy(stack) / item.tier.capacity();
+        var luminous = buffers.getBuffer(Mesh.solid());
+        float charge = ChargeableItem.charge(stack);
         var mesh = new CellLight(pose.last().pose(), 0, 0, 0, 12, item.tier.color, CellLighting.strength(charge) * 1.8f).wrap(luminous);
         LauncherRenderer.cell(pose, mesh, luminous, 0, 0, 0, item.tier.color, charge, light, overlay);
         pose.popPose();

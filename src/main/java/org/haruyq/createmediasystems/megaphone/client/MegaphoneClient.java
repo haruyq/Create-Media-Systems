@@ -1,10 +1,14 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
+import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
 import java.util.*;
+import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
-import net.minecraft.sounds.SoundSource;
+import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.phys.Vec3;
@@ -12,74 +16,43 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.*;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import org.haruyq.createmediasystems.*;
-import org.haruyq.createmediasystems.launcher.*;
 import org.haruyq.createmediasystems.megaphone.*;
 import org.haruyq.createmediasystems.playback.*;
-import org.haruyq.createmediasystems.stream.Streams;
 
 public final class MegaphoneClient {
-    public record Emitter(Player player,InteractionHand hand,UUID id,int revision) {
-        public ItemStack item(){return player.getItemInHand(hand);}
-        public boolean present(){return !player.isRemoved() && player.level()==Minecraft.getInstance().level
-                && item().getItem() instanceof MegaphoneItem && MegaphoneData.id(item()).filter(id::equals).isPresent()
-                && MegaphoneData.revision(item())==revision && MegaphoneData.playing(item());}
-        public Vec3 position(){return player.getEyePosition().add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
-        public double seconds(){return MegaphoneData.seconds(item(),player.level());}
-        public int volume(){return MegaphoneData.volume(item());}
-        public int drive(){return MegaphoneData.drive(item());}
-        public boolean audible(){var ear=Minecraft.getInstance().getCameraEntity();return present() && ear!=null && ear.distanceToSqr(player)<MegaphoneAcoustics.RANGE*MegaphoneAcoustics.RANGE;}
-        public double gain(){var ear=Minecraft.getInstance().getCameraEntity();if(ear==null)return 0;
+    /** A megaphone's music, from its horn in {@code player}'s {@code hand}, beamed where they look. */
+    private record Horn(Player player,InteractionHand hand,UUID id) implements MusicEmitter {
+        @Override public int cap(){return 8;}
+        static Stream<Horn> near(Entity ear) {
+            return ear.level().players().stream().flatMap(player->Arrays.stream(InteractionHand.values()).flatMap(hand->{
+                ItemStack item=player.getItemInHand(hand);
+                return item.getItem() instanceof MegaphoneItem && MegaphoneData.playing(item)
+                        ? MegaphoneData.id(item).map(id->new Horn(player,hand,id)).stream() : Stream.empty();
+            }));
+        }
+        ItemStack item(){return player.getItemInHand(hand);}
+        @Override public int revision(){return MegaphoneData.revision(item());}
+        @Override public ItemStack media(){return MegaphoneData.disc(item(),player.level());}
+        @Override public boolean present(){return !player.isRemoved() && player.level()==Minecraft.getInstance().level
+                && item().getItem() instanceof MegaphoneItem && MegaphoneData.id(item()).filter(id::equals).isPresent() && MegaphoneData.playing(item());}
+        @Override public Vec3 position(){return player.getEyePosition().add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
+        @Override public Vec3 velocity(){return DopplerMath.step(player);}
+        @Override public double seconds(){return MegaphoneData.seconds(item(),player.level());}
+        @Override public double range(){return MegaphoneAcoustics.RANGE;}
+        @Override public double gain(Entity ear){
             Vec3 offset=ear.getEyePosition().subtract(position());double beam=ear==player?.4:MegaphoneAcoustics.direction(player.getLookAngle(),offset);
-            return MegaphoneAcoustics.gain(offset.length(),volume(),beam);}
-        public double pitch(){var ear=Minecraft.getInstance().getCameraEntity();if(ear==null)return 1;var p=position();
-            return DopplerMath.observedRatio(p.x,p.y,p.z,player.getX()-player.xo,player.getY()-player.yo,player.getZ()-player.zo,
-                    ear.getX(),ear.getEyeY(),ear.getZ(),ear.getX()-ear.xo,ear.getY()-ear.yo,ear.getZ()-ear.zo);}
+            return MegaphoneAcoustics.gain(offset.length(),MegaphoneData.volume(item()),beam);}
+        @Override public List<UnaryOperator<AudioStream>> decorators(){
+            return List.of(pcm->new MegaphoneAudioStream(pcm,()->MegaphoneData.drive(item()),()->MegaphoneData.volume(item())));}
+        @Override public boolean viaApi(){return true;}
     }
-    private record Playing(Emitter source,MegaphoneSound vanilla,boolean stream,int at){
-        double seconds(){return stream?ClientStreams.audibleSeconds(source.id):vanilla.audibleSeconds();}
-    }
-    public record Playback(UUID id,String player,int revision,double serverSeconds,double audibleSeconds,boolean stream,double requestedSeconds){}
-    /** Used by diagnostics to check the same physical horn on separate clients. */
-    public static List<Playback> playbacks(){return PLAYING.values().stream().map(p->new Playback(p.source.id,p.source.player.getScoreboardName(),p.source.revision,p.source.seconds(),p.seconds(),p.stream,p.stream?ClientStreams.requestedSeconds(p.source.id):-1)).toList();}
-    private static final Map<UUID,Playing> PLAYING=new HashMap<>();private static int ticks;
     private MegaphoneClient(){}
     public static void register(IEventBus bus) {
-        bus.addListener((RegisterMenuScreensEvent e)->e.register(CreateMediaSystems.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
+        bus.addListener((RegisterMenuScreensEvent e)->e.register(MegaphoneFeature.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
         bus.addListener((RegisterClientExtensionsEvent e)->e.registerItem(new IClientItemExtensions(){
             private MegaphoneItemRenderer renderer;
             @Override public BlockEntityWithoutLevelRenderer getCustomRenderer(){if(renderer==null)renderer=new MegaphoneItemRenderer();return renderer;}
-        },CreateMediaSystems.MEGAPHONE_WHITE.get(),CreateMediaSystems.MEGAPHONE_BLACK.get()));
-        bus.addListener((net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent e)->Minecraft.getInstance().execute(MegaphoneClient::stopAll));
-        NeoForge.EVENT_BUS.addListener(MegaphoneClient::tick);
-    }
-    private static void stop(Playing p){if(p.stream)ClientStreams.stop(p.source.id);else Minecraft.getInstance().getSoundManager().stop(p.vanilla);}
-    private static void stopAll(){PLAYING.values().forEach(MegaphoneClient::stop);PLAYING.clear();}
-    private static void tick(ClientTickEvent.Post ignored) {
-        var mc=Minecraft.getInstance();ticks++;
-        if(mc.level==null || mc.player==null){stopAll();return;}
-        PLAYING.entrySet().removeIf(e->{var p=e.getValue();int age=ticks-p.at;
-            boolean alive=p.stream?ClientStreams.contains(e.getKey()):mc.getSoundManager().isActive(p.vanilla);
-            if(p.source.audible() && (alive || age<40) && !PlaybackSync.realign(p.seconds(),p.source.seconds(),age,p.source.pitch()))return false;
-            stop(p);return true;
-        });
-        if(ticks%5!=0)return;
-        for(var player:mc.level.players())for(var hand:InteractionHand.values()) {
-            ItemStack item=player.getItemInHand(hand);
-            if(!(item.getItem() instanceof MegaphoneItem) || !MegaphoneData.playing(item))continue;
-            var id=MegaphoneData.id(item);if(id.isEmpty() || PLAYING.containsKey(id.get()) || PLAYING.size()>=8)continue;
-            var source=new Emitter(player,hand,id.get(),MegaphoneData.revision(item));if(!source.audible())continue;
-            var disc=MegaphoneData.disc(item,mc.level);String url=DiscPlayback.mediaUrl(disc);
-            if(url!=null && !url.isBlank() && ServerConfig.isAllowed(url)) {
-                double start=source.seconds();
-                var sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
-                        source::position,null,source::present,source::audible,source::gain,null,Streams.Channel.MIX,length->{});
-                sound.setDiscPlayback(id.get(),source::seconds);sound.setDynamicPitch(source::pitch);sound.setMegaphone(source::drive,source::volume);
-                ClientStreams.play(id.get(),sound);PLAYING.put(id.get(),new Playing(source,null,true,ticks));
-            } else if(url==null)JukeboxSong.fromStack(mc.level.registryAccess(),disc).ifPresent(song->{
-                var sound=new MegaphoneSound(source,song.value().soundEvent().value());mc.getSoundManager().play(sound);PLAYING.put(id.get(),new Playing(source,sound,false,ticks));
-            });
-        }
+        },MegaphoneFeature.MEGAPHONE_WHITE.get(),MegaphoneFeature.MEGAPHONE_BLACK.get()));
+        EmitterAudioManager.add(Horn::near);
     }
 }

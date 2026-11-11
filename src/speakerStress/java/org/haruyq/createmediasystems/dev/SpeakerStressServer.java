@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.dev;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,9 +9,9 @@ import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
@@ -58,17 +57,13 @@ public final class SpeakerStressServer {
     private SpeakerStressServer() {
     }
 
-    private static boolean on() {
-        return Boolean.getBoolean("cms.speakerStress");
-    }
-
     private static String url(String source) {
         return "http://127.0.0.1:" + MEDIA_PORT + "/stress.mp4?src=" + source;
     }
 
     @SubscribeEvent
     public static void started(ServerStartedEvent event) throws IOException, ReflectiveOperationException {
-        if (!on() || !event.getServer().isDedicatedServer()) {
+        if (!event.getServer().isDedicatedServer()) {
             return;
         }
         startMedia();
@@ -97,7 +92,7 @@ public final class SpeakerStressServer {
 
     @SubscribeEvent
     public static void loggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (on() && event.getEntity() instanceof ServerPlayer player) {
+        if (event.getEntity() instanceof ServerPlayer player) {
             // Always the same place, among the three walls, within all of their ranges.
             player.teleportTo(player.serverLevel(), 0.5, Y, 2.5, 180, 0);
         }
@@ -108,29 +103,29 @@ public final class SpeakerStressServer {
         level.getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(false, level.getServer());
         level.setDayTime(6000);
         level.setBlock(JUKEBOX, Blocks.JUKEBOX.defaultBlockState(), 3);
-        level.setBlock(DISC_READER, CreateMediaSystems.DISC_READER.get().defaultBlockState(), 3);
-        level.setBlock(BLU_RAY, CreateMediaSystems.VIDEO_PLAYER.get().defaultBlockState(), 3);
+        level.setBlock(DISC_READER, AudioFeature.DISC_READER.get().defaultBlockState(), 3);
+        level.setBlock(BLU_RAY, VideoFeature.VIDEO_PLAYER.get().defaultBlockState(), 3);
         wall(level, JUKEBOX, i -> new BlockPos(i % 11 - 5, Y + i / 11, -22), Direction.SOUTH);
         wall(level, DISC_READER, i -> new BlockPos(22, Y + i / 11, i % 11 - 5), Direction.WEST);
         wall(level, BLU_RAY, i -> new BlockPos(-22, Y + i / 11, i % 11 - 5), Direction.EAST);
 
-        ItemStack jukeboxDisc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        jukeboxDisc.set(CreateMediaSystems.URL.get(), url("jukebox"));
+        ItemStack jukeboxDisc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        jukeboxDisc.set(AudioFeature.URL.get(), url("jukebox"));
         ((JukeboxBlockEntity) level.getBlockEntity(JUKEBOX)).setTheItem(jukeboxDisc);
 
-        ItemStack readerDisc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        readerDisc.set(CreateMediaSystems.URL.get(), url("reader"));
+        ItemStack readerDisc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        readerDisc.set(AudioFeature.URL.get(), url("reader"));
         ((DiscReaderBlock.Entity) level.getBlockEntity(DISC_READER)).insert(readerDisc, null);
 
-        ItemStack bluRay = new ItemStack(CreateMediaSystems.BLU_RAY.get());
-        bluRay.set(CreateMediaSystems.PLAYLIST.get(), List.of(url("bluray")));
+        ItemStack bluRay = new ItemStack(VideoFeature.BLU_RAY.get());
+        bluRay.set(VideoFeature.PLAYLIST.get(), List.of(url("bluray")));
         ((VideoPlayerBlock.Entity) level.getBlockEntity(BLU_RAY)).insert(bluRay, null);
     }
 
     private static void wall(ServerLevel level, BlockPos source, java.util.function.IntFunction<BlockPos> at, Direction facing) {
         for (int i = 0; i < SPEAKERS; i++) {
             BlockPos pos = at.apply(i);
-            level.setBlock(pos, CreateMediaSystems.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, facing), 3);
+            level.setBlock(pos, AudioFeature.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, facing), 3);
             ((SpeakerBlock.Entity) level.getBlockEntity(pos)).configure(level, source, 1, Streams.Channel.values()[i % 3]);
         }
     }
@@ -138,7 +133,7 @@ public final class SpeakerStressServer {
     @SubscribeEvent
     public static void tick(ServerTickEvent.Post event) throws IOException, ReflectiveOperationException {
         MinecraftServer server = event.getServer();
-        if (!on() || !server.isDedicatedServer() || server.getTickCount() % 20 != 0) {
+        if (!server.isDedicatedServer() || server.getTickCount() % 20 != 0) {
             return;
         }
         Path dir = server.getServerDirectory();
@@ -153,16 +148,11 @@ public final class SpeakerStressServer {
         ServerLevel level = server.overworld();
         // Per source and channel: how many emitters relay it, and to how many of them each player listens.
         Map<String, int[]> sides = new HashMap<>();
-        Field relaysField = Streams.class.getDeclaredField("RELAYS");
-        relaysField.setAccessible(true);
-        Map<?, ?> relays = (Map<?, ?>) relaysField.get(null);
-        for (var entry : Map.copyOf(relays).entrySet()) {
-            Object relay = entry.getValue();
-            Streams.Sound sound = (Streams.Sound) field(relay, "sound");
-            Set<?> listeners = (Set<?>) field(relay, "listeners");
+        for (Streams.RelayView relay : Streams.relays()) {
+            Streams.Sound sound = relay.sound();
             int[] counts = sides.computeIfAbsent(name(sound.source()) + "/" + sound.channel(), k -> new int[2]);
             counts[0]++;
-            counts[1] += listeners.size();
+            counts[1] += relay.listeners();
         }
         StringBuilder json = new StringBuilder("{\"wallMillis\":").append(System.currentTimeMillis())
                 .append(",\"tick\":").append(server.getTickCount()).append(",\"players\":")
@@ -190,11 +180,6 @@ public final class SpeakerStressServer {
                 : source.equals(BLU_RAY) ? "bluray" : source.toShortString().replace(", ", "_");
     }
 
-    private static Object field(Object target, String name) throws ReflectiveOperationException {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        return field.get(target);
-    }
 
     private static void startMedia() throws IOException {
         if (media != null) {

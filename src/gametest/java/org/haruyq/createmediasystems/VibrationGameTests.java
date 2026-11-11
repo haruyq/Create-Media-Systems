@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.audio.AudioFeature;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -19,8 +20,8 @@ public class VibrationGameTests {
         BlockPos jukebox = new BlockPos(1, 2, 1);
         BlockPos sensor = jukebox.east(3);
         helper.setBlock(jukebox, Blocks.JUKEBOX);
-        ItemStack disc = new ItemStack(CreateMediaSystems.CUSTOM_DISC.get());
-        disc.set(CreateMediaSystems.URL.get(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        ItemStack disc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        disc.set(AudioFeature.URL.get(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
         ((JukeboxBlockEntity) helper.getBlockEntity(jukebox)).setTheItem(disc);
         // Putting the disc in is a vibration of its own: the sensor comes after it, so only the playing can wake it.
         helper.runAfterDelay(5, () -> helper.setBlock(sensor, Blocks.SCULK_SENSOR));

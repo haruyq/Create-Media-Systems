@@ -12,6 +12,11 @@ public final class Reports {
     private Reports() {
     }
 
+    /** The last message shown, or null; for diagnostics. */
+    public static Component last() {
+        return last;
+    }
+
     /** Above the hotbar when {@code overlay}, else in chat so it isn't missed. */
     public static void show(Component message, boolean overlay) {
         Minecraft mc = Minecraft.getInstance();

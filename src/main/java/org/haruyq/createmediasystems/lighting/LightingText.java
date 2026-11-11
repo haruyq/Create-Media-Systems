@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.Rgb;
+
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.network.chat.Component;
@@ -19,8 +21,8 @@ public final class LightingText {
 
     public static int readable(int rgb) {
         rgb &= 0xFFFFFF;
-        float brightness = ((rgb >> 16 & 255) * 54 + (rgb >> 8 & 255) * 183 + (rgb & 255) * 19) / 256f;
-        return brightness >= 150 ? rgb : LightingSettings.mix(rgb, 0xFFFFFF, (150 - brightness) / (255 - brightness));
+        float brightness = Rgb.luma(rgb);
+        return brightness >= 150 ? rgb : Rgb.mix(rgb, 0xFFFFFF, (150 - brightness) / (255 - brightness));
     }
 
     public static int groupColor(@Nullable LightingSettings settings, int group) {
@@ -47,8 +49,22 @@ public final class LightingText {
         return text(active ? "●" : "—", active ? ON : linked ? OFF : MUTED);
     }
 
-    public static MutableComponent mode(String key, int value) {
-        return Component.translatable("create_media_systems.lighting." + key + "." + value).withColor(MODE);
+    public static MutableComponent mode(LightingSettings.Mode mode) {
+        return mode(mode.key());
+    }
+
+    /** The name under {@code create_media_systems.lighting.}{@code key}, in the colour of a mode. */
+    public static MutableComponent mode(String key) {
+        return Component.translatable("create_media_systems.lighting." + key).withColor(MODE);
+    }
+
+    /** Preset key {@code slot}'s name: a built-in preset's, or with {@code custom} the console's saved slot's. */
+    public static MutableComponent presetName(LightingConsoleBlock.Entity console, int slot, boolean custom) {
+        boolean empty = custom && console.presets[slot] == null;
+        return Component.translatable("create_media_systems.lighting." + (custom
+                        ? empty ? "preset_empty" : "preset_slot" : LightingSettings.Preset.values()[slot].key),
+                text(slot + 1, empty ? MUTED : NUMBER))
+                .withColor(empty ? MUTED : MODE);
     }
 
     public static MutableComponent label(String key, Component value) {

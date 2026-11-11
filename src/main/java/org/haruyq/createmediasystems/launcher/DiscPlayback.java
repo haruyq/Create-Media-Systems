@@ -1,11 +1,8 @@
 package org.haruyq.createmediasystems.launcher;
 
-import java.util.List;
 import java.util.UUID;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -38,41 +35,25 @@ public record DiscPlayback(UUID id, String source, long positionTicks) {
         return new DiscPlayback(id, source, ticks);
     }
 
-    static double duration(Level level, ItemStack disc) {
-        String url = mediaUrl(disc);
-        if (url != null) return ServerConfig.isAllowed(url) ? Streams.duration(url) : -1;
-        return JukeboxSong.fromStack(level.registryAccess(), disc)
-                .map(song -> (double) song.value().lengthInSeconds()).orElse(-1.0);
-    }
-
     static boolean canStartAt(Level level, ItemStack disc, int seconds) {
-        if (seconds == 0) return true;
-        double duration = duration(level, disc);
-        return duration <= 0 || seconds < duration;
+        if (seconds == 0 || !MediaItem.allowed(disc)) return true;
+        double length = MediaItem.lengthSeconds(disc, level.registryAccess());
+        return length <= 0 || seconds < length;
     }
 
     /** Changing the media starts that CD's new track at zero, keeping its physical identity. */
     static DiscPlayback prepare(Level level, ItemStack item) {
         String source = source(level, item);
-        DiscPlayback previous = item.get(CreateMediaSystems.DISC_PLAYBACK.get());
+        DiscPlayback previous = item.get(LauncherFeature.DISC_PLAYBACK.get());
         return previous == null ? new DiscPlayback(UUID.randomUUID(), source, 0)
                 : previous.source.equals(source) ? previous : new DiscPlayback(previous.id, source, 0);
     }
 
     private static String source(Level level, ItemStack item) {
-        String url = mediaUrl(item);
+        String url = MediaItem.url(item);
         if (url != null) return "url:" + url;
         return JukeboxSong.fromStack(level.registryAccess(), item)
                 .map(song -> "song:" + song.value().soundEvent().value().getLocation())
                 .orElseGet(() -> "item:" + BuiltInRegistries.ITEM.getKey(item.getItem()));
-    }
-
-    public static String mediaUrl(ItemStack item) {
-        if (item.is(CreateMediaSystems.CUSTOM_DISC.get())) return item.get(CreateMediaSystems.URL.get());
-        if (item.is(CreateMediaSystems.DVD.get()) || item.is(CreateMediaSystems.BLU_RAY.get())) {
-            List<String> playlist = item.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
-            return playlist.isEmpty() ? null : playlist.getFirst();
-        }
-        return null;
     }
 }

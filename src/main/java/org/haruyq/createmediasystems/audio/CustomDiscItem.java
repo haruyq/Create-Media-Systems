@@ -2,9 +2,11 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -26,9 +28,20 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Jukebox-playable disc whose audio is the URL stored on it. Use in the air to edit the URL. */
-public class CustomDiscItem extends Item {
+public class CustomDiscItem extends Item implements MediaItem {
     public CustomDiscItem(Properties properties) {
         super(properties);
+    }
+
+    @Override
+    public DiscKind kind() {
+        return DiscKind.CUSTOM_DISC;
+    }
+
+    @Override
+    public List<String> links(ItemStack stack) {
+        String url = stack.get(AudioFeature.URL.get());
+        return url == null ? List.of() : List.of(url);
     }
 
     @Override
@@ -38,7 +51,7 @@ public class CustomDiscItem extends Item {
             return InteractionResultHolder.pass(stack);
         }
         if (level.isClientSide) {
-            TextPromptScreen.open("create_media_systems.screen.url", stack.getOrDefault(CreateMediaSystems.URL.get(), ""),
+            TextPromptScreen.open("create_media_systems.screen.url", stack.getOrDefault(AudioFeature.URL.get(), ""),
                     UrlPolicy.MAX_LENGTH, value -> PacketDistributor.sendToServer(new SetDiscUrl(value)));
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
@@ -46,8 +59,8 @@ public class CustomDiscItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        String url = stack.get(CreateMediaSystems.URL.get());
-        String title = stack.get(CreateMediaSystems.TITLE.get());
+        String url = stack.get(AudioFeature.URL.get());
+        String title = stack.get(AudioFeature.TITLE.get());
         if (title != null) {
             tooltip.add(Component.literal(title).withStyle(ChatFormatting.WHITE));
         }
@@ -73,29 +86,29 @@ public class CustomDiscItem extends Item {
      * (its metadata exists); otherwise the disc is left as it was and the player is told why.
      */
     static void writeDisc(ServerPlayer player, String url) {
-        if (!player.getMainHandItem().is(CreateMediaSystems.CUSTOM_DISC.get())) {
+        if (!player.getMainHandItem().is(AudioFeature.CUSTOM_DISC.get())) {
             return;
         }
-        if (!ServerConfig.isAllowed(url)) {
+        if (!UrlPolicy.isAllowed(url)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected").withStyle(ChatFormatting.RED), true);
             return;
         }
         player.displayClientMessage(Component.translatable("create_media_systems.url.checking"), true);
         Streams.info(url).whenComplete((info, error) -> player.server.execute(() -> {
             if (error != null) {
-                player.displayClientMessage(Component.translatable("create_media_systems.url.not_found", UrlPolicy.reason(error))
+                player.displayClientMessage(Component.translatable("create_media_systems.url.not_found", ApiHttp.reason(error))
                         .withStyle(ChatFormatting.RED), false);
                 return;
             }
             ItemStack held = player.getMainHandItem();
-            if (!held.is(CreateMediaSystems.CUSTOM_DISC.get())) {
+            if (!held.is(AudioFeature.CUSTOM_DISC.get())) {
                 return; // switched items while the API was checking
             }
-            held.set(CreateMediaSystems.URL.get(), url);
+            held.set(AudioFeature.URL.get(), url);
             if (info.title() == null) {
-                held.remove(CreateMediaSystems.TITLE.get());
+                held.remove(AudioFeature.TITLE.get());
             } else {
-                held.set(CreateMediaSystems.TITLE.get(), info.title());
+                held.set(AudioFeature.TITLE.get(), info.title());
             }
             player.displayClientMessage(Component.translatable("create_media_systems.url.saved",
                     info.title() == null ? url : info.title()).withStyle(ChatFormatting.GREEN), true);

@@ -7,9 +7,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -19,12 +22,12 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.disc.DiscUrl;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -39,6 +42,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -50,24 +54,25 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Server side of block-placed streams. A <em>source</em> ({@link MediaSource}) owns a track and its position in it;
- * an <em>emitter</em> (a jukebox, which is its own source, or a speaker or display linked to one) sends that track to
- * players as they come into its range, with the current offset so late joiners and every speaker stay in sync.
+ * Server side of streams. A <em>source</em> ({@link MediaSource}) owns a track and its position in it; an
+ * <em>emitter</em> (a jukebox, which is its own source, or an {@link Emitter} linked to one) sends that track to
+ * players as they come into its {@link EmitterRange}, with the current offset so late joiners and every speaker stay
+ * in sync. A source that is no block (see MediaSource.Keyed) has emitters that pick their own audience instead.
  */
 public final class Streams {
     private static final double UNKNOWN = -1;
 
-    /** Per emitter, what it relays and to whom. */
-    private static final Map<BlockEntity, Relay> RELAYS = new WeakHashMap<>();
-    /** How often (ticks) emitters relay their source's track, and sources check whether it has ended. */
+    /** Per emitter (a block entity, or what a keyed source relays through), what it relays and to whom. */
+    private static final Map<Object, Relay> RELAYS = new WeakHashMap<>();
+    /** How often (ticks of game time) emitters relay their source's track, and clocks ask whether it has ended. */
     public static final int RELAY_TICKS = 10;
     /** Longest a track waits for its listeners to load it: what a client waits for the API (see StreamSound). */
-    public static final long MAX_LOAD_TICKS = 90 * 20;
+    public static final long MAX_LOAD_TICKS = 90 * PlaybackClock.TICKS_PER_SECOND;
     /**
      * Longest a track waits for the rest of its listeners once one has it loaded: those slower to download it don't
      * hold everyone up for long, and catch up when they have it (see started).
      */
-    public static final long BARRIER_TICKS = 10 * 20;
+    public static final long BARRIER_TICKS = 10 * PlaybackClock.TICKS_PER_SECOND;
     private static final long LOADING = -1;
     /**
      * Per source, how its listeners load its track (see Load). Kept by the source's identity, or its place before it
@@ -82,10 +87,10 @@ public final class Streams {
     private static long lastLoadId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE / 2);
 
     /**
-     * A source's track as its listeners load it. Its position counts from when they all have it loaded (or the first
-     * of them, {@link #BARRIER_TICKS} on), when they are all told to play it together; so time spent loading (a fresh
-     * disc first waits out YouTube's pre-roll ad, a slow connection takes its time) is not taken as played: nobody
-     * starts that far in, and the track doesn't end that early.
+     * A source's track as its listeners load it. Its clock stands until they all have it loaded (or the first of them,
+     * {@link #BARRIER_TICKS} on), when they are all told to play it together; so time spent loading (a fresh disc first
+     * waits out YouTube's pre-roll ad, a slow connection takes its time) is not taken as played: nobody starts that far
+     * in, and the track doesn't end that early.
      */
     private static final class Load {
         /**
@@ -99,9 +104,11 @@ public final class Streams {
         final long barrierTicks;
         /** How far into the track it starts (ticks): 0 for the top, more for one taken up where it was left. */
         final long offset;
-        /** Whether it plays on after a moment with nobody there to load it, instead of waiting for someone to come. */
+        /** Whether it plays on after a moment with nobody there to load it (see PlaybackClock#unattended). */
         final boolean unattended;
-        /** The tick count since the track started at which it began to play; LOADING while it loads. */
+        /** The game time it began to load. */
+        final long since;
+        /** The game time it began to play; LOADING while it loads. */
         long playingFrom = LOADING;
         /** The players it was sent to while it loaded, whom it waits for. */
         final Set<ServerPlayer> expected = new HashSet<>();
@@ -109,33 +116,90 @@ public final class Streams {
          * Those that have it loaded, waiting to play it, and every emitter each said so of: each is told through all
          * of them, as a client may have opened its sides apart (one native player each), and each waits to be told.
          */
-        final Map<ServerPlayer, Set<BlockPos>> ready = new HashMap<>();
-        /** The tick count at which the first of them had it loaded; LOADING until then. */
+        final Map<ServerPlayer, Set<StreamPackets.Target>> ready = new HashMap<>();
+        /** The game time the first of them had it loaded; LOADING until then. */
         long firstReadyAt = LOADING;
 
-        Load(@Nullable UUID startedBy, long barrierTicks, long offset, boolean unattended) {
+        Load(@Nullable UUID startedBy, long barrierTicks, long offset, boolean unattended, long since) {
             this.startedBy = startedBy;
             this.barrierTicks = barrierTicks;
             this.offset = offset;
             this.unattended = unattended;
+            this.since = since;
+        }
+
+        /**
+         * Whether it plays at game time {@code now}: once its listeners all have it loaded, or have had long enough, it
+         * starts playing, and those waiting are told to play it.
+         */
+        boolean open(long now) {
+            if (playingFrom != LOADING) {
+                return true;
+            }
+            expected.removeIf(ServerPlayer::isRemoved);
+            long age = now - since;
+            boolean everyone = !ready.isEmpty() && ready.keySet().containsAll(expected);
+            // Its emitters have had two turns to send it to whoever is near.
+            boolean nobody = unattended && age >= 2 * RELAY_TICKS && expected.isEmpty() && ready.isEmpty();
+            if (everyone || nobody || age >= MAX_LOAD_TICKS
+                    || firstReadyAt != LOADING && now - firstReadyAt >= barrierTicks) {
+                playingFrom = now;
+                ready.forEach((player, emitters) -> {
+                    if (!player.isRemoved()) {
+                        emitters.forEach(emitter -> send(player, emitter.sync(offset / (float) PlaybackClock.TICKS_PER_SECOND)));
+                    }
+                });
+                ready.clear();
+                expected.clear();
+            }
+            return playingFrom != LOADING;
         }
     }
 
     /** One emitter's stream: who has it, and what was sent, to notice the source or the emitter's sound changing. */
     private static final class Relay {
-        final BlockPos pos;
+        /** How its listeners' clients name it. */
+        final StreamPackets.Target target;
+        /** A block emitter's sound, which says where its source is; null for a keyed source's emitter. */
+        @Nullable
         final Sound sound;
+        /** The source it plays when that is no block; null for a block emitter's. */
+        @Nullable
+        final MediaSource.Keyed keyed;
         final Set<ServerPlayer> listeners = new HashSet<>();
         String url;
         long ticks;
         /** Which load of its source's track it relays (see Load#id): a new one starts everyone over. */
         long load;
         @Nullable
-        JukeboxSettings settings;
+        EmitterRange range;
 
-        Relay(BlockPos pos, Sound sound) {
-            this.pos = pos;
+        Relay(StreamPackets.Target target, @Nullable Sound sound, @Nullable MediaSource.Keyed keyed) {
+            this.target = target;
             this.sound = sound;
+            this.keyed = keyed;
+        }
+
+        /** Whether it relays as {@code other} does: the same emitter, sound and source. */
+        boolean sameAs(Relay other) {
+            return target.equals(other.target) && Objects.equals(sound, other.sound) && keyed == other.keyed;
+        }
+
+        /** Whether it relays the same source as {@code other}. */
+        boolean sameSource(Relay other) {
+            return keyed != null ? keyed == other.keyed : other.sound != null && sound.source().equals(other.sound.source());
+        }
+
+        /** What its source plays now (see Streams#source); null for nothing. */
+        @Nullable
+        Source playing(Level level) {
+            return keyed != null ? allowed(keyed.nowPlaying()) : source(level, sound.source());
+        }
+
+        /** How its source's listeners load its track; null for one never waited on. */
+        @Nullable
+        Load load(Level level) {
+            return keyed != null ? LOADS.get(keyed.id()) : loadOf(level, sound.source());
         }
     }
 
@@ -155,15 +219,15 @@ public final class Streams {
     }
 
     /**
-     * What a source is playing: the track and how far in it is, and the Blu-ray player it is a video of, if any, whose
+     * What a source is playing: the track and how far in it is, and the source it is a video of, if any, whose
      * displays and speakers clients play on one player (see NativeAudio).
      */
     public record Source(String url, long ticks, @Nullable Video video) {
     }
 
     /**
-     * The Blu-ray player a video plays from, the tallest picture (pixels) its disc plays, and the video after it on
-     * the disc, which clients get ready ahead.
+     * The source (a VideoSource) a video plays from, the tallest picture (pixels) its disc plays (see DiscKind), and
+     * the video after it on the disc, which clients get ready ahead.
      */
     public record Video(BlockPos player, int maxHeight, Optional<String> next) {
         public static final StreamCodec<ByteBuf, Video> CODEC = StreamCodec.composite(
@@ -231,49 +295,67 @@ public final class Streams {
     /** What the source at {@code pos} is playing now, or null (nothing, unloaded, disallowed). */
     @Nullable
     public static Source source(Level level, BlockPos pos) {
-        Source source = level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media
-                ? playing(media) : null;
-        if (source == null || !ServerConfig.isAllowed(source.url())) {
+        return allowed(level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media ? playing(media) : null);
+    }
+
+    /** {@code source} as the server allows it to be played: null if its link isn't allowed. */
+    @Nullable
+    private static Source allowed(@Nullable Source source) {
+        if (source == null || !UrlPolicy.isAllowed(source.url())) {
             return null;
         }
         // Clients fetch the next video ahead: it has to pass the same allow-list as the one playing.
         Video video = source.video();
-        return video == null || video.next().map(ServerConfig::isAllowed).orElse(true) ? source
+        return video == null || video.next().map(UrlPolicy::isAllowed).orElse(true) ? source
                 : new Source(source.url(), source.ticks(), new Video(video.player(), video.maxHeight(), Optional.empty()));
     }
 
-    /** What {@code media} plays now, counted from when its listeners had it loaded (see played); null for nothing. */
+    /** What {@code media} plays now, as far in as its clock is (see PlaybackClock); null for nothing. */
     @Nullable
     public static Source playing(MediaSource media) {
-        Source source = media.nowPlaying();
-        return source == null ? null
-                : new Source(source.url(), played((BlockEntity) media, source.ticks()), source.video());
+        return media.nowPlaying();
     }
 
     /**
-     * {@code source} starts its track from the top: its position waits until its listeners have it (see Load).
-     * {@code by} is the player who started it; null when it follows on from the one before (who started that stays).
+     * {@code source}'s listeners load what {@code clock} plays, from where it is at game time {@code now}: it stands
+     * there until they all have it (see tick). A source calls this as it starts a track, or takes one up where it was
+     * left (a tape played on, a disc sought). {@code by} is the player who started it; null when it follows on from the
+     * one before (who started that stays).
      */
-    public static void loading(BlockEntity source, @Nullable Player by) {
-        loading(source, by, 0, false);
-    }
-
-    /**
-     * The same, {@code offset} ticks into its track: a tape played on from where it was stopped, a disc from where
-     * it was paused. The source counts its ticks from 0 again (see played). {@code unattended}: with nobody there
-     * to load it, it plays on after a moment instead of waiting for someone to come, as a deck's counter runs with
-     * nobody in the room.
-     */
-    public static void loading(BlockEntity source, @Nullable Player by, long offset, boolean unattended) {
+    public static void loading(BlockEntity source, @Nullable Player by, PlaybackClock clock, long now) {
         source.setChanged();
-        Load previous = LOADS.get(key(source));
         Source playing = source instanceof MediaSource media ? media.nowPlaying() : null;
-        LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy,
-                barrierTicks(playing == null ? "" : playing.url()), Math.max(0, offset), unattended));
+        loading(key(source), by, MediaKind.barrierTicks(playing == null ? null : playing.url()), clock, now);
     }
 
-    public static long barrierTicks(String url) {
-        return DiscUrl.parse(url) == null ? BARRIER_TICKS : MAX_LOAD_TICKS;
+    /** {@link #loading} for a source that is no block: it plays from when the first listener has it. */
+    public static void loading(MediaSource.Keyed source, @Nullable Player by, PlaybackClock clock, long now) {
+        loading(source.id(), by, 0, clock, now);
+    }
+
+    private static void loading(UUID key, @Nullable Player by, long barrierTicks, PlaybackClock clock, long now) {
+        clock.hold(now);
+        Load previous = LOADS.get(key);
+        LOADS.put(key, new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy,
+                barrierTicks, clock.position(now), clock.playsUnattended(), now));
+    }
+
+    /**
+     * One tick at game time {@code now} of {@code source}, whose listeners load what {@code clock} plays (see loading):
+     * the clock stands while they load it, and counts on once they all have it, or have had long enough.
+     */
+    public static void tick(BlockEntity source, PlaybackClock clock, long now) {
+        tick(key(source), clock, now);
+    }
+
+    /** {@link #tick} for a source that is no block. */
+    public static void tick(MediaSource.Keyed source, PlaybackClock clock, long now) {
+        tick(source.id(), clock, now);
+    }
+
+    private static void tick(UUID key, PlaybackClock clock, long now) {
+        Load load = clock.running() ? LOADS.get(key) : null;
+        clock.tick(now, load == null || load.open(now));
     }
 
     /** Which load of its track {@code source} plays (see Load#id); 0 for one never loaded since the server started. */
@@ -288,71 +370,55 @@ public final class Streams {
         return load == null ? null : load.startedBy;
     }
 
-    /** Whether an emitter that {@code kind} matches relays the source at {@code source} now. */
-    public static boolean relayedBy(Level level, BlockPos source, Class<? extends BlockEntity> kind) {
-        return RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey().getLevel() == level
-                && kind.isInstance(entry.getKey()) && source.equals(entry.getValue().sound.source()));
-    }
-
     /** Whether emitters relay at {@code level}'s tick now: all on the same ticks (see relay's game event). */
     public static boolean relayDue(Level level) {
         return level.getGameTime() % RELAY_TICKS == 0;
     }
 
-    /** The emitters relaying the source at {@code source} now: a source tells its speakers of a new volume at once. */
-    public static java.util.List<BlockEntity> emitters(Level level, BlockPos source) {
-        return RELAYS.entrySet().stream().filter(entry -> entry.getKey().getLevel() == level
-                && source.equals(entry.getValue().sound.source())).map(Map.Entry::getKey).toList();
+    /**
+     * The source at {@code source} changed how it sounds (its volume, its displays' lighting): every emitter relaying it
+     * relays now, so its listeners hear the change at once rather than at the next relay.
+     */
+    public static void changed(ServerLevel level, BlockPos source) {
+        RELAYS.entrySet().stream().filter(entry -> relays(entry, level, source)).map(Map.Entry::getKey).toList()
+                .forEach(emitter -> {
+                    if (emitter instanceof Emitter linked && !((BlockEntity) emitter).isRemoved()) {
+                        linked.relay(level);
+                    }
+                });
+    }
+
+    /** Whether {@code entry} is a block emitter in {@code level} relaying the source at {@code source}. */
+    private static boolean relays(Map.Entry<Object, Relay> entry, Level level, BlockPos source) {
+        Sound sound = entry.getValue().sound;
+        return entry.getKey() instanceof BlockEntity emitter && emitter.getLevel() == level && sound != null
+                && source.equals(sound.source());
+    }
+
+    /** A read-only view of one emitter's relay, for diagnostics: what it relays and to how many players. */
+    public record RelayView(Sound sound, int listeners) {
+    }
+
+    /** Every emitter's relay now, for diagnostics. */
+    public static java.util.List<RelayView> relays() {
+        return RELAYS.values().stream().map(relay -> new RelayView(relay.sound, relay.listeners.size())).toList();
     }
 
     public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
         Set<ServerPlayer> players = new HashSet<>();
-        RELAYS.forEach((emitter, relay) -> {
-            if (emitter.getLevel() == level && source.equals(relay.sound.source())) {
-                relay.listeners.stream().filter(player -> !player.isRemoved() && player.level() == level)
-                        .forEach(players::add);
-            }
-        });
+        RELAYS.entrySet().stream().filter(entry -> relays(entry, level, source))
+                .forEach(entry -> players.addAll(listening(level, entry.getValue())));
         return players;
     }
 
-    /**
-     * How many of the {@code ticks} since {@code source} started its track count as played (see Load). Once its
-     * listeners have it loaded, or have had long enough, it starts playing, and those waiting are told to play it.
-     */
-    public static long played(BlockEntity source, long ticks) {
-        Load load = LOADS.get(key(source));
-        if (load == null) {
-            return ticks;
-        }
-        if (load.playingFrom == LOADING) {
-            if (!load.ready.isEmpty() && load.firstReadyAt == LOADING) {
-                load.firstReadyAt = ticks;
-            }
-            load.expected.removeIf(ServerPlayer::isRemoved);
-            boolean everyone = !load.ready.isEmpty() && load.ready.keySet().containsAll(load.expected);
-            // Its emitters have had two turns to send it to whoever is near.
-            boolean nobody = load.unattended && ticks >= 2 * RELAY_TICKS && load.expected.isEmpty() && load.ready.isEmpty();
-            if (everyone || nobody || ticks >= MAX_LOAD_TICKS
-                    || load.firstReadyAt != LOADING && ticks - load.firstReadyAt >= load.barrierTicks) {
-                load.playingFrom = ticks;
-                load.ready.forEach((player, emitters) -> {
-                    if (!player.isRemoved()) {
-                        emitters.forEach(emitter ->
-                                PacketDistributor.sendToPlayer(player,
-                                        new StreamPackets.SyncAtBlock(emitter, load.offset / 20f)));
-                    }
-                });
-                load.ready.clear();
-                load.expected.clear();
-            }
-        }
-        return load.offset + (load.playingFrom == LOADING ? 0 : ticks - load.playingFrom);
+    /** Who listens to {@code relay} in {@code level}, still there. */
+    private static List<ServerPlayer> listening(Level level, Relay relay) {
+        return relay.listeners.stream().filter(player -> !player.isRemoved() && player.level() == level).toList();
     }
 
     /**
      * Whether {@code source}'s track plays, its listeners having it loaded (or having had long enough); false while
-     * it loads, when its position stands at 0 (see played). True for one never waited on.
+     * it loads, when its clock stands (see tick). True for one never waited on.
      */
     public static boolean loaded(BlockEntity source) {
         Load load = LOADS.get(key(source));
@@ -361,7 +427,7 @@ public final class Streams {
 
     /** A source block entity is known by its id, which it keeps when Sable moves it or its chunk reloads. */
     private static UUID key(BlockEntity source) {
-        return source.getData(CreateMediaSystems.SOURCE_ID);
+        return source.getData(StreamFeature.SOURCE_ID);
     }
 
     @Nullable
@@ -373,37 +439,60 @@ public final class Streams {
     /**
      * {@code player} has the stream of the emitter at {@code pos} loaded, paused until told to play it. Only from a
      * player that emitter sent it to. While its source's track loads, that is once every listener has it (see
-     * played); once it plays, at once, from how far in it is now: a player that took longer to download it, or joined
+     * Load#open); once it plays, at once, from how far in it is now: a player that took longer to download it, or joined
      * later, catches up there (see StreamPackets.SyncAtBlock). {@code duration} is the track's length as that
      * player's VLC sees it (0 if unknown, or live): it stands in for the API's, for tracks the API can't tell the
      * length of (pages only yt-dlp knows), so a Blu-ray player moves on when they end.
      */
     public static void started(ServerPlayer player, BlockPos pos, float duration) {
+        started(player, new StreamPackets.Target.Block(pos.immutable()), duration);
+    }
+
+    /** {@link #started(ServerPlayer, BlockPos, float)} for the emitter {@code target}, a block's or a keyed source's. */
+    public static void started(ServerPlayer player, StreamPackets.Target target, float duration) {
         Level level = player.level();
-        BlockEntity emitter = level.isLoaded(pos) ? level.getBlockEntity(pos) : null;
-        Relay relay = emitter == null ? null : RELAYS.get(emitter);
+        Relay relay = relayOf(level, target);
         if (relay == null) {
             return;
         }
-        BlockPos sourcePos = relay.sound.source();
         if (!relay.listeners.contains(player)) {
             // That emitter lost this player (out of its range) while another of the source's still has them: the
             // length they tell is still the only one there may be for a track the API can't tell.
-            if (listeners(player.serverLevel(), sourcePos).contains(player)) {
-                learnDuration(source(level, sourcePos), duration);
+            if (RELAYS.values().stream().anyMatch(other -> other.sameSource(relay) && listening(level, other).contains(player))) {
+                learnDuration(relay.playing(level), duration);
             }
             return;
         }
-        Load load = loadOf(level, sourcePos);
+        Load load = relay.load(level);
         boolean loading = load != null && load.playingFrom == LOADING;
         if (loading) {
-            load.ready.computeIfAbsent(player, p -> new HashSet<>()).add(pos.immutable());
+            load.ready.computeIfAbsent(player, p -> new HashSet<>()).add(target);
+            if (load.firstReadyAt == LOADING) {
+                load.firstReadyAt = level.getGameTime();
+            }
+            // Plays it now if this player was the last it waited for.
+            load.open(level.getGameTime());
         }
-        // Counts it as played so far, which plays it now if this player was the last it waited for.
-        Source playing = source(level, sourcePos);
+        Source playing = relay.playing(level);
         learnDuration(playing, duration);
         if (playing != null && !loading) {
-            PacketDistributor.sendToPlayer(player, new StreamPackets.SyncAtBlock(pos, playing.ticks() / 20f));
+            send(player, target.sync(playing.ticks() / (float) PlaybackClock.TICKS_PER_SECOND));
+        }
+    }
+
+    /** The relay of the emitter {@code target} in {@code level}; null if it relays nothing. */
+    @Nullable
+    private static Relay relayOf(Level level, StreamPackets.Target target) {
+        if (target instanceof StreamPackets.Target.Block block) {
+            BlockEntity emitter = level.isLoaded(block.pos()) ? level.getBlockEntity(block.pos()) : null;
+            return emitter == null ? null : RELAYS.get(emitter);
+        }
+        return RELAYS.values().stream().filter(relay -> relay.target.equals(target)).findFirst().orElse(null);
+    }
+
+    private static void send(ServerPlayer player, @Nullable CustomPacketPayload payload) {
+        if (payload != null) {
+            PacketDistributor.sendToPlayer(player, payload);
         }
     }
 
@@ -417,103 +506,138 @@ public final class Streams {
         }
     }
 
-    /** Whether {@code source} has played past its track's length, once the API has told us that length. */
-    public static boolean endedAt(Source source) {
-        return endedAt(source.url(), source.ticks());
-    }
-
     /**
      * Whether {@code url} has played past its length {@code ticks} in; false while that length is unknown. True for a
      * track the API refused: no listener can load it either, so a deck or player moves on past it.
      */
     public static boolean endedAt(String url, long ticks) {
         double duration = duration(url);
-        return REFUSED.contains(url) || duration > 0 && ticks >= duration * 20;
+        return REFUSED.contains(url) || duration > 0 && ticks >= duration * PlaybackClock.TICKS_PER_SECOND;
     }
 
     /**
      * The emitter plays its source's track (the source at {@code sound.source()}, if it plays one), sounding as
-     * {@code sound}, at {@code settings}; emitters call this every RELAY_TICKS, and at once when something changed. Players newly in range
-     * get the stream, from where it is now; those who left are told to stop (they get it again on return). A different track, the source starting over, or a different sound starts everyone over; new
-     * settings reach current listeners without restarting their audio.
+     * {@code sound}, heard over {@code range}; emitters call this every RELAY_TICKS, and at once when something
+     * changed. Players newly in range get the stream, from where it is now; those who left are told to stop (they get
+     * it again on return). A different track, the source starting over, or a different sound starts everyone over; a
+     * new range reaches current listeners without restarting their audio.
      */
-    public static void relay(ServerLevel level, BlockEntity emitter, Sound sound, JukeboxSettings settings) {
+    public static void relay(ServerLevel level, BlockEntity emitter, Sound sound, EmitterRange range) {
         BlockPos pos = emitter.getBlockPos();
-        Source playing = source(level, sound.source());
-        Relay relay = RELAYS.get(emitter);
-        Load load = loadOf(level, sound.source());
-        long loadId = load == null ? 0 : load.id;
-        // A new load of the same track further in (a tape played on) is a new playback too.
-        if (relay != null && (playing == null || !playing.url().equals(relay.url) || playing.ticks() < relay.ticks
-                || relay.load != loadId || !sound.equals(relay.sound) || !pos.equals(relay.pos))) {
-            stop(emitter);
-            relay = null;
-        }
+        Source playing = update(level, emitter, new Relay(new StreamPackets.Target.Block(pos.immutable()), sound, null));
         if (playing == null) {
             return;
         }
-        if (relay == null) {
-            relay = new Relay(pos.immutable(), sound);
-            RELAYS.put(emitter, relay);
-        }
-        relay.url = playing.url();
-        relay.ticks = playing.ticks();
-        relay.load = loadId;
+        Relay relay = RELAYS.get(emitter);
+        Load load = relay.load(level);
         // Wardens and sculk sensors hear it once a second (jukebox_play is no vibration), like a goat horn: a warden
         // goes to see what it is. Every other relay tick, as emitters all relay on the same ticks.
-        if (settings.volume() > 0 && level.getGameTime() % (2 * RELAY_TICKS) == 0) {
+        if (range.volume() > 0 && level.getGameTime() % (2 * RELAY_TICKS) == 0) {
             level.gameEvent(GameEvent.INSTRUMENT_PLAY, SableCompat.toWorld(level, pos, sound.origin()),
                     GameEvent.Context.of(level.getBlockState(pos)));
         }
-        boolean retune = !settings.equals(relay.settings);
-        relay.settings = settings;
+        boolean retune = !range.equals(relay.range);
+        relay.range = range;
         // A relogged or respawned player is a new object, so they get a fresh stream too. One who left is told: their
         // client plays a side while any of its emitters is near, and an emitter never stopped, once they were back
         // within its drop margin, kept it playing after the disc came out (silent that far, its video on screen).
         relay.listeners.removeIf(p -> {
             boolean keep = !p.isRemoved() && p.level() == level
-                    && hears(level, pos, sound, settings, p, JukeboxSettings.DROP_MARGIN);
+                    && range.hears(level, pos, sound.origin(), p.position(), EmitterRange.DROP_MARGIN);
             if ((retune || !keep) && !p.isRemoved()) {
-                PacketDistributor.sendToPlayer(p, keep ? new StreamPackets.RetuneAtBlock(pos, settings)
+                PacketDistributor.sendToPlayer(p, keep ? new StreamPackets.RetuneAtBlock(pos, range)
                         : new StreamPackets.StopAtBlock(pos));
             }
             return !keep;
         });
         for (ServerPlayer player : level.players()) {
-            if (hears(level, pos, sound, settings, player, 0) && relay.listeners.add(player)) {
-                if (load != null && load.playingFrom == LOADING) {
-                    load.expected.add(player);
-                }
-                PacketDistributor.sendToPlayer(player, new StreamPackets.PlayAtBlock(playing.url(), pos,
-                        playing.ticks() / 20f, settings, sound, Optional.ofNullable(playing.video()), loadId));
+            if (range.hears(level, pos, sound.origin(), player.position(), 0) && relay.listeners.add(player)) {
+                join(load, player, new StreamPackets.PlayAtBlock(playing.url(), pos,
+                        playing.ticks() / (float) PlaybackClock.TICKS_PER_SECOND, range, sound, Optional.ofNullable(playing.video()), relay.load));
             }
         }
     }
 
     /**
-     * {@link #relay} for an emitter linked to the source at {@code link}, at {@code volume} times the source's own (see
-     * MediaSource#volume). An unlinked one points at its own place, where no source plays.
+     * {@link #relay} for {@code emitter} of a source that is no block, whose listeners its clients know it by
+     * {@code target}, to {@code audience} (those aboard a train): each that joins it gets {@code play} of what it plays,
+     * with its load (see Load#id); those who left are dropped, and stop it themselves (see StreamPackets.Target).
      */
-    public static void relay(ServerLevel level, BlockEntity emitter, Optional<BlockPos> link, Vec3 origin,
-                             Optional<Direction> facing, Channel channel, float volume) {
-        BlockPos source = link.orElse(emitter.getBlockPos());
-        float sourceVolume = level.isLoaded(source) && level.getBlockEntity(source) instanceof MediaSource media
-                ? media.volume() : 1;
-        relay(level, emitter, new Sound(origin, facing, channel, source),
-                new JukeboxSettings(Optional.empty(), volume * sourceVolume));
+    public static void relay(ServerLevel level, Object emitter, StreamPackets.Target target, MediaSource.Keyed source,
+                             Collection<ServerPlayer> audience, BiFunction<Source, Long, CustomPacketPayload> play) {
+        Source playing = update(level, emitter, new Relay(target, null, source));
+        if (playing == null) {
+            return;
+        }
+        Relay relay = RELAYS.get(emitter);
+        relay.listeners.removeIf(player -> player.isRemoved() || !audience.contains(player));
+        Load load = relay.load(level);
+        for (ServerPlayer player : audience) {
+            if (relay.listeners.add(player)) {
+                join(load, player, play.apply(playing, relay.load));
+            }
+        }
     }
 
-    private static boolean hears(ServerLevel level, BlockPos pos, Sound sound, JukeboxSettings settings,
-                                 ServerPlayer player, double margin) {
-        return settings.inRange(pos, sound.origin(), SableCompat.toBlockSpace(level, pos, player.position()), margin);
+    /**
+     * {@code emitter} relays as {@code fresh} says, its source playing what it returns (null: nothing, and it stops). A
+     * different track, the source starting over or a new load of it (a tape played on further in), or a different
+     * sound or place, starts everyone over.
+     */
+    @Nullable
+    private static Source update(ServerLevel level, Object emitter, Relay fresh) {
+        Source playing = fresh.playing(level);
+        Load load = fresh.load(level);
+        long loadId = load == null ? 0 : load.id;
+        Relay relay = RELAYS.get(emitter);
+        if (relay != null && (playing == null || !playing.url().equals(relay.url) || playing.ticks() < relay.ticks
+                || relay.load != loadId || !relay.sameAs(fresh))) {
+            stop(emitter);
+            relay = null;
+        }
+        if (playing == null) {
+            return null;
+        }
+        if (relay == null) {
+            relay = fresh;
+            RELAYS.put(emitter, relay);
+        }
+        relay.url = playing.url();
+        relay.ticks = playing.ticks();
+        relay.load = loadId;
+        return playing;
+    }
+
+    /** {@code player} gets {@code play}: one its source's track waits for, while that loads. */
+    private static void join(@Nullable Load load, ServerPlayer player, CustomPacketPayload play) {
+        if (load != null && load.playingFrom == LOADING) {
+            load.expected.add(player);
+        }
+        PacketDistributor.sendToPlayer(player, play);
+    }
+
+    /**
+     * {@link #relay} for {@code emitter} linked to the source at {@code link}, over the default range at {@code volume}
+     * times the source's own (see MediaSource#gain); silent while it gives way to another (see Emitter#givesWay). An
+     * unlinked one points at its own place, where no source plays.
+     */
+    public static <E extends BlockEntity & Emitter> void relay(ServerLevel level, E emitter, Optional<BlockPos> link,
+                                                               Vec3 origin, Optional<Direction> facing, Channel channel,
+                                                               float volume) {
+        BlockPos source = link.orElse(emitter.getBlockPos());
+        float sourceGain = level.isLoaded(source) && level.getBlockEntity(source) instanceof MediaSource media
+                ? media.gain() : 1;
+        boolean givenWay = emitter.givesWay() && RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey() != emitter
+                && relays(entry, level, source) && !(entry.getKey() instanceof Emitter other && other.givesWay()));
+        relay(level, emitter, new Sound(origin, facing, channel, source),
+                EmitterRange.at(givenWay ? 0 : volume * sourceGain));
     }
 
     /** Stops {@code emitter}'s stream for everyone still listening to it. */
-    public static void stop(BlockEntity emitter) {
+    public static void stop(Object emitter) {
         Relay relay = RELAYS.remove(emitter);
         if (relay != null) {
-            relay.listeners.stream().filter(p -> !p.isRemoved())
-                    .forEach(p -> PacketDistributor.sendToPlayer(p, new StreamPackets.StopAtBlock(relay.pos)));
+            relay.listeners.stream().filter(p -> !p.isRemoved()).forEach(p -> send(p, relay.target.stop()));
         }
     }
 
@@ -523,7 +647,8 @@ public final class Streams {
      */
     public static long seekable(String url, long to) {
         double duration = duration(url);
-        return Math.max(0, duration > 0 ? Math.min(to, (long) (duration * 20) - 20) : to);
+        int second = PlaybackClock.TICKS_PER_SECOND;
+        return Math.max(0, duration > 0 ? Math.min(to, (long) (duration * second) - second) : to);
     }
 
     /** Track length in seconds from the API; negative while loading or for live/unknown streams. */
@@ -555,24 +680,19 @@ public final class Streams {
      * played, so a disc can be refused before it is written. Also fills the duration cache.
      */
     public static CompletableFuture<TrackInfo> info(String url) {
-        if (DiscUrl.parse(url) != null) {
-            return CompletableFuture.completedFuture(new TrackInfo(null, "DVD / Blu-ray"));
-        }
-        URI uri;
-        try {
-            uri = URI.create(url.trim());
-        } catch (IllegalArgumentException invalid) {
+        MediaKind kind = MediaKind.of(url);
+        if (kind == null) {
             return CompletableFuture.failedFuture(new IOException("Not a link"));
         }
-        if (UrlPolicy.isRtsp(uri)) {
-            DURATIONS.put(url, UNKNOWN);
-            return CompletableFuture.completedFuture(new TrackInfo(null, "RTSP live"));
+        if (kind.title != null) {
+            return CompletableFuture.completedFuture(new TrackInfo(null, kind.title));
         }
-        return HTTP.sendAsync(HttpRequest.newBuilder(URI.create(UrlPolicy.endpoint(ServerConfig.API_URL.get(), "info", ProviderUrls.canonical(uri).toString())))
+        URI uri = URI.create(url.trim());
+        return HTTP.sendAsync(HttpRequest.newBuilder(URI.create(ApiHttp.endpoint(ServerConfig.API_URL.get(), "info", ProviderUrls.canonical(uri).toString())))
                         .timeout(Duration.ofSeconds(60)).build(), HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() != 200) {
-                        throw new CompletionException(new Refused(UrlPolicy.errorDetail(response.statusCode(), response.body())));
+                        throw new CompletionException(new Refused(ApiHttp.errorDetail(response.statusCode(), response.body())));
                     }
                     JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
                     TrackInfo info = new TrackInfo(optional(body, "duration", JsonElement::getAsDouble),

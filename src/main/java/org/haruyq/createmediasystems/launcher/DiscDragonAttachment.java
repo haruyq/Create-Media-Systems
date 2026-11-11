@@ -19,6 +19,10 @@ public final class DiscDragonAttachment {
         public Vec3 localDirection(Vec3 vector){var v=inverse.transformDirection(new Vector3d(vector.x,vector.y,vector.z));return new Vec3(v.x,v.y,v.z).normalize();}
     }
     public record Contact(int bone,Vec3 point,Vec3 direction){}
+    /** How many parts (colliders) a dragon has, and how many bones its model animates. */
+    public static final int PARTS = 8, BONES = 23;
+    /** The trunk, where a contact that found no bone of its part sits. */
+    private static final int BODY_BONE = 6;
     private record Cached(int tick,int partial,long x,long y,long z,int yaw,int flap,List<Bone> bones){}
     private static final Map<EnderDragon,Cached> CACHE=Collections.synchronizedMap(new WeakHashMap<>());
     private static final float DEG=(float)(Math.PI/180);
@@ -34,7 +38,7 @@ public final class DiscDragonAttachment {
                 if(distance<nearest){nearest=distance;selected=bone;chosen=on;}
             }
         }
-        if(selected==null)selected=bone(dragon,6,1);
+        if(selected==null)selected=bone(dragon,BODY_BONE,1);
         var direction=selected.localDirection(incoming);if(chosen==null)chosen=surface(selected.boxes.getFirst(),selected.local(point));
         return new Contact(selected.id,chosen.add(direction.scale(.08)),direction);
     }
@@ -54,7 +58,7 @@ public final class DiscDragonAttachment {
         var result=build(dragon,partial);CACHE.put(dragon,new Cached(dragon.tickCount,bits,x,y,z,yaw,flap,result));return result;
     }
     private static List<Bone> build(EnderDragon d,float t) {
-        Bone[] result=new Bone[23];float flap=Mth.lerp(t,d.oFlapTime,d.flapTime),phase=flap*(float)(Math.PI*2);
+        Bone[] result=new Bone[BONES];float flap=Mth.lerp(t,d.oFlapTime,d.flapTime),phase=flap*(float)(Math.PI*2);
         float bob=(float)(Math.sin(phase-1)+1);bob=(bob*bob+bob*2)*.05f;
         float bank=Mth.wrapDegrees((float)(d.getLatencyPos(5,t)[0]-d.getLatencyPos(10,t)[0]));
         float mean=Mth.wrapDegrees((float)(d.getLatencyPos(5,t)[0]+bank/2));

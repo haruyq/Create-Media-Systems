@@ -8,8 +8,6 @@ import javax.sound.sampled.AudioFormat;
 
 import org.haruyq.createmediasystems.stream.Streams;
 
-import org.jetbrains.annotations.Nullable;
-
 import com.sun.jna.Pointer;
 
 import net.minecraft.client.sounds.AudioStream;
@@ -49,13 +47,10 @@ final class VlcAudio {
     private static final int MAX_QUEUED_BYTES = Pcm.BYTES_PER_SECOND * 5;
 
     private final List<Stream> streams = new CopyOnWriteArrayList<>();
-    /** What every stream hears it through; set through NativeAudio#equalize. */
+    /** What every stream hears it through (see NativeAudio.Playback#equalize). */
     final Equalizer equalizer = new Equalizer();
-    private final LightingMedia.Audio lighting = new LightingMedia.Audio();
-    private volatile long lightingUntil;
-    /** What it sounds like, for a hi-fi stack's displays: worked out only while one asks (see spectrum). */
-    private final Spectrum spectrum = new Spectrum();
-    private volatile long spectrumUntil;
+    /** The player's taps, offered what it plays as heard, after its tone. */
+    private final MediaTaps taps;
     /** When VLC played its first samples (System.nanoTime); 0 before. */
     volatile long firstSamples;
     volatile long lastSamples;
@@ -75,6 +70,10 @@ final class VlcAudio {
      */
     private long runPts;
     private long runSamples;
+
+    VlcAudio(MediaTaps taps) {
+        this.taps = taps;
+    }
 
     /** Whether a stream from {@link #open} has played all it was given (the player waits for that before EOF). */
     static boolean drained(AudioStream tap) {
@@ -96,20 +95,10 @@ final class VlcAudio {
         return stream;
     }
 
-    LightingMedia.AudioFrame lighting() {
-        lightingUntil = System.nanoTime() + 2_000_000_000L;
-        return lighting.sample(Vlc.LIB.libvlc_clock());
-    }
-
-    @Nullable
-    Spectrum.Frame spectrum() {
-        spectrumUntil = System.nanoTime() + 2_000_000_000L;
-        return spectrum.sample(Vlc.LIB.libvlc_clock());
-    }
-
-    void clearLighting() {
+    /** What it played no longer goes on (it was sought, flushed or let go): its taps start over. */
+    void clear() {
         lastSamples = 0;
-        lighting.clear();
+        taps.clear();
     }
 
     /** When audio OpenAL plays at {@code device} (its clock, ns) is heard, on VLC's clock (µs); 0 if it can't tell. */
@@ -154,12 +143,7 @@ final class VlcAudio {
             next = pts;
         }
         runSamples += count;
-        if (lightingUntil != 0 && System.nanoTime() - lightingUntil < 0) {
-            lighting.offer(stereo, count, next);
-        }
-        if (spectrumUntil != 0 && System.nanoTime() - spectrumUntil < 0) {
-            spectrum.offer(stereo, count, next);
-        }
+        taps.sound(stereo, count, CHANNELS, next);
         for (Stream stream : streams) {
             stream.offer(stereo, next);
         }
@@ -167,13 +151,12 @@ final class VlcAudio {
 
     private void flush() {
         runSamples = 0;
-        spectrum.clear();
-        clearLighting();
+        clear();
         streams.forEach(Stream::clear);
     }
 
     /** One stream's share: mono, on VLC's clock, so each read lines up with when the engine will play it. */
-    static final class Stream implements AudioStream, DeviceClock.Timed {
+    static final class Stream implements CmsStream {
         private final VlcAudio audio;
         private final Streams.Channel channel;
         /** Mono chunks with the VLC time (microseconds) of their first sample; guarded by itself. */

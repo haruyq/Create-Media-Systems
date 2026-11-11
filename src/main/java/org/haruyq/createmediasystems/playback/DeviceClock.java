@@ -20,19 +20,6 @@ public final class DeviceClock {
     private DeviceClock() {
     }
 
-    /** A stream that starts at a time of its own; see mixin/ChannelMixin. */
-    public interface Timed {
-        /**
-         * Attached to the OpenAL {@code source}, at {@code deviceNow} (see {@link #now}); the device clock time to
-         * start at, or 0 for at once.
-         */
-        long attach(int source, long deviceNow);
-
-        default boolean advancesWhilePaused() {
-            return false;
-        }
-    }
-
     /** OpenAL's clock now (ns), or 0 if it can't schedule starts, so everything plays at once as before. */
     public static long now() {
         long device = device();
@@ -72,24 +59,26 @@ public final class DeviceClock {
         return AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED);
     }
 
-    static long presentationTime(int source, long startAt, long queuedSamples) {
+    /**
+     * When audio queued on {@code source} now, after {@code queuedFrames} frames (at {@code rate} a second) already
+     * there, will be heard (System.nanoTime): from where the source is now, or from {@code startAt} if it hasn't
+     * started yet, at the source's pitch, plus the device's latency.
+     */
+    static long presentationTime(int source, long startAt, long queuedFrames, float rate) {
         long now = System.nanoTime();
+        double pitch = Math.max(.01, AL10.alGetSourcef(source, AL10.AL_PITCH));
+        double queued = queuedFrames / (double) rate;
         long[] device = nowAndLatency();
-        if (device != null) {
-            return now + Math.max(0, queueEnd(source, startAt, queuedSamples) - device[0]) + device[1];
+        if (device == null) {
+            double remaining = (queued - AL10.alGetSourcef(source, AL11.AL_SEC_OFFSET)) / pitch;
+            return now + Math.max(0, Math.round(remaining * 1e9));
         }
-        double remaining = queuedSamples / (double) Pcm.RATE - AL10.alGetSourcef(source, AL11.AL_SEC_OFFSET);
-        return now + Math.max(0, Math.round(remaining * 1e9));
-    }
-
-    /** Per-source media measurement, including vanilla disc sample rates and the actual Doppler pitch. */
-    public static long presentationTime(int source,long startAt,long queuedSamples,float rate) {
-        long now=System.nanoTime();long[] device=nowAndLatency();
-        double pitch=Math.max(.01,AL10.alGetSourcef(source,AL10.AL_PITCH));
-        double offset=AL10.alGetSourcef(source,AL11.AL_SEC_OFFSET);
-        long remaining=Math.max(0,Math.round((queuedSamples/(double)rate-offset)/pitch*1e9));
-        long schedule=device==null?0:Math.max(0,startAt-device[0]);
-        return now+schedule+remaining+(device==null?0:device[1]);
+        long[] offsetAndClock = new long[2];
+        SOFTSourceLatency.alGetSourcei64vSOFT(source, SOFTDeviceClock.AL_SAMPLE_OFFSET_CLOCK_SOFT, offsetAndClock);
+        // The offset is 32.32 fixed point, from the start of the queue; 0 (and the clock now) until it plays.
+        long queueStart = offsetAndClock[1] - Math.round((offsetAndClock[0] >> 32) / (double) rate / pitch * 1e9);
+        long end = Math.max(queueStart, startAt) + Math.round(queued / pitch * 1e9);
+        return now + Math.max(0, end - device[0]) + device[1];
     }
 
     /** The open device if it has everything needed, else 0. */

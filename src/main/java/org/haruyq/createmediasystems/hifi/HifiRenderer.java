@@ -10,11 +10,13 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.lighting.LightingRenderer;
+import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.playback.Spectrum;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.DiscTransport;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.VideoDiscItem;
 
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -79,8 +81,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
-            event.registerBlockEntityRenderer(CreateMediaSystems.HIFI_STACK_ENTITY.get(), context -> new HifiRenderer());
-            event.registerBlockEntityRenderer(CreateMediaSystems.HIFI_SPEAKER_ENTITY.get(), context -> new SpeakerCable());
+            event.registerBlockEntityRenderer(HifiFeature.HIFI_STACK_ENTITY.get(), context -> new HifiRenderer());
+            event.registerBlockEntityRenderer(HifiFeature.HIFI_SPEAKER_ENTITY.get(), context -> new SpeakerCable());
         });
         modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
             private BlockEntityWithoutLevelRenderer renderer;
@@ -92,7 +94,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                 }
                 return renderer;
             }
-        }, Arrays.stream(Unit.values()).map(CreateMediaSystems::hifiUnit).toArray(Item[]::new)));
+        }, Arrays.stream(Unit.values()).map(HifiFeature::hifiUnit).toArray(Item[]::new)));
     }
 
     @Override
@@ -118,7 +120,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             long now = Util.getMillis();
             float fall = Math.min(1, (now - at) / 1000f);
             at = now;
-            Spectrum.Frame heard = stack.power() ? NativeAudio.spectrum(stack.getBlockPos()) : null;
+            NativeAudio.Playback playback = stack.power() ? NativeAudio.playback(stack.getBlockPos()) : null;
+            Spectrum.Frame heard = playback == null ? null : playback.spectrum();
             for (int band = 0; band < bands.length; band++) {
                 bands[band] = Math.max(heard == null ? 0 : heard.bands()[band], bands[band] - fall * 1.6f);
                 peaks[band] = Math.max(bands[band], peaks[band] - fall * 0.3f);
@@ -188,20 +191,21 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     private static void amplifier(Pen pen, HifiStackBlock.Entity stack, @Nullable Control pressed) {
         boolean on = stack.power();
+        UnitPart.Amplifier amplifier = stack.amplifier();
         pen.text(0.5f, 2.78f, 0.07f, 0.45f, Unit.BRAND, LEGEND, false, LEFT, 3);
         pen.text(11.5f, 0.55f, 0.07f, 0.2f, "STEREO AMPLIFIER  " + Unit.AMPLIFIER.model, FAINT, false, RIGHT, 5);
         button(pen, Control.POWER, pressed, "POWER", 0);
         pen.glow(1.78f, 2.06f, 2.02f, 2.24f, 0.07f, on ? GREEN : RED);
-        button(pen, Control.DIRECT, pressed, "DIRECT", on && stack.direct() ? AMBER : 0);
-        button(pen, Control.WIDE, pressed, "WIDE", on && stack.wide() ? AMBER : 0);
-        button(pen, Control.BASS, pressed, "BASS", on && stack.bass() ? AMBER : 0);
+        button(pen, Control.DIRECT, pressed, "DIRECT", on && amplifier.direct ? AMBER : 0);
+        button(pen, Control.WIDE, pressed, "WIDE", on && amplifier.wide ? AMBER : 0);
+        button(pen, Control.BASS, pressed, "BASS", on && amplifier.bass ? AMBER : 0);
         pen.knob(Control.VOLUME, 0.7f, stack.knob(Control.VOLUME) / 100f);
         pen.text(5.5f, 2.74f, 0.07f, 0.2f, "VOLUME", FAINT, false, RIGHT, 2);
         pen.knob(Control.BASS_LEVEL, 0.45f, stack.knob(Control.BASS_LEVEL) / 100f);
         pen.text(Control.BASS_LEVEL.centerX(), 2.86f, 0.07f, 0.18f, "LEVEL", FAINT, false, MIDDLE, 1.4f);
         String[] inputs = {"DISC", "TUNER", "TAPE"};
         for (Control control : new Control[]{Control.INPUT_DISC, Control.INPUT_TUNER, Control.INPUT_TAPE}) {
-            button(pen, control, pressed, inputs[control.index], on && stack.input().ordinal() == control.index ? RED : 0);
+            button(pen, control, pressed, inputs[control.index], on && amplifier.input.ordinal() == control.index ? RED : 0);
         }
         pen.text(Control.INPUT_TUNER.centerX(), 1.05f, 0.07f, 0.16f, "INPUT SELECTOR", FAINT, false, MIDDLE, 3.6f);
         // The headphone socket, for show.
@@ -211,6 +215,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     private static void equalizer(Pen pen, HifiStackBlock.Entity stack, @Nullable Control pressed, Meters meters) {
         boolean live = stack.live(Unit.EQUALIZER);
+        UnitPart.Equalizer equalizer = stack.equalizer();
         legend(pen, Unit.EQUALIZER, "SOUND CONTROLLER", 1.75f);
         pen.glow(3, 0.95f, 9, 2.2f, 0.07f, GLASS);
         if (live) {
@@ -223,7 +228,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
                     pen.glow(x, 1.02f + row * 0.125f, x + 0.34f, 1.12f + row * 0.125f, 0.09f, color);
                 }
             }
-            pen.text(8.88f, 1.84f, 0.09f, 0.24f, stack.preset().name(), CYAN, true, RIGHT, 1.25f);
+            pen.text(8.88f, 1.84f, 0.09f, 0.24f, equalizer.preset.name(), CYAN, true, RIGHT, 1.25f);
             pen.text(8.88f, 1.42f, 0.09f, 0.15f, "EFFECT", 0x3F8FA0, true, RIGHT, 1.25f);
             pen.glow(7.7f, 1.1f, 8.88f, 1.22f, 0.09f, UNLIT);
             pen.glow(7.7f, 1.1f, 7.7f + 1.18f * stack.knob(Control.EFFECT) / 100f, 1.22f, 0.095f, AMBER);
@@ -231,7 +236,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         for (Control control : Control.values()) {
             if (control.unit == Unit.EQUALIZER && control.kind == Control.Kind.BUTTON) {
                 button(pen, control, pressed, HifiStackBlock.Preset.byId(control.index).name(),
-                        live && stack.preset().ordinal() == control.index ? CYAN : 0);
+                        live && equalizer.preset.ordinal() == control.index ? CYAN : 0);
             }
         }
         pen.knob(Control.EFFECT, 0.55f, stack.knob(Control.EFFECT) / 100f);
@@ -240,21 +245,22 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     private static void tuner(Pen pen, HifiStackBlock.Entity stack, @Nullable Control pressed) {
         boolean live = stack.live(Unit.TUNER);
+        UnitPart.Tuner tuner = stack.tuner();
         legend(pen, Unit.TUNER, "STEREO TUNER", 1.75f);
         pen.glow(3, 0.95f, 7.6f, 2.2f, 0.07f, GLASS);
         if (live) {
-            int station = stack.station();
-            String link = station < 0 ? "" : stack.station(station);
+            int station = tuner.station;
+            String link = station < 0 ? "" : tuner.station(station);
             pen.text(3.25f, 1.22f, 0.09f, 0.72f, station < 0 ? "P-" : "P" + (station + 1), CYAN, true, LEFT, 1.5f);
             pen.text(7.4f, 1.68f, 0.09f, 0.26f, link.isEmpty() ? "NO STATION" : host(link), CYAN, true, RIGHT, 2.5f);
-            if (!link.isEmpty() && stack.input() == HifiStackBlock.Input.TUNER) {
+            if (!link.isEmpty() && stack.amplifier().input == HifiStackBlock.Input.TUNER) {
                 pen.text(7.4f, 1.2f, 0.09f, 0.2f, "TUNED", RED, true, RIGHT, 2.5f);
             }
         }
         for (Control control : Control.values()) {
             if (control.unit == Unit.TUNER && control.kind == Control.Kind.BUTTON) {
                 button(pen, control, pressed, String.valueOf(control.index + 1),
-                        live && stack.station() == control.index ? CYAN : 0);
+                        live && tuner.station == control.index ? CYAN : 0);
             }
         }
         pen.text(9.77f, 2.02f, 0.07f, 0.16f, "STATION", FAINT, false, MIDDLE, 3);
@@ -271,40 +277,47 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     private static void discPlayer(Pen pen, HifiStackBlock.Entity stack, @Nullable Control pressed, float partialTick) {
         boolean live = stack.live(Unit.DISC_PLAYER);
+        UnitPart.DiscPlayer player = stack.discPlayer();
+        DiscTransport transport = player.transport;
         legend(pen, Unit.DISC_PLAYER, "DISC PLAYER", 2.3f);
-        float out = (stack.lastTrayOut + (stack.trayOut - stack.lastTrayOut) * partialTick) * 5.2f;
+        float out = (player.lastTrayOut + (player.trayOut - player.lastTrayOut) * partialTick) * 5.2f;
         Control tray = Control.TRAY;
         // The tray's front, and the drawer behind it as it comes out with the disc.
         pen.box(tray.left, tray.bottom, 0.06f + out, tray.right, tray.top, 0.2f + out, 0x3E3E44);
         pen.text(tray.left + 0.2f, tray.bottom + 0.12f, 0.21f + out, 0.17f, "DISC", FAINT, false, LEFT, 2);
         if (out > 0.05f) {
             pen.box(tray.left + 0.15f, tray.bottom + 0.12f, 0.06f, tray.right - 0.15f, tray.bottom + 0.3f, 0.06f + out, 0x1E1E21);
-            if (!stack.disc().isEmpty()) {
-                int color = !(stack.disc().getItem() instanceof VideoDiscItem disc) ? 0x55555E
-                        : disc.maxHeight >= 1080 ? 0x5878C8 : disc.maxHeight > 0 ? 0xD8C690 : 0xD0D6DE;
+            if (!player.disc.isEmpty()) {
+                DiscKind kind = MediaItem.kindOf(player.disc);
+                int color = kind == null ? 0x55555E : switch (kind) {
+                    case BLU_RAY -> 0x5878C8;
+                    case DVD -> 0xD8C690;
+                    case CD, CASSETTE -> 0xD0D6DE;
+                    case CUSTOM_DISC -> 0x55555E;
+                };
                 pen.disc(tray.centerX(), tray.bottom + 0.3f, out - 2.5f, 2.3f, color);
             }
         }
         pen.glow(3, 0.5f, 8.6f, 1.55f, 0.07f, GLASS);
         if (live) {
-            List<String> playlist = stack.playlist();
-            if (stack.trayOpen()) {
+            List<String> playlist = player.playlist();
+            if (player.trayOpen) {
                 pen.text(5.8f, 0.78f, 0.09f, 0.5f, "OPEN", CYAN, true, MIDDLE, 5);
             } else if (playlist.isEmpty()) {
                 pen.text(5.8f, 0.78f, 0.09f, 0.5f, "NO DISC", CYAN, true, MIDDLE, 5);
             } else {
-                pen.text(3.25f, 0.7f, 0.09f, 0.68f, String.format(Locale.ROOT, "%02d", Math.min(stack.index(), playlist.size() - 1) + 1),
+                pen.text(3.25f, 0.7f, 0.09f, 0.68f, String.format(Locale.ROOT, "%02d", player.shownIndex() + 1),
                         CYAN, true, LEFT, 1.6f);
                 pen.text(4.95f, 0.72f, 0.09f, 0.26f, "/" + playlist.size(), 0x3F8FA0, true, LEFT, 1);
                 boolean loading = stack.loading(HifiStackBlock.Input.DISC);
-                pen.text(5.75f, 1.08f, 0.09f, 0.26f, !stack.discPlaying() ? "STOP" : stack.discPaused() ? "PAUSE"
-                        : loading ? "LOAD" : "PLAY", stack.discPlaying() && !stack.discPaused() && !loading ? GREEN : AMBER,
+                pen.text(5.75f, 1.08f, 0.09f, 0.26f, !transport.playing() ? "STOP" : transport.paused() ? "PAUSE"
+                        : loading ? "LOAD" : "PLAY", transport.playing() && !transport.paused() && !loading ? GREEN : AMBER,
                         true, LEFT, 1.2f);
-                pen.text(8.4f, 0.7f, 0.09f, 0.6f, HifiStackBlock.Entity.clock(stack.discTicks()), CYAN, true, RIGHT, 2.4f);
+                pen.text(8.4f, 0.7f, 0.09f, 0.6f, HifiStackBlock.Entity.clock(transport.clock().position()), CYAN, true, RIGHT, 2.4f);
             }
         }
         button(pen, Control.OPEN, pressed, "OPEN", 0);
-        button(pen, Control.PLAY, pressed, "PLAY", live && stack.discPlaying() && !stack.discPaused() ? GREEN : 0);
+        button(pen, Control.PLAY, pressed, "PLAY", live && transport.playing() && !transport.paused() ? GREEN : 0);
         button(pen, Control.STOP, pressed, "STOP", 0);
         button(pen, Control.PREVIOUS, pressed, "<<", 0);
         button(pen, Control.NEXT, pressed, ">>", 0);
@@ -312,6 +325,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
 
     private static void deck(Pen pen, HifiStackBlock.Entity stack, @Nullable Control pressed, Meters meters, float partialTick) {
         boolean live = stack.live(Unit.CASSETTE_DECK);
+        UnitPart.CassetteDeck decks = stack.deck();
         pen.text(0.9f, 4.06f, 0.07f, 0.3f, Unit.BRAND, LEGEND, false, LEFT, 2.4f);
         pen.text(11.1f, 4.1f, 0.07f, 0.18f, "STEREO DOUBLE CASSETTE DECK  " + Unit.CASSETTE_DECK.model, FAINT, false, RIGHT, 6.5f);
         for (int deck = 0; deck < 2; deck++) {
@@ -319,18 +333,18 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             pen.box(door.left, door.bottom, 0.06f, door.right, door.top, 0.14f, 0x232327);
             pen.glow(door.left + 0.5f, door.bottom + 0.35f, door.right - 0.5f, door.top - 0.45f, 0.145f, GLASS);
             pen.text(door.right - 0.2f, door.top - 0.36f, 0.145f, 0.2f, deck == 0 ? "DECK I" : "DECK II", FAINT, false, RIGHT, 2);
-            if (!stack.tape(deck).isEmpty()) {
+            if (!decks.tape(deck).isEmpty()) {
                 float x = door.centerX();
                 float y = door.bottom + 0.5f;
                 // The cassette behind the window: its shell, its label, and the two reels showing through it.
                 pen.box(x - 1.6f, y, 0.15f, x + 1.6f, y + 1.1f, 0.2f, 0x4A4A50);
                 pen.box(x - 1.4f, y + 0.72f, 0.2f, x + 1.4f, y + 1.02f, 0.215f, 0xD8D2C0);
                 pen.glow(x - 1.05f, y + 0.18f, x + 1.05f, y + 0.62f, 0.205f, 0x100D0A);
-                float turn = stack.lastReels[deck] + (stack.reels[deck] - stack.lastReels[deck]) * partialTick;
+                float turn = decks.lastReels[deck] + (decks.reels[deck] - decks.lastReels[deck]) * partialTick;
                 pen.reel(x - 0.68f, y + 0.4f, 0.21f, 0.2f, turn);
                 pen.reel(x + 0.68f, y + 0.4f, 0.21f, 0.2f, turn);
             }
-            HifiStackBlock.Motion motion = stack.motion(deck);
+            HifiStackBlock.Motion motion = decks.motion(deck);
             Control[] keys = deck == 0 ? new Control[]{Control.REWIND_1, Control.PLAY_1, Control.FORWARD_1, Control.STOP_1}
                     : new Control[]{Control.REWIND_2, Control.PLAY_2, Control.FORWARD_2, Control.STOP_2};
             button(pen, keys[0], pressed, "<<", live && motion == HifiStackBlock.Motion.REWIND ? AMBER : 0);
@@ -343,14 +357,14 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             return;
         }
         for (int deck = 0; deck < 2; deck++) {
-            int tracks = stack.tracks(deck).size();
-            String counter = stack.tape(deck).isEmpty() ? "NO TAPE" : tracks == 0 ? "BLANK"
-                    : stack.tapeTrack(deck) >= tracks ? "END" : (stack.tapeTrack(deck) + 1) + "  "
-                    + HifiStackBlock.Entity.clock(stack.tapeTicks(deck));
+            int tracks = decks.tracks(deck).size();
+            String counter = decks.tape(deck).isEmpty() ? "NO TAPE" : tracks == 0 ? "BLANK"
+                    : decks.track(deck) >= tracks ? "END" : (decks.track(deck) + 1) + "  "
+                    + HifiStackBlock.Entity.clock(decks.ticks(deck));
             pen.text(deck == 0 ? 1.05f : 8.15f, 1.3f, 0.09f, 0.3f, counter, CYAN, true, LEFT, 2.8f);
         }
         // What the tape puts out, a row per channel.
-        boolean tape = stack.input() == HifiStackBlock.Input.TAPE && stack.playingDeck() >= 0;
+        boolean tape = stack.amplifier().input == HifiStackBlock.Input.TAPE && decks.playingDeck() >= 0;
         for (int channel = 0; channel < 2; channel++) {
             int lit = tape ? Math.round((channel == 0 ? meters.left : meters.right) * 14) : 0;
             float y = channel == 0 ? 1.5f : 1.27f;
@@ -455,8 +469,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             this.buffers = buffers;
             this.light = light;
             this.text = text;
-            metal = new LightingRenderer.Output(buffers, METAL);
-            ink = new LightingRenderer.Output(buffers, LightingRenderer.SCREEN);
+            metal = new QuadOutput(buffers, METAL);
+            ink = new QuadOutput(buffers, QuadOutput.FLAT);
         }
 
         /** A lit quad through four corners, facing ({@code nx}, {@code ny}, {@code nz}). */
@@ -585,7 +599,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             }
             HifiStackBlock.Entity stack = stacks.computeIfAbsent(unitItem.unit, unit -> {
                 HifiStackBlock.Entity alone = new HifiStackBlock.Entity(BlockPos.ZERO,
-                        CreateMediaSystems.HIFI_STACK.get().defaultBlockState());
+                        HifiFeature.HIFI_STACK.get().defaultBlockState());
                 alone.units().add(unit);
                 return alone;
             });

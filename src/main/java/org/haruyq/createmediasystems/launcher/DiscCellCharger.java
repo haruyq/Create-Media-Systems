@@ -1,7 +1,8 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.power.PowerFeature;
 import java.util.List;
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import net.minecraft.core.BlockPos;
@@ -18,11 +19,16 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 
 /** One owned inventory; rotation and FE both charge the real cell, including its persistent master. */
 public final class DiscCellCharger extends KineticBlockEntity {
+    /** The slowest shaft that charges, and the stress it takes. */
+    public static final int MIN_RPM = 16, STRESS = 8;
+    /** FE a tick per RPM, and the most FE a tick. */
+    public static final int FE_PER_RPM = 8, MAX_FE_PER_TICK = 2048;
+    /** How long it shows as charging after FE last came in by cable. */
+    private static final int CABLE_ACTIVE_TICKS = 8;
     private long externallyChargedAt = Long.MIN_VALUE;
     public final ItemStackHandler inventory = new ItemStackHandler(1) {
         @Override public int getSlotLimit(int slot) { return 1; }
-        @Override public boolean isItemValid(int slot, ItemStack item) { return item.getItem() instanceof DiscCellItem
-                || item.getItem() instanceof org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem; }
+        @Override public boolean isItemValid(int slot, ItemStack item) { return item.getItem() instanceof ChargeableItem; }
         @Override protected void onContentsChanged(int slot) { changed(true); }
     };
     private final IEnergyStorage energy = new IEnergyStorage() {
@@ -40,13 +46,10 @@ public final class DiscCellCharger extends KineticBlockEntity {
         @Override public boolean canExtract() { return false; }
         @Override public boolean canReceive() { return getEnergyStored() < getMaxEnergyStored(); }
     };
-    private IEnergyStorage port() {
-        return cell().getItem() instanceof org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem
-                ? org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.storage(cell()) : new DiscCellEnergy(cell());
-    }
+    private IEnergyStorage port() { return ChargeableItem.storage(cell()); }
 
     public DiscCellCharger(BlockEntityType<?> type, BlockPos pos, BlockState state) { super(type, pos, state); }
-    public DiscCellCharger(BlockPos pos, BlockState state) { this(CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), pos, state); }
+    public DiscCellCharger(BlockPos pos, BlockState state) { this(LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), pos, state); }
     @Override public void addBehaviours(List<BlockEntityBehaviour> behaviours) {}
     public ItemStack cell() { return inventory.getStackInSlot(0); }
     public void insert(ItemStack cell) { inventory.insertItem(0, cell, false); }
@@ -56,14 +59,14 @@ public final class DiscCellCharger extends KineticBlockEntity {
         setChanged();
         if (level != null && !level.isClientSide && (immediate || level.getGameTime() % 10 == 0)) sendData();
     }
-    @Override public float calculateStressApplied() { lastStressApplied = 8; return 8; }
+    @Override public float calculateStressApplied() { lastStressApplied = STRESS; return STRESS; }
 
     @Override public void tick() {
         super.tick();
         if (level == null || level.isClientSide) return;
         float rpm = Math.abs(getSpeed());
-        int received = rpm >= 16 ? energy.receiveEnergy(Math.min(2048, Math.round(rpm * 8)), false) : 0;
-        boolean active = received > 0 || externallyChargedAt != Long.MIN_VALUE && level.getGameTime() - externallyChargedAt <= 8;
+        int received = rpm >= MIN_RPM ? energy.receiveEnergy(Math.min(MAX_FE_PER_TICK, Math.round(rpm * FE_PER_RPM)), false) : 0;
+        boolean active = received > 0 || externallyChargedAt != Long.MIN_VALUE && level.getGameTime() - externallyChargedAt <= CABLE_ACTIVE_TICKS;
         if (getBlockState().getValue(DiscCellChargerBlock.CHARGING) != active)
             level.setBlockAndUpdate(worldPosition, getBlockState().setValue(DiscCellChargerBlock.CHARGING, active));
     }
@@ -83,11 +86,7 @@ public final class DiscCellCharger extends KineticBlockEntity {
         return true;
     }
     public static void registerCapabilities(RegisterCapabilitiesEvent event) {
-        event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.storage(stack),
-                CreateMediaSystems.PARTYBOX_BATTERY.get());
-        event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> new DiscCellEnergy(stack),
-                CreateMediaSystems.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
-        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.energy);
-        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, CreateMediaSystems.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.inventory);
+        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.energy);
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.inventory);
     }
 }

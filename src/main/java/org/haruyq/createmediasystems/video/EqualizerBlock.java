@@ -6,7 +6,7 @@ import java.util.Locale;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
-import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -29,7 +29,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -47,7 +46,6 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public class EqualizerBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final MapCodec<EqualizerBlock> CODEC = simpleCodec(EqualizerBlock::new);
     public static final int FADERS = 3;
-    public static final float MAX_GAIN = 12;
 
     public EqualizerBlock(Properties properties) {
         super(properties);
@@ -82,7 +80,7 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
 
     private static boolean touchesPlayer(BlockGetter level, BlockPos pos) {
         return Arrays.stream(Direction.values())
-                .anyMatch(side -> level.getBlockState(pos.relative(side)).is(CreateMediaSystems.VIDEO_PLAYER.get()));
+                .anyMatch(side -> level.getBlockState(pos.relative(side)).is(VideoFeature.VIDEO_PLAYER.get()));
     }
 
     /** Whether the equalizer at {@code pos} is a second one: touching one that touches a Blu-ray player. */
@@ -119,21 +117,19 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
     }
 
     /**
-     * Where a look from {@code eye} along {@code look} (both in the world) crosses the top of the equalizer at
-     * {@code pos}, in its block space, which moves and turns with it on a sub-level (see SableCompat); null if the
-     * look doesn't come down onto it from above.
+     * Where a look from {@code eye} along {@code along} (both in the block space of the equalizer at {@code pos}, which
+     * moves and turns with it on a sub-level; see SableCompat) crosses its top; null if the look doesn't come down onto
+     * it from above.
      */
     @Nullable
-    public static Vec3 aim(Level level, BlockPos pos, Vec3 eye, Vec3 look) {
-        Vec3 from = SableCompat.toBlockSpace(level, pos, eye);
-        Vec3 along = SableCompat.toBlockSpace(level, pos, eye.add(look)).subtract(from);
-        double above = from.y - (pos.getY() + 1);
-        return above > 0 && along.y < 0 ? from.add(along.scale(above / -along.y)) : null;
+    public static Vec3 aim(BlockPos pos, Vec3 eye, Vec3 along) {
+        double above = eye.y - (pos.getY() + 1);
+        return above > 0 && along.y < 0 ? eye.add(along.scale(above / -along.y)) : null;
     }
 
-    /** {@code gain} as a fader can set it: in half-dB steps, within {@link #MAX_GAIN} either way. */
+    /** {@code gain} as a fader can set it: in half-dB steps, within {@link Tone#MAX_GAIN} either way. */
     static float snap(float gain) {
-        return Mth.clamp(Math.round(gain * 2) / 2f, -MAX_GAIN, MAX_GAIN);
+        return Mth.clamp(Math.round(gain * 2) / 2f, -Tone.MAX_GAIN, Tone.MAX_GAIN);
     }
 
     public static String db(float gain) {
@@ -176,7 +172,7 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
         private final float[] gains = new float[FADERS];
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.EQUALIZER_ENTITY.get(), pos, state);
+            super(VideoFeature.EQUALIZER_ENTITY.get(), pos, state);
         }
 
         public float gain(int fader) {

@@ -19,6 +19,7 @@ import java.util.function.LongSupplier;
 import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 
 import org.apache.commons.io.FileUtils;
@@ -28,7 +29,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 
-import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * Displays' videos kept on this computer, so playing one again starts at once and needs no origin: up to the client
@@ -38,7 +38,7 @@ import net.neoforged.fml.loading.FMLPaths;
  * together (no ffmpeg needed), and a {@code .meta} file, written last, naming them; its modified time is when the
  * video last played.
  */
-final class VideoCache {
+public final class VideoCache {
     /** How long a download waits, so it doesn't slow the stream it is a copy of while that starts. */
     private static final long HEAD_START_MILLIS = 10_000;
     private static final long DOWNLOAD_TIMEOUT_SECONDS = 60 * 60;
@@ -58,9 +58,20 @@ final class VideoCache {
     }
 
     /** The game's cache, sized by the client config. */
+    /**
+     * For dev harnesses: keeps {@code video} as {@code page}'s, at most {@code maxHeight} tall and {@code seconds} long,
+     * as if it had been downloaded, and checks it can be read back.
+     */
+    public static void seed(URI page, int maxHeight, Path video, double seconds) throws IOException {
+        get().keep(page, maxHeight, video, seconds);
+        if (get().lookup(page, maxHeight) == null) {
+            throw new IOException("A seeded video could not be read back");
+        }
+    }
+
     static synchronized VideoCache get() {
         if (shared == null) {
-            shared = new VideoCache(FMLPaths.GAMEDIR.get().resolve("create_media_systems-video-cache"),
+            shared = new VideoCache(ClientFiles.VIDEO_CACHE,
                     () -> ClientConfig.VIDEO_CACHE_MEGABYTES.get() * (1L << 20));
         }
         return shared;

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class PreparedMediaTest {
     @Test void rtspUsesSmallTimeBuffer() {
-        var options = new NativeMediaResolver.Prepared(URI.create("rtsp://camera.test:8554/main"), true).options();
+        var options = NativeMediaResolver.Prepared.rtsp(URI.create("rtsp://camera.test:8554/main")).options();
         assertTrue(options.contains(":network-caching=200"));
         assertTrue(options.contains(":rtsp-tcp"));
         assertFalse(new NativeMediaResolver.Prepared(URI.create("https://cdn.test/v.mp4"), false).options().contains(":rtsp-tcp"));

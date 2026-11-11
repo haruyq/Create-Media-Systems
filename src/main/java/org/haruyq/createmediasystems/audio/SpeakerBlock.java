@@ -2,8 +2,8 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Emitter;
+import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -84,17 +84,17 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != CreateMediaSystems.SPEAKER_ENTITY.get() ? null
-                : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l, s);
+        return level.isClientSide || type != AudioFeature.SPEAKER_ENTITY.get() ? null
+                : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l);
     }
 
-    public static class Entity extends BlockEntity {
-        private final SourceLinks.Link source = new SourceLinks.Link();
+    public static class Entity extends BlockEntity implements Emitter {
+        private Link source = Link.NONE;
         private float volume = 1;
         private Streams.Channel channel = Streams.Channel.MIX;
 
         public Entity(BlockPos pos, BlockState state) {
-            this(CreateMediaSystems.SPEAKER_ENTITY.get(), pos, state);
+            this(AudioFeature.SPEAKER_ENTITY.get(), pos, state);
         }
 
         /** A speaker of another kind: a hi-fi stack's. */
@@ -103,7 +103,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         }
 
         public Optional<BlockPos> source() {
-            return source.get(level, this::setChanged);
+            return Optional.ofNullable(source.pos());
         }
 
         public float volume() {
@@ -116,27 +116,33 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
 
         /** New volume: listeners keep playing at the new volume. New source or channel: they start over. */
         public void configure(ServerLevel level, @Nullable BlockPos source, float volume, Streams.Channel channel) {
-            this.source.set(level, source);
+            this.source = Link.to(level, source);
             this.volume = Mth.clamp(volume, 0, 1);
             this.channel = channel;
             setChanged();
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
-            relay(level, getBlockState());
+            relay(level);
         }
 
-        /** Its source plays louder or quieter: its listeners hear that now, not at its next relay. */
-        public void refresh(ServerLevel level) {
-            relay(level, getBlockState());
-        }
-
-        public void tick(ServerLevel level, BlockState state) {
+        public void tick(ServerLevel level) {
             if (Streams.relayDue(level)) {
-                relay(level, state);
+                relay(level);
             }
         }
 
-        private void relay(ServerLevel level, BlockState state) {
-            Direction facing = state.getValue(FACING);
+        /** Its source as it is now, where Sable moved it. */
+        public void followSource(ServerLevel level) {
+            Link followed = source.follow(level);
+            if (!followed.equals(source)) {
+                source = followed;
+                setChanged();
+            }
+        }
+
+        @Override
+        public void relay(ServerLevel level) {
+            followSource(level);
+            Direction facing = getBlockState().getValue(FACING);
             Streams.relay(level, this, source(), mouth(worldPosition, facing), Optional.of(facing), channel, volume);
         }
 
@@ -162,7 +168,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         @Override
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
-            source.save(level, tag);
+            source.save(tag, "Source", "SourceId");
             tag.putFloat("Volume", volume);
             tag.putInt("Channel", channel.ordinal());
         }
@@ -170,7 +176,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         @Override
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
-            source.load(tag);
+            source = Link.load(tag, "Source", "SourceId");
             volume = tag.contains("Volume") ? tag.getFloat("Volume") : 1;
             channel = Streams.Channel.byId(tag.getInt("Channel"));
         }

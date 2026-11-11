@@ -2,8 +2,10 @@
   "replace": false,
   "values": [
     "create_media_systems:blu_ray_player",
+    "create_media_systems:disc_drive_emulator",
     "create_media_systems:disc_reader",
     "create_media_systems:train_disc_reader",
+    "create_media_systems:disc_cell_charger",
     "create_media_systems:stage_light",
     "create_media_systems:laser_projector",
     "create_media_systems:lighting_console",

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.junit.jupiter.api.Test;
 
 class UrlPolicyTest {
@@ -24,13 +25,13 @@ class UrlPolicyTest {
     @Test
     void buildsApiEndpoints() {
         assertEquals("http://api/stream?url=https%3A%2F%2Fyoutu.be%2Fabc%3Fsi%3Dz&format=ogg",
-                UrlPolicy.streamUrl("http://api/", "https://youtu.be/abc?si=z", 0, null));
+                ApiHttp.streamUrl("http://api/", "https://youtu.be/abc?si=z", 0, null));
         assertEquals("http://api/stream?url=https%3A%2F%2Fcdn.discordapp.com%2Fa.mp3&start=12.50&format=ogg",
-                UrlPolicy.streamUrl("http://api", " https://cdn.discordapp.com/a.mp3 ", 12.5, null));
+                ApiHttp.streamUrl("http://api", " https://cdn.discordapp.com/a.mp3 ", 12.5, null));
         assertEquals("http://api/stream?url=https%3A%2F%2Fyoutu.be%2Fabc&start=1.00&channel=left&format=ogg",
-                UrlPolicy.streamUrl("http://api", "https://youtu.be/abc", 1, "left"));
+                ApiHttp.streamUrl("http://api", "https://youtu.be/abc", 1, "left"));
         assertEquals("http://api/info?url=https%3A%2F%2Fyoutu.be%2Fabc",
-                UrlPolicy.endpoint("http://api", "info", "https://youtu.be/abc"));
+                ApiHttp.endpoint("http://api", "info", "https://youtu.be/abc"));
     }
 
     @Test

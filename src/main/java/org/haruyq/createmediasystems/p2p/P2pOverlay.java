@@ -4,12 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.disc.DiscClient;
-import org.haruyq.createmediasystems.disc.DiscSource;
-import org.haruyq.createmediasystems.disc.DiscStream;
 
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -20,21 +18,32 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 
 /**
  * {@code /cms p2p debug}: text in the top-left corner on this client's P2P session, mostly its connection to the host:
- * the route, round trip, measured rate, what is coming in, and the disc segment it waits for. As host, a line per
- * viewer. While shown, it pings each peer once a second, quietly. Hidden with the HUD and under the F3 screen.
+ * the route, round trip, measured rate and what is coming in, then what each feature sending over it adds (see
+ * Section), such as the disc segment it waits for. As host, a line per viewer. While shown, it pings each peer once a second, quietly. Hidden with the HUD and under the F3 screen.
  */
 public final class P2pOverlay {
-    private static final int WHITE = 0xFFFFFFFF, GRAY = 0xFFAAAAAA, GREEN = 0xFF55FF55, YELLOW = 0xFFFFFF55, RED = 0xFFFF5555;
-    private static final long SECOND = 1_000_000_000L;
+    public static final int WHITE = 0xFFFFFFFF, GRAY = 0xFFAAAAAA, GREEN = 0xFF55FF55, YELLOW = 0xFFFFFF55, RED = 0xFFFF5555;
+    public static final long SECOND = 1_000_000_000L;
+    private static final List<Section> SECTIONS = new CopyOnWriteArrayList<>();
     /** Game thread only. */
     private static boolean shown;
     private static long lastPing, windowAt, windowBytes;
     private static double receivingBps;
 
-    record Line(String text, int color) {
+    public record Line(String text, int color) {
+    }
+
+    /** What a feature that sends over the session shows below its lines, as host or viewer, as of {@code now}. */
+    public interface Section {
+        List<Line> lines(boolean hosting, long now);
     }
 
     private P2pOverlay() {
+    }
+
+    /** Adds {@code section} below the session's lines (as the client starts). */
+    public static void add(Section section) {
+        SECTIONS.add(section);
     }
 
     public static void register(IEventBus modBus) {
@@ -68,7 +77,12 @@ public final class P2pOverlay {
         }
         List<Line> lines = transport == null ? List.of(new Line("CMS P2P: not in a session", GRAY))
                 : lines(transport.state(), transport.host(), transport.hostId(), transport.received(), transport.links(),
-                        DiscClient.stats(), receivingBps, now, P2pOverlay::name);
+                        receivingBps, now, P2pOverlay::name);
+        if (transport != null) {
+            for (Section section : SECTIONS) {
+                lines.addAll(section.lines(transport.host(), now));
+            }
+        }
         int width = 0;
         for (Line line : lines) {
             width = Math.max(width, mc.font.width(line.text()));
@@ -83,7 +97,7 @@ public final class P2pOverlay {
 
     /** The overlay's text for a session as of {@code now}; {@code name} gives a player's name. */
     static List<Line> lines(Transport.State session, boolean hosting, UUID hostId, long received, List<Transport.LinkInfo> links,
-                            DiscStream.Stats disc, double receivingBps, long now, Function<UUID, String> name) {
+                            double receivingBps, long now, Function<UUID, String> name) {
         List<Line> lines = new ArrayList<>();
         String state = session.name().toLowerCase(Locale.ROOT);
         if (hosting) {
@@ -96,10 +110,6 @@ public final class P2pOverlay {
                                 rttColor(link.rttNanos()))
                         : new Line(name.apply(link.peer()) + ": connecting...", YELLOW));
             }
-            if (disc != null && disc.host() && disc.encoder() != null) {
-                lines.add(new Line("Disc: " + disc.encoder() + (disc.encoded() < 0 ? ""
-                        : ", segment " + disc.encoded() + " at " + disc.quality()), GRAY));
-            }
             return lines;
         }
         lines.add(new Line("CMS P2P: viewing " + name.apply(hostId) + ", " + state, WHITE));
@@ -111,24 +121,6 @@ public final class P2pOverlay {
                     + duration(now - host.openedAt()), rttColor(host.rttNanos())));
             lines.add(new Line("Measured " + (host.measured() ? mbps(host.bps()) : "(measuring)") + ", receiving "
                     + mbps((long) receivingBps) + ", " + bytes(received) + " in all", WHITE));
-        }
-        if (disc != null && !disc.host()) {
-            if (disc.waitingSince() != 0) {
-                long waited = now - disc.waitingSince();
-                // A segment plays for SEGMENT_SECONDS: waiting longer than that, playback has to stall.
-                int color = waited > DiscSource.SEGMENT_SECONDS * SECOND ? RED : waited > SECOND * 2 ? YELLOW : WHITE;
-                lines.add(new Line("Disc: waiting for " + (disc.waiting() < 0 ? "the length" : "segment " + disc.waiting())
-                        + " for " + seconds(waited), color));
-            } else {
-                lines.add(new Line("Disc: idle", GRAY));
-            }
-            if (disc.last() >= 0) {
-                lines.add(new Line("Last segment " + disc.last() + ": " + bytes(disc.lastBytes()) + " in " + seconds(disc.lastNanos())
-                        + " (" + mbps((long) (disc.lastBytes() * 8e9 / Math.max(1, disc.lastNanos()))) + ")", WHITE));
-            }
-            if (disc.failures() > 0) {
-                lines.add(new Line("Failed requests: " + disc.failures() + (disc.error() == null ? "" : ", last: " + disc.error()), RED));
-            }
         }
         return lines;
     }
@@ -147,17 +139,17 @@ public final class P2pOverlay {
         return nanos <= 0 ? WHITE : nanos < 60_000_000L ? GREEN : nanos < 150_000_000L ? YELLOW : RED;
     }
 
-    static String mbps(long bps) {
-        return String.format(Locale.ROOT, "%.1f Mbps", bps / 1e6);
+    public static String mbps(long bps) {
+        return P2pClient.mbps(bps) + " Mbps";
     }
 
-    static String bytes(long bytes) {
+    public static String bytes(long bytes) {
         return bytes < 1024 * 1024 ? String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
                 : bytes < 1L << 30 ? String.format(Locale.ROOT, "%.1f MB", bytes / 1048576.0)
                 : String.format(Locale.ROOT, "%.2f GB", bytes / (double) (1L << 30));
     }
 
-    private static String seconds(long nanos) {
+    public static String seconds(long nanos) {
         return String.format(Locale.ROOT, "%.2f s", nanos / 1e9);
     }
 

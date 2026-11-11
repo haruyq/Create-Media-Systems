@@ -2,7 +2,12 @@ package org.haruyq.createmediasystems.launcher;
 
 import java.util.List;
 
-/** All ordinary tiers use Minecraft/Create materials. Only CHEMI has an optional addon recipe. */
+import net.neoforged.fml.ModList;
+
+/**
+ * Every cell tier: its item (registered from this table), its stats, colour and upgrade materials. All but CHEMI use
+ * Minecraft/Create materials; CHEMI's come from another mod, and its item and upgrade are there only with that mod.
+ */
 public enum DiscCellTier {
     COPPER(1, "copper", 24, 1000, 12, 0x5CE4D7),
     BRASS(2, "brass", 48, 1500, 18, 0xF6BE54),
@@ -11,6 +16,7 @@ public enum DiscCellTier {
     RESONANT(5, "resonant", 256, 6000, 56, 0xFF70B4),
     CHEMI(6, "chemi", 512, 10000, 80, 0xB9FF64);
 
+    /** The mod CHEMI's materials come from; its upgrade recipe has a mod-loaded condition on it. */
     public static final String PLANT_MOD_ID = "create_heavy_indusstry";
     public final int level;
     public final String id;
@@ -30,7 +36,16 @@ public enum DiscCellTier {
 
     public int capacity() { return shots * energyPerShot; }
     public boolean optional() { return this == CHEMI; }
+    /** Whether this tier can be made here: an optional tier only when the mod its materials come from is loaded. */
+    public boolean available() { return !optional() || ModList.get().isLoaded(PLANT_MOD_ID); }
+    /** The tier this one is upgraded from, or null for the first. */
+    public DiscCellTier previous() { return ordinal() == 0 ? null : values()[ordinal() - 1]; }
+    /** Its cell's item (and upgrade recipe) path. */
+    public String itemId() { return id + "_disc_cell"; }
     public static DiscCellTier at(int level) { return values()[Math.clamp(level, 1, values().length) - 1]; }
+
+    /** The other mod's items that CHEMI is made of, each once. */
+    public static List<String> plantItems() { return CHEMI.upgradeMaterials().stream().distinct().toList(); }
 
     /** Eight material slots plus the previous cell; upgrades preserve its master and stored energy. */
     public List<String> upgradeMaterials() {

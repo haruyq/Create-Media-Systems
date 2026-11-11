@@ -17,10 +17,15 @@ import net.minecraft.world.phys.Vec3;
 class LightingScreensTest {
     private static final BlockPos ANCHOR = new BlockPos(4, 7, -2);
 
+    /** A 2 by 2 display's screen at {@code anchor}, as it stops light. */
+    private static LightingScreens.Panel panel(BlockPos anchor, Direction facing, Pose3d pose) {
+        return new LightingScreens.Panel(anchor, DisplayBlock.box(anchor, facing, 2, 2, 0, 0.004f), pose);
+    }
+
     @Test
     void clipsTheWholeRectangleForEveryHorizontalFacing() {
         for (Direction facing : Direction.Plane.HORIZONTAL) {
-            LightingScreens.Panel panel = new LightingScreens.Panel(ANCHOR, facing, 2, 2, null);
+            LightingScreens.Panel panel = panel(ANCHOR, facing, null);
             DisplayPoint center = displayPoint(ANCHOR, facing, 1, 1, 0);
             LightingRaycast.Hit front = panel.clip(center.point.add(center.out.scale(2)),
                     center.point.subtract(center.out.scale(2)));
@@ -38,7 +43,7 @@ class LightingScreensTest {
     @Test
     void missesOutsideTheRectangleRatherThanTreatingTheAnchorAsThePanel() {
         Direction facing = Direction.NORTH;
-        LightingScreens.Panel panel = new LightingScreens.Panel(ANCHOR, facing, 2, 2, null);
+        LightingScreens.Panel panel = panel(ANCHOR, facing, null);
         DisplayPoint outside = displayPoint(ANCHOR, facing, 2.2, 1, 0);
 
         assertNull(panel.clip(outside.point.add(outside.out.scale(2)), outside.point.subtract(outside.out.scale(2))));
@@ -50,9 +55,9 @@ class LightingScreensTest {
         pose.position().set(13, 3, -9);
         pose.scale().set(2.0, 0.75, 1.5);
         pose.orientation().rotateY(0.55).rotateX(0.2);
-        LightingScreens.Panel panel = new LightingScreens.Panel(BlockPos.ZERO, Direction.NORTH, 2, 2, pose);
+        LightingScreens.Panel panel = panel(BlockPos.ZERO, Direction.NORTH, pose);
         DisplayPoint local = displayPoint(BlockPos.ZERO, Direction.NORTH, 1, 1, 0);
-        LightingScreens.Panel identity = new LightingScreens.Panel(BlockPos.ZERO, Direction.NORTH, 2, 2, null);
+        LightingScreens.Panel identity = panel(BlockPos.ZERO, Direction.NORTH, null);
         LightingRaycast.Hit localHit = identity.clip(local.point.add(local.out.scale(2)),
                 local.point.subtract(local.out.scale(2)));
         Vec3 from = pose.transformPosition(local.point.add(local.out.scale(2)));

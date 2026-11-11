@@ -1,38 +1,44 @@
 package org.haruyq.createmediasystems.partybox.client;
 
+import static org.haruyq.createmediasystems.client.mesh.Mesh.box;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.quad;
+
+import org.haruyq.createmediasystems.client.mesh.CellLight;
+import org.haruyq.createmediasystems.client.mesh.Mesh;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import org.haruyq.createmediasystems.launcher.client.LauncherRenderer;
 import org.haruyq.createmediasystems.partybox.PartyBoxSpecs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 
 /** Original mesh, measured in metres from the manufacturer's drawing; no borrowed product-photo textures. */
 public final class PartyBoxMesh {
-    private static final int FULL=0xF000F0, DARK=0x23252A, RUBBER=0x101115, METAL=0x737C85;
+    private static final int FULL=Mesh.FULL_BRIGHT, DARK=0x23252A, RUBBER=0x101115, METAL=0x737C85;
     private static final VertexConsumer NONE=new VertexConsumer(){
         public VertexConsumer addVertex(float x,float y,float z){return this;}public VertexConsumer setColor(int r,int g,int b,int a){return this;}
         public VertexConsumer setUv(float u,float v){return this;}public VertexConsumer setUv1(int u,int v){return this;}
         public VertexConsumer setUv2(int u,int v){return this;}public VertexConsumer setNormal(float x,float y,float z){return this;}
     };
     private PartyBoxMesh() {}
-    public static int lightColor(double time,int mode,float beat) {
-        return Mth.hsvToRgb((float)(time*.045%1),mode==3?.18f:.80f,.98f);
+    /** The light show's colour at {@code time} seconds in light mode {@code mode}: STARS (3) is nearly white. */
+    public static int lightColor(double time,int mode) {
+        return hue(time*.045,mode==3?.18f:.80f);
+    }
+    private static int hue(double cycle,float saturation) {
+        return Mth.hsvToRgb((float)(cycle%1),saturation,.98f);
     }
     public static void draw(PoseStack p,MultiBufferSource buffers,int light,float handle,float wheel,double time,int mode,float beat,boolean powered) {
         drawPass(p,buffers,light,handle,wheel,time,mode,beat,powered,false);
         if(powered)drawPass(p,buffers,light,handle,wheel,time,mode,beat,true,true);
     }
     private static void drawPass(PoseStack p,MultiBufferSource buffers,int light,float handle,float wheel,double time,int mode,float beat,boolean powered,boolean emission) {
-        var target=buffers.getBuffer(emission?RenderType.entityTranslucentEmissive(LauncherRenderer.MATERIALS):LauncherRenderer.solid());
+        var target=buffers.getBuffer(emission?Mesh.emissive():Mesh.solid());
         VertexConsumer raw=emission?target:NONE;
-        int color=lightColor(time,mode,beat);
-        VertexConsumer v=emission?NONE:new org.haruyq.createmediasystems.launcher.client.CellLight(p.last().pose(),0,.34f,-.23f,.8f,color,
+        int color=lightColor(time,mode);
+        VertexConsumer v=emission?NONE:new CellLight(p.last().pose(),0,.34f,-.23f,.8f,color,
                 powered&&mode!=0?.55f+beat*.6f:0).wrap(target);
         // Tyres turn independently of the leaned cabinet and remain on the ground.
         for(int side:new int[]{-1,1}) {
@@ -51,12 +57,12 @@ public final class PartyBoxMesh {
         rounded(p,v,.313f,.585f,.009f,.067f,.027f,0x121318,light,-.197f);
         // Two 165 mm drivers with rubber surrounds and actual recessed cones.
         for(float y:new float[]{.218f,.458f}) {
-            ring(p,v,0,y,-.205f,.117f,.090f,RUBBER,light,0);
-            ring(p,v,0,y,-.208f,.0825f,.058f,0x303239,light,0);
+            ring(p,v,0,y,-.205f,.117f,.090f,RUBBER,light);
+            ring(p,v,0,y,-.208f,.0825f,.058f,0x303239,light);
             disk(p,v,0,y,-.210f,.058f,0x16191E,light);
             if(powered&&mode!=0) {
                 float brightness=mode==2? .32f+beat*.68f:.65f+beat*.35f;
-                int ringColor=y>.3f?color:Mth.hsvToRgb((float)((time*.045+.15)%1),.80f,.98f);
+                int ringColor=y>.3f?color:hue(time*.045+.15,.80f);
                 ring(p,raw,0,y,-.217f,.109f,.090f,ringColor,FULL,(float)time+(y>.3f?0:1.8f),brightness);
             }
         }
@@ -119,13 +125,6 @@ public final class PartyBoxMesh {
         p.popPose();}
         p.popPose();
     }
-    public static void battery(PoseStack p,MultiBufferSource buffers,int light) {
-        var v=buffers.getBuffer(LauncherRenderer.solid());
-        box(p,v,-.065f,0,-.042f,.065f,.18f,.042f,DARK,light);
-        box(p,v,-.067f,.018f,-.044f,.067f,.025f,.044f,0xF25628,light);
-        box(p,v,-.049f,.178f,-.02f,.049f,.19f,.02f,0x6F747A,light);
-        box(p,v,-.033f,.065f,-.045f,.033f,.126f,-.043f,0xD0D5D9,light);
-    }
     private static void cylinderX(PoseStack p,VertexConsumer v,float r,float half,int color,int light) {
         for(int i=0;i<24;i++) {
             double a=i*Math.PI/12,b=(i+1)*Math.PI/12;
@@ -135,19 +134,16 @@ public final class PartyBoxMesh {
             quad(p,v,-half,0,0,-half,y,z,-half,yy,zz,-half,0,0,-1,0,0,color,light);
         }
     }
-    private static void disk(PoseStack p,VertexConsumer v,float x,float y,float z,float r,int color,int light) { ring(p,v,x,y,z,r,0,color,light,0); }
-    private static void ring(PoseStack p,VertexConsumer v,float x,float y,float z,float outer,float inner,int color,int light,float time) {ring(p,v,x,y,z,outer,inner,color,light,time,1);}
+    private static void disk(PoseStack p,VertexConsumer v,float x,float y,float z,float r,int color,int light) { ring(p,v,x,y,z,r,0,color,light); }
+    private static void ring(PoseStack p,VertexConsumer v,float x,float y,float z,float outer,float inner,int color,int light) {
+        Mesh.ring(p,v,x,y,z,outer,inner,64,-1,color,light);
+    }
+    /** A light ring whose brightness chases round it with {@code time}. */
     private static void ring(PoseStack p,VertexConsumer v,float x,float y,float z,float outer,float inner,int color,int light,float time,float strength) {
-        for(int i=0;i<64;i++) {
-            double a=i*Math.PI/32,b=(i+1)*Math.PI/32;
-            float ca=(float)Math.cos(a),sa=(float)Math.sin(a),cb=(float)Math.cos(b),sb=(float)Math.sin(b);
-            int c=color;
-            if(time!=0) {
-                float k=strength*(.45f+.55f*(float)Math.pow(.5+.5*Math.sin(a*2-time*2),2));
-                c=((int)((color>>16&255)*k)<<16)|((int)((color>>8&255)*k)<<8)|(int)((color&255)*k);
-            }
-            quad(p,v,x+outer*ca,y+outer*sa,z,x+inner*ca,y+inner*sa,z,x+inner*cb,y+inner*sb,z,x+outer*cb,y+outer*sb,z,0,0,-1,c,light);
-        }
+        Mesh.ring(p,v,x,y,z,outer,inner,64,-1,a->{
+            float k=strength*(.45f+.55f*(float)Math.pow(.5+.5*Math.sin(a*2-time*2),2));
+            return ((int)((color>>16&255)*k)<<16)|((int)((color>>8&255)*k)<<8)|(int)((color&255)*k);
+        },light);
     }
     private static void rounded(PoseStack p,VertexConsumer v,float w,float h,float d,float y,float radius,int color,int light) {rounded(p,v,w,h,d,y,radius,color,light,0);}
     private static void rounded(PoseStack p,VertexConsumer v,float w,float h,float d,float y,float radius,int color,int light,float z) {
@@ -165,24 +161,5 @@ public final class PartyBoxMesh {
             float nx=yyy-yy,ny=x-xx,len=(float)Math.hypot(nx,ny);
             if(len>0)quad(p,v,x,yy,z-d/2,x,yy,z+d/2,xx,yyy,z+d/2,xx,yyy,z-d/2,nx/len,ny/len,0,color,light);
         }
-    }
-    public static void box(PoseStack p,VertexConsumer v,float x,float y,float z,float xx,float yy,float zz,int color,int light) {
-        quad(p,v,x,yy,z,x,yy,zz,xx,yy,zz,xx,yy,z,0,1,0,color,light);
-        quad(p,v,x,y,z,xx,y,z,xx,y,zz,x,y,zz,0,-1,0,color,light);
-        quad(p,v,x,y,z,x,yy,z,xx,yy,z,xx,y,z,0,0,-1,color,light);
-        quad(p,v,x,y,zz,xx,y,zz,xx,yy,zz,x,yy,zz,0,0,1,color,light);
-        quad(p,v,x,y,z,x,y,zz,x,yy,zz,x,yy,z,-1,0,0,color,light);
-        quad(p,v,xx,y,z,xx,yy,z,xx,yy,zz,xx,y,zz,1,0,0,color,light);
-    }
-    private static void quad(PoseStack p,VertexConsumer v,float ax,float ay,float az,float bx,float by,float bz,float cx,float cy,float cz,float dx,float dy,float dz,float nx,float ny,float nz,int c,int light) {
-        float ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,wx=dx-ax,wy=dy-ay,wz=dz-az;
-        float orientation=((uy*vz-uz*vy)+(vy*wz-vz*wy))*nx+((uz*vx-ux*vz)+(vz*wx-vx*wz))*ny+((ux*vy-uy*vx)+(vx*wy-vy*wx))*nz;
-        vertex(p,v,ax,ay,az,nx,ny,nz,c,light);
-        if(orientation<0){vertex(p,v,dx,dy,dz,nx,ny,nz,c,light);vertex(p,v,cx,cy,cz,nx,ny,nz,c,light);vertex(p,v,bx,by,bz,nx,ny,nz,c,light);}
-        else{vertex(p,v,bx,by,bz,nx,ny,nz,c,light);vertex(p,v,cx,cy,cz,nx,ny,nz,c,light);vertex(p,v,dx,dy,dz,nx,ny,nz,c,light);}
-    }
-    private static void vertex(PoseStack p,VertexConsumer v,float x,float y,float z,float nx,float ny,float nz,int c,int light){
-        v.addVertex(p.last(),x,y,z).setColor(c>>16&255,c>>8&255,c&255,255).setUv(12.5f/64,4.5f/64)
-                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(p.last(),nx,ny,nz);
     }
 }

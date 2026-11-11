@@ -2,11 +2,10 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.MediaSource;
 
 import org.jetbrains.annotations.Nullable;
@@ -55,7 +54,7 @@ public final class RangeQuillHandler {
     /** The picked jukebox or disc reader: range settings apply to it, speakers get linked to it. */
     private static BlockPos source;
     /** The picked jukebox's saved settings, as last reported by the server; null until then, or for a reader. */
-    private static JukeboxSettings current;
+    private static EmitterRange current;
     /** Speaker whose screen opens once the server reports its settings. */
     private static BlockPos pendingSpeaker;
     /** Corners and the one pointed at, in the source's block space. */
@@ -88,7 +87,7 @@ public final class RangeQuillHandler {
     }
 
     @Nullable
-    static JukeboxSettings current() {
+    static EmitterRange current() {
         return current;
     }
 
@@ -171,7 +170,7 @@ public final class RangeQuillHandler {
             return true;
         }
         BlockState hovered = hoveredBlock == null ? null : player.level().getBlockState(hoveredBlock);
-        if (firstPos == null && hovered != null && hovered.is(CreateMediaSystems.SPEAKER.get())) {
+        if (firstPos == null && hovered != null && hovered.is(AudioFeature.SPEAKER.get())) {
             pendingSpeaker = hoveredBlock;
             PacketDistributor.sendToServer(new RangeQuill.QueryBlockSettings(hoveredBlock));
             return true;
@@ -273,7 +272,7 @@ public final class RangeQuillHandler {
     }
 
     private static boolean isActive() {
-        return Quill.held(CreateMediaSystems.RANGE_QUILL.get());
+        return Quill.held(AudioFeature.RANGE_QUILL.get());
     }
 
     private static AABB currentSelectionBox() {

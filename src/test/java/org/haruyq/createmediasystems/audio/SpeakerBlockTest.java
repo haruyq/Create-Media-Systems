@@ -2,7 +2,7 @@ package org.haruyq.createmediasystems.audio;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.train.TrainFeature;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +23,7 @@ class SpeakerBlockTest {
     /** Create's contraptions, schematics and structures turn and mirror blocks through these. */
     @Test
     void speakersTurnAndMirrorWithWhatTheyArePartOf() {
-        for (Block speaker : new Block[] {CreateMediaSystems.SPEAKER.get(), CreateMediaSystems.TRAIN_SPEAKER.get()}) {
+        for (Block speaker : new Block[] {AudioFeature.SPEAKER.get(), TrainFeature.TRAIN_SPEAKER.get()}) {
             BlockState north = speaker.defaultBlockState().setValue(SpeakerBlock.FACING, Direction.NORTH);
             assertEquals(Direction.EAST, north.rotate(Rotation.CLOCKWISE_90).getValue(SpeakerBlock.FACING));
             assertEquals(Direction.SOUTH, north.mirror(Mirror.LEFT_RIGHT).getValue(SpeakerBlock.FACING));

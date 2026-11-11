@@ -19,12 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.stream.PlaylistView;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
-import org.haruyq.createmediasystems.video.Remotable;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -53,7 +53,7 @@ final class Diagnostics {
 
     private final Streams.Video video;
     @Nullable
-    private final VlcPlayer.Frame frame;
+    private final VideoFrame frame;
     private final VlcAudio audio;
     private final int maxHeight;
     private final long requestedAt;
@@ -72,7 +72,7 @@ final class Diagnostics {
     volatile long playing;
     @Nullable
     private volatile String failure;
-    /** Measured on the sound thread (see NativeAudio.Shared#correct); Long.MIN_VALUE until the first check. */
+    /** Measured on the sound thread (see NativeAudio.Playback#correct); Long.MIN_VALUE until the first check. */
     private volatile long firstDrift = Long.MIN_VALUE;
     private volatile long maxDrift;
     private volatile int seeks;
@@ -81,7 +81,7 @@ final class Diagnostics {
      * Of the player whose pictures go to {@code frame} and sound to {@code audio}; {@code requestedAt}: when the
      * server's word to play arrived (System.nanoTime).
      */
-    Diagnostics(Streams.Video video, @Nullable VlcPlayer.Frame frame, VlcAudio audio, int maxHeight, long requestedAt) {
+    Diagnostics(Streams.Video video, @Nullable VideoFrame frame, VlcAudio audio, int maxHeight, long requestedAt) {
         this.video = video;
         this.frame = frame;
         this.audio = audio;
@@ -145,7 +145,7 @@ final class Diagnostics {
             Minecraft mc = Minecraft.getInstance();
             JsonObject report = new JsonObject();
             report.addProperty("player", mc.getUser().getName());
-            if (mc.level != null && mc.level.getBlockEntity(video.player()) instanceof Remotable disc) {
+            if (mc.level != null && mc.level.getBlockEntity(video.player()) instanceof PlaylistView disc) {
                 report.addProperty("playlistIndex", disc.index());
                 report.addProperty("playlistSize", disc.playlist().size());
             }
@@ -245,7 +245,7 @@ final class Diagnostics {
 
     private static void post(JsonObject report) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(UrlPolicy.api(ServerConfig.API_URL.get(), "diagnostics")))
+            HttpRequest request = HttpRequest.newBuilder(URI.create(ApiHttp.api(ServerConfig.API_URL.get(), "diagnostics")))
                     .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(report.toString())).build();
             int status = NativeMediaResolver.HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();

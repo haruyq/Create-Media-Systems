@@ -5,10 +5,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.StreamSound;
+import org.haruyq.createmediasystems.playback.StreamSpec;
+import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -22,22 +22,24 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /** Client side of in-train announcements: each is heard from the train speakers of the carriage we are on. */
 final class Announcements {
+    /** Where each reader's announcements play (see TrainDiscReaderBehaviour.Announce#channel). */
+    private static final Map<String, ClientStreams.Slot> SLOTS = new HashMap<>();
+
     private Announcements() {
     }
 
     static void play(TrainDiscReaderBehaviour.Announce payload) {
         Map<Integer, List<Vec3>> speakers = new HashMap<>();
         Vec3[] last = {Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()};
-        ClientStreams.play("train/" + payload.channel(), new StreamSound(
-                ClientStreams.apiStream(payload.url(), payload.startSeconds(), Streams.Channel.MIX), payload.url(),
-                null, 0, payload.startSeconds(), SoundSource.VOICE,
-                () -> {
-                    Vec3 at = speaker(payload.carriages(), speakers);
-                    return at == null ? last[0] : (last[0] = at);
-                }, null, () -> true, () -> carriage(payload.carriages()) != null,
-                () -> speaker(payload.carriages(), speakers) == null ? 0 : payload.volume(), null, Streams.Channel.MIX,
-                seconds -> Minecraft.getInstance().execute(() -> PacketDistributor.sendToServer(
-                        new TrainDiscReaderBehaviour.StartedAnnouncement(payload.channel())))));
+        var heard = new StreamSpec.Emitter(() -> {
+            Vec3 at = speaker(payload.carriages(), speakers);
+            return at == null ? last[0] : (last[0] = at);
+        }, null, () -> true, () -> carriage(payload.carriages()) != null,
+                () -> speaker(payload.carriages(), speakers) == null ? 0 : payload.volume(), null);
+        SLOTS.computeIfAbsent(payload.channel(), channel -> new ClientStreams.Slot("train/" + channel)).play(new StreamSound(new StreamSpec(payload.url(),
+                payload.startSeconds(), Streams.Channel.MIX, SoundSource.VOICE, heard,
+                seconds -> Minecraft.getInstance().execute(() -> PacketDistributor.sendToServer(new StreamPackets.Started(
+                        new StreamPackets.Target.Channel(payload.channel()), (float) seconds))))));
     }
 
     /** The carriage of {@code carriages} we are on, by the same test the server picks passengers with. */
@@ -69,8 +71,8 @@ final class Announcements {
         }
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         List<Vec3> mouths = found.computeIfAbsent(carriage.getId(), i -> carriage.getContraption().getBlocks().entrySet()
-                .stream().filter(e -> e.getValue().state().is(CreateMediaSystems.TRAIN_SPEAKER.get()))
-                .map(e -> SpeakerBlock.mouth(e.getKey(), e.getValue().state().getValue(SpeakerBlock.FACING)))
+                .stream().filter(e -> e.getValue().state().is(TrainFeature.TRAIN_SPEAKER.get()))
+                .map(e -> e.getKey().getCenter().relative(e.getValue().state().getValue(TrainSpeakerBlock.FACING), 0.5))
                 .toList());
         return mouths.stream().map(local -> carriage.toGlobalVector(local, 1))
                 .min(Comparator.comparingDouble(at -> at.distanceToSqr(ear))).orElse(null);

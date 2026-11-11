@@ -2,21 +2,20 @@ package org.haruyq.createmediasystems.playback;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.function.DoubleFunction;
+import java.util.Set;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.Reports;
-import org.haruyq.createmediasystems.mixin.ChannelAccessor;
-import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
-import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
-import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.EmitterRange;
+import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL;
@@ -41,16 +40,14 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * The streams playing on this computer, one per channel: one side of a source's track (keyed by its {@link Side}),
- * or one train disc reader's announcements (keyed by a string); different channels play at the same time.
+ * The streams playing on this computer, one per {@link Slot}: one side of a source's track (see Side), one train disc
+ * reader's announcements, one music emitter's; different slots play at the same time.
  */
 public final class ClientStreams {
-    /** The actual PCM presentation position of a tracked horn, independent of its decoder read-ahead. */
-    public static double audibleSeconds(Object key){var sound=PLAYING.get(key);return sound==null?-1:sound.audibleSeconds();}
-    public static double requestedSeconds(Object key){var sound=PLAYING.get(key);return sound==null?-1:sound.requestedSeconds();}
-    private static final Map<Object, StreamSound> PLAYING = new HashMap<>();
-    /** Live settings per emitter block; RetuneAtBlock updates them without restarting the audio. */
-    private static final Map<BlockPos, JukeboxSettings> SETTINGS = new HashMap<>();
+    /** The slots a stream plays on now. */
+    private static final Set<Slot> PLAYING = new LinkedHashSet<>();
+    /** Live range per emitter block; RetuneAtBlock updates it without restarting the audio. */
+    private static final Map<BlockPos, EmitterRange> RANGES = new HashMap<>();
     private static final Map<Side, Group> GROUPS = new HashMap<>();
     /** The side each emitter block playing here plays. */
     private static final Map<BlockPos, Side> SIDES = new HashMap<>();
@@ -64,13 +61,79 @@ public final class ClientStreams {
     private record Side(BlockPos source, Streams.Channel channel) {
     }
 
+    /**
+     * Where one stream plays here at a time: a stream played on it replaces the one there. It plays while that stream
+     * plays, loads or waits for a channel, and starts it again where it is if the sound engine drops it.
+     */
+    public static final class Slot {
+        private final String name;
+        /** The side it plays, for a source's; null for one of its own (an announcement, a music emitter). */
+        @Nullable
+        private final Side side;
+        @Nullable
+        private StreamSound sound;
+
+        /** A slot of its own, known in the log as {@code name}. */
+        public Slot(String name) {
+            this(name, null);
+        }
+
+        private Slot(String name, @Nullable Side side) {
+            this.name = name;
+            this.side = side;
+        }
+
+        /** Plays {@code next} here, instead of what played. */
+        public void play(StreamSound next) {
+            var sounds = Minecraft.getInstance().getSoundManager();
+            StreamSound previous = sound;
+            sound = next;
+            PLAYING.add(this);
+            if (previous != null) {
+                sounds.stop(previous);
+                previous.release();
+            }
+            sounds.play(next);
+        }
+
+        /** Whether a stream plays here, including while it loads or waits for a channel. */
+        public boolean playing() {
+            return sound != null;
+        }
+
+        /** Stops its stream and lets go of its download. */
+        public void stop() {
+            StreamSound current = sound;
+            sound = null;
+            PLAYING.remove(this);
+            if (current != null) {
+                Minecraft.getInstance().getSoundManager().stop(current);
+                current.release();
+            }
+        }
+
+        /** Where in its track what is heard now is, of an API stream (s); -1 if nothing is, or it plays natively. */
+        public double audibleSeconds() {
+            return sound == null ? -1 : sound.audibleSeconds();
+        }
+
+        /** Where in its track the API was last asked to stream from (s); -1 before it was. */
+        public double requestedSeconds() {
+            return sound == null ? -1 : sound.requestedSeconds();
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
     /** The emitters playing one side, and how they sound together as of this tick (see update). */
     private static final class Group {
-        final String url;
-        /** Which load of the source's track they play (see Streams.Load); 0 if unknown. */
-        final long load;
-        /** When the track's top was as the first of them asked (System.nanoTime), to tell a restart (see joins). */
-        final long origin;
+        /** The playback they play, as the first of them asked for it: emitters of the same one join it. */
+        final PlaybackId playback;
+        /** Where it plays: the side's, kept as a new playback replaces this one. */
+        final Slot slot;
         final Map<BlockPos, Streams.Sound> emitters = new LinkedHashMap<>();
         boolean present;
         boolean nearby;
@@ -90,25 +153,9 @@ public final class ClientStreams {
         private StreamSound spreadOn;
         private double spreadRadius;
 
-        Group(String url, long load, long origin) {
-            this.url = url;
-            this.load = load;
-            this.origin = origin;
-        }
-
-        /**
-         * Whether an emitter asked to play {@code url}'s {@code load} from its top at {@code origin} joins this
-         * playback: by the rule its native player is shared by (see NativeAudio.Shared#join), so the two never
-         * disagree. A known load decides alone: while a track loads, every emitter of it says 0 s.
-         */
-        boolean joins(String url, long load, double startSeconds, long origin) {
-            if (!this.url.equals(url)) {
-                return false;
-            }
-            if (load != 0 && this.load != 0) {
-                return load == this.load;
-            }
-            return startSeconds > 0 || Math.abs(origin - this.origin) / 1e9 < SyncClock.SAME_PLAYBACK_SECONDS;
+        Group(PlaybackId playback, Slot slot) {
+            this.playback = playback;
+            this.slot = slot;
         }
 
         /** Sums up its emitters as heard from the camera now (see Mix); its stream asks this every tick. */
@@ -129,7 +176,7 @@ public final class ClientStreams {
                 present = true;
                 nearby |= inRange(pos, sound.origin());
                 Vec3 ear = toBlockSpace(pos, camera);
-                mix.add(world, settings(pos).gain(pos, sound.origin(), ear) * sound.directivity(ear));
+                mix.add(world, range(pos).gain(pos, sound.origin(), ear) * sound.directivity(ear));
             }
             gain = mix.gain();
             Vec3 heard = mix.at();
@@ -146,21 +193,17 @@ public final class ClientStreams {
             if (sound == null || sound == spreadOn && Math.abs(radius - spreadRadius) <= 0.05 * Math.max(1, spreadRadius)) {
                 return;
             }
-            var engine = ((SoundManagerAccessor) Minecraft.getInstance().getSoundManager()).create_media_systems$soundEngine();
-            var handle = ((SoundEngineAccessor) engine).create_media_systems$instanceToChannel().get(sound);
-            if (handle == null) {
-                return; // not playing yet
-            }
             float given = (float) radius;
-            spreadOn = sound;
-            spreadRadius = given;
-            handle.execute(channel -> {
+            boolean playing = SoundChannels.withSource(sound, source -> {
                 // Without it (not OpenAL Soft), a point between them, as heard from the listener.
                 if (AL.getCapabilities().AL_EXT_SOURCE_RADIUS) {
-                    AL10.alSourcef(((ChannelAccessor) channel).create_media_systems$source(),
-                            EXTSourceRadius.AL_SOURCE_RADIUS, given);
+                    AL10.alSourcef(source, EXTSourceRadius.AL_SOURCE_RADIUS, given);
                 }
             });
+            if (playing) {
+                spreadOn = sound;
+                spreadRadius = given;
+            }
         }
     }
 
@@ -265,6 +308,27 @@ public final class ClientStreams {
     }
 
     public static void register(IEventBus modBus) {
+        StreamPackets.client(new StreamPackets.Client() {
+            @Override
+            public void play(StreamPackets.PlayAtBlock payload) {
+                ClientStreams.play(payload);
+            }
+
+            @Override
+            public void retune(StreamPackets.RetuneAtBlock payload) {
+                ClientStreams.retune(payload);
+            }
+
+            @Override
+            public void sync(StreamPackets.SyncAtBlock payload) {
+                ClientStreams.sync(payload);
+            }
+
+            @Override
+            public void stop(StreamPackets.StopAtBlock payload) {
+                ClientStreams.stop(payload);
+            }
+        });
         modBus.addListener((FMLClientSetupEvent event) -> {
             Vlc.preload();
             Tools.preload();
@@ -276,8 +340,20 @@ public final class ClientStreams {
         NeoForge.EVENT_BUS.addListener(ClientStreams::muteVanillaJukeboxSound);
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre event) -> GROUPS.forEach((side, group) -> {
             group.update();
-            group.spread(PLAYING.get(side));
+            group.spread(group.slot.sound);
         }));
+        // Every playback here plays through the tone of what shows or plays it here now (see Playback#equalize).
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            var level = Minecraft.getInstance().level;
+            if (level != null) {
+                for (NativeAudio.Playback playback : NativeAudio.playbacks()) {
+                    BlockPos at = playback.at();
+                    if (at != null) {
+                        playback.equalize(level.getBlockEntity(at) instanceof MediaSource media ? media.tone() : Tone.FLAT);
+                    }
+                }
+            }
+        });
         NeoForge.EVENT_BUS.addListener(ClientStreams::releaseFinished);
         NeoForge.EVENT_BUS.addListener(ClientStreams::resolveNext);
         NeoForge.EVENT_BUS.addListener(ClientStreams::reportDownloads);
@@ -293,19 +369,20 @@ public final class ClientStreams {
     public static void play(StreamPackets.PlayAtBlock payload) {
         BlockPos pos = payload.pos().immutable();
         Streams.Sound sound = payload.sound();
-        SETTINGS.put(pos, payload.settings());
+        RANGES.put(pos, payload.range());
         Side side = new Side(sound.source(), sound.channel());
         Side was = SIDES.put(pos, side);
         if (was != null && !was.equals(side)) {
             leave(was, pos);
         }
         Group group = GROUPS.get(side);
-        long origin = System.nanoTime() - Math.round(payload.startSeconds() * 1e9);
-        if (group != null && group.joins(payload.url(), payload.load(), payload.startSeconds(), origin)) {
+        PlaybackId playback = PlaybackId.of(payload.url(), side.source(), payload.load(), null, payload.startSeconds(),
+                System.nanoTime());
+        if (group != null && group.playback.same(playback)) {
             group.emitters.put(pos, sound);
             return;
         }
-        Group fresh = new Group(payload.url(), payload.load(), origin);
+        Group fresh = new Group(playback, group != null ? group.slot : new Slot(side.toString(), side));
         if (group != null) {
             fresh.emitters.putAll(group.emitters);
         }
@@ -315,42 +392,34 @@ public final class ClientStreams {
         LogUtils.getLogger().info("CMS stream {} plays {} from {}s (load {})", side, payload.url(), payload.startSeconds(),
                 payload.load());
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
-        play(side, new StreamSound(apiStream(payload.url(), payload.startSeconds(), side.channel()), payload.url(),
-                side.source(), payload.load(), payload.startSeconds(), SoundSource.RECORDS, () -> fresh.at,
-                () -> fresh.tracedFrom,
-                () -> fresh.present, () -> fresh.nearby, () -> fresh.gain, payload.video().orElse(null), side.channel(),
+        var heard = new StreamSpec.Emitter(() -> fresh.at, () -> fresh.tracedFrom, () -> fresh.present,
+                () -> fresh.nearby, () -> fresh.gain, null);
+        fresh.slot.play(new StreamSound(new StreamSpec(payload.url(), payload.startSeconds(), side.channel(),
+                SoundSource.RECORDS, heard,
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
                 seconds -> Minecraft.getInstance().execute(() -> {
                     LogUtils.getLogger().info("CMS stream {} loaded, {}s long (0: unknown)", side, seconds);
                     fresh.emitters.keySet().stream().findFirst()
-                            .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.StartedAtBlock(at, (float) seconds)));
-                })));
+                            .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.Started(at, (float) seconds)));
+                })).from(side.source(), payload.load(), payload.video().orElse(null))));
     }
 
     private static void leave(Side side, BlockPos pos) {
         Group group = GROUPS.get(side);
         if (group != null && group.emitters.remove(pos) != null && group.emitters.isEmpty()) {
             GROUPS.remove(side);
-            StreamSound sound = PLAYING.remove(side);
-            if (sound != null) {
-                Minecraft.getInstance().getSoundManager().stop(sound);
-                sound.release();
-            }
+            group.slot.stop();
         }
     }
 
-    /** The API's stream of {@code url} from {@code startSeconds} in, plus the offset asked for. */
-    public static DoubleFunction<String> apiStream(String url, double startSeconds, Streams.Channel channel) {
-        return offset -> UrlPolicy.streamUrl(ServerConfig.API_URL.get(), url, startSeconds + offset, channel.api);
-    }
-
     public static void retune(StreamPackets.RetuneAtBlock payload) {
-        SETTINGS.put(payload.pos(), payload.settings());
+        RANGES.put(payload.pos(), payload.range());
     }
 
     public static void sync(StreamPackets.SyncAtBlock payload) {
         Side side = SIDES.get(payload.pos());
-        StreamSound sound = side == null ? null : PLAYING.get(side);
+        Group group = side == null ? null : GROUPS.get(side);
+        StreamSound sound = group == null ? null : group.slot.sound;
         var mc = Minecraft.getInstance();
         if (sound != null && mc.player != null && mc.getConnection() != null) {
             // The server's position as it sent this; it is half our ping further on by now.
@@ -360,73 +429,41 @@ public final class ClientStreams {
     }
 
     public static void stop(StreamPackets.StopAtBlock payload) {
-        SETTINGS.remove(payload.pos());
+        RANGES.remove(payload.pos());
         Side side = SIDES.remove(payload.pos());
         if (side != null) {
             leave(side, payload.pos());
         }
     }
 
-    static long position(BlockPos source, String track) {
-        for (StreamSound sound : PLAYING.values()) {
-            long position = sound.position(source, track);
-            if (position >= 0) {
-                return position;
-            }
-        }
-        return -1;
-    }
-
-    /** Plays {@code sound} on {@code channel}, instead of what played there. */
-    public static void play(Object channel, StreamSound sound) {
-        var sounds = Minecraft.getInstance().getSoundManager();
-        StreamSound previous = PLAYING.put(channel, sound);
-        if (previous != null) {
-            sounds.stop(previous);
-            previous.release();
-        }
-        sounds.play(sound);
-    }
-
-    /** Whether a disc-owned stream is still managed, including while its decoder is loading or retrying a channel. */
-    public static boolean contains(Object channel) { return PLAYING.containsKey(channel); }
-
-    /** Remove a disc-owned stream and release its decoder after expiry/unload. */
-    public static void stop(Object channel) {
-        StreamSound current = PLAYING.remove(channel);
-        if (current != null) {
-            Minecraft.getInstance().getSoundManager().stop(current);
-            current.release();
-        }
-    }
-
     /** A playing stream broke off: posted to chat, unless {@code sound} was already replaced or stopped. */
     static void interrupted(StreamSound sound, String reason) {
         Minecraft.getInstance().execute(() -> {
-            if (PLAYING.containsValue(sound)) {
+            if (PLAYING.stream().anyMatch(slot -> slot.sound == sound)) {
                 Reports.show(Component.translatable("create_media_systems.stream.interrupted", reason), false);
             }
         });
     }
 
-    private static JukeboxSettings settings(BlockPos pos) {
-        return SETTINGS.getOrDefault(pos, JukeboxSettings.DEFAULT);
+    private static EmitterRange range(BlockPos pos) {
+        return RANGES.getOrDefault(pos, EmitterRange.DEFAULT);
     }
 
     /**
      * In the last minute of each video playing here, resolves the next on its Blu-ray player, unless it is kept
      * already: it then starts without waiting on yt-dlp, which takes its own time on every computer, and the
-     * listeners all have it loaded about as soon as each other (see Streams#played).
+     * listeners all have it loaded about as soon as each other (see Streams#tick).
      */
     private static void resolveNext(ClientTickEvent.Post event) {
         var level = Minecraft.getInstance().level;
         if (level == null || level.getGameTime() % 20 != 0) {
             return;
         }
-        for (StreamSound sound : PLAYING.values()) {
-            Streams.Video video = sound.video();
+        for (Slot slot : PLAYING) {
+            Streams.Video video = slot.sound.video();
             if (video != null && video.next().isPresent()) {
-                double left = NativeAudio.remaining(video.player());
+                NativeAudio.Playback playback = NativeAudio.playback(video.player());
+                double left = playback == null ? -1 : playback.remaining();
                 if (left >= 0 && left <= MediaSources.RESOLVE_AHEAD_SECONDS) {
                     MediaSources.resolveAhead(video.next().get(), video);
                 }
@@ -435,7 +472,7 @@ public final class ClientStreams {
     }
 
     /**
-     * Once a second, tells the server how far each Blu-ray player's video is downloaded here: all of it once it plays
+     * Once a second, tells the server how far each video source's video is downloaded here: all of it once it plays
      * here (streamed, it needs no more) or is kept, else how much of its copy is (see VideoCache). Its goggles show
      * its listeners' average while any of them waits. Every second, not only on a change, as the server forgets what
      * it was told whenever a track starts over.
@@ -446,12 +483,14 @@ public final class ClientStreams {
             return;
         }
         Map<BlockPos, String> told = new HashMap<>();
-        for (StreamSound sound : PLAYING.values()) {
+        for (Slot slot : PLAYING) {
+            StreamSound sound = slot.sound;
             Streams.Video video = sound.video();
             if (video == null || told.putIfAbsent(video.player(), sound.track()) != null) {
                 continue;
             }
-            NativeAudio.Progress progress = NativeAudio.progress(video.player());
+            NativeAudio.Playback playback = NativeAudio.playback(video.player());
+            NativeAudio.Progress progress = playback == null ? null : playback.progress();
             double downloaded = progress != null && !progress.loading() ? 1
                     : Math.max(0, MediaSources.downloaded(sound.track(), video));
             PacketDistributor.sendToServer(new StreamPackets.DownloadedAtBlock(video.player(), sound.track(),
@@ -462,34 +501,36 @@ public final class ClientStreams {
     /** Covers every way a sound ends (stopped, finished, culled, disconnect), including before it started. */
     private static void releaseFinished(ClientTickEvent.Post event) {
         var sounds = Minecraft.getInstance().getSoundManager();
-        Map.copyOf(PLAYING).forEach((channel, sound) -> {
+        for (Slot slot : List.copyOf(PLAYING)) {
+            StreamSound sound = slot.sound;
             if (sounds.isActive(sound)) {
-                return;
+                continue;
             }
             // As things are now, not as of this tick's start: leaving the world (the server closing, a kick) stops
             // every sound mid-tick, and its emitters, still there then, made it look dropped, so every stream was
             // started again as the player left.
-            Group group = channel instanceof Side side ? GROUPS.get(side) : null;
+            Group group = slot.side == null ? null : GROUPS.get(slot.side);
             if (group != null) {
                 group.update();
             }
             if (sound.wantsRestart()) {
-                LogUtils.getLogger().info("The sound engine dropped CMS stream {} as its audio ran dry; starting it again", channel);
-                play(channel, sound.again());
+                LogUtils.getLogger().info("The sound engine dropped CMS stream {} as its audio ran dry; starting it again", slot);
+                slot.play(sound.again());
             } else if (sound.waitingForChannel() && sound.retryChannelNow()) {
                 // Never started, so the same sound: it still joins its playback where it is now (see NativeAudio).
                 sounds.play(sound);
             }
-        });
-        PLAYING.entrySet().removeIf(entry -> {
-            boolean finished = !sounds.isActive(entry.getValue()) && !entry.getValue().waitingForChannel();
+        }
+        PLAYING.removeIf(slot -> {
+            boolean finished = !sounds.isActive(slot.sound) && !slot.sound.waitingForChannel();
             if (finished) {
-                entry.getValue().release();
-                Group group = entry.getKey() instanceof Side side ? GROUPS.remove(side) : null;
+                slot.sound.release();
+                slot.sound = null;
+                Group group = slot.side == null ? null : GROUPS.remove(slot.side);
                 if (group != null) {
                     group.emitters.keySet().forEach(pos -> {
-                        SIDES.remove(pos, entry.getKey());
-                        SETTINGS.remove(pos);
+                        SIDES.remove(pos, slot.side);
+                        RANGES.remove(pos);
                     });
                 }
             }
@@ -503,11 +544,10 @@ public final class ClientStreams {
         return level != null && level.getBlockEntity(pos) != null;
     }
 
-    /** Within the range past which the server stops tracking us (it resends on return). */
+    /** Within the range past which the server stops tracking us (it resends on return): the server's own check. */
     private static boolean inRange(BlockPos pos, Vec3 origin) {
         var player = Minecraft.getInstance().player;
-        return player != null
-                && settings(pos).inRange(pos, origin, toBlockSpace(pos, player.position()), JukeboxSettings.DROP_MARGIN);
+        return player != null && range(pos).hears(player.level(), pos, origin, player.position(), EmitterRange.DROP_MARGIN);
     }
 
     /** Where the block-space position {@code local} is in the world now (see SableCompat). */
@@ -525,7 +565,7 @@ public final class ClientStreams {
     /** The vanilla jukebox also plays the custom song's placeholder event; only our stream should be heard. */
     private static void muteVanillaJukeboxSound(PlaySoundEvent event) {
         if (event.getSound() != null && !(event.getSound() instanceof StreamSound)
-                && event.getSound().getLocation().equals(CreateMediaSystems.STREAM.getId())) {
+                && event.getSound().getLocation().equals(StreamFeature.STREAM.getId())) {
             event.setSound(null);
         }
     }

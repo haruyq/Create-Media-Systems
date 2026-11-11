@@ -11,6 +11,9 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.jetbrains.annotations.Nullable;
+
 import com.google.gson.JsonParser;
 
 /**
@@ -63,15 +66,24 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         }
     }
 
+    /** The kind of the disc at {@code root}, as its files show it: a Blu-ray, a DVD or an audio CD; null for none. */
+    @Nullable
+    public static DiscKind kind(Path root) {
+        return Files.isRegularFile(root.resolve("BDMV/index.bdmv")) ? DiscKind.BLU_RAY
+                : Files.isRegularFile(root.resolve("VIDEO_TS/VIDEO_TS.IFO")) ? DiscKind.DVD
+                : CdAudio.find(root) != null ? DiscKind.CD : null;
+    }
+
     private static DiscSource read(String ffmpeg, String ffprobe, Path path, int title, Access access) throws IOException {
         Path root = path.toRealPath();
         String name = root.getFileName() == null ? "" : root.getFileName().toString();
         if (name.equalsIgnoreCase("VIDEO_TS") || name.equalsIgnoreCase("BDMV")) {
             root = root.getParent();
         }
-        boolean bluray = Files.isRegularFile(root.resolve("BDMV/index.bdmv"));
-        if (!bluray && !Files.isRegularFile(root.resolve("VIDEO_TS/VIDEO_TS.IFO"))) {
-            CdAudio cd = access == null ? CdAudio.open(root) : null;
+        DiscKind kind = kind(root);
+        boolean bluray = kind == DiscKind.BLU_RAY;
+        if (!bluray && kind != DiscKind.DVD) {
+            CdAudio cd = kind == DiscKind.CD && access == null ? CdAudio.open(root) : null;
             if (cd == null) {
                 throw new IOException("Select a disc drive or a folder containing VIDEO_TS, BDMV or a CD image");
             }

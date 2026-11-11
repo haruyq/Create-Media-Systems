@@ -9,7 +9,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.concurrent.Executors;
 
-import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ClientFiles;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -25,7 +25,7 @@ import com.sun.net.httpserver.HttpServer;
  * Origin, so it can't make yt-dlp use someone else's account.
  */
 final class CookieReceiver {
-    static final Path FILE = ClientConfig.DIR.resolve("youtube-cookies.txt");
+    static final Path FILE = ClientFiles.DIR.resolve("youtube-cookies.txt");
     private static final int PORT = 9696;
     private static final String PATH = "/api/youtube-cookies";
     private static final int MAX_BODY_BYTES = 1024 * 1024;

@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.train;
 import java.util.List;
 import java.util.UUID;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -64,7 +63,7 @@ public class TrainDetectorBlock extends Block implements IBE<TrainDetectorBlock.
 
     @Override
     public BlockEntityType<? extends Entity> getBlockEntityType() {
-        return CreateMediaSystems.TRAIN_DETECTOR_ENTITY.get();
+        return TrainFeature.TRAIN_DETECTOR_ENTITY.get();
     }
 
     public static class Entity extends SmartBlockEntity implements ChannelHolder {
@@ -75,7 +74,7 @@ public class TrainDetectorBlock extends Block implements IBE<TrainDetectorBlock.
         private UUID registered;
 
         public Entity(BlockPos pos, BlockState state) {
-            super(CreateMediaSystems.TRAIN_DETECTOR_ENTITY.get(), pos, state);
+            super(TrainFeature.TRAIN_DETECTOR_ENTITY.get(), pos, state);
         }
 
         @Override

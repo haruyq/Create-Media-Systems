@@ -3,7 +3,7 @@ package org.haruyq.createmediasystems.mixin;
 import java.util.List;
 import java.util.function.Supplier;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.train.TrainFeature;
 import org.haruyq.createmediasystems.train.AnnounceCondition;
 import org.haruyq.createmediasystems.train.AnnouncementTypes;
 import org.haruyq.createmediasystems.train.StationInstruction;
@@ -45,7 +45,7 @@ public abstract class ScheduleScreenMixin {
     @Unique
     private boolean create_media_systems$announcement() {
         return ((AbstractContainerScreen<?>) (Object) this).getMenu() instanceof ScheduleMenu menu
-                && menu.contentHolder.is(CreateMediaSystems.ANNOUNCEMENT_SCHEDULE.get());
+                && menu.contentHolder.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get());
     }
 
     @Redirect(method = "*", at = @At(value = "FIELD", opcode = Opcodes.GETSTATIC,

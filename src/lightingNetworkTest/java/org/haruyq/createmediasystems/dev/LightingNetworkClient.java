@@ -2,11 +2,9 @@ package org.haruyq.createmediasystems.dev;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 
 import org.haruyq.createmediasystems.lighting.AnalysisPackets;
 import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
-import org.haruyq.createmediasystems.playback.LightingDemoCache;
 
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -19,9 +17,9 @@ public final class LightingNetworkClient {
     private static boolean seeded;
 
     @SubscribeEvent
-    public static void tick(ClientTickEvent.Post event) throws ReflectiveOperationException {
+    public static void tick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!Boolean.getBoolean("cms.lightingNetworkTest") || minecraft.level == null) {
+        if (!LightingLab.NETWORK || minecraft.level == null) {
             return;
         }
         if (Files.exists(minecraft.gameDirectory.toPath().resolve("disconnect"))) {
@@ -31,14 +29,10 @@ public final class LightingNetworkClient {
                 || !Files.exists(minecraft.gameDirectory.toPath().resolve("prepare-next"))) {
             return;
         }
-        var playing = AnalysisPlayback.class.getDeclaredField("PLAYING");
-        playing.setAccessible(true);
-        for (Object playback : ((Map<?, ?>) playing.get(null)).values()) {
-            var stateField = playback.getClass().getDeclaredField("state");
-            stateField.setAccessible(true);
-            AnalysisPackets.State state = (AnalysisPackets.State) stateField.get(playback);
+        for (AnalysisPlayback.Snapshot playback : AnalysisPlayback.snapshots()) {
+            AnalysisPackets.State state = playback.state();
             if (!state.next().isEmpty()) {
-                LightingDemoCache.seedNext(state.next(), Path.of("..", "server", "media", "cms-lighting-lab.mp4"), state.height());
+                LightingDemoCache.seedNext(state.next(), Path.of("..", "server").resolve(LightingLab.media()), state.height());
                 seeded = true;
             }
         }

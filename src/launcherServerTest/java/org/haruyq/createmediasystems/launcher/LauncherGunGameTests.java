@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -22,9 +23,9 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class LauncherGunGameTests {
     private static ItemStack gun() {
-        var cell=new ItemStack(CreateMediaSystems.COPPER_DISC_CELL.get());
-        DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));DiscCellItem.setEnergy(cell,24000);
-        var gun=new ItemStack(CreateMediaSystems.DISC_LAUNCHER.get());LauncherMagazine.setCell(gun,cell);return gun;
+        var cell=new ItemStack(LauncherFeature.cell(DiscCellTier.COPPER));
+        DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));ChargeableItem.setEnergy(cell,24000);
+        var gun=new ItemStack(LauncherFeature.DISC_LAUNCHER.get());LauncherMagazine.setCell(gun,cell);return gun;
     }
     private static DiscProjectile shot(GameTestHelper h,net.minecraft.world.entity.player.Player player) {
         return new DiscProjectile(h.getLevel(),player,new ItemStack(Items.MUSIC_DISC_CAT));

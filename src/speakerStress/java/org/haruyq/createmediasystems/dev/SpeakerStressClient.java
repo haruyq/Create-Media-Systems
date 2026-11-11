@@ -66,9 +66,6 @@ public final class SpeakerStressClient {
 
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) {
-        if (!Boolean.getBoolean("cms.speakerStress")) {
-            return;
-        }
         Minecraft mc = Minecraft.getInstance();
         Path dir = mc.gameDirectory.toPath();
         try {
@@ -148,8 +145,8 @@ public final class SpeakerStressClient {
         int orphanStreams = orphans;
         int engineStreams = streamsActive;
         String players = players();
-        Object report = staticField(org.haruyq.createmediasystems.client.Reports.class, "last");
-        String said = report == null ? null : ((net.minecraft.network.chat.Component) report).getString();
+        var report = org.haruyq.createmediasystems.client.Reports.last();
+        String said = report == null ? null : report.getString();
         if (said != null && !said.equals(lastReport)) {
             lastReport = said;
             LogUtils.getLogger().info("Speaker stress: the game said \"{}\"", said);
@@ -166,17 +163,12 @@ public final class SpeakerStressClient {
         });
     }
 
-    /** The native players open here (see NativeAudio.SHARED), as JSON. */
+    /** The native players open here (see NativeAudio#playbacks), as JSON. */
     private static String players() throws ReflectiveOperationException {
-        Map<?, ?> shared = (Map<?, ?>) staticField(Class.forName("org.haruyq.createmediasystems.playback.NativeAudio"), "SHARED");
         StringBuilder json = new StringBuilder("[");
-        List<Object> all;
-        synchronized (shared) {
-            all = new ArrayList<>(shared.values());
-        }
-        for (Object player : all) {
-            Object key = field(player, "key");
-            String source = String.valueOf(call(key, "source"));
+        for (Object player : org.haruyq.createmediasystems.playback.NativeAudio.playbacks()) {
+            Object id = field(player, "id");
+            String source = String.valueOf(call(id, "track"));
             var playing = (java.util.concurrent.CompletableFuture<?>) field(player, "playing");
             Object owner = field(player, "owner");
             Object status = owner.getClass().getMethod("status").invoke(owner);
@@ -248,7 +240,7 @@ public final class SpeakerStressClient {
         if (direct == null) {
             return none;
         }
-        Object tap = field(direct, "tap");
+        Object tap = field(direct, "source");
         Object queue = field(tap, "queue");
         List<byte[]> chunks = new ArrayList<>();
         long newest = -1;

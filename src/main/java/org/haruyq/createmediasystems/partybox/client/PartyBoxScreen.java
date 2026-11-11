@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.partybox.client;
 
+import org.haruyq.createmediasystems.client.DevicePanel;
+import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.partybox.*;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -11,26 +13,18 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class PartyBoxScreen extends AbstractContainerScreen<PartyBoxMenu> {
     private Button play,bass,lights,pull;
     public PartyBoxScreen(PartyBoxMenu menu,Inventory inventory,Component title){super(menu,inventory,title);imageWidth=300;imageHeight=240;}
-    private void action(int code,int value){if(menu.box!=null)PacketDistributor.sendToServer(new PartyBoxAction(menu.box.getId(),code,value,menu.box.revision()));}
-    private Button button(int x,int y,int w,Component name,Runnable action){return addRenderableWidget(new Control(leftPos+x,topPos+y,w,name,b->action.run()));}
-    private static final class Control extends Button {
-        Control(int x,int y,int width,Component text,OnPress press){super(x,y,width,20,text,press,DEFAULT_NARRATION);}
-        @Override protected void renderWidget(GuiGraphics g,int mouseX,int mouseY,float partial){
-            boolean hover=isHoveredOrFocused();
-            g.fill(getX(),getY(),getX()+width,getY()+height,hover?0xFF414852:0xFF2A3039);
-            g.fill(getX(),getY(),getX()+2,getY()+height,hover?0xFFFF5A2E:0xFF5C6572);
-            g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font,getMessage(),getX()+width/2,getY()+6,0xFFE8EDF3);
-        }
-    }
+    private static final DevicePanel.Palette PALETTE=new DevicePanel.Palette(0xFF2A3039,0xFF414852,0xFF5C6572,0xFFFF5A2E,0xFFE8EDF3);
+    private void action(PartyBoxAction.Kind kind,int value){if(menu.box!=null)PacketDistributor.sendToServer(new PartyBoxAction(menu.box.getId(),kind,value));}
+    private Button button(int x,int y,int w,Component name,Runnable action){return addRenderableWidget(DevicePanel.button(leftPos+x,topPos+y,w,name,PALETTE,action));}
     @Override protected void init(){
         super.init();
-        play=button(116,48,168,Component.empty(),()->action(0,0));
-        button(116,76,23,Component.literal("−"),()->action(1,menu.box.volume()-2));
-        button(261,76,23,Component.literal("+"),()->action(1,menu.box.volume()+2));
-        bass=button(116,102,168,Component.empty(),()->action(2,(menu.box.bass()+1)%3));
-        lights=button(116,128,168,Component.empty(),()->action(3,menu.box.lights()+1));
-        pull=button(12,145,91,tr("pull"),()->action(4,0));
-        button(12,171,91,tr("pack"),()->action(5,0));
+        play=button(116,48,168,Component.empty(),()->action(PartyBoxAction.Kind.PLAY_PAUSE,0));
+        button(116,76,23,Component.literal("−"),()->action(PartyBoxAction.Kind.VOLUME,menu.box.volume()-2));
+        button(261,76,23,Component.literal("+"),()->action(PartyBoxAction.Kind.VOLUME,menu.box.volume()+2));
+        bass=button(116,102,168,Component.empty(),()->action(PartyBoxAction.Kind.BASS,(menu.box.bass()+1)%3));
+        lights=button(116,128,168,Component.empty(),()->action(PartyBoxAction.Kind.LIGHTS,menu.box.lights()+1));
+        pull=button(12,145,91,tr("pull"),()->action(PartyBoxAction.Kind.PULL,0));
+        button(12,171,91,tr("pack"),()->action(PartyBoxAction.Kind.PACK,0));
     }
     private static Component tr(String key){return Component.translatable("partybox."+key);}
     @Override public void render(GuiGraphics g,int x,int y,float partial){
@@ -53,11 +47,10 @@ public final class PartyBoxScreen extends AbstractContainerScreen<PartyBoxMenu> 
         g.drawString(font,tr("battery"),x+12,y+93,0xFFAEB8C4,false);
         if(menu.box!=null){var box=menu.box;
             g.drawCenteredString(font,Component.translatable("partybox.volume",box.volume()),x+200,y+82,0xFFE4E9ED);
-            int fill=Math.round(87f*box.energy()/PartyBoxSpecs.CAPACITY_FE);
-            g.fill(x+12,y+134,x+99,y+138,0xFF3A414A);g.fill(x+12,y+134,x+12+fill,y+138,0xFF65DCA0);
-            g.drawString(font,Math.round(100f*box.energy()/PartyBoxSpecs.CAPACITY_FE)+"%",x+49,y+114,0xFFE4E9ED,false);
-            long seconds=box.positionTicks()/20;
-            g.drawString(font,String.format(java.util.Locale.ROOT,"%02d:%02d",seconds/60,seconds%60),x+65,y+62,0xFFE4E9ED,false);
+            float charge=(float)box.energy()/BatteryItem.CAPACITY;
+            DevicePanel.gauge(g,x+12,y+134,x+99,y+138,charge,0xFF3A414A,0xFF65DCA0);
+            g.drawString(font,DevicePanel.percent(charge),x+49,y+114,0xFFE4E9ED,false);
+            g.drawString(font,DevicePanel.clock(box.positionTicks()),x+65,y+62,0xFFE4E9ED,false);
         }
     }
     @Override protected void renderLabels(GuiGraphics g,int x,int y){}
