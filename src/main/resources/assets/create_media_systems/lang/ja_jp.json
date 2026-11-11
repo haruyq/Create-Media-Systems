@@ -235,6 +235,7 @@
   "block.create_media_systems.blu_ray_player": "Blu-rayプレーヤー",
   "block.create_media_systems.disc_drive_emulator": "ディスクドライブエミュレーター",
   "create_media_systems.drive.open": "ディスクなし",
+  "create_media_systems.drive.loading": "ロード中...",
   "create_media_systems.drive.reading": "ディスクを読み込み中",
   "create_media_systems.drive.downloading": "FFmpegをダウンロード中",
   "create_media_systems.drive.ready": "ディスクを配信中",

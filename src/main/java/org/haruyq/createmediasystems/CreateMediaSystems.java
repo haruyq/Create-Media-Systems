@@ -159,11 +159,13 @@ public class CreateMediaSystems {
             SOUNDS.register("disc_latch", () -> SoundEvent.createVariableRangeEvent(id("disc_latch")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_INSERT_SOUND =
             SOUNDS.register("disc_insert", () -> SoundEvent.createVariableRangeEvent(id("disc_insert")));
-    /** A disc drive emulator's: its disc turning (a loop), its tray, and its head finding the disc's start. */
+    /** A disc drive emulator's: its disc turning (a loop), its tray closing and opening, and its head finding the disc's start. */
     public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SPIN =
             SOUNDS.register("drive_spin", () -> SoundEvent.createVariableRangeEvent(id("drive_spin")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_TRAY =
             SOUNDS.register("drive_tray", () -> SoundEvent.createVariableRangeEvent(id("drive_tray")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_TRAY_OPEN =
+            SOUNDS.register("drive_tray_open", () -> SoundEvent.createVariableRangeEvent(id("drive_tray_open")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SEEK =
             SOUNDS.register("drive_seek", () -> SoundEvent.createVariableRangeEvent(id("drive_seek")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_CHARGE_SOUND =

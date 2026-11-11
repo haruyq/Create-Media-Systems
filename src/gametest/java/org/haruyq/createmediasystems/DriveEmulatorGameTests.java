@@ -17,6 +17,7 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -46,6 +47,14 @@ public class DriveEmulatorGameTests {
         host.setPos(Vec3.atCenterOf(helper.absolutePos(pos.north())));
         other.setPos(Vec3.atCenterOf(helper.absolutePos(pos.south())));
 
+        emulator.update(other, Drive.LOADING, "", Disc.BLU_RAY);
+        emulator.update(other, Drive.OPEN, "", Disc.BLU_RAY);
+        helper.assertTrue(emulator.drive() == Drive.OPEN && emulator.host() == null
+                        && !helper.getBlockState(pos).getValue(DriveEmulatorBlock.LIT),
+                "a real drive that closed on nothing leaves it free: " + emulator.drive() + " " + emulator.host());
+        emulator.update(host, Drive.LOADING, "", Disc.BLU_RAY);
+        helper.assertTrue(emulator.drive() == Drive.LOADING && host.getUUID().equals(emulator.host()) && player.playlist().isEmpty(),
+                "a disc the real drive closes on makes it its player's before it is read: " + emulator.drive() + " " + emulator.host());
         emulator.update(host, Drive.READING, "MOVIE", Disc.BLU_RAY);
         helper.assertTrue(emulator.drive() == Drive.READING && host.getUUID().equals(emulator.host())
                         && helper.getBlockState(pos).getValue(DriveEmulatorBlock.LIT),
@@ -62,6 +71,8 @@ public class DriveEmulatorGameTests {
                 && reader.nowPlaying() == null, "the Blu-ray player beside it plays its Blu-ray, the disc reader doesn't: "
                 + player.playlist() + " " + playing + " " + reader.nowPlaying());
         helper.assertTrue("MOVIE (Blu-ray)".equals(emulator.discName()), "it is called by its label: " + emulator.discName());
+        helper.assertTrue(emulator.status().getString().equals(Component.translatable("create_media_systems.drive.loading").getString()),
+                "it says it loads until the player has its disc playing: " + emulator.status().getString());
 
         // A remote's buttons, as RemoteItem passes them on.
         player.control(Action.PLAY_PAUSE, 0, host);

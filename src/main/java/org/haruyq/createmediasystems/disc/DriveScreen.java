@@ -57,6 +57,11 @@ public final class DriveScreen extends Screen {
         this.pos = pos;
     }
 
+    /** Whether the screen now open is that of the emulator at {@code pos}. */
+    static boolean shows(BlockPos pos) {
+        return Minecraft.getInstance().screen instanceof DriveScreen screen && screen.pos.equals(pos);
+    }
+
     @Nullable
     private DriveEmulatorBlock.Entity emulator() {
         return minecraft.level != null && minecraft.level.getBlockEntity(pos) instanceof DriveEmulatorBlock.Entity found
@@ -100,7 +105,7 @@ public final class DriveScreen extends Screen {
         return switch (emulator.drive()) {
             case OPEN -> LAMP_OFF;
             case FAILED -> LAMP_FAILED;
-            case READING, DOWNLOADING -> now / 90 % 2 == 0 ? LAMP_ON : LAMP_OFF;
+            case LOADING, READING, DOWNLOADING -> now / 90 % 2 == 0 ? LAMP_ON : LAMP_OFF;
             case READY -> emulator.spinning() && (Long.hashCode(now / 70 * 0x9E3779B97F4A7C15L) & 7) < 5 ? LAMP_ON : LAMP_OFF;
         };
     }
@@ -125,7 +130,7 @@ public final class DriveScreen extends Screen {
         // Seen from above its front left, like the drive it is drawn from.
         pose.mulPose(Axis.XP.rotationDegrees(28));
         pose.mulPose(Axis.YP.rotationDegrees(-32));
-        drive(pose, graphics.bufferSource().getBuffer(SOLID), closed, emulator.disc(), lamp(emulator));
+        drive(pose, graphics.bufferSource().getBuffer(SOLID), closed, drive == Drive.LOADING ? null : emulator.disc(), lamp(emulator));
         graphics.flush();
         pose.popPose();
 
@@ -137,20 +142,24 @@ public final class DriveScreen extends Screen {
                     + DriveClient.hint(emulator)).withStyle(ChatFormatting.GRAY), width / 2, y + 12, 0xFFFFFF);
             return;
         }
-        graphics.drawCenteredString(font, Component.translatable("create_media_systems.drive.disc", emulator.discName())
-                .withStyle(ChatFormatting.GOLD), width / 2, y + 12, 0xFFFFFF);
+        if (drive != Drive.LOADING) {
+            // Known once the real drive has made the disc out.
+            graphics.drawCenteredString(font, Component.translatable("create_media_systems.drive.disc", emulator.discName())
+                    .withStyle(ChatFormatting.GOLD), width / 2, y += 12, 0xFFFFFF);
+        }
         graphics.drawCenteredString(font, drive == Drive.FAILED
                 ? Component.literal(font.plainSubstrByWidth(emulator.error(), width - 40)).withStyle(ChatFormatting.RED)
                 : Component.translatable("create_media_systems.drive.host", emulator.hostName())
-                        .withStyle(ChatFormatting.GRAY), width / 2, y + 24, 0xFFFFFF);
+                        .withStyle(ChatFormatting.GRAY), width / 2, y + 12, 0xFFFFFF);
     }
 
     /**
      * The drive, a unit wide and deep, its front towards +z: a white shell with waves pressed into all of its top, a
-     * black tray out of its front by how far it is from {@code closed}, a disc put on that as it starts to close, the
-     * lamp and button on the tray's front, and its cable out of the back.
+     * black tray out of its front by how far it is from {@code closed}, a disc ({@code disc}; null for one of a kind
+     * not known yet) put on that as it starts to close, the lamp and button on the tray's front, and its cable out of
+     * the back.
      */
-    private static void drive(PoseStack p, VertexConsumer v, float closed, DriveEmulatorBlock.Disc disc, int lamp) {
+    private static void drive(PoseStack p, VertexConsumer v, float closed, @Nullable DriveEmulatorBlock.Disc disc, int lamp) {
         int light = LightTexture.FULL_BRIGHT;
         float travel = Mth.clamp((closed - DISC_SHARE) / (1 - DISC_SHARE), 0, 1);
         float out = .62f * (1 - travel * travel * (3 - 2 * travel));
@@ -200,11 +209,15 @@ public final class DriveScreen extends Screen {
     }
 
     /**
-     * A disc, label up, around its clear hub: a Blu-ray's deep blue, a DVD's violet-tinted silver, or a CD's plain
-     * silver, which shows the colours of its sheen in rings.
+     * A disc, label up, around its clear hub: a Blu-ray's deep blue, a DVD's violet-tinted silver, a CD's plain
+     * silver, which shows the colours of its sheen in rings, or the bare grey of one whose kind is not known yet.
      */
-    private static void disc(PoseStack p, VertexConsumer v, DriveEmulatorBlock.Disc disc, int light) {
+    private static void disc(PoseStack p, VertexConsumer v, @Nullable DriveEmulatorBlock.Disc disc, int light) {
         switch (disc) {
+            case null -> {
+                annulus(p, v, 0, .43f, .15f, 0xC9CED4, light, 1);
+                annulus(p, v, 0, .15f, .11f, 0xE3E6EA, light, 1);
+            }
             case BLU_RAY -> {
                 annulus(p, v, 0, .43f, .15f, 0x2B63C9, light, 1);
                 annulus(p, v, 0, .15f, .11f, 0x9CC7F2, light, 1);

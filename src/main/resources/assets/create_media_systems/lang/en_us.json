@@ -235,6 +235,7 @@
   "block.create_media_systems.blu_ray_player": "Blu-ray Player",
   "block.create_media_systems.disc_drive_emulator": "Disc Drive Emulator",
   "create_media_systems.drive.open": "No disc",
+  "create_media_systems.drive.loading": "Loading...",
   "create_media_systems.drive.reading": "Reading the disc",
   "create_media_systems.drive.downloading": "Downloading FFmpeg",
   "create_media_systems.drive.ready": "Sharing the disc",
