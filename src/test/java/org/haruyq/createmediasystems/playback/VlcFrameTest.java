@@ -50,7 +50,7 @@ class VlcFrameTest {
     }
 
     private static final class Pictures implements AutoCloseable {
-        final VideoFrame frame = new VideoFrame();
+        final VideoFrame frame = new VideoFrame(new MediaTaps(() -> 0));
         final Memory planes = new Memory(Native.POINTER_SIZE);
 
         Pictures() {

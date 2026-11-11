@@ -1,13 +1,10 @@
 package org.haruyq.createmediasystems.dev;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.Map;
 
 import org.haruyq.createmediasystems.client.ClientConfig;
-import org.haruyq.createmediasystems.lighting.AnalysisPackets;
 import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.AnalysisTimeline;
 import org.haruyq.createmediasystems.playback.VideoCache;
@@ -46,28 +43,16 @@ public final class LightingDemoCache {
         if (reused || LightingLab.SABLE) {
             return;
         }
-        try {
-            Field playing = AnalysisPlayback.class.getDeclaredField("PLAYING");
-            playing.setAccessible(true);
-            for (Object playback : ((Map<?, ?>) playing.get(null)).values()) {
-                Field stateField = playback.getClass().getDeclaredField("state");
-                Field tracksField = playback.getClass().getDeclaredField("tracks");
-                stateField.setAccessible(true);
-                tracksField.setAccessible(true);
-                AnalysisPackets.State state = (AnalysisPackets.State) stateField.get(playback);
-                Map<?, ?> tracks = (Map<?, ?>) tracksField.get(playback);
-                if (!received && tracks.get(state.next()) instanceof AnalysisTimeline next && next.end() >= 59_000) {
-                    received = true;
-                    LogUtils.getLogger().info("Lighting demo received complete next-track analysis before playback");
-                }
-                if (received && state.track().endsWith("?next=1")
-                        && tracks.get(state.track()) instanceof AnalysisTimeline current && current.sample(1000) != null) {
-                    reused = true;
-                    LogUtils.getLogger().info("Lighting demo reused synchronized analysis after the playlist advanced");
-                }
+        for (AnalysisPlayback.Snapshot playback : AnalysisPlayback.snapshots()) {
+            if (!received && playback.next() instanceof AnalysisTimeline next && next.end() >= 59_000) {
+                received = true;
+                LogUtils.getLogger().info("Lighting demo received complete next-track analysis before playback");
             }
-        } catch (ReflectiveOperationException failed) {
-            throw new IllegalStateException("Could not verify lighting synchronization", failed);
+            if (received && playback.state().track().endsWith("?next=1")
+                    && playback.timeline() instanceof AnalysisTimeline current && current.sample(1000) != null) {
+                reused = true;
+                LogUtils.getLogger().info("Lighting demo reused synchronized analysis after the playlist advanced");
+            }
         }
     }
 }

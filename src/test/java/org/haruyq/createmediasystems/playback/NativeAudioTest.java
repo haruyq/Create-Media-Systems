@@ -427,7 +427,7 @@ class NativeAudioTest {
         owned.close();
 
         Player videoPlayer = new Player();
-        videoPlayer.tapped = new VlcAudio().open(Streams.Channel.LEFT);
+        videoPlayer.tapped = new VlcAudio(new MediaTaps(() -> 0)).open(Streams.Channel.LEFT);
         NativeAudio.Owned video = playing(videoPlayer);
         assertTrue(video.advancesWhilePaused());
         video.close();

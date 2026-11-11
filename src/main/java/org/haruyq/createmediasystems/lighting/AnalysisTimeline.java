@@ -1,12 +1,17 @@
 package org.haruyq.createmediasystems.lighting;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * A track's lighting frames by time (ms into it): those prepared ahead from a kept copy, and those sent live as it
+ * plays (played a delay behind, see AnalysisDelay), the prepared ones first where both are.
+ */
 public final class AnalysisTimeline {
     private final NavigableMap<Long, AnalysisFrame> frames = new TreeMap<>();
     private final NavigableMap<Long, AnalysisFrame> live = new TreeMap<>();
@@ -168,6 +173,11 @@ public final class AnalysisTimeline {
 
     public boolean prepared() {
         return prepared;
+    }
+
+    /** Its live frames or those prepared ahead, by time, read-only: for the development probes. */
+    public NavigableMap<Long, AnalysisFrame> frames(boolean live) {
+        return Collections.unmodifiableNavigableMap(live ? this.live : frames);
     }
 
     public long end() {

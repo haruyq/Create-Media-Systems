@@ -2,14 +2,15 @@ package org.haruyq.createmediasystems.dev;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Map;
+import java.util.NavigableMap;
 
 import org.haruyq.createmediasystems.lighting.AnalysisFrame;
+import org.haruyq.createmediasystems.lighting.AnalysisPackets;
+import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.AnalysisTimeline;
 import com.mojang.logging.LogUtils;
 
@@ -42,7 +43,7 @@ public final class LightingNetworkProbe {
         next = now + PERIOD;
         try {
             write(now);
-        } catch (ReflectiveOperationException | IOException failure) {
+        } catch (IOException failure) {
             if (!warned) {
                 warned = true;
                 LogUtils.getLogger().warn("Lighting network probe disabled after diagnostic failure", failure);
@@ -50,32 +51,17 @@ public final class LightingNetworkProbe {
         }
     }
 
-    private static void write(long now) throws ReflectiveOperationException, IOException {
+    private static void write(long now) throws IOException {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
             return;
         }
-        Field playingField = field("org.haruyq.createmediasystems.lighting.AnalysisPlayback", "PLAYING");
-        Map<?, ?> playing = (Map<?, ?>) playingField.get(null);
-        for (Object playback : playing.values()) {
-            Object state = get(playback, "state");
-            if (state == null) {
-                continue;
-            }
-            String track = safeTrack((String) get(state, "track"));
-            long position = (long) invoke(playback, "samplePosition");
-            @SuppressWarnings("unchecked")
-            Map<String, AnalysisTimeline> tracks = (Map<String, AnalysisTimeline>) get(playback, "tracks");
-            AnalysisTimeline timeline = tracks.get((String) get(state, "track"));
-            long delay = delay(state, position);
-            AnalysisFrame sample = timeline == null ? null : timeline.sample(position, delay);
-            AnalysisFrame raw = timeline == null ? null : latest(timeline);
-            line(now, minecraft, state, playback, track, position, delay, timeline, sample, raw);
+        for (AnalysisPlayback.Snapshot playback : AnalysisPlayback.snapshots()) {
+            line(now, minecraft, playback);
         }
     }
 
-    private static void line(long now, Minecraft minecraft, Object state, Object playback, String track, long position,
-                             long delay, AnalysisTimeline timeline, AnalysisFrame sample, AnalysisFrame raw) throws IOException, ReflectiveOperationException {
+    private static void line(long now, Minecraft minecraft, AnalysisPlayback.Snapshot playback) throws IOException {
         if (output == null) {
             outputPath = minecraft.gameDirectory.toPath().resolve("lighting-network.jsonl");
             if (Files.exists(outputPath) && Files.size(outputPath) > 20_000_000) {
@@ -84,27 +70,35 @@ public final class LightingNetworkProbe {
             }
             output = Files.newBufferedWriter(outputPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         }
+        AnalysisPackets.State state = playback.state();
+        AnalysisTimeline timeline = playback.timeline();
+        long position = playback.samplePosition();
+        long delay = playback.delay();
+        AnalysisFrame sample = timeline == null ? null : timeline.sample(position, delay);
         StringBuilder json = new StringBuilder(512);
         json.append('{').append("\"wallNanos\":").append(now).append(",\"wallMillis\":").append(System.currentTimeMillis());
         json.append(",\"client\":").append(q(minecraft.player.getName().getString()));
         json.append(",\"uuid\":").append(q(minecraft.player.getUUID().toString()));
-        json.append(",\"source\":").append(q(get(state, "source").toString()));
-        json.append(",\"session\":").append(q(get(state, "session").toString()));
-        json.append(",\"generation\":").append(get(state, "generation"));
-        json.append(",\"owner\":").append(q(get(state, "owner").toString()));
-        json.append(",\"track\":").append(q(track)).append(",\"positionMillis\":").append(position).append(",\"delayMillis\":").append(delay);
-        json.append(",\"localPositionMillis\":").append(invoke(playback, "position"));
-        json.append(",\"active\":").append(get(state, "active"));
-        json.append(",\"ownerLocal\":").append(invoke(playback, "owner"));
+        json.append(",\"source\":").append(q(state.source().toString()));
+        json.append(",\"session\":").append(q(state.session().toString()));
+        json.append(",\"generation\":").append(state.generation());
+        json.append(",\"owner\":").append(q(state.owner().toString()));
+        json.append(",\"track\":").append(q(safeTrack(state.track()))).append(",\"positionMillis\":").append(position)
+                .append(",\"delayMillis\":").append(delay);
+        json.append(",\"localPositionMillis\":").append(playback.position());
+        json.append(",\"active\":").append(state.active());
+        json.append(",\"ownerLocal\":").append(playback.owner());
         if (timeline == null) {
             json.append(",\"hasData\":false");
         } else {
+            NavigableMap<Long, AnalysisFrame> prepared = timeline.frames(false);
+            NavigableMap<Long, AnalysisFrame> live = timeline.frames(true);
             json.append(",\"hasData\":true,\"prepared\":").append(timeline.prepared());
             json.append(",\"latestEnd\":").append(timeline.end());
-            json.append(",\"preparedEnd\":").append(edge(timeline, "frames", true));
-            json.append(",\"liveEnd\":").append(edge(timeline, "live", true));
-            json.append(",\"framesOldest\":").append(edge(timeline, "frames", false)).append(",\"framesNewest\":").append(edge(timeline, "frames", true));
-            json.append(",\"liveOldest\":").append(edge(timeline, "live", false)).append(",\"liveNewest\":").append(edge(timeline, "live", true));
+            json.append(",\"preparedEnd\":").append(edge(prepared, true));
+            json.append(",\"liveEnd\":").append(edge(live, true));
+            json.append(",\"framesOldest\":").append(edge(prepared, false)).append(",\"framesNewest\":").append(edge(prepared, true));
+            json.append(",\"liveOldest\":").append(edge(live, false)).append(",\"liveNewest\":").append(edge(live, true));
         }
         if (sample == null) {
             double phase = timeline == null ? Double.NaN : timeline.phaseAt(position, delay);
@@ -115,51 +109,31 @@ public final class LightingNetworkProbe {
                     .append(",\"left\":").append(sample.left()).append(",\"right\":").append(sample.right())
                     .append(",\"motionPhase\":").append(sample.motionPhase()).append('}');
         }
+        var raw = timeline == null ? null : timeline.frames(true).lastEntry();
         if (raw != null) {
-            json.append(",\"rawLatest\":{\"millis\":").append(raw.millis()).append(",\"level\":").append(raw.level())
-                    .append(",\"left\":").append(raw.left()).append(",\"right\":").append(raw.right())
-                    .append(",\"motionPhase\":").append(raw.motionPhase()).append('}');
+            frame(json, "rawLatest", raw.getValue());
         }
-        AnalysisFrame cached = timeline == null ? null : cached(timeline, position);
+        var cached = timeline == null ? null : timeline.frames(false).floorEntry(position);
         if (cached != null) {
-            json.append(",\"rawPrepared\":{\"millis\":").append(cached.millis()).append(",\"level\":").append(cached.level())
-                    .append(",\"left\":").append(cached.left()).append(",\"right\":").append(cached.right())
-                    .append(",\"motionPhase\":").append(cached.motionPhase()).append('}');
+            frame(json, "rawPrepared", cached.getValue());
         }
-        json.append(",\"receivedAgeMillis\":").append(Math.max(0, (System.nanoTime() - (long) get(playback, "received")) / 1_000_000));
-        Object pending = get(playback, "pending");
-        json.append(",\"pendingSequence\":").append(pending == null ? "null" : get(pending, "sequence"));
-        json.append(",\"sentAgeMillis\":").append(Math.max(0, (System.nanoTime() - (long) get(playback, "sentAt")) / 1_000_000));
+        json.append(",\"receivedAgeMillis\":").append(Math.max(0, (System.nanoTime() - playback.received()) / 1_000_000));
+        json.append(",\"pendingSequence\":").append(playback.pendingSequence() == null ? "null" : playback.pendingSequence());
+        json.append(",\"sentAgeMillis\":").append(Math.max(0, (System.nanoTime() - playback.sentAt()) / 1_000_000));
         json.append('}');
         output.write(json.toString());
         output.newLine();
         output.flush();
     }
 
-    private static long delay(Object state, long position) throws ReflectiveOperationException {
-        int from = (int) get(state, "delayFrom");
-        int to = (int) get(state, "delayTo");
-        long start = (long) get(state, "delayStart");
-        return Math.round(from + (to - from) * Math.max(0, Math.min(1, (position - start) / 2000.0)));
+    private static void frame(StringBuilder json, String name, AnalysisFrame frame) {
+        json.append(",\"").append(name).append("\":{\"millis\":").append(frame.millis()).append(",\"level\":").append(frame.level())
+                .append(",\"left\":").append(frame.left()).append(",\"right\":").append(frame.right())
+                .append(",\"motionPhase\":").append(frame.motionPhase()).append('}');
     }
 
-    private static long edge(AnalysisTimeline timeline, String name, boolean newest) throws ReflectiveOperationException {
-        @SuppressWarnings("unchecked")
-        java.util.NavigableMap<Long, AnalysisFrame> frames = (java.util.NavigableMap<Long, AnalysisFrame>) get(timeline, name);
+    private static long edge(NavigableMap<Long, AnalysisFrame> frames, boolean newest) {
         return frames.isEmpty() ? -1 : newest ? frames.lastKey() : frames.firstKey();
-    }
-
-    private static AnalysisFrame latest(AnalysisTimeline timeline) throws ReflectiveOperationException {
-        @SuppressWarnings("unchecked")
-        java.util.NavigableMap<Long, AnalysisFrame> frames = (java.util.NavigableMap<Long, AnalysisFrame>) get(timeline, "live");
-        return frames.isEmpty() ? null : frames.lastEntry().getValue();
-    }
-
-    private static AnalysisFrame cached(AnalysisTimeline timeline, long position) throws ReflectiveOperationException {
-        @SuppressWarnings("unchecked")
-        java.util.NavigableMap<Long, AnalysisFrame> frames = (java.util.NavigableMap<Long, AnalysisFrame>) get(timeline, "frames");
-        var entry = frames.floorEntry(position);
-        return entry == null ? null : entry.getValue();
     }
 
     private static String safeTrack(String value) {
@@ -171,24 +145,6 @@ public final class LightingNetworkProbe {
         } catch (IllegalArgumentException ignored) {
             return "invalid";
         }
-    }
-
-    private static Field field(String type, String name) throws ReflectiveOperationException {
-        Field field = Class.forName(type).getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
-    }
-
-    private static Object get(Object target, String name) throws ReflectiveOperationException {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        return field.get(target);
-    }
-
-    private static Object invoke(Object target, String name) throws ReflectiveOperationException {
-        var method = target.getClass().getDeclaredMethod(name);
-        method.setAccessible(true);
-        return method.invoke(target);
     }
 
     private static String q(String value) {

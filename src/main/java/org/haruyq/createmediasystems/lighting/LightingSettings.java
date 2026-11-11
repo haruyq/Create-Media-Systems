@@ -2,6 +2,8 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.util.UUID;
 
+import org.haruyq.createmediasystems.Rgb;
+
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -336,15 +338,7 @@ public final class LightingSettings {
         float y = Mth.clamp(row, 0, 7) / 7f;
         int top = Math.round(Math.min(1, (1 - x) * 2) * 255) << 8 | Math.round(Math.min(1, x * 2) * 255);
         int bottom = 0xFF0000 | Math.round((1 - x) * 140) << 8 | Math.round(x * 255);
-        return mix(top, bottom, y);
-    }
-
-    public static int mix(int a, int b, float amount) {
-        float t = Mth.clamp(amount, 0, 1);
-        int r = Math.round((a >> 16 & 255) * (1 - t) + (b >> 16 & 255) * t);
-        int g = Math.round((a >> 8 & 255) * (1 - t) + (b >> 8 & 255) * t);
-        int blue = Math.round((a & 255) * (1 - t) + (b & 255) * t);
-        return r << 16 | g << 8 | blue;
+        return Rgb.mix(top, bottom, y);
     }
 
     public static int color(Group group, int order, int count, double seconds, int leftColor, int rightColor,
@@ -363,6 +357,6 @@ public final class LightingSettings {
         int next = (index + 1) % n;
         int a = videoColors ? (index == 0 ? leftColor : rightColor) : group.colors[index];
         int b = videoColors ? (next == 0 ? leftColor : rightColor) : group.colors[next];
-        return mix(a, b, (float) (position - Math.floor(position)));
+        return Rgb.mix(a, b, (float) (position - Math.floor(position)));
     }
 }

@@ -436,16 +436,6 @@ public final class ClientStreams {
         }
     }
 
-    static long position(BlockPos source, String track) {
-        for (Slot slot : PLAYING) {
-            long position = slot.sound.position(source, track);
-            if (position >= 0) {
-                return position;
-            }
-        }
-        return -1;
-    }
-
     /** A playing stream broke off: posted to chat, unless {@code sound} was already replaced or stopped. */
     static void interrupted(StreamSound sound, String reason) {
         Minecraft.getInstance().execute(() -> {

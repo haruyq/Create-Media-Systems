@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.Rgb;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
@@ -65,10 +66,12 @@ public final class VideoFrame {
     /** When VLC finished its first picture (System.nanoTime); 0 before. */
     volatile long firstPicture;
     volatile long lastPicture;
-    private volatile long lightingUntil;
-    private long nextLighting;
-    @Nullable
-    private volatile LightingMedia.Colors lightingColors;
+    /** The player's taps, offered each picture as it is shown. */
+    private final MediaTaps taps;
+
+    VideoFrame(MediaTaps taps) {
+        this.taps = taps;
+    }
 
     // Held here: VLC calls them as long as it plays.
     final Vlc.VideoSetup setup = (opaque, chroma, width, height, pitches, lines) -> {
@@ -96,9 +99,7 @@ public final class VideoFrame {
             fresh = false;
             this.width = w;
             this.height = h;
-            lightingColors = null;
             lastPicture = 0;
-            nextLighting = 0;
         }
         return 1;
     };
@@ -132,41 +133,16 @@ public final class VideoFrame {
                 back ^= 1;
                 fresh = true;
             }
-            if (lightingUntil != 0 && now - lightingUntil < 0 && now - nextLighting >= 0) {
-                int[] colors = LightingMedia.colors(width, height, index -> {
-                    long at = (long) index * 4;
-                    return (written.getByte(at) & 255) << 16 | (written.getByte(at + 1) & 255) << 8
-                            | written.getByte(at + 2) & 255;
-                });
-                LightingMedia.Colors previous = lightingColors;
-                float amount = previous == null ? 1 : Math.min(1, (now - previous.at()) / 200_000_000f);
-                lightingColors = new LightingMedia.Colors(
-                        previous == null ? colors[0] : LightingMedia.blend(previous.left(), colors[0], amount),
-                        previous == null ? colors[1] : LightingMedia.blend(previous.right(), colors[1], amount), now);
-                nextLighting = now + 50_000_000L;
-            }
+            offer(written);
         }
     };
 
-    @Nullable
-    LightingMedia.Colors lighting() {
-        return lighting(System.nanoTime());
-    }
-
-    @Nullable
-    LightingMedia.Colors lighting(long now) {
-        lightingUntil = now + 2_000_000_000L;
-        LightingMedia.Colors colors = lightingColors;
-        return VlcPlayer.recent(lastPicture, now, 1_000_000_000L) && colors != null
-                && VlcPlayer.recent(colors.at(), now, 1_000_000_000L) ? colors : null;
-    }
-
-    void clearLighting() {
-        synchronized (guard) {
-            lightingColors = null;
-            lastPicture = 0;
-            nextLighting = 0;
-        }
+    /** Offers its taps the picture VLC just wrote into {@code written}; under guard. */
+    private void offer(Memory written) {
+        taps.picture(width, height, index -> {
+            long at = (long) index * 4;
+            return (written.getByte(at) & 255) << 16 | (written.getByte(at + 1) & 255) << 8 | written.getByte(at + 2) & 255;
+        });
     }
 
     /** The texture with the latest picture, uploading it first if new; null before the first. Render thread. */
@@ -299,15 +275,15 @@ public final class VideoFrame {
         // For the picture's own sampling, and a display's glow samples a small mipmap as its blur (see DisplayRenderer).
         GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
         // ponytail: 8 × 8 pixels' luma, plenty for a light level 0..15; average the mipmap's last level if not.
-        long sum = 0;
+        float sum = 0;
         for (int i = 1; i < 16; i += 2) {
             for (int j = 1; j < 16; j += 2) {
                 long at = ((long) (i * height / 16) * width + j * width / 16) * 4;
-                sum += (pixels.getByte(at) & 0xFF) * 54 + (pixels.getByte(at + 1) & 0xFF) * 183
-                        + (pixels.getByte(at + 2) & 0xFF) * 19;
+                sum += Rgb.luma((pixels.getByte(at) & 0xFF) << 16 | (pixels.getByte(at + 1) & 0xFF) << 8
+                        | pixels.getByte(at + 2) & 0xFF);
             }
         }
-        brightness = sum / (64f * 256 * 255);
+        brightness = sum / (64f * 255);
     }
 
     /** How bright the latest picture is, 0..1, once {@link #texture} has one. Render thread. */
@@ -340,7 +316,6 @@ public final class VideoFrame {
                 buffers[i] = null;
             }
             fresh = false;
-            lightingColors = null;
             lastPicture = 0;
         }
     }

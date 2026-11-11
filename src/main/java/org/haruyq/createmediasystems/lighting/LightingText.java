@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.Rgb;
+
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.network.chat.Component;
@@ -19,8 +21,8 @@ public final class LightingText {
 
     public static int readable(int rgb) {
         rgb &= 0xFFFFFF;
-        float brightness = ((rgb >> 16 & 255) * 54 + (rgb >> 8 & 255) * 183 + (rgb & 255) * 19) / 256f;
-        return brightness >= 150 ? rgb : LightingSettings.mix(rgb, 0xFFFFFF, (150 - brightness) / (255 - brightness));
+        float brightness = Rgb.luma(rgb);
+        return brightness >= 150 ? rgb : Rgb.mix(rgb, 0xFFFFFF, (150 - brightness) / (255 - brightness));
     }
 
     public static int groupColor(@Nullable LightingSettings settings, int group) {

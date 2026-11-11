@@ -1,8 +1,16 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.Rgb;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
+/**
+ * The stage lights' signal at one moment, {@code millis} into a track: its sound's level, bands, pulse and tempo (if
+ * {@code audio}), its picture's left and right colours (if {@code video}), and how far the lights' motion has run.
+ * Worked out on a client (see LightingAnalyzer), shared through the server (see AnalysisCoordinator) and kept by each
+ * console (see LightingConsoleBlock.Entity#receive).
+ */
 public record AnalysisFrame(long millis, float level, float bass, float mid, float high, float pulse, float bpm,
                             int left, int right, boolean audio, boolean video, double motionPhase) {
     public static final int INTERVAL = 100;
@@ -55,17 +63,11 @@ public record AnalysisFrame(long millis, float level, float bass, float mid, flo
         float amount = Math.clamp((float) (time - millis) / Math.max(1, next.millis - millis), 0, 1);
         return new AnalysisFrame(time, mix(level, next.level, amount), mix(bass, next.bass, amount),
                 mix(mid, next.mid, amount), mix(high, next.high, amount), mix(pulse, next.pulse, amount),
-                mix(bpm, next.bpm, amount), color(left, next.left, amount), color(right, next.right, amount),
+                mix(bpm, next.bpm, amount), Rgb.mix(left, next.left, amount), Rgb.mix(right, next.right, amount),
                 audio, video, motionPhase + (next.motionPhase - motionPhase) * amount);
     }
 
     private static float mix(float a, float b, float amount) {
         return a + (b - a) * amount;
-    }
-
-    private static int color(int a, int b, float amount) {
-        return Math.round(mix(a >> 16 & 255, b >> 16 & 255, amount)) << 16
-                | Math.round(mix(a >> 8 & 255, b >> 8 & 255, amount)) << 8
-                | Math.round(mix(a & 255, b & 255, amount));
     }
 }

@@ -22,10 +22,9 @@ class AnalysisPacketsTest {
     @Test
     void allAnalysisPayloadsRoundTrip() {
         AnalysisFrame frame = new AnalysisFrame(100, .2f, .3f, .4f, .5f, .6f, 120, 0x102030, 0x405060, true, true);
-        assertEquals(new AnalysisPackets.State(SOURCE, SESSION, 3, SOURCE, new BlockPos(1, 2, 3), "track", "next", 720, 100, true,
-                        200, 800, 1_000),
-                roundTrip(AnalysisPackets.State.CODEC, new AnalysisPackets.State(SOURCE, SESSION, 3, SOURCE,
-                        new BlockPos(1, 2, 3), "track", "next", 720, 100, true, 200, 800, 1_000)));
+        AnalysisPackets.State state = new AnalysisPackets.State(SOURCE, SESSION, 3, SOURCE, new BlockPos(1, 2, 3),
+                "track", "next", 720, 100, true, new AnalysisDelay(200, 800, 1_000));
+        assertEquals(state, roundTrip(AnalysisPackets.State.CODEC, state));
         AnalysisPackets.Status status = new AnalysisPackets.Status(SOURCE, SESSION, true, 100, 600, -4_000_000_000L, 300);
         assertEquals(status, roundTrip(AnalysisPackets.Status.CODEC, status));
         AnalysisPackets.Clock clock = new AnalysisPackets.Clock(SOURCE, SESSION, status.clientSentNanos(), 400);
