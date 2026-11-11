@@ -22,15 +22,14 @@ import net.minecraft.util.Mth;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * A disc's playlist: one link per row, added, moved and removed with the row's buttons; scroll for more rows. A
- * YouTube playlist link in a row is read with yt-dlp on saving and replaced by its videos, as many as fit.
+ * A disc's playlist. A YouTube playlist link in a row is read with yt-dlp on saving and replaced by its videos, as
+ * many as fit.
  */
 final class PlaylistScreen extends Screen {
     private static final int ROWS = 8;
     private static final int ROW_HEIGHT = 24;
     /** Edited in place; always at least one (maybe empty) row. */
     private final List<String> entries;
-    /** How many the disc holds. */
     private final int capacity;
     private int scroll;
     private boolean reading;
@@ -79,7 +78,6 @@ final class PlaylistScreen extends Screen {
                 .bounds(left + 218, bottom, 120, 20).build()).active = !reading;
     }
 
-    /** Saves the rows, reading the playlists among them first. */
     private void done() {
         List<String> rows = List.copyOf(entries);
         List<String> playlists = rows.stream().map(String::strip).filter(YtDlp::isPlaylist).distinct().toList();

@@ -31,7 +31,6 @@ public final class AnnouncementTypes {
         }
     }
 
-    /** The entries of {@code all} an announcement schedule offers, or a train schedule does. */
     public static <T> List<Pair<ResourceLocation, T>> filter(List<Pair<ResourceLocation, T>> all, boolean announcement) {
         return all.stream().filter(pair -> !CreateMediaSystems.LEGACY_ID.equals(pair.getFirst().getNamespace())
                 && CreateMediaSystems.MOD_ID.equals(pair.getFirst().getNamespace()) == announcement).toList();

@@ -31,14 +31,13 @@ import net.neoforged.neoforge.attachment.IAttachmentSerializer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/** Server side of the range quill: a jukebox's range and volume, a speaker's volume, channel and source. */
 public final class RangeQuill {
     /** Largest area side, so one jukebox can't make a whole region stream it. */
     public static final int MAX_SIZE = 256;
 
     /**
-     * A jukebox's range as it is saved on it (see AudioFeature#JUKEBOX_SETTINGS); it also reads saves from before the
-     * area was relative, which had it in place.
+     * A jukebox's range as it is saved on it; it also reads saves from before the area was relative, which had
+     * it in place.
      */
     public static final IAttachmentSerializer<Tag, EmitterRange> JUKEBOX_SERIALIZER = new IAttachmentSerializer<>() {
         @Override

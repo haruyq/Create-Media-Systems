@@ -31,17 +31,11 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * An equalizer's three faders, side by side on its top and running from its front (-12 dB) to its back (+12 dB): from
- * the left as one faces it, Low, Mid and Hi (on a second equalizer BASS, Low-Mid and Hi-Mid), each knob in its band's
- * colour. Point at one, hold right-click and look along it: its knob follows the crosshair, its gain is shown, and it
- * is heard here at once and set for everyone when let go. Sneak to use the top as a block instead.
- */
+/** An equalizer's three faders, side by side on its top and running from its front (lowest gain) to its back. */
 public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock.Entity> {
     private static final ModelResourceLocation KNOB = ModelResourceLocation.standalone(CreateMediaSystems.id("block/equalizer_knob"));
     /** Sixteenths between the faders. */
     private static final float SPACING = 5;
-    /** The fader in the middle of the top, the others either side of it. */
     private static final int MIDDLE = (EqualizerBlock.FADERS - 1) / 2;
     /** How far a knob goes either side of the middle of the top (sixteenths). */
     private static final float TRAVEL = 4.5f;
@@ -102,7 +96,6 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         return true;
     }
 
-    /** The fader held: its knob goes where the crosshair crosses the top, and is sent once right-click is let go. */
     private record Fader(BlockPos pos, int fader) implements ControlDrag.Held {
         @Override
         public void drag(ControlDrag.Look look) {

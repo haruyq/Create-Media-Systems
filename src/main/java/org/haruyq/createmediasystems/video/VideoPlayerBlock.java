@@ -54,12 +54,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.BlockHitResult;
 
-/**
- * Plays a disc's playlist for its linked displays and speakers, one video after another, and stops after the last. A
- * remote steps through it (see RemoteItem); its volume (on top) and how brightly its displays light their surroundings
- * (in front) are set like any Create value, by holding right-click on it with a wrench. Right-click with a disc to put it in, with an empty hand to take it out.
- * With no disc of its own, the DVD or Blu-ray in a disc drive emulator beside it is its disc (see DriveEmulatorBlock).
- */
+/** Plays a disc's playlist for its linked displays and speakers. */
 public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
         SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<VideoPlayerBlock> CODEC = simpleCodec(VideoPlayerBlock::new);
@@ -114,7 +109,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         return type != VideoFeature.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    /** The Blu-ray player's volume: a block entity keeps one behaviour per type, and lighting has the default one. */
+    /** A block entity keeps one behaviour per type, and lighting has the default one. */
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
@@ -143,7 +138,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             behaviours.add(lighting);
         }
 
-        /** The drive whose disc it plays: one beside it with a disc that has a picture, while it has no disc of its own. */
         @Nullable
         private DiscDrive drive() {
             return cd.isEmpty() ? DiscDrive.feeding(level, worldPosition, this) : null;
@@ -160,7 +154,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return kind.fits(DiscKind.Slot.PICTURE);
         }
 
-        /** Plays the disc of the drive beside it from the top, or stops with it, unless it has its own. */
         @Override
         public void driveChanged(@Nullable Player by) {
             if (cd.isEmpty()) {
@@ -177,7 +170,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return transport;
         }
 
-        /** Its remote or wrench turns all of its speakers and displays up or down. */
         @Override
         public float volume() {
             return volume == null ? 1 : volume.getValue() / 100f;
@@ -189,13 +181,11 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return lighting == null ? 1 : lighting.getValue() / 100f;
         }
 
-        /** What the equalizers touching it are set to. */
         @Override
         public Tone tone() {
             return level == null ? Tone.FLAT : new Tone(EqualizerBlock.bands(level, worldPosition), 1);
         }
 
-        /** Its volume or lighting changed: its speakers and displays take it up now. */
         private void soundChanged() {
             changed();
             if (level instanceof ServerLevel server) {
@@ -216,7 +206,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return cd;
         }
 
-        /** A new disc put in by {@code by} plays its first video; with none, the disc of a drive beside it does. */
         @Override
         public void insert(ItemStack stack, @Nullable Player by) {
             cd.set(stack);
@@ -267,7 +256,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
         }
 
-        /** Saved, and sent to clients for remotes and goggles. */
         @Override
         public void changed() {
             setChanged();
@@ -276,7 +264,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
         }
 
-        /** Empty (no disc, or none with links), stopped, paused or playing, as its remote and goggles show it. */
         @Override
         public Component state() {
             return transport.state();
@@ -320,7 +307,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return true;
         }
 
-        /** A value in a goggle line, set apart from its gray label. */
         private static Component value(Object value, ChatFormatting color) {
             return Component.literal(String.valueOf(value)).withStyle(color);
         }

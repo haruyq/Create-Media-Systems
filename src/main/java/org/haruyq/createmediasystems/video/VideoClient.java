@@ -22,7 +22,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 
-/** The Blu-ray player on this client: its equalizers' faders, and the Blu-ray player and equalizer scenes. */
 public final class VideoClient implements ClientFeature {
     @Override
     public void register(IEventBus modBus) {

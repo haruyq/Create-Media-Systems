@@ -33,16 +33,13 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** DVDs and Blu-rays, the Blu-ray player with its remote and equalizers, and the disc drive emulator. */
 public final class VideoFeature implements Feature {
     public static final ModConfigSpec.IntValue REMOTE_RANGE = ServerConfig.intSetting("remoteRange", "blocks",
             "Farthest (in blocks) a remote reaches the Blu-ray player it is paired with.", 64, 1, 4096);
 
-    /** A disc's video links, played in order. */
     public static final Supplier<DataComponentType<List<String>>> PLAYLIST = COMPONENTS.registerComponentType("playlist",
             b -> b.persistent(Codec.STRING.listOf())
                     .networkSynchronized(ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list())));
-    /** The Blu-ray player a remote is paired with. */
     public static final Supplier<DataComponentType<GlobalPos>> REMOTE_TARGET = COMPONENTS.registerComponentType(
             "remote_target", b -> b.persistent(GlobalPos.CODEC).networkSynchronized(GlobalPos.STREAM_CODEC));
     public static final Supplier<DataComponentType<UUID>> REMOTE_SOURCE = COMPONENTS.registerComponentType(
@@ -58,7 +55,6 @@ public final class VideoFeature implements Feature {
     public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SEEK =
             SOUNDS.register("drive_seek", () -> SoundEvent.createVariableRangeEvent(id("drive_seek")));
 
-    /** A DVD holds fewer videos than a Blu-ray, and plays them less sharp (see DiscKind). */
     public static final DeferredItem<VideoDiscItem> DVD = ITEMS.register("dvd",
             () -> new VideoDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON), DiscKind.DVD));
     public static final DeferredItem<VideoDiscItem> BLU_RAY = ITEMS.register("blu_ray",
@@ -68,7 +64,6 @@ public final class VideoFeature implements Feature {
     public static final DeferredItem<?> VIDEO_PLAYER_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_player", VIDEO_PLAYER);
     public static final Supplier<BlockEntityType<VideoPlayerBlock.Entity>> VIDEO_PLAYER_ENTITY = BLOCK_ENTITIES.register(
             "blu_ray_player", () -> BlockEntityType.Builder.of(VideoPlayerBlock.Entity::new, VIDEO_PLAYER.get()).build(null));
-    /** The disc drive of its player's real computer, beside the Blu-ray player or disc reader that plays its disc. */
     public static final DeferredBlock<DriveEmulatorBlock> DRIVE_EMULATOR = BLOCKS.register("disc_drive_emulator",
             () -> new DriveEmulatorBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
     public static final DeferredItem<?> DRIVE_EMULATOR_ITEM = ITEMS.registerSimpleBlockItem("disc_drive_emulator", DRIVE_EMULATOR);

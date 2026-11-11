@@ -20,9 +20,8 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * A remote's buttons for its Blu-ray player: previous, play/pause, stop, next, play entry N, volume, and seeking (a bar,
- * and ten seconds back or on). What it shows of the Blu-ray player is what this client has of it (the server checks the
- * remote's range on every button).
+ * A remote's buttons for its Blu-ray player. What it shows of the Blu-ray player is what this client has of it (the
+ * server checks the remote's range on every button).
  */
 final class RemoteScreen extends Screen {
     private final GlobalPos target;

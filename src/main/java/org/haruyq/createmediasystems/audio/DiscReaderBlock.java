@@ -29,8 +29,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
 /**
- * Plays a custom disc silently: it keeps the track's position so linked speakers can play it in sync. A disc plays
- * once inserted; a redstone signal turning on plays it from the start, and turning off stops it.
+ * Plays a custom disc silently: it keeps the track's position so linked speakers can play it in sync.
  */
 public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     public DiscReaderBlock(Properties properties) {
@@ -78,9 +77,7 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
 
     public static class Entity extends BlockEntity implements MediaSource, DiscDrive.Fed, ItemSlot.Holder {
         private final ItemSlot disc = new ItemSlot("Disc", stack -> MediaItem.fits(stack, DiscKind.Slot.JUKEBOX));
-        /** How far into its disc's track it is; it runs while it plays. */
         private final PlaybackClock clock = new PlaybackClock();
-        /** Whether it had a redstone signal, so only a change starts or stops it. */
         private boolean powered;
 
         public Entity(BlockPos pos, BlockState state) {
@@ -94,7 +91,6 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             return url != null ? new Streams.Source(url, clock.position(), null) : null;
         }
 
-        /** Its disc's link, or with no disc that of the audio CD in a drive beside it (see DiscDrive). */
         @Nullable
         private String url() {
             if (!disc.isEmpty()) {
@@ -104,13 +100,11 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             return drive == null ? null : drive.link();
         }
 
-        /** A drive's disc with sound alone. */
         @Override
         public boolean plays(DiscKind kind) {
             return !kind.hasPicture();
         }
 
-        /** Plays the CD of the drive beside it from the beginning, or stops with it, unless it has a disc of its own. */
         @Override
         public void driveChanged(@Nullable Player by) {
             if (disc.isEmpty()) {
@@ -123,7 +117,7 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             return disc;
         }
 
-        /** A new disc (or none, but a drive's CD) starts from the beginning; speakers notice the restart on their next check. */
+        /** Speakers notice the restart on their next check. */
         @Override
         public void insert(ItemStack stack, @Nullable Player by) {
             disc.set(stack);
@@ -132,12 +126,10 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             } else {
                 clock.stop();
             }
-            // A signal already on doesn't count as turning on later.
             powered = level != null && level.hasNeighborSignal(worldPosition);
             setChanged();
         }
 
-        /** Its track plays from the top, for its listeners to load (see Streams#loading). */
         private void play(@Nullable Player by) {
             clock.start(0);
             if (level != null) {
@@ -145,7 +137,6 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             }
         }
 
-        /** A redstone signal turning on plays the disc from the start (unless it plays already); off stops it. */
         void power(boolean on) {
             if (on == powered) {
                 return;

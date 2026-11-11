@@ -32,14 +32,12 @@ public class AnnounceCondition extends ScheduleWaitCondition {
         BEFORE_ARRIVAL(Unit.SECONDS);
 
         public final ResourceLocation id = CreateMediaSystems.id("announce_" + name().toLowerCase(Locale.ROOT));
-        /** What its number counts, if it takes one. */
         public final Unit unit;
 
         Trigger(Unit unit) {
             this.unit = unit;
         }
 
-        /** Whether an announcement with this trigger and {@code value} is due at this point of {@code trip}. */
         public boolean ready(int value, Trip trip) {
             return switch (this) {
                 case ARRIVAL -> trip.arrived();

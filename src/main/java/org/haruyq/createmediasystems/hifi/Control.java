@@ -8,10 +8,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
 /**
- * Everything on a unit a player can work by pointing at it: buttons, knobs, the disc tray and the cassette doors on
- * its front, sockets and terminals on its back. Each has its place on that face, in sixteenths from the face's
- * bottom left as one looks at it: the client finds which one is pointed at, the renderer draws it there, and the
- * server is told which was pressed.
+ * Everything on a unit a player can work by pointing at it. Each has its place on that face, in sixteenths from the
+ * face's bottom left as one looks at it.
  */
 public enum Control {
     POWER(Unit.AMPLIFIER, Kind.BUTTON, 0.5f, 1.9f, 1.6f, 2.4f),
@@ -126,7 +124,6 @@ public enum Control {
         return (bottom + top) / 2;
     }
 
-    /** What it is called when pointed at. */
     public Component label() {
         return Component.translatable("create_media_systems.hifi.control." + name().toLowerCase(Locale.ROOT));
     }
@@ -135,7 +132,6 @@ public enum Control {
         return values()[Mth.clamp(id, 0, values().length - 1)];
     }
 
-    /** The control of {@code unit} at ({@code x}, {@code y}) on its front or {@code rear}; null for none there. */
     @Nullable
     public static Control at(Unit unit, boolean rear, double x, double y) {
         for (Control control : values()) {
