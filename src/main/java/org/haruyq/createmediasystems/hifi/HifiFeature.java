@@ -5,6 +5,7 @@ import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCK_ENTITIES;
 import static org.haruyq.createmediasystems.CreateMediaSystems.COMPONENTS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.ITEMS;
 
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -56,6 +57,11 @@ public final class HifiFeature implements Feature {
 
     public static HifiUnitItem hifiUnit(Unit unit) {
         return HIFI_UNITS.get(unit).get();
+    }
+
+    /** Every unit's item, in the order of Unit. */
+    public static Collection<DeferredItem<HifiUnitItem>> hifiUnits() {
+        return HIFI_UNITS.values();
     }
 
     @Override

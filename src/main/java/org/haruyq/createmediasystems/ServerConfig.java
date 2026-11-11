@@ -64,10 +64,11 @@ public final class ServerConfig {
     private ServerConfig() {
     }
 
-    /** A whole-number setting of this file, which {@code /cms config <key>} shows and sets. */
-    public static ModConfigSpec.IntValue intSetting(String key, String comment, int defaultValue, int min, int max) {
+    /** A whole-number setting of this file, which {@code /cms config <key> <argument>} shows and sets. */
+    public static ModConfigSpec.IntValue intSetting(String key, String argument, String comment, int defaultValue,
+            int min, int max) {
         ModConfigSpec.IntValue value = BUILDER.comment(comment).defineInRange(key, defaultValue, min, max);
-        INT_SETTINGS.add(new IntSetting(key, value, min, max));
+        INT_SETTINGS.add(new IntSetting(key, argument, value, min, max));
         return value;
     }
 
@@ -120,8 +121,9 @@ public final class ServerConfig {
         for (IntSetting setting : INT_SETTINGS) {
             config.then(Commands.literal(setting.key())
                     .executes(c -> show(c, setting.key(), setting.value().get()))
-                    .then(Commands.argument("value", IntegerArgumentType.integer(setting.min(), setting.max()))
-                            .executes(c -> set(c, setting.value(), setting.key(), IntegerArgumentType.getInteger(c, "value")))));
+                    .then(Commands.argument(setting.argument(), IntegerArgumentType.integer(setting.min(), setting.max()))
+                            .executes(c -> set(c, setting.value(), setting.key(),
+                                    IntegerArgumentType.getInteger(c, setting.argument())))));
         }
         event.getDispatcher().register(Commands.literal(CreateMediaSystems.COMMAND)
                 .requires(source -> source.hasPermission(2)).then(config));
@@ -238,7 +240,7 @@ public final class ServerConfig {
                 .filter(c -> c.getType() == ModConfig.Type.SERVER).findFirst().orElseThrow();
     }
 
-    private record IntSetting(String key, ModConfigSpec.IntValue value, int min, int max) {
+    private record IntSetting(String key, String argument, ModConfigSpec.IntValue value, int min, int max) {
     }
 
     /** Server → client: the config's TOML after it changed while players were on. */

@@ -34,7 +34,7 @@ import net.neoforged.neoforge.registries.DeferredItem;
 
 /** DVDs and Blu-rays, the Blu-ray player with its remote and equalizers, and the disc drive emulator. */
 public final class VideoFeature implements Feature {
-    public static final ModConfigSpec.IntValue REMOTE_RANGE = ServerConfig.intSetting("remoteRange",
+    public static final ModConfigSpec.IntValue REMOTE_RANGE = ServerConfig.intSetting("remoteRange", "blocks",
             "Farthest (in blocks) a remote reaches the Blu-ray player it is paired with.", 64, 1, 4096);
 
     /** A disc's video links, played in order. */
