@@ -9,14 +9,17 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
 
 @EnabledIfEnvironmentVariable(named = "CMS_FFMPEG_DOWNLOAD_TEST", matches = "1")
 class DiscToolsIntegrationTest {
     @Test
-    void downloadsAndRunsTheDiscTools() throws Exception {
-        Path directory = Path.of("build", "ffmpeg-download").toAbsolutePath();
+    void downloadsAndRunsTheDiscTools(@TempDir Path directory) throws Exception {
         var tools = DiscTools.ensure(directory, "ffmpeg", "ffprobe", () -> System.out.println("Downloading the FFmpeg release"));
         assertEquals(tools, DiscTools.ensure(directory, "ffmpeg", "ffprobe", () -> fail("Downloaded twice")));
+        Path previous = directory.resolve("9.0.2-win64");
+        assertEquals(tools, DiscTools.ensure(directory, previous.resolve("ffmpeg.exe").toString(),
+                previous.resolve("ffprobe.exe").toString(), () -> fail("Old managed paths must use the cached update")));
         Path installed = Path.of(tools.ffmpeg()).getParent();
         assertTrue(Files.size(installed.resolve("LICENSE")) > 100);
         assertTrue(Files.size(installed.resolve("README.txt")) > 100);

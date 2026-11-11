@@ -32,7 +32,7 @@ public final class ClientConfig {
             .comment("Send how long each display's video took to start here to the server's API, to find why it starts slowly for some: the times, this config, the Create: Media Systems and yt-dlp versions, whether YouTube cookies are set (never the cookies) and the end of logs/latest.log without chat.")
             .define("sendDiagnostics", true);
     public static final ModConfigSpec.ConfigValue<String> DISC_FFMPEG_PATH = BUILDER
-            .comment("FFmpeg for disc sharing. The default 'ffmpeg' or an empty value downloads a managed Windows x64 build on first use. A custom executable path overrides it; needs dvdvideo, H.264 and AC-3 support.")
+            .comment("FFmpeg for disc sharing. The default 'ffmpeg', an empty value or an old managed path uses the current managed Windows x64 build. An external executable path overrides it; needs dvdvideo, H.264 and AC-3 support.")
             .define("discFfmpegPath", "ffmpeg");
     public static final ModConfigSpec.ConfigValue<String> DISC_FFPROBE_PATH = BUILDER
             .comment("FFprobe for disc titles. The default 'ffprobe' or an empty value uses the managed download. For a custom FFmpeg, set the FFprobe path from the same installation.")
