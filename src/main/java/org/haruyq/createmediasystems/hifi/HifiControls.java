@@ -18,16 +18,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * Working a hi-fi stack by hand: point at a control on its front or a socket on its back and right-click. What is
- * pointed at is outlined and named above the hotbar. A knob is held and turned by looking left or right along the
- * stack (see ControlDrag): it is heard at once here, and set for everyone as it turns. Sneaking, or holding a block,
- * a wrench or a tool that works blocks itself, leaves the stack to those.
- */
 public final class HifiControls {
     /** How far across the stack (sixteenths) the crosshair goes to turn a knob all the way. */
     private static final double KNOB_TRAVEL = 4;
-    /** How long (ms) a pressed button stays in. */
     private static final long PRESSED_MILLIS = 180;
 
     @Nullable
@@ -48,14 +41,12 @@ public final class HifiControls {
         ControlDrag.onUse(HifiControls::press);
     }
 
-    /** The control of {@code stack} pointed at (or held); null for none. */
     @Nullable
     static Control hovered(HifiStackBlock.Entity stack) {
         return ControlDrag.held() instanceof Knob knob && knob.pos.equals(stack.getBlockPos()) ? knob.control
                 : stack.getBlockPos().equals(hoveredAt) ? hovered : null;
     }
 
-    /** The button of {@code stack} just pressed; null for none. */
     @Nullable
     static Control pressed(HifiStackBlock.Entity stack) {
         return stack.getBlockPos().equals(pressedAt) && Util.getMillis() - pressedTime < PRESSED_MILLIS ? pressed : null;
@@ -98,7 +89,6 @@ public final class HifiControls {
         }
     }
 
-    /** A right-click: works what is pointed at, if anything. */
     private static boolean press() {
         HifiStackBlock.Entity stack = stack(hoveredAt);
         if (hovered == null || stack == null) {
@@ -118,7 +108,6 @@ public final class HifiControls {
         pressed = control;
         pressedAt = pos;
         pressedTime = Util.getMillis();
-        // A station with no link yet, or the one tuned in pressed again, asks for its link.
         if (control.unit == Unit.TUNER && control.kind == Control.Kind.BUTTON && stack.live(Unit.TUNER)
                 && (stack.tuner().station == control.index || stack.tuner().station(control.index).isEmpty())) {
             TextPromptScreen.open("create_media_systems.screen.station", stack.tuner().station(control.index),
@@ -130,10 +119,6 @@ public final class HifiControls {
         return true;
     }
 
-    /**
-     * The knob held, grabbed with the crosshair {@code grabbedAt} across the stack at {@code grabbedValue}: looking
-     * along the stack turns it, heard here at once, and sent for everyone every other tick and as it is let go.
-     */
     private static final class Knob implements ControlDrag.Held {
         private final BlockPos pos;
         private final Control control;
@@ -175,7 +160,6 @@ public final class HifiControls {
             }
         }
 
-        /** Sends where it is turned to, if that changed and {@code now}; and shows it. */
         private void send(HifiStackBlock.Entity stack, boolean now) {
             int value = stack.knob(control);
             if (value != sent && now) {

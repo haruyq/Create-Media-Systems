@@ -25,11 +25,6 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/**
- * A disc (or tape) that holds a playlist of links: a DVD or a Blu-ray, which differ in how many videos they hold and
- * how sharp they play, or a CD or a cassette, which have no picture. Its kind says what plays it (see DiscKind). Use
- * in the air to edit the list.
- */
 public class VideoDiscItem extends Item implements MediaItem {
     /** Most links any disc holds (the network's limit). */
     public static final int MAX_ENTRIES = 64;

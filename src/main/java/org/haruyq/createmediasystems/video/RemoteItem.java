@@ -30,10 +30,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/**
- * Controls one Blu-ray player from afar (within the server's {@code remoteRange}): Shift+right-click a Blu-ray player to pair
- * it, right-click in the air for its buttons.
- */
+/** Controls one Blu-ray player from afar, within the server's {@code remoteRange}. */
 public class RemoteItem extends Item {
     public RemoteItem(Properties properties) {
         super(properties);

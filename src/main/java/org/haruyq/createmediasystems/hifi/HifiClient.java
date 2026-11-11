@@ -27,7 +27,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 
-/** The hi-fi stack on this client: its controls and renderer, and its scene. */
 public final class HifiClient implements ClientFeature {
     @Override
     public void register(IEventBus modBus) {
@@ -65,7 +64,6 @@ public final class HifiClient implements ClientFeature {
         scene.overlay().showControls(top, Pointing.DOWN, 50).rightClick().whileSneaking();
         say(scene, 80, top, "Sneak and right-click it with an empty hand to take the top unit off again.");
 
-        // Round to its back, for its cables.
         scene.rotateCameraY(180);
         scene.idle(25);
         scene.overlay().showControls(back, Pointing.RIGHT, 70).rightClick()

@@ -34,10 +34,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Plays the track of a linked jukebox, disc reader or Blu-ray player, in sync with it, loudest in front. Its range is the
- * default radius; only its volume is set (with the range quill). Rotate it with a Create wrench.
- */
 public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWrenchable {
     private static final MapCodec<SpeakerBlock> CODEC = simpleCodec(SpeakerBlock::new);
 
@@ -46,7 +42,6 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH));
     }
 
-    /** Where the sound comes from: the middle of the front face. */
     public static Vec3 mouth(BlockPos pos, Direction facing) {
         return pos.getCenter().add(Vec3.atLowerCornerOf(facing.getNormal()).scale(0.5));
     }
@@ -97,7 +92,6 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
             this(AudioFeature.SPEAKER_ENTITY.get(), pos, state);
         }
 
-        /** A speaker of another kind: a hi-fi stack's. */
         protected Entity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
             super(type, pos, state);
         }

@@ -17,11 +17,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 
-/**
- * Joins a hi-fi stack's units to its amplifier, and its amplifier to its speakers. On a socket at the back of a unit
- * it plugs that unit's cable in (see Cable); on one of the amplifier's speaker terminals and then on a hi-fi speaker
- * it runs a speaker cable between them. Each cable run uses one up; pulling it out gives it back.
- */
 public class HifiCableItem extends Item {
     /** How far (blocks) a speaker cable reaches. */
     public static final int MAX_LENGTH = 24;
@@ -37,7 +32,6 @@ public class HifiCableItem extends Item {
         super(properties);
     }
 
-    /** {@code player} touched the {@code channel} speaker terminal of {@code stack}: the cable they hold starts there. */
     static void pick(ServerPlayer player, HifiStackBlock.Entity stack, Streams.Channel channel) {
         if (!player.getMainHandItem().is(HifiFeature.HIFI_CABLE.get())) {
             player.displayClientMessage(Component.translatable("create_media_systems.hifi.needs_cable")

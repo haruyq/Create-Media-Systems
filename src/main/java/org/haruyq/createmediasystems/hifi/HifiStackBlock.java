@@ -66,13 +66,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/**
- * A hi-fi system of separate units stacked in one block: an amplifier, a graphic equalizer, a tuner, a disc player
- * and a double cassette deck (see Unit), each placed onto the stack with its own item, in any order. The amplifier is
- * the heart of it: it picks which of the others is heard, how loud, and through which speakers (see
- * HifiSpeakerBlock), and the others only work once joined to it with cables at the back (see Cable). Everything is
- * worked by pointing at its controls (see Control); sneak and right-click with an empty hand to take the top unit off.
- */
+/** A hi-fi system of separate units (see Unit) stacked in one block, each placed onto the stack with its own item. */
 public class HifiStackBlock extends HorizontalDirectionalBlock implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<HifiStackBlock> CODEC = simpleCodec(HifiStackBlock::new);
     /** Its shape for each height (in half sixteenths) and whether it faces along x. */
@@ -137,7 +131,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
-    /** No item of its own: picking it gives its top unit. */
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
         return level.getBlockEntity(pos) instanceof Entity stack && !stack.units.isEmpty()
@@ -156,7 +149,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         return type != HifiFeature.HIFI_STACK_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    /** What the amplifier plays: the unit it is set to listen to. */
     public enum Input {
         DISC(Unit.DISC_PLAYER), TUNER(Unit.TUNER), TAPE(Unit.CASSETTE_DECK);
 
@@ -171,7 +163,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         }
     }
 
-    /** What a deck does with its tape. */
     public enum Motion {
         STOP, PLAY, REWIND, FORWARD;
 
@@ -229,7 +220,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         /** Client only: the knob this player turns (see HifiControls), which the server's word leaves as it is meanwhile. */
         @Nullable
         private Control turning;
-        /** Who last worked it, to start what it plays next. */
         @Nullable
         private Player by;
         /** How much of the video its disc plays its listeners have downloaded. Not saved. */
@@ -275,7 +265,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return (cables & cable.bit()) != 0;
         }
 
-        /** Whether {@code unit} works: in the stack, and (but for the amplifier) joined to an amplifier switched on. */
         public boolean live(Unit unit) {
             return has(unit) && power() && (unit == Unit.AMPLIFIER || wired(Cable.system(unit)));
         }
@@ -284,7 +273,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return has(Unit.AMPLIFIER) && amplifier.power;
         }
 
-        /** The unit the amplifier's input plays. */
         private UnitPart.Source source(Input input) {
             return switch (input) {
                 case DISC -> discPlayer;
@@ -297,7 +285,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return List.of(discPlayer, deck, tuner);
         }
 
-        /** Whether {@code input} is what is heard and still waits for its listeners to load it. */
         public boolean loading(Input input) {
             UnitPart.Playing playing = loading ? audible() : null;
             return playing != null && playing.input() == input;
@@ -323,7 +310,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             turning = knob;
         }
 
-        /** Whether {@code unit} can be put on top: one of each, and no taller than the block. */
         public boolean canAdd(Unit unit) {
             return !has(unit) && height() + unit.height <= Unit.ROOM;
         }
@@ -343,7 +329,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             changed();
         }
 
-        /** Takes the top unit off for {@code player}, with what is in it and its cables; the last one takes the block. */
         void pop(Player player) {
             if (units.isEmpty()) {
                 return;
@@ -360,7 +345,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
         }
 
-        /** Every item it is made of and holds. */
         List<ItemStack> everything() {
             List<ItemStack> items = new ArrayList<>();
             for (Unit unit : List.copyOf(units)) {
@@ -370,7 +354,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return items;
         }
 
-        /** Takes {@code unit} apart: the cables plugged into it, what it holds, and its own item. */
         private List<ItemStack> contents(Unit unit) {
             List<ItemStack> items = new ArrayList<>();
             int unplugged = 0;
@@ -388,7 +371,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return items;
         }
 
-        /** The links of the disc in the player. */
         @Override
         public List<String> playlist() {
             return discPlayer.playlist();
@@ -399,7 +381,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return discPlayer.index();
         }
 
-        /** What its speakers play now: what the amplifier's input is set to, if that plays and is joined to it. */
         @Nullable
         private UnitPart.Playing audible() {
             if (!power() || amplifier.warming > 0 || !live(amplifier.input.unit)) {
@@ -420,7 +401,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     : new Streams.Source(playing.url(), source(playing.input()).clock(playing).position(), null);
         }
 
-        /** The amplifier's volume knob. */
         @Override
         public float volume() {
             return amplifier.volume / 100f;
@@ -432,10 +412,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return power() ? (float) Math.pow(volume(), 1.5) : 0;
         }
 
-        /**
-         * How it sounds: the equalizer's preset at its effect level (unless the amplifier plays a disc direct), the
-         * amplifier's bass boost and wide stereo, and a tape's duller top.
-         */
         @Override
         public Tone tone() {
             if (!power()) {
@@ -473,7 +449,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             if (amplifier.warming > 0) {
                 amplifier.warming--;
             }
-            // Whatever is heard now that wasn't a tick ago starts for its speakers, from where it is.
             UnitPart.Playing playing = audible();
             if (!Objects.equals(playing, begun)) {
                 begun = playing;
@@ -483,7 +458,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                             source(playing.input()).clock(playing), now);
                 }
             }
-            // Everything runs on, heard or not; what is heard waits for its listeners to load it.
             PlaybackClock heard = playing == null ? null : source(playing.input()).clock(playing);
             for (UnitPart.Source source : sources()) {
                 for (PlaybackClock clock : source.clocks()) {
@@ -528,7 +502,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 amplifier.switchPower();
                 click(amplifier.power ? 0.9f : 0.7f);
             } else if (control == Control.DOOR_1 || control == Control.DOOR_2) {
-                // A door is opened by hand, live or not.
                 boolean empty = deck.tape(control.index).isEmpty();
                 if (deck.door(player, control.index, held)) {
                     click(empty ? 1.2f : 1.1f);
@@ -544,7 +517,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             changed();
         }
 
-        /** Sets the amplifier's volume knob; its speakers and displays take it up now. */
         void setVolume(int value) {
             amplifier.volume = Mth.clamp(value, 0, 100);
             if (level instanceof ServerLevel server) {
@@ -552,7 +524,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
         }
 
-        /** A remote's buttons work the disc player, and its slider the amplifier. */
         @Override
         public void control(Action action, int value, @Nullable Player by) {
             if (action == Action.VOLUME) {
@@ -570,7 +541,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             changed();
         }
 
-        /** Counts a listener's download of the video its disc plays, while it is what is heard. */
         @Override
         public void downloaded(ServerPlayer player, String url, float fraction) {
             UnitPart.Playing playing = audible();
@@ -579,7 +549,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
         }
 
-        /** Plugs {@code cable} in with the audio cable {@code player} holds, or pulls it out for them. */
         private void plug(ServerPlayer player, Cable cable) {
             if (wired(cable)) {
                 cables &= ~cable.bit();
@@ -623,7 +592,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             level.playSound(null, worldPosition, SoundEvents.STONE_BUTTON_CLICK_ON, SoundSource.BLOCKS, 0.4f, pitch);
         }
 
-        /** Saved, and sent to clients, who draw it. */
         void changed() {
             setChanged();
             if (level != null && !level.isClientSide) {

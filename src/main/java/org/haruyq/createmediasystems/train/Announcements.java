@@ -20,7 +20,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/** Client side of in-train announcements: each is heard from the train speakers of the carriage we are on. */
 final class Announcements {
     /** Where each reader's announcements play (see TrainDiscReaderBehaviour.Announce#channel). */
     private static final Map<String, ClientStreams.Slot> SLOTS = new HashMap<>();

@@ -26,7 +26,6 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** Announcements on Create trains, and train detectors with the receivers that signal them anywhere. */
 public final class TrainFeature implements Feature {
     public static final DeferredItem<AnnouncementScheduleItem> ANNOUNCEMENT_SCHEDULE = ITEMS.register(
             "announcement_schedule", () -> new AnnouncementScheduleItem(new Item.Properties().stacksTo(1)));

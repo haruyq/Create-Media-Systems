@@ -17,10 +17,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * One unit of a hi-fi stack. Used on a stack it goes on top of it, in the same block, if the stack has room and none
- * of its kind yet; anywhere else it is placed as a new stack of one.
- */
 public class HifiUnitItem extends BlockItem {
     public final Unit unit;
 
@@ -45,7 +41,6 @@ public class HifiUnitItem extends BlockItem {
         return super.useOn(context);
     }
 
-    /** The stack it was just placed as starts with it. */
     @Override
     protected boolean updateCustomBlockEntityTag(BlockPos pos, Level level, @Nullable Player player, ItemStack stack,
                                                  BlockState state) {
@@ -55,7 +50,6 @@ public class HifiUnitItem extends BlockItem {
         return super.updateCustomBlockEntityTag(pos, level, player, stack, state);
     }
 
-    /** Named as the unit it is, not as the stack. */
     @Override
     public String getDescriptionId() {
         return getOrCreateDescriptionId();
