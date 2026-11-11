@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.megaphone;
 
+import org.haruyq.createmediasystems.FittingSlot;
 import org.haruyq.createmediasystems.HeldItemMenu;
 import org.haruyq.createmediasystems.power.BatteryItem;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -18,8 +19,8 @@ public final class MegaphoneMenu extends HeldItemMenu {
         var level=inventory.player.level();contents.setItem(0,MegaphoneData.disc(item,level));contents.setItem(1,MegaphoneData.battery(item,level));
         contents.addListener(c->{if(!updating && !level.isClientSide && stillValid(inventory.player)){
             MegaphoneData.contents(item,level,c.getItem(0),c.getItem(1));inventory.setChanged();}});
-        addSlot(new Slot(contents,0,28,60){@Override public boolean mayPlace(ItemStack item){return MediaItem.fits(item, DiscKind.Slot.PORTABLE);}@Override public int getMaxStackSize(){return 1;}});
-        addSlot(new Slot(contents,1,28,108){@Override public boolean mayPlace(ItemStack item){return item.getItem() instanceof BatteryItem;}@Override public int getMaxStackSize(){return 1;}});
+        addSlot(new FittingSlot(contents,0,28,60,item->MediaItem.fits(item, DiscKind.Slot.PORTABLE)));
+        addSlot(new FittingSlot(contents,1,28,108,BatteryItem::fits));
         addPlayerSlots(116,142);
     }
     public ItemStack horn(){return inventory.getItem(held);}
@@ -31,7 +32,7 @@ public final class MegaphoneMenu extends HeldItemMenu {
     @Override public ItemStack quickMoveStack(Player player,int slot) {
         if(slot<0 || slot>=slots.size())return ItemStack.EMPTY;var s=slots.get(slot);if(!s.hasItem() || !s.mayPickup(player))return ItemStack.EMPTY;
         var stack=s.getItem();var before=stack.copy();
-        boolean moved=slot<2?moveItemStackTo(stack,2,slots.size(),true):stack.getItem() instanceof BatteryItem?moveItemStackTo(stack,1,2,false):MediaItem.fits(stack, DiscKind.Slot.PORTABLE)&&moveItemStackTo(stack,0,1,false);
+        boolean moved=slot<2?moveItemStackTo(stack,2,slots.size(),true):moveItemStackTo(stack,0,2,false);
         if(!moved)return ItemStack.EMPTY;if(stack.isEmpty())s.setByPlayer(ItemStack.EMPTY);else s.setChanged();s.onTake(player,stack);return before;
     }
 }

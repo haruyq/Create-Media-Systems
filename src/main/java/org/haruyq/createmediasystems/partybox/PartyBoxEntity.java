@@ -127,7 +127,7 @@ public final class PartyBoxEntity extends Entity implements Portable {
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (level().isClientSide) return InteractionResult.SUCCESS;
         ItemStack held = player.getItemInHand(hand);
-        int slot = held.getItem() instanceof BatteryItem ? 1 : MediaItem.fits(held, DiscKind.Slot.PORTABLE) ? 0 : -1;
+        int slot = BatteryItem.fits(held) ? 1 : MediaItem.fits(held, DiscKind.Slot.PORTABLE) ? 0 : -1;
         if (slot >= 0) {
             if (slot == 0 && !MediaItem.allowed(held)) {
                 player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true); return InteractionResult.CONSUME;
