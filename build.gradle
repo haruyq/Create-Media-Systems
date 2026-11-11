@@ -161,6 +161,17 @@ if (flag('launcherServerTest') || cellPlantTest) {
     }
     neoForge.runs.gameTestServer.gameDirectory = file(sableTests ? 'build/sable-gametest' : 'build/gametest')
 }
+// Game tests never ask a CMS API that happens to run on this computer (one refuses their made-up tracks, which then end
+// at once): their server's apiUrl is one nothing listens on, so a track's length stays unknown, as with no API at all.
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    doFirst {
+        def config = neoForge.runs.gameTestServer.gameDirectory.get().file('config/cms-server.toml').asFile
+        def line = 'apiUrl = "http://127.0.0.1:1"'
+        def text = config.exists() ? config.text : ''
+        config.parentFile.mkdirs()
+        config.text = text =~ /(?m)^apiUrl = / ? text.replaceAll(/(?m)^apiUrl = .*$/, line) : line + '\n' + text
+    }
+}
 
 // A tiny registry fixture verifies both branches of the optional Plant recipe without making Plant a dependency.
 if (cellPlantTest) {
