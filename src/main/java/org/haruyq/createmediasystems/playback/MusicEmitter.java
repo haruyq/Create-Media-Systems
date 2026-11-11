@@ -52,6 +52,9 @@ public interface MusicEmitter {
         return List.of();
     }
 
+    /** How many emitters of its kind play at once here, the nearest first. */
+    int cap();
+
     /** Whether its link streams from the API even where the native player could play it. */
     default boolean viaApi() {
         return false;

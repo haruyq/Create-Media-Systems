@@ -27,6 +27,7 @@ public final class PartyBoxClient {
 
     /** A PartyBox's music, from its speaker and through its bass. */
     private record Speaker(PartyBoxEntity box, Meter meter) implements MusicEmitter {
+        @Override public int cap(){return 12;}
         static Stream<Speaker> near(Entity ear) {
             return ear.level().getEntitiesOfClass(PartyBoxEntity.class,ear.getBoundingBox().inflate(PartyBoxSpecs.HEAR_RANGE)).stream()
                     .map(box->new Speaker(box,new Meter()));

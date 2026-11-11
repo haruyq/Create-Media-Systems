@@ -11,7 +11,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Portable;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -32,9 +31,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Plays the music emitters near this listener (see MusicEmitter): the nearest of every kind together, up to one budget
- * (ClientConfig.MAX_AUDIBLE_DISC_PROJECTIONS), each from where it is and pitched by its Doppler shift for this
- * listener. A link streams (see StreamSound), a jukebox record plays its own song event (see EmitterRecordSound); both
+ * Plays the music emitters near this listener (see MusicEmitter): the nearest of each kind, up to its cap, each from
+ * where it is and pitched by its Doppler shift for this listener. A link streams (see StreamSound), a jukebox record plays its own song event (see EmitterRecordSound); both
  * open where the emitter's server clock is, and start over there once a still emitter's sound drifts off it.
  */
 public final class EmitterAudioManager {
@@ -132,11 +130,12 @@ public final class EmitterAudioManager {
         if (ticks % FIND_TICKS != 0) {
             return;
         }
+        Map<Class<?>, Integer> taken = new HashMap<>();
         List<MusicEmitter> nearest = FINDERS.stream().<MusicEmitter>flatMap(finder -> finder.apply(ear))
                 .filter(emitter -> emitter.present() && inRange(emitter, ear))
                 .sorted(Comparator.comparingDouble((MusicEmitter emitter) -> emitter.position().distanceToSqr(ear.position()))
                         .thenComparing(MusicEmitter::id))
-                .limit(ClientConfig.MAX_AUDIBLE_DISC_PROJECTIONS.get()).toList();
+                .filter(emitter -> taken.merge(emitter.getClass(), 1, Integer::sum) <= emitter.cap()).toList();
         Set<UUID> chosen = nearest.stream().map(MusicEmitter::id).collect(Collectors.toSet());
         PLAYING.values().removeIf(p -> {
             if (chosen.contains(p.emitter.id())) {

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.launcher.client;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 import org.haruyq.createmediasystems.playback.DopplerMath;
 import org.haruyq.createmediasystems.playback.MusicEmitter;
@@ -19,6 +20,11 @@ import net.minecraft.world.phys.Vec3;
  * the disc (see MediaItem), never a weapon sound. Each listener hears its own Doppler pitch of it.
  */
 record DiscEmitter(DiscProjectile disc) implements MusicEmitter {
+    @Override
+    public int cap() {
+        return ClientConfig.MAX_AUDIBLE_DISC_PROJECTIONS.get();
+    }
+
     static final double RANGE = 72;
 
     static Stream<DiscEmitter> near(Entity ear) {
