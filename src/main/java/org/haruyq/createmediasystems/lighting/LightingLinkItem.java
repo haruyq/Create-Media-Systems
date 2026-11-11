@@ -43,10 +43,6 @@ public class LightingLinkItem extends Item {
         LinkAction.resolve(player, pos).perform(player);
     }
 
-    private static void say(Player player, String key, Object... args) {
-        player.displayClientMessage(LightingText.message(key, args), true);
-    }
-
     @Override
     public InteractionResult useOn(UseOnContext context) {
         if (context.getPlayer() != null && !context.getLevel().isClientSide) {
@@ -75,7 +71,7 @@ public class LightingLinkItem extends Item {
             group.target = target.getUUID();
             group.motion = LightingSettings.Motion.TRACK;
             console.changed();
-            say(player, "following", target.getName().copy());
+            player.displayClientMessage(LightingText.message(LightingText.ON, "following", target.getName().copy()), true);
         }
     }
 
@@ -89,7 +85,7 @@ public class LightingLinkItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(LightingText.message("link_help"));
-        tooltip.add(LightingText.message("track_help"));
+        tooltip.add(LightingText.message(LightingText.MUTED, "link_help"));
+        tooltip.add(LightingText.message(LightingText.MUTED, "track_help"));
     }
 }

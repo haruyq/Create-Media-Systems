@@ -16,6 +16,12 @@ class AnalysisSession {
     /** A client says how it plays this often (ns); the server takes at most two a period from each (see status). */
     static final long STATUS_NANOS = 1_000_000_000L;
     static final long STATUS_MIN_MILLIS = STATUS_NANOS / 2_000_000;
+    /** The server sends each viewer a session's state at least this often (ticks)... */
+    static final int STATE_TICKS = 10;
+    /** ...and a client forgets a session it has not heard of for this long (ns), many states missed. */
+    static final long FORGET_NANOS = 5_000_000_000L;
+    /** The owner sends a live frame this often (ns), as far apart as prepared ones. */
+    static final long LIVE_NANOS = AnalysisFrame.INTERVAL * 1_000_000L;
 
     String track = "";
     String next = "";

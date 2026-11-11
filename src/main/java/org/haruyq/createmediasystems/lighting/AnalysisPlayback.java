@@ -29,6 +29,10 @@ public final class AnalysisPlayback {
     private static final Map<UUID, Playback> PLAYING = new HashMap<>();
     /** A client tick (ms): how far on a console's motion phase is read, for how fast it runs till the next. */
     private static final long PHASE_STEP_MILLIS = 50;
+    /** A prepared upload the server has not accepted is sent again after this long (ns). */
+    private static final long RESEND_NANOS = 500_000_000L;
+    /** A track whose kept copy could not be analysed is tried again after this long (ns). */
+    private static final long RETRY_NANOS = 60_000_000_000L;
 
     private AnalysisPlayback() {
     }
@@ -217,7 +221,7 @@ public final class AnalysisPlayback {
         }
         long now = System.nanoTime();
         PLAYING.values().removeIf(playback -> {
-            if (now - playback.received > 5_000_000_000L) {
+            if (now - playback.received > AnalysisSession.FORGET_NANOS) {
                 playback.cancel();
                 return true;
             }
@@ -241,14 +245,14 @@ public final class AnalysisPlayback {
             }
             prepare(playback, now);
             if (playback.pending != null) {
-                if (now - playback.sentAt >= 500_000_000L) {
+                if (now - playback.sentAt >= RESEND_NANOS) {
                     PacketDistributor.sendToServer(playback.pending);
                     playback.sentAt = now;
                 }
             } else if (now - playback.sentAt >= 100_000_000L && level.getGameTime() % 4 < 2 && uploadPrepared(playback)) {
                 playback.sentAt = now;
             }
-            if (now - playback.liveSentAt < 100_000_000L) {
+            if (now - playback.liveSentAt < AnalysisSession.LIVE_NANOS) {
                 continue;
             }
             playback.liveSentAt = now;
@@ -284,8 +288,7 @@ public final class AnalysisPlayback {
                     LogUtils.getLogger().info("Prepared lighting analysis: {} frames", frames.size());
                 }
             } catch (RuntimeException failed) {
-                playback.retryAt = now + 60_000_000_000L;
-                LogUtils.getLogger().debug("Cached lighting analysis unavailable", failed);
+                unavailable(playback, now, failed);
             }
             playback.job = null;
         }
@@ -306,9 +309,14 @@ public final class AnalysisPlayback {
                 playback.job = job;
                 return;
             } catch (RuntimeException failed) {
-                playback.retryAt = now + 60_000_000_000L;
+                unavailable(playback, now, failed);
             }
         }
+    }
+
+    private static void unavailable(Playback playback, long now, RuntimeException failed) {
+        playback.retryAt = now + RETRY_NANOS;
+        LogUtils.getLogger().debug("Cached lighting analysis unavailable", failed);
     }
 
     private static double phaseAt(Playback playback, long position) {

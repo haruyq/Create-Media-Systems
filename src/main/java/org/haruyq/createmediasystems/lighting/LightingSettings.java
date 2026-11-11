@@ -13,6 +13,8 @@ public final class LightingSettings {
     public static final int GROUPS = 6;
     public static final int COLORS = 8;
     public static final int MAX_RANGE = 300;
+    /** How far from a fixture its light is drawn: its longest beam, and a margin. */
+    public static final int VIEW_DISTANCE = MAX_RANGE + 32;
     /** Saved settings a console keeps for its groups to recall. */
     public static final int PRESETS = 6;
     /** How far a held Shift moves a range at once, against 1 without. */
