@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.ArrayList;
@@ -72,8 +73,8 @@ public class VideoPlayerGameTests {
         BlockPos speakerPos = helper.absolutePos(new BlockPos(3, 2, 1));
         level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
-        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
-        disc.set(VideoFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=listener"));
+        ItemStack disc = new ItemStack(DiscFeature.BLU_RAY.get());
+        disc.set(DiscFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=listener"));
         ((VideoPlayerBlock.Entity) level.getBlockEntity(source)).insert(disc, null);
         SpeakerBlock.Entity speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);
 
@@ -128,8 +129,8 @@ public class VideoPlayerGameTests {
         level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
         level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
         String url = "cms-disc://" + UUID.randomUUID() + "/" + UUID.randomUUID();
-        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
-        disc.set(VideoFeature.PLAYLIST.get(), List.of(url));
+        ItemStack disc = new ItemStack(DiscFeature.BLU_RAY.get());
+        disc.set(DiscFeature.PLAYLIST.get(), List.of(url));
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(source);
         player.insert(disc, null);
         SpeakerBlock.Entity speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);
@@ -156,8 +157,8 @@ public class VideoPlayerGameTests {
                         && play.url().equals(url) && play.startSeconds() == 300 && play.load() == seekLoad),
                         "each listener gets the disc again from 300 s: " + received);
             }
-            helper.assertTrue(!Streams.loaded(player) && Streams.playing(player).ticks() == 300 * 20,
-                    "it stands at 300 s while they load it, was " + Streams.playing(player).ticks());
+            helper.assertTrue(!Streams.loaded(player) && player.nowPlaying().ticks() == 300 * 20,
+                    "it stands at 300 s while they load it, was " + player.nowPlaying().ticks());
             Streams.started(first, speakerPos, 600);
             helper.assertTrue(a.stream().noneMatch(StreamPackets.SyncAtBlock.class::isInstance),
                     "the first to load it waits for the other");
@@ -168,15 +169,15 @@ public class VideoPlayerGameTests {
             }
 
             player.control(Remotable.Action.SEEK_BY, -10, first);
-            helper.assertTrue(Streams.playing(player).ticks() == 290 * 20, "ten seconds back is 290 s");
+            helper.assertTrue(player.nowPlaying().ticks() == 290 * 20, "ten seconds back is 290 s");
             player.control(Remotable.Action.PLAY_PAUSE, 0, first);
             player.control(Remotable.Action.SEEK, 100, first);
             helper.assertTrue(player.nowPlaying() == null, "a seek leaves it paused");
             player.control(Remotable.Action.PLAY_PAUSE, 0, first);
-            helper.assertTrue(Streams.playing(player).ticks() == 100 * 20, "and it plays on from 100 s");
+            helper.assertTrue(player.nowPlaying().ticks() == 100 * 20, "and it plays on from 100 s");
             player.control(Remotable.Action.SEEK, 10_000, first);
-            helper.assertTrue(Streams.playing(player).ticks() == 599 * 20,
-                    "past the end it goes a second short of it, was " + Streams.playing(player).ticks());
+            helper.assertTrue(player.nowPlaying().ticks() == 599 * 20,
+                    "past the end it goes a second short of it, was " + player.nowPlaying().ticks());
         } finally {
             Streams.stop(speaker);
             level.removePlayerImmediately(first, Entity.RemovalReason.DISCARDED);

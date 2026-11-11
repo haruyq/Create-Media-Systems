@@ -17,7 +17,6 @@ import org.haruyq.createmediasystems.p2p.Transport;
 import org.haruyq.createmediasystems.playback.MediaSources;
 import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.MediaKind;
-import org.haruyq.createmediasystems.video.VideoDiscItem;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -115,7 +114,7 @@ public final class DiscClient {
 
     private static int load(String path, int title) {
         var mc = Minecraft.getInstance();
-        if (mc.player == null || !(mc.player.getMainHandItem().getItem() instanceof VideoDiscItem)) {
+        if (mc.player == null || !(mc.player.getMainHandItem().getItem() instanceof PlaylistItem)) {
             say("hold_disc", true);
             return 0;
         }
@@ -136,7 +135,7 @@ public final class DiscClient {
                     say("hold_disc", true);
                     return false;
                 }
-                PacketDistributor.sendToServer(new VideoDiscItem.SetPlaylist(List.of(url.toString())));
+                PacketDistributor.sendToServer(new PlaylistItem.SetPlaylist(List.of(url.toString())));
                 say("loaded", false, String.format(java.util.Locale.ROOT, "%.0f", disc.duration()));
                 return true;
             }

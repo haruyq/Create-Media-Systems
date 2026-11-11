@@ -8,7 +8,7 @@ import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.disc.DiscFeature;
 
 import com.simibubi.create.Create;
 import com.simibubi.create.foundation.ponder.CreateSceneBuilder;
@@ -38,7 +38,7 @@ public final class HifiClient implements ClientFeature {
     public void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
         helper.forComponents(Stream.concat(Arrays.stream(Unit.values()).map(unit -> BuiltInRegistries.ITEM.getKey(HifiFeature.hifiUnit(unit))),
                         Stream.of(HifiFeature.HIFI_SPEAKER.getId(), HifiFeature.HIFI_CABLE.getId(),
-                                HifiFeature.CD.getId(), HifiFeature.CASSETTE.getId())).toArray(ResourceLocation[]::new))
+                                DiscFeature.CD.getId(), DiscFeature.CASSETTE.getId())).toArray(ResourceLocation[]::new))
                 .addStoryBoard(Create.asResource("redstone_link"), HifiClient::hifi);
     }
 
@@ -98,10 +98,10 @@ public final class HifiClient implements ClientFeature {
         scene.overlay().showControls(front, Pointing.RIGHT, 60).rightClick();
         say(scene, 120, front, PonderPalette.GREEN, "Point at a button and right-click to press it. Hold right-click on a knob and look left or right to turn it. What you point at is named above the hotbar.");
         scene.overlay().showControls(front, Pointing.RIGHT, 60).rightClick()
-                .withItem(new ItemStack(VideoFeature.BLU_RAY.get()));
+                .withItem(new ItemStack(DiscFeature.BLU_RAY.get()));
         say(scene, 120, front, "Open the disc player's tray and put a CD, DVD, Blu-ray or Custom Disc on it. A DVD or Blu-ray also shows on displays linked to the stack with a Display Quill.");
         scene.overlay().showControls(front, Pointing.RIGHT, 60).rightClick()
-                .withItem(new ItemStack(HifiFeature.CASSETTE.get()));
+                .withItem(new ItemStack(DiscFeature.CASSETTE.get()));
         say(scene, 100, front, "Put a Cassette Tape in either deck. A tape remembers where it was stopped, so rewind it to hear it from the top.");
         say(scene, 130, top, "The amplifier picks what is heard and how loud. The sound controller shapes it with its presets and shows its spectrum. A Remote paired with the stack works its disc player and volume from afar.");
     }

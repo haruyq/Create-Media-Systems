@@ -1,13 +1,12 @@
 package org.haruyq.createmediasystems.mod;
 
-import org.haruyq.createmediasystems.client.PointLights;
-import org.haruyq.createmediasystems.power.client.BatteryRenderer;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.AudioClient;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
+import org.haruyq.createmediasystems.client.PointLights;
 import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.disc.DiscClient;
@@ -20,6 +19,7 @@ import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.partybox.client.PartyBoxClient;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
+import org.haruyq.createmediasystems.power.client.BatteryRenderer;
 import org.haruyq.createmediasystems.train.TrainClient;
 import org.haruyq.createmediasystems.video.VideoClient;
 

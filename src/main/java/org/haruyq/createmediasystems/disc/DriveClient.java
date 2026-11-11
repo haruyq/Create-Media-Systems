@@ -13,9 +13,7 @@ import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.p2p.Transport;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.DiscUrl;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Drive;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -412,7 +410,7 @@ public final class DriveClient {
         private float speed;
 
         Spin(BlockPos pos) {
-            super(VideoFeature.DRIVE_SPIN.get(), SoundSource.BLOCKS, SoundInstance.createUnseededRandom());
+            super(DiscFeature.DRIVE_SPIN.get(), SoundSource.BLOCKS, SoundInstance.createUnseededRandom());
             this.pos = pos;
             looping = true;
             delay = 0;

@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.display.DisplayFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
@@ -51,8 +52,8 @@ public class SableGameTests {
         BlockPos ground = origin.south(3);
         level.setBlockAndUpdate(ground, AudioFeature.SPEAKER.get().defaultBlockState());
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(origin);
-        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
-        disc.set(VideoFeature.PLAYLIST.get(), List.of("https://example.com/test.mp4"));
+        ItemStack disc = new ItemStack(DiscFeature.BLU_RAY.get());
+        disc.set(DiscFeature.PLAYLIST.get(), List.of("https://example.com/test.mp4"));
         player.insert(disc, null);
         CompoundTag legacy = new CompoundTag();
         legacy.put("Source", NbtUtils.writeBlockPos(origin));

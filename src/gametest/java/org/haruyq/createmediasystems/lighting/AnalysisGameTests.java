@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.VideoPlayerGameTests;
 import org.haruyq.createmediasystems.audio.AudioFeature;
@@ -50,8 +51,8 @@ public final class AnalysisGameTests {
         level.setBlockAndUpdate(consolePos, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState());
         level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
         VideoPlayerBlock.Entity player = (VideoPlayerBlock.Entity) level.getBlockEntity(playerPos);
-        ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
-        disc.set(VideoFeature.PLAYLIST.get(), List.of(CURRENT, NEXT));
+        ItemStack disc = new ItemStack(DiscFeature.BLU_RAY.get());
+        disc.set(DiscFeature.PLAYLIST.get(), List.of(CURRENT, NEXT));
         player.insert(disc, null);
         LightingConsoleBlock.Entity console = (LightingConsoleBlock.Entity) level.getBlockEntity(consolePos);
         console.setVideoSource(playerPos);

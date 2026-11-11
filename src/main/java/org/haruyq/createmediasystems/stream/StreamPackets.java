@@ -149,7 +149,7 @@ public final class StreamPackets {
     }
 
     /**
-     * Server → client: play the stream of the block at {@code pos} that StartedAtBlock said was loaded, from
+     * Server → client: play the stream of the block at {@code pos} that Started said was loaded, from
      * {@code seconds} in: the top, once every listener of a fresh track has it, or where it is, for one that loaded it
      * later or joined it playing (see Streams#started).
      */

@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.video;
+package org.haruyq.createmediasystems.disc;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -119,7 +119,7 @@ final class PlaylistScreen extends Screen {
     }
 
     private void save(List<String> rows) {
-        PacketDistributor.sendToServer(new VideoDiscItem.SetPlaylist(List.copyOf(rows)));
+        PacketDistributor.sendToServer(new PlaylistItem.SetPlaylist(List.copyOf(rows)));
         onClose();
     }
 

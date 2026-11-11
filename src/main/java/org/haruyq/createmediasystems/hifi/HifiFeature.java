@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
-import org.haruyq.createmediasystems.stream.DiscKind;
-import org.haruyq.createmediasystems.video.VideoDiscItem;
 
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.item.Item;
@@ -46,10 +44,6 @@ public final class HifiFeature implements Feature {
             "hifi_speaker", () -> BlockEntityType.Builder.of(HifiSpeakerBlock.Entity::new, HIFI_SPEAKER.get()).build(null));
     public static final DeferredItem<HifiCableItem> HIFI_CABLE = ITEMS.register("audio_cable",
             () -> new HifiCableItem(new Item.Properties()));
-    public static final DeferredItem<VideoDiscItem> CD = ITEMS.register("cd",
-            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), DiscKind.CD));
-    public static final DeferredItem<VideoDiscItem> CASSETTE = ITEMS.register("cassette",
-            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), DiscKind.CASSETTE));
     public static final Supplier<DataComponentType<TapePosition>> TAPE_POSITION = COMPONENTS.registerComponentType(
             "tape_position", b -> b.persistent(TapePosition.CODEC).networkSynchronized(TapePosition.STREAM_CODEC));
 

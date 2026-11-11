@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.video;
+package org.haruyq.createmediasystems.disc;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -7,8 +7,6 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.disc.DriveClient;
-import org.haruyq.createmediasystems.disc.DriveScreen;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaKind;
@@ -113,7 +111,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
     @Override
     @Nullable
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return type != VideoFeature.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+        return type != DiscFeature.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
     @Nullable
@@ -292,7 +290,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         private List<String> viewerNames = List.of();
 
         public Entity(BlockPos pos, BlockState state) {
-            super(VideoFeature.DRIVE_EMULATOR_ENTITY.get(), pos, state);
+            super(DiscFeature.DRIVE_EMULATOR_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -395,10 +393,10 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             host = next == Drive.OPEN ? null : player.getUUID();
             hostName = player.getGameProfile().getName();
             if (wasOpen || next == Drive.OPEN) {
-                sound(next == Drive.OPEN ? VideoFeature.DRIVE_TRAY_OPEN.get() : VideoFeature.DRIVE_TRAY.get());
+                sound(next == Drive.OPEN ? DiscFeature.DRIVE_TRAY_OPEN.get() : DiscFeature.DRIVE_TRAY.get());
             }
             if (next == Drive.READING) {
-                sound(VideoFeature.DRIVE_SEEK.get());
+                sound(DiscFeature.DRIVE_SEEK.get());
             }
             changed(player);
         }

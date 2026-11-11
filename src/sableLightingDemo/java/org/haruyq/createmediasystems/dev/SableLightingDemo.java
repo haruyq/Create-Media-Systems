@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.dev;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
@@ -328,8 +329,8 @@ public final class SableLightingDemo {
             if (level.getBlockEntity(playerPos) instanceof VideoPlayerBlock.Entity player
                     && level.getBlockEntity(plot.offset(3, 1, 3)) instanceof SpeakerBlock.Entity speaker
                     && level.getBlockEntity(plot.offset(0, 1, 2)) instanceof LightingConsoleBlock.Entity aboard) {
-                ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
-                disc.set(VideoFeature.PLAYLIST.get(), List.copyOf(ground.playlist()));
+                ItemStack disc = new ItemStack(DiscFeature.BLU_RAY.get());
+                disc.set(DiscFeature.PLAYLIST.get(), List.copyOf(ground.playlist()));
                 player.insert(disc, null);
                 speaker.configure(level, playerPos, 1, Streams.Channel.MIX);
                 aboard.setAudioSource(playerPos);

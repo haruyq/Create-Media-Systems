@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.List;
@@ -9,9 +10,9 @@ import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.Remotable.Action;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Disc;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Disc;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Drive;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import com.mojang.authlib.GameProfile;
@@ -39,7 +40,7 @@ public class DriveEmulatorGameTests {
         BlockPos pos = new BlockPos(1, 2, 1);
         helper.setBlock(pos.west(), AudioFeature.DISC_READER.get());
         helper.setBlock(pos.east(), VideoFeature.VIDEO_PLAYER.get());
-        helper.setBlock(pos, VideoFeature.DRIVE_EMULATOR.get());
+        helper.setBlock(pos, DiscFeature.DRIVE_EMULATOR.get());
         DriveEmulatorBlock.Entity emulator = helper.getBlockEntity(pos);
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos.east());
         DiscReaderBlock.Entity reader = helper.getBlockEntity(pos.west());
@@ -87,8 +88,8 @@ public class DriveEmulatorGameTests {
         helper.assertTrue(player.nowPlaying() != null, "played again from its remote: " + player.state().getString());
 
         // A disc of the player's own comes first; taken out, the drive's plays again.
-        ItemStack own = new ItemStack(VideoFeature.BLU_RAY.get());
-        own.set(VideoFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));
+        ItemStack own = new ItemStack(DiscFeature.BLU_RAY.get());
+        own.set(DiscFeature.PLAYLIST.get(), List.of("https://www.youtube.com/watch?v=own"));
         player.insert(own, host);
         helper.assertTrue(player.playlist().equals(List.of("https://www.youtube.com/watch?v=own")), "its own disc: " + player.playlist());
         player.insert(ItemStack.EMPTY, host);

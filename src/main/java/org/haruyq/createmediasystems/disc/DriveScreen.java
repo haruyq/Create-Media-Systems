@@ -4,9 +4,7 @@ import static org.haruyq.createmediasystems.client.mesh.Mesh.box;
 import static org.haruyq.createmediasystems.client.mesh.Mesh.quad;
 
 import org.haruyq.createmediasystems.client.mesh.Mesh;
-import org.haruyq.createmediasystems.video.VideoFeature;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Drive;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -53,7 +51,7 @@ public final class DriveScreen extends Screen {
     }
 
     private DriveScreen(BlockPos pos) {
-        super(VideoFeature.DRIVE_EMULATOR.get().getName());
+        super(DiscFeature.DRIVE_EMULATOR.get().getName());
         this.pos = pos;
     }
 

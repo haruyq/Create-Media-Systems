@@ -284,7 +284,7 @@ public final class Streams {
     /** What the source at {@code pos} is playing now, or null (nothing, unloaded, disallowed). */
     @Nullable
     public static Source source(Level level, BlockPos pos) {
-        return allowed(level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media ? playing(media) : null);
+        return allowed(level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media ? media.nowPlaying() : null);
     }
 
     @Nullable
@@ -296,11 +296,6 @@ public final class Streams {
         Video video = source.video();
         return video == null || video.next().map(UrlPolicy::isAllowed).orElse(true) ? source
                 : new Source(source.url(), source.ticks(), new Video(video.player(), video.maxHeight(), Optional.empty()));
-    }
-
-    @Nullable
-    public static Source playing(MediaSource media) {
-        return media.nowPlaying();
     }
 
     /**
@@ -383,7 +378,7 @@ public final class Streams {
     public record RelayView(Sound sound, int listeners) {
     }
 
-    public static java.util.List<RelayView> relays() {
+    public static List<RelayView> relays() {
         return RELAYS.values().stream().map(relay -> new RelayView(relay.sound, relay.listeners.size())).toList();
     }
 
