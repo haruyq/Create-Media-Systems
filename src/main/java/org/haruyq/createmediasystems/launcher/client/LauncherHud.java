@@ -26,7 +26,8 @@ public final class LauncherHud {
     private static final int WIDTH=318,HEIGHT=88;
     private static int spareCells,cachedTick=Integer.MIN_VALUE;
     private static Object cachedPlayer;
-    public static boolean reticleDrawn;
+    /** Whether the last frame drew the reticle (see LauncherClient.diagnostics). */
+    static boolean reticleDrawn;
     private LauncherHud() {}
     public static void register(IEventBus bus) {
         bus.addListener((RegisterGuiLayersEvent event)->event.registerAbove(VanillaGuiLayers.CROSSHAIR,LAYER,LauncherHud::render));

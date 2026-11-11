@@ -40,7 +40,7 @@ public final class DiscDragonGameTests {
     }
     @GameTest(template="empty") public static void savingAndRebindingDragonPartsPreservesTheDiscUuidAndMusicClock(GameTestHelper h){
         var dragon=dragon(h);var part=dragon.getSubEntities()[3];var shot=disc(h);shot.onHitEntity(new EntityHitResult(part,part.position().add(-.8,.5,0)));
-        var tag=new CompoundTag();shot.save(tag);tag.putLong("CmsDiscMusicStart",h.getLevel().getGameTime()-200);
+        shot.musicStartedAgo(200);var tag=new CompoundTag();shot.save(tag);
         var loaded=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),h.getLevel());loaded.load(tag);dragon.setPos(dragon.position().add(5,2,4));loaded.tick();
         h.assertTrue(loaded.getUUID().equals(shot.getUUID()) && loaded.attachmentPart()==3 && loaded.attachmentTarget()==dragon && loaded.elapsedMusicSeconds()>=10,"NBT must rebind the same parent UUID and distinct tail index without restarting audio");
         dragon.setHealth(0);loaded.tick();h.assertTrue(loaded.isRemoved(),"A dead dragon cannot leave an orphan blade");dragon.discard();h.succeed();

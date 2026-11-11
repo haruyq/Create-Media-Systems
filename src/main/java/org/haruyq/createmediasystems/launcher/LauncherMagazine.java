@@ -19,9 +19,6 @@ public final class LauncherMagazine {
         if (cell.isEmpty()) launcher.remove(LauncherFeature.LAUNCHER_CELL.get());
         else launcher.set(LauncherFeature.LAUNCHER_CELL.get(), ItemContainerContents.fromItems(List.of(cell.copyWithCount(1))));
     }
-    public static List<ItemStack> reserved(ItemStack launcher) {
-        return pending(launcher).isEmpty() ? List.of() : List.of(pending(launcher));
-    }
     public static boolean reloading(ItemStack launcher) { return launcher.has(LauncherFeature.LAUNCHER_RELOAD_START.get()); }
     public static boolean ejecting(ItemStack launcher) { return launcher.getOrDefault(LauncherFeature.LAUNCHER_EJECT_ONLY.get(), false); }
     public static int count(ItemStack launcher) { return DiscCellItem.shots(cell(launcher)); }

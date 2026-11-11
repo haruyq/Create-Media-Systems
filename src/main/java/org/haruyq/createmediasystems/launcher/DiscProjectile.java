@@ -56,7 +56,6 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             SynchedEntityData.defineId(DiscProjectile.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> ATTACH_BONE =
             SynchedEntityData.defineId(DiscProjectile.class,EntityDataSerializers.INT);
-    private long embeddedAtTick = -1L;
     private long spawnedAtTick = Long.MIN_VALUE;
     /** Its track's length in seconds once learned; server only (see clock). */
     private double length = -1;
@@ -253,12 +252,25 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             }
             boolean ended = clock().ended(level().getGameTime());
             if (ended || length <= 0 && level().getGameTime() - spawnedAtTick >= UNKNOWN_LIFETIME_TICKS) {
-                recover(ended);
+                // Projections are never obtainable items: the original stays in its cell. Its music sees it go and stops.
+                discard();
                 return false;
             }
         }
         return true;
     }
+
+    // Fixtures (the launcher game tests and harness, in this package) set what a save would carry through these,
+    // never by writing its save format by hand.
+    /** Its music started {@code ticks} ago. */
+    void musicStartedAgo(long ticks) { entityData.set(MUSIC_START_TICK, level().getGameTime() - ticks); }
+    /** It was fired {@code ticks} ago. */
+    void firedAgo(long ticks) { spawnedAtTick = level().getGameTime() - ticks; }
+    /** It is stuck where it is, as in a block or a body. */
+    void stuckHere() { entityData.set(EMBEDDED, true); setDeltaMovement(Vec3.ZERO); setNoGravity(true); }
+    /** Its track is {@code seconds} long, as the server learned it; negative while unknown. */
+    void trackLasts(double seconds) { length = seconds; }
+    double trackLength() { return length; }
 
     @Override
     protected Item getDefaultItem() {
@@ -330,14 +342,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         setPos(hitAt.x, hitAt.y, hitAt.z);
         setDeltaMovement(Vec3.ZERO);
         setNoGravity(true);
-        embeddedAtTick = level().getGameTime();
         entityData.set(EMBEDDED, true);
-    }
-
-    private void recover(boolean ended) {
-        if (isRemoved()) return;
-        // Projections are never obtainable items. The original remains inside the energy cell.
-        discard(); // The matching music instance sees its entity disappear and stops.
     }
 
     @Override
@@ -345,7 +350,6 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         super.addAdditionalSaveData(tag);
         tag.putBoolean("CmsDiscEmbedded", embedded());
         tag.putLong("CmsDiscMusicStart", entityData.get(MUSIC_START_TICK));
-        tag.putLong("CmsDiscEmbeddedAt", embeddedAtTick);
         tag.putLong("CmsDiscSpawnedAt", spawnedAtTick);
         tag.putDouble("CmsDiscDuration", length);
         tag.putInt("CmsDiscCellTier", cellTier().level);
@@ -360,7 +364,6 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         super.readAdditionalSaveData(tag);
         entityData.set(EMBEDDED, tag.getBoolean("CmsDiscEmbedded"));
         entityData.set(MUSIC_START_TICK, tag.contains("CmsDiscMusicStart") ? tag.getLong("CmsDiscMusicStart") : Long.MIN_VALUE);
-        embeddedAtTick = tag.getLong("CmsDiscEmbeddedAt");
         spawnedAtTick = tag.contains("CmsDiscSpawnedAt") ? tag.getLong("CmsDiscSpawnedAt")
                 : entityData.get(MUSIC_START_TICK);
         length = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;

@@ -58,15 +58,19 @@ public final class LauncherClient {
     private static long hitAt,lastShot=Long.MIN_VALUE;
     private static boolean headHit,killed;
     private static float hitDamage,cameraKick;
-    public static int confirmedShots,confirmedHits,confirmedHeadshots;
+    private static int confirmedShots,confirmedHits,confirmedHeadshots;
     /** Optional focus provider for non-mouse input integrations; the default uses normal game focus. */
-    public static java.util.function.BooleanSupplier additionalInputActive=()->false;
+    private static java.util.function.BooleanSupplier additionalInputActive=()->false;
+    /** Lets {@code active} count as input focus besides the game window's (a harness driving the client). */
+    public static void additionalInput(java.util.function.BooleanSupplier active){additionalInputActive=active;}
+    /** What the local player's launcher has confirmed so far, read-only, for diagnostics. */
+    public record Diagnostics(int confirmedShots,int confirmedHits,int confirmedHeadshots,float hitDamage,boolean reticleDrawn) {}
+    public static Diagnostics diagnostics(){return new Diagnostics(confirmedShots,confirmedHits,confirmedHeadshots,hitDamage,LauncherHud.reticleDrawn);}
     public static float aim(float partial){return MOTION.aim(partial);}
     public static float kick(float partial){return MOTION.kick(partial);}
     public static float hitAge(){return (System.nanoTime()-hitAt)/1_000_000_000f;}
     public static boolean headHit(){return headHit;}
     public static boolean killed(){return killed;}
-    public static float hitDamage(){return hitDamage;}
     private static final KeyMapping RELOAD_KEY = new KeyMapping(
             "key.create_media_systems.disc_launcher_reload",
             KeyConflictContext.IN_GAME,

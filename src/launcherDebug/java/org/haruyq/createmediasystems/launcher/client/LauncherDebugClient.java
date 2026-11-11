@@ -35,7 +35,7 @@ public final class LauncherDebugClient {
     private static boolean firing,crouchFire;
     private static boolean inputCapture,aimHeld;
     private static boolean savedPauseOnLostFocus;
-    static {LauncherClient.additionalInputActive=()->inputCapture;}
+    static {LauncherClient.additionalInput(()->inputCapture);}
     private static final Gson JSON = new Gson();
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) {
@@ -167,15 +167,15 @@ public final class LauncherDebugClient {
             row.put("crouching",mc.player.isCrouching());row.put("bodyYaw",mc.player.yBodyRot);row.put("headYaw",mc.player.yHeadRot);
             row.put("loaded",LauncherMagazine.count(mc.player.getMainHandItem()));
             row.put("capacity",org.haruyq.createmediasystems.launcher.LauncherReadout.of(mc.player.getMainHandItem()).capacity());
-            row.put("reserved",LauncherMagazine.reserved(mc.player.getMainHandItem()).size());
+            row.put("reserved",LauncherMagazine.pending(mc.player.getMainHandItem()).isEmpty()?0:1);
             row.put("reloading",LauncherMagazine.reloading(mc.player.getMainHandItem()));
             row.put("ejecting",LauncherMagazine.ejecting(mc.player.getMainHandItem()));
             row.put("aim",LauncherClient.aim(1));row.put("gunKick",LauncherClient.kick(1));
-            row.put("reticleDrawn",LauncherHud.reticleDrawn);
+            var diagnostics=LauncherClient.diagnostics();row.put("reticleDrawn",diagnostics.reticleDrawn());
             row.put("trigger",mc.options.keyAttack.isDown());row.put("aimKey",mc.options.keyUse.isDown());
             row.put("usingItem",mc.player.isUsingItem());row.put("yaw",mc.player.getYRot());row.put("pitch",mc.player.getXRot());
-            row.put("confirmedShots",LauncherClient.confirmedShots);row.put("confirmedHits",LauncherClient.confirmedHits);row.put("confirmedHeadshots",LauncherClient.confirmedHeadshots);
-            row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",LauncherClient.hitDamage());
+            row.put("confirmedShots",diagnostics.confirmedShots());row.put("confirmedHits",diagnostics.confirmedHits());row.put("confirmedHeadshots",diagnostics.confirmedHeadshots());
+            row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",diagnostics.hitDamage());
             row.put("damageTotal",LauncherClient.damageDisplay().total());
             double damageAge=LauncherClient.damageDisplay().age(System.nanoTime()/1_000_000_000.0);row.put("damageAge",Double.isFinite(damageAge)?damageAge:-1);
             row.put("damageMode",LauncherClient.DAMAGE_NUMBERS.get().name());

@@ -362,17 +362,14 @@ public final class DiscCellGameTests {
         var player = h.makeMockPlayer(GameType.SURVIVAL);
         var shot = new DiscProjectile(h.getLevel(), player, original());
         for (double invalid : new double[] {Double.NaN, Double.POSITIVE_INFINITY, -1, 0, 86401}) shot.noteDuration(invalid);
-        CompoundTag tag = new CompoundTag(); shot.save(tag);
-        h.assertTrue(tag.getDouble("CmsDiscDuration") < 0, "Invalid decoder metadata cannot change the server lifetime");
+        h.assertTrue(shot.trackLength() < 0, "Invalid decoder metadata cannot change the server lifetime");
         shot.noteDuration(254);
         shot.noteDuration(1);
-        shot.save(tag);
-        h.assertTrue(tag.getDouble("CmsDiscDuration") == 254, "A later client cannot shorten an established track");
+        h.assertTrue(shot.trackLength() == 254, "A later client cannot shorten an established track");
+        CompoundTag tag = new CompoundTag(); shot.save(tag);
         var restored = new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(), h.getLevel()); restored.load(tag);
-        CompoundTag savedAgain = new CompoundTag(); restored.save(savedAgain);
-        h.assertTrue(savedAgain.getDouble("CmsDiscDuration") == 254, "Chunk reload keeps the established duration");
-        tag.putLong("CmsDiscMusicStart", h.getLevel().getGameTime() - 254 * 20);
-        restored.load(tag);
+        h.assertTrue(restored.trackLength() == 254, "Chunk reload keeps the established duration");
+        restored.musicStartedAgo(254 * 20);
         h.assertTrue(!restored.tickPlayback() && restored.isRemoved(), "An expired reloaded projection disappears immediately");
         h.succeed();
     }

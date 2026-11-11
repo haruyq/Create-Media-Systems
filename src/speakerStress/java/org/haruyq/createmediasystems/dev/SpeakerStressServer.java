@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.dev;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,7 +9,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
@@ -154,16 +152,11 @@ public final class SpeakerStressServer {
         ServerLevel level = server.overworld();
         // Per source and channel: how many emitters relay it, and to how many of them each player listens.
         Map<String, int[]> sides = new HashMap<>();
-        Field relaysField = Streams.class.getDeclaredField("RELAYS");
-        relaysField.setAccessible(true);
-        Map<?, ?> relays = (Map<?, ?>) relaysField.get(null);
-        for (var entry : Map.copyOf(relays).entrySet()) {
-            Object relay = entry.getValue();
-            Streams.Sound sound = (Streams.Sound) field(relay, "sound");
-            Set<?> listeners = (Set<?>) field(relay, "listeners");
+        for (Streams.RelayView relay : Streams.relays()) {
+            Streams.Sound sound = relay.sound();
             int[] counts = sides.computeIfAbsent(name(sound.source()) + "/" + sound.channel(), k -> new int[2]);
             counts[0]++;
-            counts[1] += listeners.size();
+            counts[1] += relay.listeners();
         }
         StringBuilder json = new StringBuilder("{\"wallMillis\":").append(System.currentTimeMillis())
                 .append(",\"tick\":").append(server.getTickCount()).append(",\"players\":")
@@ -191,11 +184,6 @@ public final class SpeakerStressServer {
                 : source.equals(BLU_RAY) ? "bluray" : source.toShortString().replace(", ", "_");
     }
 
-    private static Object field(Object target, String name) throws ReflectiveOperationException {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        return field.get(target);
-    }
 
     private static void startMedia() throws IOException {
         if (media != null) {

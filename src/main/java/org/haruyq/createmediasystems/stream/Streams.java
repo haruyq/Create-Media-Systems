@@ -331,6 +331,15 @@ public final class Streams {
                 && source.equals(entry.getValue().sound.source())).map(Map.Entry::getKey).toList();
     }
 
+    /** A read-only view of one emitter's relay, for diagnostics: what it relays and to how many players. */
+    public record RelayView(Sound sound, int listeners) {
+    }
+
+    /** Every emitter's relay now, for diagnostics. */
+    public static java.util.List<RelayView> relays() {
+        return RELAYS.values().stream().map(relay -> new RelayView(relay.sound, relay.listeners.size())).toList();
+    }
+
     public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
         Set<ServerPlayer> players = new HashSet<>();
         RELAYS.forEach((emitter, relay) -> {
