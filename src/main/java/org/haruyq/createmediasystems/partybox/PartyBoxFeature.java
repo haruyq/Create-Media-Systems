@@ -23,14 +23,12 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** The PartyBox: a speaker on a trolley with its own battery, and the battery. */
+/** The PartyBox: a speaker on a trolley, running on a battery pack. */
 public final class PartyBoxFeature implements Feature {
     public static final Supplier<DataComponentType<CompoundTag>> PARTYBOX_STATE = COMPONENTS.registerComponentType(
             "partybox_state", b -> b.persistent(CompoundTag.CODEC).networkSynchronized(ByteBufCodecs.COMPOUND_TAG));
     public static final DeferredItem<PartyBoxItem> PARTYBOX = ITEMS.register("partybox_stage_320",
             () -> new PartyBoxItem(new Item.Properties().rarity(Rarity.RARE)));
-    public static final DeferredItem<PartyBoxBatteryItem> PARTYBOX_BATTERY = ITEMS.register("partybox_battery",
-            () -> new PartyBoxBatteryItem(new Item.Properties()));
     public static final DeferredHolder<EntityType<?>, EntityType<PartyBoxEntity>> PARTYBOX_ENTITY =
             ENTITIES.register("partybox_stage_320", () -> EntityType.Builder.<PartyBoxEntity>of(
                     PartyBoxEntity::new, MobCategory.MISC).sized(.40f, .69f)

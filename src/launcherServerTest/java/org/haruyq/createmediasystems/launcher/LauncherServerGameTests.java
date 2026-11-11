@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import net.minecraft.core.BlockPos;
@@ -51,7 +52,7 @@ public final class LauncherServerGameTests {
         ItemStack returned = first.playbackItem();
         var cell = new ItemStack(LauncherFeature.COPPER_DISC_CELL.get());
         DiscCellItem.setMaster(cell, returned);
-        DiscCellItem.setEnergy(cell, DiscCellTier.COPPER.capacity());
+        ChargeableItem.setEnergy(cell, DiscCellTier.COPPER.capacity());
         var launcher = new ItemStack(LauncherFeature.DISC_LAUNCHER.get());
         LauncherMagazine.setCell(launcher, cell);
         var round = LauncherMagazine.pop(launcher);

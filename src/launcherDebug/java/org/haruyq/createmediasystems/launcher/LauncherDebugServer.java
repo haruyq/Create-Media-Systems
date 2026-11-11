@@ -1,5 +1,8 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.PowerFeature;
+import org.haruyq.createmediasystems.power.BatteryItem;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.nio.file.*;
 import java.util.*;
 import com.mojang.logging.LogUtils;
@@ -116,7 +119,7 @@ public final class LauncherDebugServer {
     static ItemStack cell(DiscCellTier tier, String kind) {
         ItemStack cell = new ItemStack(LauncherFeature.cell(tier));
         DiscCellItem.setMaster(cell, disc(kind));
-        DiscCellItem.setEnergy(cell, tier.capacity());
+        ChargeableItem.setEnergy(cell, tier.capacity());
         return cell;
     }
     @SubscribeEvent public static void spawned(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) {
@@ -212,7 +215,7 @@ public final class LauncherDebugServer {
                     p.teleportTo(event.getServer().overworld(),700.5,116,688.5,0,0);p.getAbilities().flying=true;p.onUpdateAbilities();
                     for(int i=0;i<2;i++){
                         var horn=new ItemStack(i==0?MegaphoneFeature.MEGAPHONE_WHITE.get():MegaphoneFeature.MEGAPHONE_BLACK.get());
-                        var battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                        var battery=new ItemStack(PowerFeature.BATTERY.get());ChargeableItem.setEnergy(battery,BatteryItem.CAPACITY);
                         var media=disc(parts.length>1?parts[1]:"vanilla");
                         if(parts.length>1 && parts[1].equals("youtube"))media.set(AudioFeature.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
                         org.haruyq.createmediasystems.megaphone.MegaphoneData.contents(horn,p.level(),media,battery);
@@ -255,8 +258,8 @@ public final class LauncherDebugServer {
                 case "partybox-grant" -> {
                     if(p.getInventory().countItem(PartyBoxFeature.PARTYBOX.get())==0){
                         p.getInventory().placeItemBackInInventory(new ItemStack(PartyBoxFeature.PARTYBOX.get()));
-                        ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
-                        org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                        ItemStack battery=new ItemStack(PowerFeature.BATTERY.get());
+                        ChargeableItem.setEnergy(battery,BatteryItem.CAPACITY);
                         p.getInventory().placeItemBackInInventory(battery);p.inventoryMenu.broadcastChanges();
                     }
                 }
@@ -272,8 +275,8 @@ public final class LauncherDebugServer {
                     p.teleportTo(l,.5,100,9.5,180,25);
                     var box=new org.haruyq.createmediasystems.partybox.PartyBoxEntity(PartyBoxFeature.PARTYBOX_ENTITY.get(),l);
                     box.setPos(.5,100,7.8);box.setYRot(180);box.addTag("cms_partybox_check");
-                    ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
-                    org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                    ItemStack battery=new ItemStack(PowerFeature.BATTERY.get());
+                    ChargeableItem.setEnergy(battery,BatteryItem.CAPACITY);
                     box.inventory.setItem(1,battery);ItemStack media=disc(parts.length>1?parts[1]:"vanilla");
                     if(parts.length>1 && parts[1].equals("youtube"))media.set(AudioFeature.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
                     box.inventory.setItem(0,media);
@@ -317,7 +320,7 @@ public final class LauncherDebugServer {
                     var charger = (DiscCellCharger) l.getBlockEntity(pos);
                     charger.take();
                     ItemStack demo = cell(DiscCellTier.RESONANT, "vanilla");
-                    if(parts.length==1)DiscCellItem.setEnergy(demo,0);
+                    if(parts.length==1)ChargeableItem.setEnergy(demo,0);
                     charger.insert(demo);
                     if(parts.length>1 && parts[1].equals("static"))l.setBlockAndUpdate(motor,Blocks.AIR.defaultBlockState());
                     p.teleportTo(l, .5, 100, 9.5, -145, 15);
@@ -364,7 +367,7 @@ public final class LauncherDebugServer {
                     gun.remove(LauncherFeature.LAUNCHER_EJECT_ONLY.get());
                     DiscCellTier tier = DiscCellTier.at(Integer.parseInt(parts[1]));
                     ItemStack fixture = cell(tier, "vanilla");
-                    if (parts.length > 2) DiscCellItem.setEnergy(fixture, Integer.parseInt(parts[2]));
+                    if (parts.length > 2) ChargeableItem.setEnergy(fixture, Integer.parseInt(parts[2]));
                     LauncherMagazine.setCell(gun, fixture);
                     p.inventoryMenu.broadcastChanges();
                 }

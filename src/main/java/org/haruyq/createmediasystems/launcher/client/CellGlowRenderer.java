@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -73,7 +74,7 @@ public final class CellGlowRenderer {
 
     private static void addCell(List<Source> sources, ItemStack cell, Vec3 position, float exposure) {
         if (!(cell.getItem() instanceof DiscCellItem item)) return;
-        float strength = CellLighting.strength((float) DiscCellItem.energy(cell) / item.tier.capacity());
+        float strength = CellLighting.strength(ChargeableItem.charge(cell));
         if (strength > 0) sources.add(new Source(position, item.tier.color, strength * exposure));
     }
 
@@ -87,7 +88,7 @@ public final class CellGlowRenderer {
             if (entity instanceof org.haruyq.createmediasystems.partybox.PartyBoxEntity box) {
                 if(box.playing() && box.energy()>0 && box.lights()!=0)
                     sources.add(new Source(box.soundPosition().add(Vec3.directionFromRotation(0,box.getYRot()+180).scale(.25)),org.haruyq.createmediasystems.partybox.client.PartyBoxMesh.lightColor(
-                            (mc.level.getGameTime()+(double)partial)/20.0,box.lights(),0),.6f));
+                            (mc.level.getGameTime()+(double)partial)/20.0,box.lights()),.6f));
             } else if (entity instanceof Player player) {
                 ItemStack gun = player.getMainHandItem();
                 if (gun.is(LauncherFeature.DISC_LAUNCHER.get())) {

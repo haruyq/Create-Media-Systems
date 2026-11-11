@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.client.mesh.CellLight;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
@@ -158,7 +160,7 @@ public final class LauncherClient {
         ItemStack cell = path.incoming() ? LauncherMagazine.ejecting(gun) ? ItemStack.EMPTY : LauncherMagazine.pending(gun)
                 : LauncherMagazine.cell(gun);
         if (!(cell.getItem() instanceof DiscCellItem item)) return new CellVisual(cell, path, 0x82949E, 0);
-        float charge = (float) DiscCellItem.energy(cell) / item.tier.capacity();
+        float charge = ChargeableItem.charge(cell);
         return new CellVisual(cell, path, item.tier.color, CellLighting.strength(charge));
     }
 

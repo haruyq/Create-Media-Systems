@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
+import org.haruyq.createmediasystems.power.BatteryItem;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import net.minecraft.client.gui.*;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -39,9 +41,9 @@ public final class MegaphoneScreen extends AbstractContainerScreen<MegaphoneMenu
         g.drawString(font,"SBL",x+13,y+10,0xFFFF6034,false);g.drawString(font,"MEGAPHONE  /  30 W",x+46,y+10,0xFFF0F2F4,false);
         for(var slot:menu.slots){int sx=x+slot.x,sy=y+slot.y;g.fill(sx-1,sy-1,sx+17,sy+17,0xFF505861);g.fill(sx,sy,sx+16,sy+16,0xFF242A31);}
         g.drawString(font,tr("source"),x+12,y+44,0xFFC3CBD2,false);g.drawString(font,tr("battery"),x+12,y+92,0xFFC3CBD2,false);
-        int energy=PartyBoxBatteryItem.energy(MegaphoneData.battery(item,minecraft.level));
-        g.fill(x+12,y+133,x+99,y+136,0xFF343C45);g.fill(x+12,y+133,x+12+Math.round(87f*energy/PartyBoxSpecs.CAPACITY_FE),y+136,0xFFFF8854);
-        g.drawString(font,Math.round(100f*energy/PartyBoxSpecs.CAPACITY_FE)+"%",x+54,y+113,0xFFE4E9ED,false);
+        int energy=ChargeableItem.energy(MegaphoneData.battery(item,minecraft.level));
+        g.fill(x+12,y+133,x+99,y+136,0xFF343C45);g.fill(x+12,y+133,x+12+Math.round(87f*energy/BatteryItem.CAPACITY),y+136,0xFFFF8854);
+        g.drawString(font,Math.round(100f*energy/BatteryItem.CAPACITY)+"%",x+54,y+113,0xFFE4E9ED,false);
         long seconds=MegaphoneData.position(item,minecraft.level)/20;
         g.drawString(font,String.format(java.util.Locale.ROOT,"%02d:%02d",seconds/60,seconds%60),x+56,y+65,0xFFE4E9ED,false);
         g.drawCenteredString(font,Component.translatable("megaphone.volume",MegaphoneData.volume(item)),x+200,y+86,0xFFEDE2CF);

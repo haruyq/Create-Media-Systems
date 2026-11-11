@@ -1,12 +1,11 @@
-package org.haruyq.createmediasystems.launcher.client;
+package org.haruyq.createmediasystems.client.mesh;
 
-import org.haruyq.createmediasystems.launcher.CellLighting;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 
-/** Local colored spill on the actual receiver/skin vertices, including the first-person hand pass. */
+/** A coloured point light spilling onto the actual receiver/skin vertices, including the first-person hand pass. */
 public final class CellLight {
     private final Vector3f position;
     private final int color;
@@ -21,6 +20,19 @@ public final class CellLight {
 
     public VertexConsumer wrap(VertexConsumer target) { return strength <= 0 ? target : new Lit(target); }
     public MultiBufferSource wrap(MultiBufferSource target) { return type -> wrap(target.getBuffer(type)); }
+
+    /** How much of the light reaches {@code distance} from it: none at {@code radius} or beyond. */
+    public static float falloff(float distance, float radius) {
+        if (radius <= 0 || distance >= radius) return 0;
+        float edge = 1 - Math.max(0, distance) / radius;
+        return edge * edge;
+    }
+
+    /** A surface colour channel {@code base} under a light channel {@code lightChannel} at {@code amount} 0..1. */
+    public static int channel(int base, int lightChannel, float amount) {
+        float blend = Math.clamp(amount * .9f, 0f, .95f);
+        return Math.clamp(Math.round(base * (1 - blend * (1 - lightChannel / 255f))), 0, 255);
+    }
 
     private final class Lit implements VertexConsumer {
         private final VertexConsumer target;
@@ -45,9 +57,9 @@ public final class CellLight {
             float normalLength = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
             float facing = distance < .0001f || normalLength < .0001f ? 1
                     : Math.max(0, (dx * nx + dy * ny + dz * nz) / (distance * normalLength));
-            float amount = Math.min(1, strength * CellLighting.falloff(distance, radius) * (.24f + .76f * facing));
-            target.setColor(CellLighting.channel(r, color >> 16 & 255, amount),
-                    CellLighting.channel(g, color >> 8 & 255, amount), CellLighting.channel(b, color & 255, amount), a);
+            float amount = Math.min(1, strength * falloff(distance, radius) * (.24f + .76f * facing));
+            target.setColor(channel(r, color >> 16 & 255, amount),
+                    channel(g, color >> 8 & 255, amount), channel(b, color & 255, amount), a);
             target.setUv2(Math.max(block, Math.round(amount * 240)), sky);
             target.setNormal(nx, ny, nz);
             return this;

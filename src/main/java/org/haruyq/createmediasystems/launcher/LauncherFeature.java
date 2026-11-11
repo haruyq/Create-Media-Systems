@@ -61,8 +61,6 @@ public final class LauncherFeature implements Feature {
             "launcher_shot_at", b -> b.persistent(Codec.LONG).networkSynchronized(ByteBufCodecs.VAR_LONG));
     public static final Supplier<DataComponentType<ItemContainerContents>> CELL_MASTER = COMPONENTS.registerComponentType(
             "cell_master", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
-    public static final Supplier<DataComponentType<Integer>> CELL_ENERGY = COMPONENTS.registerComponentType(
-            "cell_energy", b -> b.persistent(Codec.INT).networkSynchronized(ByteBufCodecs.VAR_INT));
     public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_CELL = COMPONENTS.registerComponentType(
             "launcher_cell", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
     public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_PENDING_CELL = COMPONENTS.registerComponentType(

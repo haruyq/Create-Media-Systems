@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.partybox.client;
 
+import org.haruyq.createmediasystems.client.mesh.Mesh;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import org.haruyq.createmediasystems.partybox.PartyBoxEntity;
@@ -12,7 +13,7 @@ import net.minecraft.util.Mth;
 
 public final class PartyBoxRenderer extends EntityRenderer<PartyBoxEntity> {
     public PartyBoxRenderer(EntityRendererProvider.Context context) { super(context);shadowRadius=.22f; }
-    @Override public ResourceLocation getTextureLocation(PartyBoxEntity box) { return LauncherRenderer.MATERIALS; }
+    @Override public ResourceLocation getTextureLocation(PartyBoxEntity box) { return Mesh.ATLAS; }
     @Override public void render(PartyBoxEntity box,float yaw,float partial,PoseStack pose,MultiBufferSource buffers,int light) {
         pose.pushPose();pose.mulPose(Axis.YP.rotationDegrees(-Mth.rotLerp(partial,box.yRotO,box.getYRot())));
         PartyBoxMesh.draw(pose,buffers,light,Mth.lerp(partial,box.previousLean,box.lean)/19,

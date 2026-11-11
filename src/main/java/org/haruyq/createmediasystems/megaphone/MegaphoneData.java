@@ -1,11 +1,11 @@
 package org.haruyq.createmediasystems.megaphone;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 
@@ -32,14 +32,14 @@ public final class MegaphoneData {
         if(!ItemStack.matches(disc(item,level),disc)){clock.stop();clock.forget();}
         t.put("Disc",disc.copyWithCount(1).saveOptional(level.registryAccess()));
         t.put("Battery",battery.copyWithCount(1).saveOptional(level.registryAccess()));
-        if(PartyBoxBatteryItem.energy(battery)<=0)clock.pause(now);
+        if(ChargeableItem.energy(battery)<=0)clock.pause(now);
         clock.save(t);settled(t,now);commit(item,t);
     }
     public static boolean play(ItemStack item,Level level,boolean play) {
         tick(item,level);var t=state(item).copy();long now=level.getGameTime();
         if(play) {
             var media=disc(item,level);
-            if(media.isEmpty() || PartyBoxBatteryItem.energy(battery(item,level))<=0 || MediaItem.silent(media) || !MediaItem.allowed(media))return false;
+            if(media.isEmpty() || ChargeableItem.energy(battery(item,level))<=0 || MediaItem.silent(media) || !MediaItem.allowed(media))return false;
         }
         PlaybackClock clock=PlaybackClock.read(t);
         if(!play)clock.pause(now);
@@ -60,7 +60,7 @@ public final class MegaphoneData {
         if(playing(item)) {
             dirty|=!t.contains("PowerAt") || t.getLong("PowerAt")!=now;
             var clock=PlaybackClock.read(t);var drain=PlaybackClock.Drain.read(t,OWED,now);var battery=battery(item,level);
-            PartyBoxBatteryItem.setEnergy(battery,drain.settle(clock,now,PartyBoxBatteryItem.energy(battery),MegaphoneAcoustics.drainPerTick(volume(item))));
+            ChargeableItem.setEnergy(battery,drain.settle(clock,now,ChargeableItem.energy(battery),MegaphoneAcoustics.drainPerTick(volume(item))));
             t.put("Battery",battery.saveOptional(level.registryAccess()));
             clock.learn(MediaItem.lengthSeconds(disc(item,level),level.registryAccess()));
             if(clock.running() && clock.ended(now))clock.stop();

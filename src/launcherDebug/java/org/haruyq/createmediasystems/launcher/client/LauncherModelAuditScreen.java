@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.PowerFeature;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.*;
 import com.mojang.math.Axis;
 import net.minecraft.client.gui.GuiGraphics;
@@ -16,9 +18,9 @@ final class LauncherModelAuditScreen extends Screen {
     private final List<ItemStack> items=new ArrayList<>();private final int angle;
     LauncherModelAuditScreen(int angle){super(Component.literal("CMS model audit"));this.angle=angle;
         var gun=new ItemStack(LauncherFeature.DISC_LAUNCHER.get());var cell=new ItemStack(LauncherFeature.cell(DiscCellTier.NETHERITE));
-        DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));DiscCellItem.setEnergy(cell,DiscCellTier.NETHERITE.capacity());LauncherMagazine.setCell(gun,cell);items.add(gun);
-        for(var tier:DiscCellTier.values()) {var c=new ItemStack(LauncherFeature.cell(tier));DiscCellItem.setEnergy(c,tier.capacity());items.add(c);}
-        items.add(new ItemStack(PartyBoxFeature.PARTYBOX.get()));items.add(new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get()));
+        DiscCellItem.setMaster(cell,new ItemStack(Items.MUSIC_DISC_CAT));ChargeableItem.setEnergy(cell,DiscCellTier.NETHERITE.capacity());LauncherMagazine.setCell(gun,cell);items.add(gun);
+        for(var tier:DiscCellTier.values()) {var c=new ItemStack(LauncherFeature.cell(tier));ChargeableItem.setEnergy(c,tier.capacity());items.add(c);}
+        items.add(new ItemStack(PartyBoxFeature.PARTYBOX.get()));items.add(new ItemStack(PowerFeature.BATTERY.get()));
         items.add(new ItemStack(MegaphoneFeature.MEGAPHONE_WHITE.get()));items.add(new ItemStack(MegaphoneFeature.MEGAPHONE_BLACK.get()));items.add(new ItemStack(LauncherFeature.DISC_CELL_CHARGER.get()));
     }
     @Override public boolean isPauseScreen(){return false;}

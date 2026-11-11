@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.partybox;
 
+import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -22,7 +23,7 @@ public final class PartyBoxMenu extends AbstractContainerMenu {
             @Override public int getMaxStackSize() { return 1; }
         });
         addSlot(new Slot(storage, 1, 25, 109) {
-            @Override public boolean mayPlace(ItemStack item) { return item.getItem() instanceof PartyBoxBatteryItem; }
+            @Override public boolean mayPlace(ItemStack item) { return item.getItem() instanceof BatteryItem; }
             @Override public int getMaxStackSize() { return 1; }
         });
         for(int row=0;row<3;row++) for(int col=0;col<9;col++) addSlot(new Slot(player,9+row*9+col,116+col*18,152+row*18));
@@ -38,7 +39,7 @@ public final class PartyBoxMenu extends AbstractContainerMenu {
         Slot slot=slots.get(index); if(!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack stack=slot.getItem(), before=stack.copy();
         boolean moved = index<2 ? moveItemStackTo(stack,2,slots.size(),true)
-                : stack.getItem() instanceof PartyBoxBatteryItem ? moveItemStackTo(stack,1,2,false)
+                : stack.getItem() instanceof BatteryItem ? moveItemStackTo(stack,1,2,false)
                 : MediaItem.fits(stack, DiscKind.Slot.PORTABLE) && moveItemStackTo(stack,0,1,false);
         if(!moved) return ItemStack.EMPTY;
         if(stack.isEmpty()) slot.setByPlayer(ItemStack.EMPTY); else slot.setChanged();

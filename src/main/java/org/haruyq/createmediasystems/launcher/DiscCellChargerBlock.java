@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
@@ -36,7 +37,7 @@ public final class DiscCellChargerBlock extends KineticBlock implements IBE<Disc
     }
     @Override protected ItemInteractionResult useItemOn(ItemStack held, BlockState state, Level level, BlockPos pos,
             Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!(held.getItem() instanceof DiscCellItem) && !(held.getItem() instanceof org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        if (!(held.getItem() instanceof ChargeableItem)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof DiscCellCharger charger && charger.cell().isEmpty()) {
             charger.insert(held.split(1));
         }

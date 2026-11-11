@@ -40,7 +40,7 @@ public final class PartyBoxClient {
         bus.addListener((RegisterClientExtensionsEvent event)->event.registerItem(new IClientItemExtensions() {
             private PartyBoxItemRenderer renderer;
             @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() { if(renderer==null)renderer=new PartyBoxItemRenderer();return renderer; }
-        },PartyBoxFeature.PARTYBOX.get(),PartyBoxFeature.PARTYBOX_BATTERY.get()));
+        },PartyBoxFeature.PARTYBOX.get()));
         bus.addListener((net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent event)->Minecraft.getInstance().execute(PartyBoxClient::stopAll));
         NeoForge.EVENT_BUS.addListener(PartyBoxClient::tick);
     }

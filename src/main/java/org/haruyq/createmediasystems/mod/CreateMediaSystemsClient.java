@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.mod;
 
+import org.haruyq.createmediasystems.power.client.BatteryRenderer;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -33,7 +34,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 @Mod(value = CreateMediaSystems.MOD_ID, dist = Dist.CLIENT)
 public final class CreateMediaSystemsClient {
     /** In the order their listeners are added, which is the order they hear an event in. */
-    private static final List<ClientFeature> FEATURES = List.of(LauncherClient::register, PartyBoxClient::register,
+    private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT, LauncherClient::register, PartyBoxClient::register,
             MegaphoneClient::register, ClientStreams::register, new AudioClient(), new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
             DiscClient::register);

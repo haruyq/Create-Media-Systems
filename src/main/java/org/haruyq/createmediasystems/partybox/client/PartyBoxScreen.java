@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.partybox.client;
 
+import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.partybox.*;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -53,9 +54,9 @@ public final class PartyBoxScreen extends AbstractContainerScreen<PartyBoxMenu> 
         g.drawString(font,tr("battery"),x+12,y+93,0xFFAEB8C4,false);
         if(menu.box!=null){var box=menu.box;
             g.drawCenteredString(font,Component.translatable("partybox.volume",box.volume()),x+200,y+82,0xFFE4E9ED);
-            int fill=Math.round(87f*box.energy()/PartyBoxSpecs.CAPACITY_FE);
+            int fill=Math.round(87f*box.energy()/BatteryItem.CAPACITY);
             g.fill(x+12,y+134,x+99,y+138,0xFF3A414A);g.fill(x+12,y+134,x+12+fill,y+138,0xFF65DCA0);
-            g.drawString(font,Math.round(100f*box.energy()/PartyBoxSpecs.CAPACITY_FE)+"%",x+49,y+114,0xFFE4E9ED,false);
+            g.drawString(font,Math.round(100f*box.energy()/BatteryItem.CAPACITY)+"%",x+49,y+114,0xFFE4E9ED,false);
             long seconds=box.positionTicks()/20;
             g.drawString(font,String.format(java.util.Locale.ROOT,"%02d:%02d",seconds/60,seconds%60),x+65,y+62,0xFFE4E9ED,false);
         }

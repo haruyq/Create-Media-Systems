@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.launcher.client;
+package org.haruyq.createmediasystems.client.mesh;
 
 import static org.junit.jupiter.api.Assertions.*;
 import org.joml.Matrix4f;

@@ -1,7 +1,8 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.power.PowerFeature;
 import java.util.List;
-import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import net.minecraft.core.BlockPos;
@@ -21,8 +22,7 @@ public final class DiscCellCharger extends KineticBlockEntity {
     private long externallyChargedAt = Long.MIN_VALUE;
     public final ItemStackHandler inventory = new ItemStackHandler(1) {
         @Override public int getSlotLimit(int slot) { return 1; }
-        @Override public boolean isItemValid(int slot, ItemStack item) { return item.getItem() instanceof DiscCellItem
-                || item.getItem() instanceof org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem; }
+        @Override public boolean isItemValid(int slot, ItemStack item) { return item.getItem() instanceof ChargeableItem; }
         @Override protected void onContentsChanged(int slot) { changed(true); }
     };
     private final IEnergyStorage energy = new IEnergyStorage() {
@@ -40,10 +40,7 @@ public final class DiscCellCharger extends KineticBlockEntity {
         @Override public boolean canExtract() { return false; }
         @Override public boolean canReceive() { return getEnergyStored() < getMaxEnergyStored(); }
     };
-    private IEnergyStorage port() {
-        return cell().getItem() instanceof org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem
-                ? org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.storage(cell()) : new DiscCellEnergy(cell());
-    }
+    private IEnergyStorage port() { return ChargeableItem.storage(cell()); }
 
     public DiscCellCharger(BlockEntityType<?> type, BlockPos pos, BlockState state) { super(type, pos, state); }
     public DiscCellCharger(BlockPos pos, BlockState state) { this(LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), pos, state); }
@@ -83,10 +80,6 @@ public final class DiscCellCharger extends KineticBlockEntity {
         return true;
     }
     public static void registerCapabilities(RegisterCapabilitiesEvent event) {
-        event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.storage(stack),
-                PartyBoxFeature.PARTYBOX_BATTERY.get());
-        event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> new DiscCellEnergy(stack),
-                LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
         event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.energy);
         event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), (be, side) -> be.inventory);
     }

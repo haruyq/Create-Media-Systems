@@ -1,6 +1,15 @@
 package org.haruyq.createmediasystems.launcher.client;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.FULL_BRIGHT;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.box;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.quad;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.vertex;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.Tile.*;
+
+import org.haruyq.createmediasystems.client.mesh.CellLight;
+import org.haruyq.createmediasystems.client.mesh.Mesh;
+import org.haruyq.createmediasystems.client.mesh.Tint;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;
@@ -13,10 +22,8 @@ import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.resources.ResourceLocation;
 
 /**
  * A procedural, multi-part Create-style weapon mesh. Unlike one-piece JSON item
@@ -24,11 +31,6 @@ import net.minecraft.resources.ResourceLocation;
  * move independently, with no GeckoLib dependency or per-frame model baking.
  */
 public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
-    public static final ResourceLocation MATERIALS = CreateMediaSystems.id("textures/item/disc_launcher_materials.png");
-    /** Opaque housings must write depth; translucent sorting exposes hidden intersecting faces. */
-    public static RenderType solid(){return RenderType.entityCutoutNoCull(MATERIALS);}
-    // 64x64 palette: 4x4 tiles: polished metal, dark metal, brass, wood, copper, vents, disc, LED...
-    private static final int METAL=0, DARK=1, BRASS=2, WOOD=3, COPPER=4, VENTS=5, DISC=6, LIGHT=7;
 
     public LauncherRenderer() {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
@@ -45,12 +47,12 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         int color = visual.color();
         // One pass: acquiring a second unfixed render type would invalidate the first BufferBuilder.
         // Core vertices supply full-bright light; receiver vertices receive a tier-colored point light.
-        VertexConsumer luminous = buffers.getBuffer(solid());
+        VertexConsumer luminous = buffers.getBuffer(Mesh.solid());
         pose.pushPose();
         pose.scale(1 / 16f, 1 / 16f, 1 / 16f);
         VertexConsumer mesh = new CellLight(pose.last().pose(), visual.pose().x(), visual.pose().y(), visual.pose().z(),
                 18, color, visual.strength() * 1.8f).wrap(luminous);
-        VertexConsumer glow = tint(luminous, visual.strength() > 0 ? color : 0x344148, 255);
+        VertexConsumer glow = new Tint(luminous, visual.strength() > 0 ? color : 0x344148, 255);
 
         // Hollow magazine well: every fixed part stays OUTSIDE the cartridge's 5.2 x 5.2 feed shaft.
         box(pose, mesh, 4.9f, 7.1f, 14.9f, 11.1f, 15.6f, 16.1f, DARK, light, overlay);
@@ -84,14 +86,14 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         for(float x:new float[]{5.65f,10.35f})for(float z:new float[]{9.7f,14f})
             box(pose,mesh,x-.17f,17.1f,z-.17f,x+.17f,17.22f,z+.17f,METAL,light,overlay);
         box(pose, mesh, 6.8f, 17.1f, 10, 9.2f, 17.5f, 12.7f, DARK, light, overlay);
-        box(pose, glow, 5.2f, 15.65f, 9.2f, 10.8f, 15.8f, 14.4f, METAL, 0xF000F0, overlay);
+        box(pose, glow, 5.2f, 15.65f, 9.2f, 10.8f, 15.8f, 14.4f, METAL, FULL_BRIGHT, overlay);
         pose.popPose();
         for (int side : new int[] {-1, 1}) {
             pose.pushPose();
             pose.translate(8 + side * 3.65f, 9.2f, LauncherMechanics.DOCK_Z);
             pose.mulPose(Axis.ZP.rotationDegrees(-side * motion.latch() * 58));
             box(pose, mesh, -.45f, 0, -2.5f, .45f, 5.4f, 2.5f, BRASS, light, overlay);
-            box(pose, glow, -.47f, 1, -1.6f, .47f, 4.5f, 1.6f, METAL, 0xF000F0, overlay);
+            box(pose, glow, -.47f, 1, -1.6f, .47f, 4.5f, 1.6f, METAL, FULL_BRIGHT, overlay);
             pose.popPose();
         }
 
@@ -102,21 +104,21 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
             pose.mulPose(Axis.ZP.rotationDegrees(side * motion.tray() * 95));
             float left = side < 0 ? 0 : -3.15f, right = side < 0 ? 3.15f : 0;
             box(pose, mesh, left, -.65f, -3, right, 0, 3.1f, METAL, light, overlay);
-            box(pose, glow, left + .25f, -.72f, -2.3f, right - .25f, -.64f, 2.3f, METAL, 0xF000F0, overlay);
+            box(pose, glow, left + .25f, -.72f, -2.3f, right - .25f, -.64f, 2.3f, METAL, FULL_BRIGHT, overlay);
             pose.popPose();
         }
         if (visual.stack().getItem() instanceof DiscCellItem item)
             cell(pose, mesh, luminous, visual.pose().x(), visual.pose().y(), visual.pose().z(), item.tier.color,
-                    (float) DiscCellItem.energy(visual.stack()) / item.tier.capacity(), light, overlay);
+                    ChargeableItem.charge(visual.stack()), light, overlay);
 
-        box(pose, glow, 7.2f, 11.3f, 16.1f, 8.8f, 12, 16.25f, METAL, 0xF000F0, overlay);
+        box(pose, glow, 7.2f, 11.3f, 16.1f, 8.8f, 12, 16.25f, METAL, FULL_BRIGHT, overlay);
         Long shot=stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
         float shotAge=shot==null || level==null?-1:level.getGameTime()-shot+partial;
         if(shotAge>=0 && shotAge<1.2f) {
-            var flash=tint(luminous,color,210);
+            var flash=new Tint(luminous,color,210);
             float pulse=1-shotAge/1.2f;
-            box(pose,flash,4.9f,8.8f,-.65f-1.55f*pulse,11.1f,9.5f,-.65f,LIGHT,0xF000F0,overlay);
-            box(pose,flash,7.65f,7.8f,-.7f-1.7f*pulse,8.35f,10.5f,-.7f,LIGHT,0xF000F0,overlay);
+            box(pose,flash,4.9f,8.8f,-.65f-1.55f*pulse,11.1f,9.5f,-.65f,LIGHT,FULL_BRIGHT,overlay);
+            box(pose,flash,7.65f,7.8f,-.7f-1.7f*pulse,8.35f,10.5f,-.7f,LIGHT,FULL_BRIGHT,overlay);
         }
         pose.popPose();
     }
@@ -133,7 +135,7 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         box(pose,mesh,9.9f,17.1f,5.9f,10.35f,20.25f,7.2f,METAL,light,overlay);
         box(pose,mesh,5.65f,20.25f,5.9f,10.35f,20.7f,7.2f,DARK,light,overlay);
         box(pose,mesh,6.1f,17.1f,5.9f,9.9f,17.55f,7.2f,DARK,light,overlay);
-        box(pose,glow,5.5f,18.0f,6.15f,5.65f,19.3f,6.85f,LIGHT,0xF000F0,overlay);
+        box(pose,glow,5.5f,18.0f,6.15f,5.65f,19.3f,6.85f,LIGHT,FULL_BRIGHT,overlay);
         // Front rail and barrel ribs make the direction legible in both hip fire and ADS.
         for(int i=0;i<4;i++)box(pose,mesh,5.25f,12.1f,1.7f+i*.9f,10.75f,12.5f,2.05f+i*.9f,DARK,light,overlay);
 
@@ -151,8 +153,8 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
             box(pose, mesh, 3.65f, 8, z, 4.2f, 10.7f, z + .6f, COPPER, light, overlay);
             box(pose, mesh, 11.8f, 8, z, 12.35f, 10.7f, z + .6f, COPPER, light, overlay);
         }
-        box(pose, glow, 5.5f, 10.95f, 2.5f, 6, 11.2f, 7.8f, METAL, 0xF000F0, overlay);
-        box(pose, glow, 10, 10.95f, 2.5f, 10.5f, 11.2f, 7.8f, METAL, 0xF000F0, overlay);
+        box(pose, glow, 5.5f, 10.95f, 2.5f, 6, 11.2f, 7.8f, METAL, FULL_BRIGHT, overlay);
+        box(pose, glow, 10, 10.95f, 2.5f, 10.5f, 11.2f, 7.8f, METAL, FULL_BRIGHT, overlay);
         flywheel(pose, mesh, 3.4f, 9.4f, 5.7f, spin, light, overlay);
         flywheel(pose, mesh, 12.6f, 9.4f, 5.7f, -spin, light, overlay);
 
@@ -173,23 +175,11 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
                     DARK, light, overlay);
         for (int i = 0; i < 5; i++) {
             int tintColor = charge >= (i + .1f) / 5f ? color : 0x3E5157;
-            VertexConsumer core = tint(luminous, tintColor, 255);
+            VertexConsumer core = new Tint(luminous, tintColor, 255);
             float bottom = -2.5f + i * 1.02f;
-            box(pose, core, -1.9f, bottom, -1.9f, 1.9f, bottom + .77f, 1.9f, METAL, 0xF000F0, overlay);
+            box(pose, core, -1.9f, bottom, -1.9f, 1.9f, bottom + .77f, 1.9f, METAL, FULL_BRIGHT, overlay);
         }
         pose.popPose();
-    }
-
-    public static VertexConsumer tint(VertexConsumer target, int color, int alpha) { return new Tint(target, color, alpha); }
-    private record Tint(VertexConsumer target, int color, int alpha) implements VertexConsumer {
-        @Override public VertexConsumer addVertex(float x, float y, float z) { target.addVertex(x, y, z); return this; }
-        @Override public VertexConsumer setColor(int r, int g, int b, int a) {
-            target.setColor(r * (color >> 16 & 255) / 255, g * (color >> 8 & 255) / 255, b * (color & 255) / 255, a * alpha / 255); return this;
-        }
-        @Override public VertexConsumer setUv(float u, float v) { target.setUv(u, v); return this; }
-        @Override public VertexConsumer setUv1(int u, int v) { target.setUv1(u, v); return this; }
-        @Override public VertexConsumer setUv2(int u, int v) { target.setUv2(u, v); return this; }
-        @Override public VertexConsumer setNormal(float x, float y, float z) { target.setNormal(x, y, z); return this; }
     }
 
     private static void flywheel(PoseStack pose, VertexConsumer out, float cx, float cy, float cz,
@@ -220,54 +210,24 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
             float ix=(float)Math.cos(a)*.45f,iz=(float)Math.sin(a)*.45f,jx=(float)Math.cos(b)*.45f,jz=(float)Math.sin(b)*.45f;
             discFace(pose,out,ix,.04f,iz,jx,.04f,jz,bx,.04f,bz,ax,.04f,az,radius,1,light,overlay);
             discFace(pose,out,ax,-.04f,az,bx,-.04f,bz,jx,-.04f,jz,ix,-.04f,iz,radius,-1,light,overlay);
-            quad(pose,out,ax,-.04f,az,ax,.04f,az,bx,.04f,bz,bx,-.04f,bz,METAL,(float)Math.cos((a+b)/2),0,(float)Math.sin((a+b)/2),light,overlay);
+            quad(pose,out,ax,-.04f,az,ax,.04f,az,bx,.04f,bz,bx,-.04f,bz,(float)Math.cos((a+b)/2),0,(float)Math.sin((a+b)/2),METAL,light,overlay);
         }
         pose.popPose();
     }
     private static void discFace(PoseStack p,VertexConsumer v,float ax,float ay,float az,float bx,float by,float bz,float cx,float cy,float cz,float dx,float dy,float dz,float radius,float ny,int light,int overlay){
-        float u=(DISC%4)*.25f+.125f,w=(DISC/4)*.25f+.125f,half=.1171875f;
-        vertex(p,v,ax,ay,az,u+ax/radius*half,w+az/radius*half,DISC,0,ny,0,light,overlay);
-        vertex(p,v,bx,by,bz,u+bx/radius*half,w+bz/radius*half,DISC,0,ny,0,light,overlay);
-        vertex(p,v,cx,cy,cz,u+cx/radius*half,w+cz/radius*half,DISC,0,ny,0,light,overlay);
-        vertex(p,v,dx,dy,dz,u+dx/radius*half,w+dz/radius*half,DISC,0,ny,0,light,overlay);
+        float u=DISC.u()+.125f,w=DISC.v()+.125f,half=.1171875f;
+        vertex(p,v,ax,ay,az,u+ax/radius*half,w+az/radius*half,0xFFFFFF,0,ny,0,light,overlay);
+        vertex(p,v,bx,by,bz,u+bx/radius*half,w+bz/radius*half,0xFFFFFF,0,ny,0,light,overlay);
+        vertex(p,v,cx,cy,cz,u+cx/radius*half,w+cz/radius*half,0xFFFFFF,0,ny,0,light,overlay);
+        vertex(p,v,dx,dy,dz,u+dx/radius*half,w+dz/radius*half,0xFFFFFF,0,ny,0,light,overlay);
     }
     /** Emission is an outer rim, not a second overlapping copy of the entire disc. */
     public static void discGlowRing(PoseStack p,VertexConsumer v,int light,int overlay){
         for(int i=0;i<32;i++){
             double a=i*2*Math.PI/32,b=(i+1)*2*Math.PI/32;float c=(float)Math.cos(a),s=(float)Math.sin(a),cc=(float)Math.cos(b),ss=(float)Math.sin(b);
-            quad(p,v,3.64f*c,.045f,3.64f*s,3.83f*c,.045f,3.83f*s,3.83f*cc,.045f,3.83f*ss,3.64f*cc,.045f,3.64f*ss,LIGHT,0,1,0,light,overlay);
-            quad(p,v,3.64f*cc,-.045f,3.64f*ss,3.83f*cc,-.045f,3.83f*ss,3.83f*c,-.045f,3.83f*s,3.64f*c,-.045f,3.64f*s,LIGHT,0,-1,0,light,overlay);
+            quad(p,v,3.64f*c,.045f,3.64f*s,3.83f*c,.045f,3.83f*s,3.83f*cc,.045f,3.83f*ss,3.64f*cc,.045f,3.64f*ss,0,1,0,LIGHT,light,overlay);
+            quad(p,v,3.64f*cc,-.045f,3.64f*ss,3.83f*cc,-.045f,3.83f*ss,3.83f*c,-.045f,3.83f*s,3.64f*c,-.045f,3.64f*s,0,-1,0,LIGHT,light,overlay);
         }
     }
 
-    /** Emits 24 quads per cuboid (4 vertices/face) using a 4x4 tile atlas. */
-    private static void box(PoseStack p, VertexConsumer v,
-                            float x0,float y0,float z0,float x1,float y1,float z1,int tile,int light,int overlay) {
-        quad(p,v,x0,y1,z0,x1,y1,z0,x1,y1,z1,x0,y1,z1,tile,0,1,0,light,overlay);
-        quad(p,v,x0,y0,z1,x1,y0,z1,x1,y0,z0,x0,y0,z0,tile,0,-1,0,light,overlay);
-        quad(p,v,x0,y0,z0,x1,y0,z0,x1,y1,z0,x0,y1,z0,tile,0,0,-1,light,overlay);
-        quad(p,v,x1,y0,z1,x0,y0,z1,x0,y1,z1,x1,y1,z1,tile,0,0,1,light,overlay);
-        quad(p,v,x1,y0,z0,x1,y0,z1,x1,y1,z1,x1,y1,z0,tile,1,0,0,light,overlay);
-        quad(p,v,x0,y0,z1,x0,y0,z0,x0,y1,z0,x0,y1,z1,tile,-1,0,0,light,overlay);
-    }
-    private static void quad(PoseStack p, VertexConsumer v,
-                             float ax,float ay,float az, float bx,float by,float bz,
-                             float cx,float cy,float cz, float dx,float dy,float dz,
-                             int tile,float nx,float ny,float nz,int light,int overlay) {
-        float u=(tile % 4)*.25f+1f/128, vv=(tile/4)*.25f+1f/128, size=15f/64;
-        vertex(p,v,ax,ay,az,u,vv,tile,nx,ny,nz,light,overlay);
-        float ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,wx=dx-ax,wy=dy-ay,wz=dz-az;
-        float orientation=((uy*vz-uz*vy)+(vy*wz-vz*wy))*nx+((uz*vx-ux*vz)+(vz*wx-vx*wz))*ny+((ux*vy-uy*vx)+(vx*wy-vy*wx))*nz;
-        if(orientation<0) {
-            vertex(p,v,dx,dy,dz,u,vv+size,tile,nx,ny,nz,light,overlay);vertex(p,v,cx,cy,cz,u+size,vv+size,tile,nx,ny,nz,light,overlay);vertex(p,v,bx,by,bz,u+size,vv,tile,nx,ny,nz,light,overlay);
-        } else {
-            vertex(p,v,bx,by,bz,u+size,vv,tile,nx,ny,nz,light,overlay);vertex(p,v,cx,cy,cz,u+size,vv+size,tile,nx,ny,nz,light,overlay);vertex(p,v,dx,dy,dz,u,vv+size,tile,nx,ny,nz,light,overlay);
-        }
-    }
-    private static void vertex(PoseStack p, VertexConsumer v,float x,float y,float z,
-                               float u,float vv,int tile,float nx,float ny,float nz,int light,int overlay) {
-        int shade=tile == DARK ? 220 : 255;
-        v.addVertex(p.last(),x,y,z).setColor(shade,shade,shade,255).setUv(u,vv)
-                .setOverlay(overlay).setLight(light).setNormal(p.last(),nx,ny,nz);
-    }
 }

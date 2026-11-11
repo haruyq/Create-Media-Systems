@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import java.nio.file.*;
 import java.lang.reflect.Field;
@@ -156,7 +157,7 @@ public final class LauncherDebugClient {
                 groundItems.add(Map.of("x",item.getX(),"y",item.getY(),"z",item.getZ(),"item",item.getItem().toString()));
             row.put("groundLaunchers",groundItems);
             if(mc.level.getBlockEntity(new net.minecraft.core.BlockPos(2,100,7)) instanceof org.haruyq.createmediasystems.launcher.DiscCellCharger charger)
-                row.put("charger",Map.of("speed",charger.getSpeed(),"energy",org.haruyq.createmediasystems.launcher.DiscCellItem.energy(charger.cell()),"cell",charger.cell().toString()));
+                row.put("charger",Map.of("speed",charger.getSpeed(),"energy",ChargeableItem.energy(charger.cell()),"cell",charger.cell().toString()));
             row.put("player",mc.player.getName().getString());
             row.put("spectator",mc.player.isSpectator());
             row.put("allowedHosts",org.haruyq.createmediasystems.ServerConfig.ALLOWED_HOSTS.get());
@@ -194,7 +195,7 @@ public final class LauncherDebugClient {
             row.put("dragons",dragons);
             var cell = LauncherMagazine.cell(mc.player.getMainHandItem());
             row.put("cellLevel", cell.getItem() instanceof org.haruyq.createmediasystems.launcher.DiscCellItem item ? item.tier.level : 0);
-            row.put("cellEnergy", org.haruyq.createmediasystems.launcher.DiscCellItem.energy(cell));
+            row.put("cellEnergy", ChargeableItem.energy(cell));
             row.put("master", org.haruyq.createmediasystems.launcher.DiscCellItem.master(cell).toString());
             row.put("inventory", mc.player.getInventory().items.toString());
             row.put("flying",mc.player.getAbilities().flying);
@@ -204,7 +205,7 @@ public final class LauncherDebugClient {
                     "playing",org.haruyq.createmediasystems.megaphone.MegaphoneData.playing(item),"black",horn.black,
                     "seconds",org.haruyq.createmediasystems.megaphone.MegaphoneData.seconds(item,mc.level),"volume",org.haruyq.createmediasystems.megaphone.MegaphoneData.volume(item),
                     "drive",org.haruyq.createmediasystems.megaphone.MegaphoneData.drive(item),"revision",org.haruyq.createmediasystems.megaphone.MegaphoneData.revision(item),
-                    "energy",org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.energy(org.haruyq.createmediasystems.megaphone.MegaphoneData.battery(item,mc.level))));
+                    "energy",ChargeableItem.energy(org.haruyq.createmediasystems.megaphone.MegaphoneData.battery(item,mc.level))));
             }
             var playerRenderer=(net.minecraft.client.renderer.entity.player.PlayerRenderer)mc.getEntityRenderDispatcher().getRenderer(mc.player);
             row.put("arm",List.of(playerRenderer.getModel().rightArm.xRot,playerRenderer.getModel().rightArm.yRot,playerRenderer.getModel().rightArm.zRot));

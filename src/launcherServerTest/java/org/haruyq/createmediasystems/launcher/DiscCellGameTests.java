@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,7 +44,7 @@ public final class DiscCellGameTests {
     private static ItemStack cell(DiscCellTier tier, int energy) {
         ItemStack cell = new ItemStack(LauncherFeature.cell(tier));
         DiscCellItem.setMaster(cell, original());
-        DiscCellItem.setEnergy(cell, energy);
+        ChargeableItem.setEnergy(cell, energy);
         return cell;
     }
 
@@ -79,7 +80,7 @@ public final class DiscCellGameTests {
                 && DiscCellItem.shots(LauncherMagazine.pending(gun))==96,"Only an empty cell starts automatic replacement");
         LauncherMagazine.finish(player,gun);
         h.assertTrue(LauncherMagazine.count(gun)==96 && player.getInventory().items.stream().anyMatch(s->s.is(LauncherFeature.cell(DiscCellTier.NETHERITE))
-                && DiscCellItem.energy(s)==0 && DiscCellItem.hasMaster(s)),"The exhausted original cell is returned intact");
+                && ChargeableItem.energy(s)==0 && DiscCellItem.hasMaster(s)),"The exhausted original cell is returned intact");
         h.succeed();
     }
 
@@ -124,11 +125,11 @@ public final class DiscCellGameTests {
     public static void depletedCellKeepsTheMasterAndCanBeRecharged(GameTestHelper h) {
         ItemStack cell = cell(DiscCellTier.COPPER, 2000);
         DiscCellItem.project(cell); DiscCellItem.project(cell);
-        h.assertTrue(DiscCellItem.project(cell).isEmpty() && DiscCellItem.energy(cell) == 0, "A depleted cell cannot fire");
+        h.assertTrue(DiscCellItem.project(cell).isEmpty() && ChargeableItem.energy(cell) == 0, "A depleted cell cannot fire");
         h.assertTrue(ItemStack.matches(original(), DiscCellItem.master(cell)), "Depletion cannot destroy the original");
         var energy = cell.getCapability(Capabilities.EnergyStorage.ITEM);
         h.assertTrue(energy != null && energy.receiveEnergy(100000, true) == 24000, "FE simulation reports its capacity");
-        h.assertTrue(DiscCellItem.energy(cell) == 0, "Simulating a charge changes nothing");
+        h.assertTrue(ChargeableItem.energy(cell) == 0, "Simulating a charge changes nothing");
         h.assertTrue(energy.receiveEnergy(100000, false) == 24000 && DiscCellItem.shots(cell) == 24, "FE refills the real cell");
         h.assertTrue(energy.extractEnergy(10000, false) == 0, "A cell cannot be used to generate/extract free power");
         h.succeed();
@@ -200,7 +201,7 @@ public final class DiscCellGameTests {
             var grid = CraftingInput.of(3, 3, inputs);
             h.assertTrue(recipe.matches(grid, h.getLevel()), "Vanilla/Create materials craft level " + level);
             ItemStack upgraded = recipe.assemble(grid, h.getLevel().registryAccess());
-            h.assertTrue(upgraded.is(LauncherFeature.cell(target)) && DiscCellItem.energy(upgraded) == 1234
+            h.assertTrue(upgraded.is(LauncherFeature.cell(target)) && ChargeableItem.energy(upgraded) == 1234
                     && ItemStack.matches(DiscCellItem.master(previous), DiscCellItem.master(upgraded)), "Upgrade keeps the original and stored energy");
             inputs.set(1, new ItemStack(Items.DIRT));
             h.assertTrue(!recipe.matches(CraftingInput.of(3, 3, inputs), h.getLevel()), "Missing an expensive material must fail");
@@ -252,7 +253,7 @@ public final class DiscCellGameTests {
         var grid = CraftingInput.of(3, 3, inputs);
         h.assertTrue(recipe.matches(grid, h.getLevel()), "The condition-enabled recipe accepts the verified Plant materials");
         ItemStack apex = recipe.assemble(grid, h.getLevel().registryAccess());
-        h.assertTrue(apex.is(LauncherFeature.CHEMI_DISC_CELL.get()) && DiscCellItem.energy(apex) == 123456
+        h.assertTrue(apex.is(LauncherFeature.CHEMI_DISC_CELL.get()) && ChargeableItem.energy(apex) == 123456
                 && ItemStack.matches(DiscCellItem.master(previous), DiscCellItem.master(apex)), "The ultimate upgrade preserves the original and energy");
         h.succeed();
     }
@@ -282,7 +283,7 @@ public final class DiscCellGameTests {
                 "The charger is recoverable with its proper survival pickaxe tier");
         charger.insert(cell(DiscCellTier.COPPER, 0));
         var port = h.getLevel().getCapability(Capabilities.EnergyStorage.BLOCK, pos, null);
-        h.assertTrue(port != null && port.receiveEnergy(1000, true) == 1000 && DiscCellItem.energy(charger.cell()) == 0,
+        h.assertTrue(port != null && port.receiveEnergy(1000, true) == 1000 && ChargeableItem.energy(charger.cell()) == 0,
                 "Charging simulation leaves the dock unchanged");
         port.receiveEnergy(1000, false);
         CompoundTag saved = charger.saveWithoutMetadata(h.getLevel().registryAccess());
@@ -291,7 +292,7 @@ public final class DiscCellGameTests {
         h.assertTrue(ItemStack.matches(charger.cell(), restored.cell()), "Block save/reload keeps the original and exact energy");
         h.getLevel().destroyBlock(pos, false);
         var drops = h.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(pos).inflate(2));
-        h.assertTrue(drops.size() == 1 && DiscCellItem.energy(drops.getFirst().getItem()) == 1000
+        h.assertTrue(drops.size() == 1 && ChargeableItem.energy(drops.getFirst().getItem()) == 1000
                 && ItemStack.matches(original(), DiscCellItem.master(drops.getFirst().getItem())), "Breaking a charger returns one cell, never a loose copy of its original");
         h.succeed();
     }
@@ -305,7 +306,7 @@ public final class DiscCellGameTests {
         var charger = (DiscCellCharger) h.getLevel().getBlockEntity(dock);
         charger.insert(cell(DiscCellTier.COPPER, 0));
         h.runAfterDelay(30, () -> {
-            h.assertTrue(Math.abs(charger.getSpeed()) >= 16 && DiscCellItem.energy(charger.cell()) > 0,
+            h.assertTrue(Math.abs(charger.getSpeed()) >= 16 && ChargeableItem.energy(charger.cell()) > 0,
                     "A real Create shaft connection charges the cell without CEE, Plant or FE machinery");
             h.succeed();
         });
