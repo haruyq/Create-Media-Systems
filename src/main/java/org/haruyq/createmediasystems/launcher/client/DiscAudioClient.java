@@ -14,6 +14,7 @@ import org.haruyq.createmediasystems.launcher.DopplerMath;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.PlaybackSync;
 import org.haruyq.createmediasystems.playback.StreamSound;
+import org.haruyq.createmediasystems.playback.StreamSpec;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -107,21 +108,17 @@ public final class DiscAudioClient {
             // Do not synthesize any alternate Doppler sound. This StreamSound
             // fetches the disc's track, follows the entity and pitch-shifts ITS PCM.
             double start=disc.elapsedMusicSeconds();
-            StreamSound sound = new StreamSound(
-                    ClientStreams.apiStream(url, start, Streams.Channel.MIX), url,
-                    null, 0L, start, SoundSource.RECORDS,
-                    disc::position, null,
+            var heard = new StreamSpec.Emitter(disc::position, null,
                     () -> !disc.isRemoved() && mc.level == disc.level(),
-                    () -> inRange(disc), () -> gain(disc),
-                    null, Streams.Channel.MIX, seconds -> {
+                    () -> inRange(disc), () -> gain(disc), () -> pitchAt(disc));
+            StreamSound sound = new StreamSound(new StreamSpec(url, start, Streams.Channel.MIX, SoundSource.RECORDS,
+                    heard, seconds -> {
                         if (Double.isFinite(seconds) && seconds > 0) mc.execute(() -> {
                             if (mc.getConnection() != null && mc.level == disc.level() && !disc.isRemoved())
                                 net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                                         new org.haruyq.createmediasystems.launcher.DiscPlaybackMetadata(disc.getId(), seconds));
                         });
-                    });
-            sound.setDynamicPitch(() -> pitchAt(disc));
-            sound.setDiscPlayback(disc.getUUID(), disc::elapsedMusicSeconds);
+                    }).movingDisc(disc.getUUID(), disc::elapsedMusicSeconds));
             Object channel = disc.getUUID();
             ClientStreams.play(channel, sound); // uses CMS's existing interrupted-stream recovery
             return new Playing(disc, channel, null, tickCounter);

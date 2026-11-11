@@ -50,7 +50,7 @@ class VlcFrameTest {
     }
 
     private static final class Pictures implements AutoCloseable {
-        final VlcPlayer.Frame frame = new VlcPlayer.Frame();
+        final VideoFrame frame = new VideoFrame();
         final Memory planes = new Memory(Native.POINTER_SIZE);
 
         Pictures() {
@@ -83,7 +83,7 @@ class VlcFrameTest {
 
         /** Starts reading the latest picture, as the render thread does. */
         Pointer read() {
-            VlcPlayer.Frame.Picture picture = frame.beginRead();
+            VideoFrame.Picture picture = frame.beginRead();
             assertNotNull(picture, "a new picture to read");
             return picture.pixels();
         }

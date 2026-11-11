@@ -41,7 +41,7 @@ final class PartyBoxSound extends AbstractTickableSoundInstance {
             try {
                 double at=box.seconds();mono.skipSeconds(at);
                 for(int i=0;i<2;i++){double ahead=box.seconds()-at;if(ahead<.02)break;mono.skipSeconds(ahead);at+=ahead;}
-                var clock=new AudibleAudioStream(mono,at,null);audibleClock=clock;return new BassAudioStream(clock,box::bass,meter::sample);
+                var clock=new AudibleAudioStream(mono,at);audibleClock=clock;return new BassAudioStream(clock,box::bass,meter::sample);
             }
             catch(IOException error) { try { mono.close(); } catch(IOException ignored) {} throw new java.util.concurrent.CompletionException(error); }
         });

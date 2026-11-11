@@ -9,15 +9,14 @@ import net.minecraft.client.sounds.AudioStream;
 /** Per-source horn colour: band limiting, nasal resonance, fast AGC, asymmetric amplifier overload.
  * No pitch/tempo change or global sound-engine EQ. State spans decoder buffers and is private to this horn.
  */
-public final class MegaphoneAudioStream implements AudioStream,DeviceClock.Timed {
-    private final AudioStream source;
+public final class MegaphoneAudioStream extends CmsStream.Wrapper {
     private final IntSupplier mode,volume;
     private final Biquad[][] filters;
     private final double[] frame;
     private final double attack,release,smooth;
     private double envelope=.05,driveBlend=1,volumeBlend=22;
     public MegaphoneAudioStream(AudioStream source,IntSupplier mode,IntSupplier volume) {
-        this.source=source;this.mode=mode;this.volume=volume;var f=source.getFormat();
+        super(source);this.mode=mode;this.volume=volume;var f=source.getFormat();
         if(f.getSampleSizeInBits()!=16 || f.isBigEndian() || !AudioFormat.Encoding.PCM_SIGNED.equals(f.getEncoding()))throw new IllegalArgumentException("Megaphone needs little-endian PCM16");
         double rate=f.getSampleRate();attack=1-Math.exp(-1/(rate*.004));release=1-Math.exp(-1/(rate*.12));smooth=1-Math.exp(-1/(rate*.025));
         filters=new Biquad[f.getChannels()][];
@@ -25,7 +24,6 @@ public final class MegaphoneAudioStream implements AudioStream,DeviceClock.Timed
         for(int c=0;c<filters.length;c++)filters[c]=new Biquad[]{Biquad.pass(rate,420,.707,true),Biquad.pass(rate,420,.707,true),
                 Biquad.peak(rate,1650,1.55,7),Biquad.pass(rate,3800,.707,false),Biquad.pass(rate,3800,.707,false),Biquad.pass(rate,160,.707,true)};
     }
-    @Override public AudioFormat getFormat(){return source.getFormat();}
     @Override public ByteBuffer read(int bytes)throws IOException {
         ByteBuffer data=source.read(bytes).order(ByteOrder.LITTLE_ENDIAN);int channels=filters.length;
         int targetDrive=Math.clamp(mode.getAsInt(),0,2),targetVolume=Math.clamp(volume.getAsInt(),0,32);
@@ -50,9 +48,6 @@ public final class MegaphoneAudioStream implements AudioStream,DeviceClock.Timed
         }
         return data;
     }
-    @Override public void close()throws IOException{source.close();}
-    @Override public long attach(int sourceId,long now){return source instanceof DeviceClock.Timed t?t.attach(sourceId,now):0;}
-    @Override public boolean advancesWhilePaused(){return source instanceof DeviceClock.Timed t && t.advancesWhilePaused();}
     private static final class Biquad {
         final double b0,b1,b2,a1,a2;double z1,z2;
         Biquad(double b0,double b1,double b2,double a0,double a1,double a2){this.b0=b0/a0;this.b1=b1/a0;this.b2=b2/a0;this.a1=a1/a0;this.a2=a2/a0;}

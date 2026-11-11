@@ -8,7 +8,9 @@ import org.haruyq.createmediasystems.partybox.*;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.PlaybackSync;
+import org.haruyq.createmediasystems.playback.BassAudioStream;
 import org.haruyq.createmediasystems.playback.StreamSound;
+import org.haruyq.createmediasystems.playback.StreamSpec;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -82,12 +84,12 @@ public final class PartyBoxClient {
             String url=MediaItem.url(box.disc()); int revision=box.revision();Meter meter=new Meter();
             if(url!=null && UrlPolicy.isAllowed(url)) {
                 double start=box.seconds();
-                StreamSound sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
-                        box::soundPosition,null,()->!box.isRemoved()&&box.playing()&&box.revision()==revision,()->audible(box),()->gain(box),null,Streams.Channel.MIX,
+                var heard=new StreamSpec.Emitter(box::soundPosition,null,()->!box.isRemoved()&&box.playing()&&box.revision()==revision,
+                        ()->audible(box),()->gain(box),()->pitchAt(box));
+                StreamSound sound=new StreamSound(new StreamSpec(url,start,Streams.Channel.MIX,SoundSource.RECORDS,heard,
                         length->mc.execute(()->{if(mc.getConnection()!=null && box.revision()==revision && Double.isFinite(length) && length>0)
-                            PacketDistributor.sendToServer(new PartyBoxAction(box.getId(),7,(int)Math.ceil(length),revision));}));
-                sound.setDiscPlayback(box.getUUID(),box::seconds);sound.setDynamicPitch(()->pitchAt(box));
-                sound.setBassMode(box::bass);sound.setPcmMeter(meter::sample);
+                            PacketDistributor.sendToServer(new PartyBoxAction(box.getId(),7,(int)Math.ceil(length),revision));}))
+                        .movingDisc(box.getUUID(),box::seconds).decorated(pcm->new BassAudioStream(pcm,box::bass,meter::sample)));
                 ClientStreams.play(box.getUUID(),sound);PLAYING.put(box.getUUID(),new Playing(box,revision,true,null,ticks,meter));
             } else {
                 MediaItem.song(box.disc(),mc.level.registryAccess()).ifPresent(song->{

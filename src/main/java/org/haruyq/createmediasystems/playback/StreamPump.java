@@ -4,12 +4,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
-import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
-
 import com.mojang.blaze3d.audio.Channel;
-
-import net.minecraft.client.Minecraft;
 
 /**
  * Refills the OpenAL buffers of CMS's streams on the sound thread every {@link #PERIOD_MILLIS}. Vanilla refills
@@ -32,7 +27,7 @@ public final class StreamPump {
     private StreamPump() {
     }
 
-    /** {@code channel} plays a CMS stream; until it is destroyed. */
+    /** {@code channel} plays a {@link CmsStream}; until it is destroyed. */
     public static void add(Channel channel) {
         CHANNELS.add(channel);
     }
@@ -50,10 +45,9 @@ public final class StreamPump {
                 // piled up on the sound thread without end, and every sound the game played (each waits on that
                 // thread) froze it a while longer. Past STALE_NANOS it is taken as dropped (the engine reloading).
                 if (!CHANNELS.isEmpty() && (posted == 0 || System.nanoTime() - posted >= STALE_NANOS)) {
-                    var engine = ((SoundManagerAccessor) Minecraft.getInstance().getSoundManager()).create_media_systems$soundEngine();
                     POSTED_AT.set(System.nanoTime());
                     // updateStream only tops up what OpenAL has played, so an extra call costs nothing.
-                    ((SoundEngineAccessor) engine).create_media_systems$executor().execute(() -> {
+                    SoundChannels.execute(() -> {
                         try {
                             CHANNELS.forEach(Channel::updateStream);
                         } finally {

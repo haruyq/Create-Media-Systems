@@ -11,7 +11,7 @@ import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.playback.NativeAudio;
-import org.haruyq.createmediasystems.playback.VlcPlayer;
+import org.haruyq.createmediasystems.playback.VideoFrame;
 
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -145,7 +145,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             return;
         }
         panel(buffers.getBuffer(RenderType.textBackground()), matrix, screen, width, height);
-        VlcPlayer.Frame frame = frame(display);
+        VideoFrame frame = frame(display);
         // Lights, not shapes: nothing of them in a shader pack's shadow map.
         boolean shadow = IrisCompat.shadowPass();
         // Drawn while its picture or glow is in sight; out of sight, only its light on the blocks around (when that is
@@ -380,8 +380,8 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     }
 
     @Nullable
-    static VlcPlayer.Frame frame(DisplayBlock.Entity display) {
-        return display.source().map(NativeAudio::screen).orElse(null);
+    static VideoFrame frame(DisplayBlock.Entity display) {
+        return display.source().map(NativeAudio::playback).map(NativeAudio.Playback::frame).orElse(null);
     }
 
     /** The picture an image viewer shows, or null while it has none (or it isn't loaded yet). */

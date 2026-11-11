@@ -67,10 +67,14 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
             var level = Minecraft.getInstance().level;
             if (level != null) {
-                NativeAudio.equalize(source -> level.getBlockEntity(source) instanceof HifiStackBlock.Entity stack
-                        ? stack.tone()
-                        : level.getBlockState(source).is(VideoFeature.VIDEO_PLAYER.get())
-                        ? new Tone(EqualizerBlock.bands(level, source), 1) : Tone.FLAT);
+                for (NativeAudio.Playback playback : NativeAudio.playbacks()) {
+                    BlockPos at = playback.at();
+                    if (at != null) {
+                        playback.equalize(level.getBlockEntity(at) instanceof HifiStackBlock.Entity stack ? stack.tone()
+                                : level.getBlockState(at).is(VideoFeature.VIDEO_PLAYER.get())
+                                ? new Tone(EqualizerBlock.bands(level, at), 1) : Tone.FLAT);
+                    }
+                }
             }
         });
         NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {

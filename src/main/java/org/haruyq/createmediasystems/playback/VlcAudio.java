@@ -49,7 +49,7 @@ final class VlcAudio {
     private static final int MAX_QUEUED_BYTES = Pcm.BYTES_PER_SECOND * 5;
 
     private final List<Stream> streams = new CopyOnWriteArrayList<>();
-    /** What every stream hears it through; set through NativeAudio#equalize. */
+    /** What every stream hears it through (see NativeAudio.Playback#equalize). */
     final Equalizer equalizer = new Equalizer();
     private final LightingMedia.Audio lighting = new LightingMedia.Audio();
     private volatile long lightingUntil;
@@ -173,7 +173,7 @@ final class VlcAudio {
     }
 
     /** One stream's share: mono, on VLC's clock, so each read lines up with when the engine will play it. */
-    static final class Stream implements AudioStream, DeviceClock.Timed {
+    static final class Stream implements CmsStream {
         private final VlcAudio audio;
         private final Streams.Channel channel;
         /** Mono chunks with the VLC time (microseconds) of their first sample; guarded by itself. */

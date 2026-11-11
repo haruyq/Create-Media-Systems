@@ -27,7 +27,7 @@ final class MegaphoneSound extends AbstractTickableSoundInstance {
                 double at=source.seconds();mono.skipSeconds(at);
                 // Decoding a late join can take time too. Catch up before the first buffer is queued.
                 for(int i=0;i<2;i++){double ahead=source.seconds()-at;if(ahead<.02)break;mono.skipSeconds(ahead);at+=ahead;}
-                var clock=new AudibleAudioStream(mono,at,null);audibleClock=clock;
+                var clock=new AudibleAudioStream(mono,at);audibleClock=clock;
                 return new MegaphoneAudioStream(clock,source::drive,source::volume);
             }
             catch(IOException e){try{mono.close();}catch(IOException ignored){}throw new java.util.concurrent.CompletionException(e);}});

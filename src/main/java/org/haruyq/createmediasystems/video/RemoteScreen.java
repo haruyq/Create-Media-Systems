@@ -185,8 +185,9 @@ final class RemoteScreen extends Screen {
                 url = playlist.get(videoPlayer.shownIndex());
             }
         }
-        seek.show(url == null || videoPlayer == null ? null
-                : NativeAudio.progress(RemoteItem.held(minecraft.player).getOrDefault(VideoFeature.REMOTE_TARGET.get(), target).pos(), url));
+        NativeAudio.Playback playback = url == null || videoPlayer == null ? null : NativeAudio.playback(
+                RemoteItem.held(minecraft.player).getOrDefault(VideoFeature.REMOTE_TARGET.get(), target).pos(), url);
+        seek.show(playback == null ? null : playback.progress());
         graphics.drawCenteredString(font, status, width / 2, top - 22, 0xF0C040);
         if (url != null) {
             graphics.drawCenteredString(font, font.plainSubstrByWidth(url, 300), width / 2, top - 11, 0x909090);

@@ -53,7 +53,7 @@ final class Diagnostics {
 
     private final Streams.Video video;
     @Nullable
-    private final VlcPlayer.Frame frame;
+    private final VideoFrame frame;
     private final VlcAudio audio;
     private final int maxHeight;
     private final long requestedAt;
@@ -72,7 +72,7 @@ final class Diagnostics {
     volatile long playing;
     @Nullable
     private volatile String failure;
-    /** Measured on the sound thread (see NativeAudio.Shared#correct); Long.MIN_VALUE until the first check. */
+    /** Measured on the sound thread (see NativeAudio.Playback#correct); Long.MIN_VALUE until the first check. */
     private volatile long firstDrift = Long.MIN_VALUE;
     private volatile long maxDrift;
     private volatile int seeks;
@@ -81,7 +81,7 @@ final class Diagnostics {
      * Of the player whose pictures go to {@code frame} and sound to {@code audio}; {@code requestedAt}: when the
      * server's word to play arrived (System.nanoTime).
      */
-    Diagnostics(Streams.Video video, @Nullable VlcPlayer.Frame frame, VlcAudio audio, int maxHeight, long requestedAt) {
+    Diagnostics(Streams.Video video, @Nullable VideoFrame frame, VlcAudio audio, int maxHeight, long requestedAt) {
         this.video = video;
         this.frame = frame;
         this.audio = audio;
