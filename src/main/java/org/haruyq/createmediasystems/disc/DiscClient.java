@@ -260,7 +260,11 @@ public final class DiscClient {
                 stream = current;
             }
         }
-        return new MediaSources.Opened(current.prepare(startSeconds), current.duration(), List.of(":network-caching=2000"));
+        // Opened at the top, VLC buffers on from there until it is told where to play: segments nobody watches,
+        // which a DVD's pass seeks away for. Opened where it starts, it asks for the first alone.
+        return new MediaSources.Opened(current.prepare(startSeconds), current.duration(), startSeconds <= 0
+                ? List.of(":network-caching=2000")
+                : List.of(":network-caching=2000", String.format(java.util.Locale.ROOT, ":start-time=%.3f", startSeconds)));
     }
 
     private static Transport connection(UUID owner) throws IOException {

@@ -72,6 +72,26 @@ class DiscStreamTest {
     }
 
     @Test
+    void encodesADvdNoLargerThanItsOwnPicture() {
+        DiscSource dvd = new DiscSource("ffmpeg", java.nio.file.Path.of("."), false, 1, 60, null);
+        assertEquals(new DiscSource.Quality(480, 30, 2500), dvd.quality(13_000_000));
+        assertEquals(new DiscSource.Quality(480, 30, 1100), dvd.quality(3_000_000), "a slower viewer's is the same pass");
+        assertEquals(360, dvd.quality(1_000_000).height());
+        DiscSource bluray = new DiscSource("ffmpeg", java.nio.file.Path.of("."), true, 1, 60, null);
+        assertEquals(new DiscSource.Quality(1080, 60, 8000), bluray.quality(13_000_000));
+    }
+
+    @Test
+    void tellsAnEncodersFailureFromADiscs() {
+        assertNull(DiscSource.failure(0, "", null));
+        assertInstanceOf(DiscSource.EncoderFailed.class, DiscSource.failure(1,
+                "[h264_nvenc @ 000001] OpenEncodeSessionEx failed: out of memory (10)", null));
+        IOException unread = DiscSource.failure(1, "[dvdvideo @ 000001] libdvdread: Can't open E: for reading", null);
+        assertFalse(unread instanceof DiscSource.EncoderFailed, "an unreadable disc is no reason to encode on the CPU");
+        assertFalse(DiscSource.failure(0, "The disc is encrypted", null) instanceof DiscSource.EncoderFailed);
+    }
+
+    @Test
     void refusesScrambledPesPackets() {
         assertTrue(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0xb0}));
         assertFalse(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0x80}));

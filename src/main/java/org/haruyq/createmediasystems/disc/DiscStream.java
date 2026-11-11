@@ -190,7 +190,9 @@ public final class DiscStream implements AutoCloseable {
                     return;
                 }
                 body = await(segment(index));
-                for (int i = index + 1; i < Math.min(count(), index + 4); i++) {
+                // Ahead only of a player going on from the segment before: each opens at the top first, wherever it
+                // then starts, and a DVD's pass sent on from there seeks away from where the disc plays.
+                for (int i = index + 1; known(index - 1) && i < Math.min(count(), index + 4); i++) {
                     segment(i, true);
                 }
                 exchange.getResponseHeaders().set("Content-Type", "video/mp2t");
@@ -210,6 +212,10 @@ public final class DiscStream implements AutoCloseable {
         }
     }
 
+    private synchronized boolean known(int index) {
+        return segments.containsKey(index);
+    }
+
     private CompletableFuture<byte[]> segment(int index) {
         return segment(index, false);
     }
@@ -224,7 +230,7 @@ public final class DiscStream implements AutoCloseable {
         }
         long measured = transport.budgetBps();
         long available = adaptive.budget(measured == 0 ? 13_000_000 : measured);
-        DiscSource.Quality quality = source == null ? null : DiscSource.Quality.forBudget(available);
+        DiscSource.Quality quality = source == null ? null : source.quality(available);
         Cached known = segments.get(index);
         if (known != null) {
             if (!ahead && !known.ready.isDone() && work.remove(known.work)) {
@@ -246,6 +252,10 @@ public final class DiscStream implements AutoCloseable {
         CompletableFuture<byte[]> result = new CompletableFuture<>();
         Runnable task = () -> {
             try {
+                if (result.isDone()) {
+                    // A DVD's pass kept it on its way to a later one (see encode).
+                    return;
+                }
                 byte[] bytes;
                 if (source == null) {
                     bytes = fetch(index);
@@ -258,46 +268,27 @@ public final class DiscStream implements AutoCloseable {
                         throw new IOException("Disc sharing needs at least 0.5 Mbps per viewer");
                     }
                     long started = System.nanoTime();
-                    // A DVD pass starting (see encode) seeks first: seconds that say nothing of how fast this encodes.
-                    boolean starts = !source.segmented() && (run == null || !run.continues(index, quality, codec));
                     try {
                         bytes = encode(index, quality);
-                    } catch (IOException failed) {
+                    } catch (DiscSource.EncoderFailed failed) {
+                        // Only the encoder's own failure: a disc that reads slowly or not at all does no better
+                        // on the CPU, and came back from here encoded there for the rest of the disc.
                         if (codec.equals("libx264") || Thread.currentThread().isInterrupted()) {
                             throw failed;
                         }
                         codec = "libx264";
                         status.accept("Hardware encoding failed; using libx264 for this disc");
-                        starts = !source.segmented();
                         bytes = encode(index, quality);
                     }
-                    if (!starts) {
+                    // A DVD's pass seeks as it starts and waits on its drive: seconds that say nothing of how fast
+                    // this encodes, and a lower quality for them would only start the pass over.
+                    if (source.segmented()) {
                         adaptive.encoded(System.nanoTime() - started, available);
                     }
                     DiscRun current = run;
-                    DiscSource.Quality used = source.segmented() || current == null ? quality : current.quality;
-                    // A CD has no picture to say the quality of.
-                    boolean sound = source.cd() != null;
-                    lastQuality = sound ? "192 kbps" : used.height() + "p" + used.fps() + " " + used.kbps() + " kbps";
-                    lastEncoded = index;
-                    status.accept("Disc segment " + index + ": " + (sound ? lastQuality
-                            : used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps"));
+                    report(index, source.segmented() || current == null ? quality : current.quality);
                 }
-                synchronized (this) {
-                    if (closed) {
-                        throw new IOException("Disc stream was closed");
-                    }
-                    cachedBytes += bytes.length;
-                    result.complete(bytes);
-                    var it = segments.entrySet().iterator();
-                    while ((cachedBytes > CACHE_BYTES || segments.size() > 16) && it.hasNext()) {
-                        var old = it.next();
-                        if (old.getValue().ready.isDone() && !old.getValue().ready.isCompletedExceptionally() && old.getKey() != index) {
-                            cachedBytes -= old.getValue().ready.getNow(new byte[0]).length;
-                            it.remove();
-                        }
-                    }
-                }
+                keep(index, bytes, result);
             } catch (IOException | RuntimeException failed) {
                 result.completeExceptionally(failed);
                 synchronized (this) {
@@ -314,13 +305,60 @@ public final class DiscStream implements AutoCloseable {
         return result;
     }
 
-    /** On the encoder thread. A DVD's next segment comes from its running pass (see DiscSource#run). */
+    private void report(int index, DiscSource.Quality used) {
+        // A CD has no picture to say the quality of.
+        boolean sound = source.cd() != null;
+        lastQuality = sound ? "192 kbps" : used.height() + "p" + used.fps() + " " + used.kbps() + " kbps";
+        lastEncoded = index;
+        status.accept("Disc segment " + index + ": " + (sound ? lastQuality
+                : used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps"));
+    }
+
+    /** Hands {@code index}'s segment to whoever waits for it, and makes room for it among those kept. */
+    private synchronized void keep(int index, byte[] bytes, CompletableFuture<byte[]> result) throws IOException {
+        if (closed) {
+            throw new IOException("Disc stream was closed");
+        }
+        if (!result.complete(bytes)) {
+            return;
+        }
+        cachedBytes += bytes.length;
+        var it = segments.entrySet().iterator();
+        while ((cachedBytes > CACHE_BYTES || segments.size() > 16) && it.hasNext()) {
+            var old = it.next();
+            // The top stays: every player opens there first (see prepare), and a DVD's pass would seek back for it.
+            if (old.getValue().ready.isDone() && !old.getValue().ready.isCompletedExceptionally()
+                    && old.getKey() != index && old.getKey() != 0) {
+                cachedBytes -= old.getValue().ready.getNow(new byte[0]).length;
+                it.remove();
+            }
+        }
+    }
+
+    /** A segment a DVD's pass handed over on its way to a later one: whoever asks for it next has it. */
+    private synchronized void passed(int index, byte[] bytes, DiscSource.Quality quality) throws IOException {
+        Cached known = segments.get(index);
+        if (known == null) {
+            known = new Cached(quality, new CompletableFuture<>(), () -> { });
+            segments.put(index, known);
+        }
+        keep(index, bytes, known.ready);
+        report(index, quality);
+    }
+
+    /**
+     * On the encoder thread. A DVD's segment comes from its running pass (see DiscSource#run) wherever that gets to
+     * it: its next, or one a little on (see DiscRun#ahead), keeping those on the way. Segments are asked for out of
+     * order (41, 43, 42: one that failed asked again, a player seeking on to catch up, two players), and a pass
+     * started over for each sought every time, for seconds on a real drive.
+     */
     private byte[] encode(int index, DiscSource.Quality quality) throws IOException {
         if (source.segmented()) {
             return source.encode(index, quality, codec);
         }
         DiscRun current = run;
-        if (current == null || !current.continues(index, quality, codec)) {
+        int ahead = current == null ? -1 : current.ahead(index, quality, codec);
+        if (ahead < 0) {
             if (current != null) {
                 current.close();
             }
@@ -329,8 +367,12 @@ public final class DiscStream implements AutoCloseable {
                 current.close();
                 throw new IOException("Disc stream was closed");
             }
+            ahead = 0;
         }
         try {
+            for (; ahead > 0; ahead--) {
+                passed(index - ahead, current.take(), current.quality);
+            }
             return current.take();
         } catch (IOException failed) {
             current.close();

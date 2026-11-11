@@ -25,6 +25,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     public static final int SEGMENT_SECONDS = 4;
     public static final int MAX_SEGMENT_BYTES = 8 * 1024 * 1024;
     public static final double MAX_DURATION = 12 * 60 * 60;
+    /** The most a DVD is encoded at: its own picture, which a larger one only takes longer to encode and send. */
+    private static final Quality DVD = new Quality(480, 30, 2500);
+    private static final java.util.regex.Pattern HARDWARE_ENCODER = java.util.regex.Pattern.compile("h264_(nvenc|qsv|amf)");
 
     public interface Access extends AutoCloseable {
         default String media(Path file) {
@@ -207,6 +210,12 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         }
     }
 
+    /** What it is encoded at for a viewer taking {@code budget} bits a second. */
+    public Quality quality(long budget) {
+        Quality quality = Quality.forBudget(budget);
+        return segmented() || quality.height() <= DVD.height() ? quality : DVD;
+    }
+
     public String encoder() {
         if (cd != null) {
             return "ac3";
@@ -309,14 +318,27 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         return command;
     }
 
-    /** Why a disc reader failed, from its exit code and errors; null if it did not. */
-    static String failure(int exitCode, String errors, Access access) {
+    /** A hardware encoder would not encode: the disc may read well enough for another (see DiscStream). */
+    static final class EncoderFailed extends IOException {
+        EncoderFailed() {
+            super("The hardware encoder failed");
+        }
+    }
+
+    /**
+     * Why a disc reader failed, from its exit code and errors; null if it did not. Its hardware encoder, if FFmpeg's
+     * errors name it: anything else (a disc that can't be read, a title that isn't there) is the disc's.
+     */
+    static IOException failure(int exitCode, String errors, Access access) {
         if (exitCode == 0 && !(access == null && errors.toLowerCase(Locale.ROOT).contains("encrypted"))) {
             return null;
         }
-        return access == null
+        if (exitCode != 0 && HARDWARE_ENCODER.matcher(errors).find()) {
+            return new EncoderFailed();
+        }
+        return new IOException(access == null
                 ? "The disc reader failed; use an unencrypted disc and an FFmpeg build with DVD-Video, H.264 and AC-3 support"
-                : "The disc reader failed; check the disc, selected title and reader extension";
+                : "The disc reader failed; check the disc, selected title and reader extension");
     }
 
     static byte[] run(List<String> command, int limit, int timeout) throws IOException {
@@ -358,9 +380,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
                 if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
                     throw new IOException("The disc reader timed out; check the drive, disc and encoder");
                 }
-                String failure = failure(process.exitValue(), errors.get(), access);
+                IOException failure = failure(process.exitValue(), errors.get(), access);
                 if (failure != null) {
-                    throw new IOException(failure);
+                    throw failure;
                 }
                 return output.get();
             } catch (InterruptedException interrupted) {
