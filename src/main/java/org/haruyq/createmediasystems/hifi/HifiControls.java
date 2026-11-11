@@ -120,8 +120,8 @@ public final class HifiControls {
         pressedTime = Util.getMillis();
         // A station with no link yet, or the one tuned in pressed again, asks for its link.
         if (control.unit == Unit.TUNER && control.kind == Control.Kind.BUTTON && stack.live(Unit.TUNER)
-                && (stack.station() == control.index || stack.station(control.index).isEmpty())) {
-            TextPromptScreen.open("create_media_systems.screen.station", stack.station(control.index),
+                && (stack.tuner().station == control.index || stack.tuner().station(control.index).isEmpty())) {
+            TextPromptScreen.open("create_media_systems.screen.station", stack.tuner().station(control.index),
                     UrlPolicy.MAX_LENGTH, url -> PacketDistributor.sendToServer(
                             new HifiStackBlock.SetStation(pos, control.index, url)));
             return true;

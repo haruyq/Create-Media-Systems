@@ -57,22 +57,22 @@ public class HifiGameTests {
         disc.set(AudioFeature.URL.get(), "https://example.com/hifi-disc.mp3");
         stack.press(player, Control.POWER, 0);
         stack.press(player, Control.TRAY, 0);
-        helper.assertFalse(stack.trayOpen(), "a disc player not plugged into the amplifier is dead");
+        helper.assertFalse(stack.discPlayer().trayOpen, "a disc player not plugged into the amplifier is dead");
         hold(player, new ItemStack(HifiFeature.HIFI_CABLE.get(), 2));
         stack.press(player, Control.DISC_PLUG, 0);
         stack.press(player, Control.LINE_IN, 0);
         helper.assertTrue(player.getMainHandItem().isEmpty(), "each cable run uses one up");
         hold(player, disc);
         stack.press(player, Control.TRAY, 0);
-        helper.assertTrue(stack.trayOpen(), "the tray opens");
+        helper.assertTrue(stack.discPlayer().trayOpen, "the tray opens");
         stack.press(player, Control.TRAY, 0);
-        helper.assertTrue(player.getMainHandItem().isEmpty() && !stack.disc().isEmpty(), "the disc is on the tray");
+        helper.assertTrue(player.getMainHandItem().isEmpty() && !stack.discPlayer().disc.isEmpty(), "the disc is on the tray");
         stack.press(player, Control.OPEN, 0);
-        helper.assertTrue(stack.discPlaying() && !stack.trayOpen(), "closing the tray plays the disc");
+        helper.assertTrue(stack.discPlayer().transport.playing() && !stack.discPlayer().trayOpen, "closing the tray plays the disc");
         helper.runAfterDelay(45, () -> {
             Streams.Source playing = Streams.playing(stack);
             helper.assertTrue(playing != null && playing.url().equals("https://example.com/hifi-disc.mp3"), "it is heard");
-            long paused = stack.discTicks();
+            long paused = stack.discPlayer().transport.clock().position();
             helper.assertTrue(paused > 10 && paused < 45, "with nobody to wait for it plays on, was at " + paused);
             stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
             helper.assertTrue(stack.nowPlaying() == null, "paused");
@@ -83,7 +83,7 @@ public class HifiGameTests {
                     helper.assertTrue(again != null && again.ticks() == paused,
                             "it starts again where it paused, at " + paused + ", was " + (again == null ? null : again.ticks()));
                     stack.press(player, Control.LINE_OUT, 0);
-                    helper.assertTrue(stack.nowPlaying() == null && stack.discPlaying(), "without its line cable it plays unheard");
+                    helper.assertTrue(stack.nowPlaying() == null && stack.discPlayer().transport.playing(), "without its line cable it plays unheard");
                     helper.assertTrue(player.getInventory().countItem(HifiFeature.HIFI_CABLE.get()) == 1,
                             "a cable pulled out comes back");
                     helper.succeed();
@@ -105,22 +105,22 @@ public class HifiGameTests {
         hold(player, tape);
         stack.press(player, Control.DOOR_1, 0);
         stack.press(player, Control.PLAY_1, 0);
-        helper.assertTrue(stack.playingDeck() == 0, "deck I plays");
+        helper.assertTrue(stack.deck().playingDeck() == 0, "deck I plays");
         helper.runAfterDelay(5, () -> {
             helper.assertTrue(stack.nowPlaying() != null, "the tape is heard");
             stack.press(player, Control.FORWARD_1, 0);
             helper.runAfterDelay(4, () -> {
                 helper.assertTrue(stack.nowPlaying() == null, "not while it winds");
                 stack.press(player, Control.STOP_1, 0);
-                long stopped = stack.tapeTicks(0);
-                helper.assertTrue(stopped >= 3 * HifiStackBlock.WIND, "wound on, to " + stopped);
+                long stopped = stack.deck().ticks(0);
+                helper.assertTrue(stopped >= 3 * UnitPart.CassetteDeck.WIND, "wound on, to " + stopped);
                 stack.press(player, Control.DOOR_1, 0);
                 ItemStack out = player.getInventory().items.stream().filter(item -> item.is(HifiFeature.CASSETTE.get()))
                         .findFirst().orElse(ItemStack.EMPTY);
-                helper.assertTrue(stack.tape(0).isEmpty() && out.is(HifiFeature.CASSETTE.get()), "the tape comes out");
+                helper.assertTrue(stack.deck().tape(0).isEmpty() && out.is(HifiFeature.CASSETTE.get()), "the tape comes out");
                 hold(player, out);
                 stack.press(player, Control.DOOR_2, 0);
-                helper.assertTrue(stack.tapeTicks(1) == stopped, "deck II takes it up at " + stopped + ", was at " + stack.tapeTicks(1));
+                helper.assertTrue(stack.deck().ticks(1) == stopped, "deck II takes it up at " + stopped + ", was at " + stack.deck().ticks(1));
                 stack.press(player, Control.PLAY_2, 0);
                 helper.runAfterDelay(3, () -> {
                     Streams.Source playing = Streams.playing(stack);
@@ -155,12 +155,12 @@ public class HifiGameTests {
             hold(player, disc);
             stack.press(player, Control.TRAY, 0);
             stack.press(player, Control.OPEN, 0);
-            helper.assertTrue(stack.discPlaying(), "the disc plays, unheard");
+            helper.assertTrue(stack.discPlayer().transport.playing(), "the disc plays, unheard");
             helper.runAfterDelay(30, () -> {
                 Streams.Source heard = Streams.playing(stack);
                 helper.assertTrue(heard != null && heard.url().equals("https://example.com/hifi-tape.mp3")
                         && Streams.loadId(stack) == tapeLoad, "the tape plays on, not started over by the disc");
-                long discAt = stack.discTicks();
+                long discAt = stack.discPlayer().transport.clock().position();
                 helper.assertTrue(discAt >= 29, "the disc has played on meanwhile, to " + discAt);
                 stack.press(player, Control.INPUT_DISC, 0);
                 helper.runAfterDelay(3, () -> {
@@ -229,7 +229,7 @@ public class HifiGameTests {
                     helper.assertTrue(Streams.playing(stack).ticks() == 100 * 20, "ten seconds on is 100 s");
                     stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
                     stack.control(Remotable.Action.SEEK, 30, player);
-                    helper.assertTrue(stack.discPaused() && stack.discTicks() == 30 * 20, "paused, it waits at 30 s");
+                    helper.assertTrue(stack.discPlayer().transport.paused() && stack.discPlayer().transport.clock().position() == 30 * 20, "paused, it waits at 30 s");
                     stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
                     helper.runAfterDelay(2, () -> {
                         helper.assertTrue(Streams.playing(stack).ticks() == 30 * 20, "and plays on from there");
