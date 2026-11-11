@@ -49,12 +49,18 @@ public class VideoPlayerGameTests {
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos);
         ServerPlayer wrencher = FakePlayerFactory.getMinecraft(helper.getLevel());
         wrencher.setPos(Vec3.atCenterOf(helper.absolutePos(pos.north())));
+        List<ScrollValueBehaviour> boxes = player.getAllBehaviours().stream().filter(ScrollValueBehaviour.class::isInstance)
+                .map(ScrollValueBehaviour.class::cast).toList();
+        helper.assertTrue(boxes.size() == 2, "a value box for each: " + boxes.size());
         // What the client sends when a value box is set with a wrench (see Create's ValueSettingsClient).
-        int lightingId = player.getBehaviour(ScrollValueBehaviour.TYPE).netId(); // lighting has the default type
-        new ValueSettingsPacket(helper.absolutePos(pos), 0, 40, null, null, Direction.NORTH, false, lightingId)
+        new ValueSettingsPacket(helper.absolutePos(pos), 0, 40, null, null, Direction.NORTH, false, boxes.get(0).netId())
                 .handle(wrencher);
-        helper.assertTrue(player.lighting() == 0.4f, "lighting set, was " + player.lighting());
-        helper.assertTrue(player.volume() == 1, "volume untouched, was " + player.volume());
+        helper.assertTrue((player.lighting() == 0.4f) != (player.volume() == 0.4f),
+                "one box sets one of them, lighting " + player.lighting() + ", volume " + player.volume());
+        new ValueSettingsPacket(helper.absolutePos(pos), 0, 70, null, null, Direction.NORTH, false, boxes.get(1).netId())
+                .handle(wrencher);
+        helper.assertTrue(java.util.Set.of(player.lighting(), player.volume()).equals(java.util.Set.of(0.4f, 0.7f)),
+                "and the other the other, lighting " + player.lighting() + ", volume " + player.volume());
         helper.succeed();
     }
 
@@ -93,7 +99,7 @@ public class VideoPlayerGameTests {
      * A player at {@code pos} whose packets land in {@code received}. Not logged in (Sable's login packets refuse a
      * mock connection), just in the level, where relays look.
      */
-    private static ServerPlayer listener(ServerLevel level, BlockPos pos, List<CustomPacketPayload> received) {
+    public static ServerPlayer listener(ServerLevel level, BlockPos pos, List<CustomPacketPayload> received) {
         ServerPlayer listener = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "listener"));
         listener.connection = new ServerGamePacketListenerImpl(level.getServer(), listener.connection.getConnection(),
                 listener, CommonListenerCookie.createInitial(listener.getGameProfile(), false)) {

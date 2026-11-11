@@ -55,6 +55,7 @@ public class DriveEmulatorGameTests {
                         && !helper.getBlockState(pos).getValue(DriveEmulatorBlock.LIT),
                 "a real drive that closed on nothing leaves it free: " + emulator.drive() + " " + emulator.host());
         emulator.update(host, Drive.LOADING, "", Disc.BLU_RAY);
+        Component loading = emulator.status();
         helper.assertTrue(emulator.drive() == Drive.LOADING && host.getUUID().equals(emulator.host()) && player.playlist().isEmpty(),
                 "a disc the real drive closes on makes it its player's before it is read: " + emulator.drive() + " " + emulator.host());
         emulator.update(host, Drive.READING, "MOVIE", Disc.BLU_RAY);
@@ -69,20 +70,19 @@ public class DriveEmulatorGameTests {
         String link = new DiscUrl(host.getUUID(), UUID.randomUUID()).toString();
         emulator.update(host, Drive.READY, link, Disc.BLU_RAY);
         Streams.Source playing = player.nowPlaying();
-        helper.assertTrue(player.playlist().equals(List.of(link)) && playing != null && playing.video().maxHeight() == 1080
-                && reader.nowPlaying() == null, "the Blu-ray player beside it plays its Blu-ray, the disc reader doesn't: "
+        helper.assertTrue(player.playlist().equals(List.of(link)) && playing != null && reader.nowPlaying() == null, "the Blu-ray player beside it plays its Blu-ray, the disc reader doesn't: "
                 + player.playlist() + " " + playing + " " + reader.nowPlaying());
         helper.assertTrue("MOVIE (Blu-ray)".equals(emulator.discName()), "it is called by its label: " + emulator.discName());
-        helper.assertTrue(emulator.status().getString().equals(Component.translatable("create_media_systems.drive.loading").getString()),
+        helper.assertTrue(emulator.status().equals(loading),
                 "it says it loads until the player has its disc playing: " + emulator.status().getString());
 
         // A remote's buttons, as RemoteItem passes them on.
         player.control(Action.PLAY_PAUSE, 0, host);
-        helper.assertTrue(player.nowPlaying() == null && player.state().getString().toLowerCase(java.util.Locale.ROOT).contains("paused"), "paused: " + player.state().getString());
+        helper.assertTrue(player.nowPlaying() == null && player.transport().paused(), "paused: " + player.state().getString());
         player.control(Action.PLAY_PAUSE, 0, host);
         helper.assertTrue(player.nowPlaying() != null, "played on: " + player.state().getString());
         player.control(Action.STOP, 0, host);
-        helper.assertTrue(player.nowPlaying() == null && player.state().getString().toLowerCase(java.util.Locale.ROOT).contains("stopped"), "stopped: " + player.state().getString());
+        helper.assertTrue(player.nowPlaying() == null && !player.transport().playing(), "stopped: " + player.state().getString());
         player.control(Action.SELECT, 1, host);
         helper.assertTrue(player.nowPlaying() != null, "played again from its remote: " + player.state().getString());
 

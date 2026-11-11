@@ -61,7 +61,6 @@ class BlockResourcesTest {
             Map.entry("train_signal_receiver", new Row(Tool.PICKAXE, false, true)),
             Map.entry("train_speaker", new Row(Tool.AXE, false, true))));
 
-    /** The mod's resources as built (tests don't run in the project folder). */
     private static final String NS = CreateMediaSystems.MOD_ID;
     /** The mod's resources as built (tests don't run in the project folder). */
     private static final Path RESOURCES = resources();

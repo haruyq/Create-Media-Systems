@@ -11,14 +11,28 @@ import net.minecraft.world.phys.Vec3;
 
 class LightingControlTest {
     @Test
-    void gapsBetweenPresetPadsAndBelowMonitorControlsDoNotActivateControls() {
-        ConsoleLayout.Slot pad = ConsoleLayout.slot(new Vec3(1.42, 0.9, 0.35), false);
-        assertEquals(Control.PRESET, pad.control());
-        assertEquals(1, pad.index());
-        assertNull(ConsoleLayout.slot(new Vec3(1.42, 0.9, 0.6), false));
-        assertNull(ConsoleLayout.slot(new Vec3(1.29, 1, 1.35), false));
-        assertNull(ConsoleLayout.slot(new Vec3(2.5, 1.2, 1.5), true));
-        assertEquals(ConsoleLayout.Button.PRESET_SAVE, ConsoleLayout.slot(new Vec3(1.68, 1, 1.35), false).button());
+    void everyControlIsFoundAtItsOwnPlace() {
+        for (ConsoleLayout.Slot slot : ConsoleLayout.SLOTS) {
+            assertSame(slot, ConsoleLayout.slot(middle(slot.area(), slot.monitor()), slot.monitor()),
+                    slot + " is covered by another control");
+        }
+    }
+
+    @Test
+    void gapsBetweenPresetPadsDoNotActivateControls() {
+        LightingConsolePage.Area first = ConsoleLayout.slot(Control.PRESET, 0).area();
+        LightingConsolePage.Area beside = ConsoleLayout.slot(Control.PRESET, 1).area();
+        LightingConsolePage.Area behind = ConsoleLayout.slot(Control.PRESET, 3).area();
+        float middle = (first.bottom() + first.top()) / 2;
+        assertNull(ConsoleLayout.slot(new Vec3((first.right() + beside.left()) / 2, 0, middle), false));
+        float between = first.bottom() > behind.top() ? (first.bottom() + behind.top()) / 2 : (first.top() + behind.bottom()) / 2;
+        assertNull(ConsoleLayout.slot(new Vec3((first.left() + first.right()) / 2, 0, between), false));
+    }
+
+    /** The middle of {@code area}, on the deck or a monitor. */
+    private static Vec3 middle(LightingConsolePage.Area area, boolean monitor) {
+        double x = (area.left() + area.right()) / 2, vertical = (area.bottom() + area.top()) / 2;
+        return monitor ? new Vec3(x, vertical, 0) : new Vec3(x, 0, vertical);
     }
 
     @Test

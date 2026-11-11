@@ -129,7 +129,10 @@ class DiscToolsTest {
         try {
             assertThrows(IOException.class, () -> DiscTools.install(directory,
                     URI.create("http://127.0.0.1:" + server.getAddress().getPort()), hash, () -> {}));
-            assertFalse(Files.exists(directory.resolve("9.0.2-win64")));
+            try (var files = Files.list(directory)) {
+                assertEquals(List.of(".lock"), files.map(file -> file.getFileName().toString()).toList(),
+                        "nothing of the incomplete archive is left installed");
+            }
         } finally {
             server.stop(0);
         }

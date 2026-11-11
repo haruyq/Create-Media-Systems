@@ -8,6 +8,7 @@ import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.Remotable;
+import org.haruyq.createmediasystems.stream.Tone;
 
 import com.mojang.authlib.GameProfile;
 
@@ -200,6 +201,53 @@ public class HifiGameTests {
         helper.assertTrue(player.getInventory().countItem(HifiFeature.hifiUnit(Unit.AMPLIFIER)) == 1,
                 "the last unit taken off takes the stack with it");
         helper.succeed();
+    }
+
+    /** What its sound is shaped by follows its buttons, knobs and cables. */
+    @GameTest(template = "empty")
+    public static void itsToneIsWhatItsUnitsAreSetTo(GameTestHelper helper) {
+        HifiStackBlock.Entity stack = stack(helper, Unit.AMPLIFIER, Unit.EQUALIZER);
+        ServerPlayer player = player(helper);
+        float heavy = HifiStackBlock.Preset.HEAVY.gains[2];
+        helper.assertTrue(stack.tone() == Tone.FLAT, "on standby");
+        stack.press(player, Control.POWER, 0);
+        hold(player, new ItemStack(HifiFeature.HIFI_CABLE.get()));
+        stack.press(player, Control.SOCKET_EQUALIZER, 0);
+        stack.press(player, Control.PRESET_2, 0);
+        Tone tone = stack.tone();
+        helper.assertTrue(gain(tone, 400) == heavy && gain(tone, 1000) == 0 && tone.width() == 1,
+                "HEAVY at the middle effect level, 1 kHz left alone: " + java.util.Arrays.toString(tone.bands()));
+        stack.press(player, Control.SOCKET_EQUALIZER, 0);
+        helper.assertTrue(stack.tone().bands().length == 0, "the equalizer pulled out shapes nothing");
+        hold(player, new ItemStack(HifiFeature.HIFI_CABLE.get()));
+        stack.press(player, Control.EQUALIZER_PLUG, 0);
+        stack.press(player, Control.EFFECT, 100);
+        helper.assertTrue(gain(stack.tone(), 400) == 2 * heavy, "twice as much at the full effect level");
+        stack.press(player, Control.WIDE, 0);
+        stack.press(player, Control.BASS, 0);
+        stack.press(player, Control.DIRECT, 0);
+        tone = stack.tone();
+        helper.assertTrue(gain(tone, 400) == 0 && gain(tone, 60) > 0 && tone.width() > 1,
+                "a disc direct, wide: the bass boost alone, " + java.util.Arrays.toString(tone.bands()));
+        stack.press(player, Control.INPUT_TAPE, 0);
+        Tone tape = stack.tone();
+        helper.assertTrue(gain(tape, 400) == 2 * heavy, "only a disc goes direct");
+        stack.press(player, Control.INPUT_DISC, 0);
+        stack.press(player, Control.DIRECT, 0);
+        helper.assertTrue(gain(tape, 16000) < gain(stack.tone(), 16000), "a tape's top is duller than a disc's");
+        helper.succeed();
+    }
+
+    /** How much (dB) {@code tone} raises the sound at {@code hertz}. */
+    private static float gain(Tone tone, float hertz) {
+        float gain = 0;
+        float[] bands = tone.bands();
+        for (int i = 0; i < bands.length; i += 3) {
+            if (bands[i] <= hertz && hertz <= bands[i + 1]) {
+                gain += bands[i + 2];
+            }
+        }
+        return gain;
     }
 
     /** The remote seeks the disc playing: heard, it is loaded again from there; paused, it plays on from there. */

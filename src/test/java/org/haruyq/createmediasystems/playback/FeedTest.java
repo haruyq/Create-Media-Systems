@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -22,16 +23,17 @@ class FeedTest {
             requests.incrementAndGet();
             return new ByteArrayInputStream(audio);
         };
-        Feed.Reader first = Feed.read("song", 0, open, reason -> { });
-        Feed.Reader second = Feed.read("song", 1, open, reason -> { });
+        String song = UUID.randomUUID().toString();
+        Feed.Reader first = Feed.read(song, 0, open, reason -> { });
+        Feed.Reader second = Feed.read(song, 1, open, reason -> { });
         first.prebuffer(audio.length, System.currentTimeMillis() + 5_000);
         assertEquals(1, requests.get(), "the second stream downloaded it again");
         assertEquals(1, first.read(10)[0]);
         assertEquals(2, second.read(10)[0], "the second stream did not start a second in");
 
         // Another song, or this one from a part no longer held: a download of its own.
-        Feed.Reader other = Feed.read("other", 0, open, reason -> { });
-        Feed.Reader later = Feed.read("song", 60, open, reason -> { });
+        Feed.Reader other = Feed.read(UUID.randomUUID().toString(), 0, open, reason -> { });
+        Feed.Reader later = Feed.read(song, 60, open, reason -> { });
         other.prebuffer(1, System.currentTimeMillis() + 5_000);
         later.prebuffer(1, System.currentTimeMillis() + 5_000);
         assertEquals(3, requests.get());
@@ -48,10 +50,11 @@ class FeedTest {
             requests.incrementAndGet();
             return new ByteArrayInputStream(new byte[1000]);
         };
-        Feed.Reader first = Feed.read("song", 0, open, reason -> { });
+        String song = UUID.randomUUID().toString();
+        Feed.Reader first = Feed.read(song, 0, open, reason -> { });
         first.prebuffer(1, System.currentTimeMillis() + 5_000);
         first.close();
-        Feed.Reader again = Feed.read("song", 0, open, reason -> { });
+        Feed.Reader again = Feed.read(song, 0, open, reason -> { });
         again.prebuffer(1001, System.currentTimeMillis() + 5_000);
         assertEquals(2, requests.get());
         assertArrayEquals(new byte[1000], again.read(2000));
