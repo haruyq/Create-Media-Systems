@@ -109,7 +109,6 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         });
         NeoForge.EVENT_BUS.addListener(DisplayRenderer::overdraw);
         DisplayLight.register();
-        ScreenLight.register();
         DisplayQuillHandler.register();
         Images.register();
     }

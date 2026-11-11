@@ -15,11 +15,165 @@ public final class LightingSettings {
     public static final int PRESETS = 6;
     /** How far a held Shift moves a range at once, against 1 without. */
     public static final int FAST_RANGE_STEP = 10;
+    /** A new group's colours, and a video's two colours before it is first seen. */
+    public static final int[] DEFAULT_COLORS = {0x20C0FF, 0xA040FF, 0xFF3080, 0xFFD060, 0xFFFFFF, 0x40FF80, 0x2040FF, 0xFF3030};
+
+    /**
+     * A number a console keeps: its save key, its value in a new console, what it may be, and how far one step (a
+     * scroll, a press) moves it.
+     */
+    public record Setting(String key, float initial, float min, float max, float step) {
+        /** {@code value} within what it may be; its initial value if it isn't a number. */
+        public float bounded(float value) {
+            return Float.isFinite(value) ? Mth.clamp(value, min, max) : initial;
+        }
+
+        /** Where {@code value} lies from min (0) to max (1), as a knob shows it. */
+        public float fraction(float value) {
+            return (value - min) / (max - min);
+        }
+
+        float load(CompoundTag tag) {
+            return tag.getFloat(key);
+        }
+
+        void save(CompoundTag tag, float value) {
+            tag.putFloat(key, value);
+        }
+    }
+
+    public static final Setting MASTER = new Setting("Master", 0.8f, 0, 1, 0.05f);
+    public static final Setting BRIGHTNESS = new Setting("Brightness", 1, 0, 1, 0.05f);
+    public static final Setting RANGE = new Setting("Range", 32, 2, MAX_RANGE, 1);
+    public static final Setting SPREAD = new Setting("Spread", 12, 1, 70, 1);
+    public static final Setting SPEED = new Setting("Speed", 1, 0.05f, 4, 0.05f);
+    public static final Setting PAN = new Setting("Pan", 0, -180, 180, 1);
+    public static final Setting TILT = new Setting("Tilt", 35, -85, 85, 1);
+
+    /** One of a few ways a group does something, shown by its own lang key. Saved and sent as its ordinal. */
+    public interface Mode {
+        /** Its name's key, after {@code create_media_systems.lighting.}. */
+        String key();
+    }
+
+    public enum Motion implements Mode {
+        FIXED("motion.0"), SWEEP("motion.1"), CIRCLE("motion.2"), TRACK("motion.3");
+
+        private final String key;
+
+        Motion(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public String key() {
+            return key;
+        }
+    }
+
+    public enum Pattern implements Mode {
+        SPOT("pattern.0"), BEAM("pattern.1"), LASER_RAY("pattern.2"), LASER_FAN("pattern.3"), LASER_SHEET("pattern.4");
+
+        private final String key;
+
+        Pattern(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public String key() {
+            return key;
+        }
+
+        /** Whether it is a cone of light (a spot or a beam), not a laser's rays. */
+        public boolean cone() {
+            return this == SPOT || this == BEAM;
+        }
+    }
+
+    public enum Mapping implements Mode {
+        SEQUENCE("mapping.0"), SPLIT("mapping.1"), GRADIENT("mapping.2"), PER_FIXTURE("mapping.3");
+
+        private final String key;
+
+        Mapping(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public String key() {
+            return key;
+        }
+    }
+
+    public enum Band implements Mode {
+        ALL("band.0"), BASS("band.1"), MID("band.2"), HIGH("band.3");
+
+        private final String key;
+
+        Band(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public String key() {
+            return key;
+        }
+    }
+
+    /** Whose colours a group shows: its own, or its video source's. Shown as on (video) or off. */
+    public enum ColorMode {
+        OWN, VIDEO
+    }
+
+    /** {@code values}' member with ordinal {@code id}, the nearest if there is none, as a saved or sent one may not be. */
+    public static <E extends Enum<E>> E byId(E[] values, int id) {
+        return values[Mth.clamp(id, 0, values.length - 1)];
+    }
+
+    /** The member {@code step} places on from {@code current}, round the end. */
+    public static <E extends Enum<E>> E cycle(E current, int step) {
+        E[] values = current.getDeclaringClass().getEnumConstants();
+        return values[Math.floorMod(current.ordinal() + step, values.length)];
+    }
+
+    /**
+     * The console's built-in presets, keyed by their lang key: each replaces a group's effect (its motion, pattern,
+     * audio response, colour cycle and spread), keeping its colours and where it points.
+     */
+    public enum Preset {
+        FIXED("preset.0", 0x36C9EE, Motion.FIXED, Pattern.SPOT, false, false, 12),
+        SWEEP("preset.1", 0x9F66EF, Motion.SWEEP, Pattern.BEAM, true, false, 12),
+        CYCLE("preset.2", 0xFFC75C, Motion.SWEEP, Pattern.BEAM, true, true, 12),
+        FAN("preset.3", 0x32D999, Motion.CIRCLE, Pattern.LASER_FAN, true, false, 40),
+        SHEET("preset.4", 0xEE6C9E, Motion.SWEEP, Pattern.LASER_SHEET, true, true, 40),
+        TRACK("preset.5", 0x5C8AFF, Motion.TRACK, Pattern.SPOT, false, false, 30);
+
+        public final String key;
+        /** Its key's colour on the console. */
+        public final int cue;
+        final Motion motion;
+        final Pattern pattern;
+        final boolean audio;
+        final boolean colorCycle;
+        final float spread;
+
+        Preset(String key, int cue, Motion motion, Pattern pattern, boolean audio, boolean colorCycle, float spread) {
+            this.key = key;
+            this.cue = cue;
+            this.motion = motion;
+            this.pattern = pattern;
+            this.audio = audio;
+            this.colorCycle = colorCycle;
+            this.spread = spread;
+        }
+    }
+
     public final Group[] groups = new Group[GROUPS];
     public int selectedGroup;
     public int selectedColor;
     public boolean enabled = true;
-    public float master = 0.8f;
+    public float master = MASTER.initial();
 
     public LightingSettings() {
         for (int i = 0; i < GROUPS; i++) {
@@ -36,7 +190,7 @@ public final class LightingSettings {
 
     /** Brings every setting within what it can be, as a saved or sent one may not be. */
     public void normalize() {
-        master = bounded(master, 0, 1, 0.8f);
+        master = MASTER.bounded(master);
         selectedGroup = Mth.clamp(selectedGroup, 0, GROUPS - 1);
         selectedColor = Mth.clamp(selectedColor, 0, COLORS - 1);
         for (Group group : groups) {
@@ -45,43 +199,34 @@ public final class LightingSettings {
     }
 
     public static final class Group {
-        public static final int MOTION_FIXED = 0, MOTION_SWEEP = 1, MOTION_CIRCLE = 2, MOTION_TRACK = 3, MOTIONS = 4;
-        public static final int PATTERN_SPOT = 0, PATTERN_BEAM = 1, PATTERN_LASER_RAY = 2, PATTERN_LASER_FAN = 3,
-                PATTERN_LASER_SHEET = 4, PATTERNS = 5;
-        public static final int MAPPING_SEQUENCE = 0, MAPPING_SPLIT = 1, MAPPING_GRADIENT = 2, MAPPING_PER_FIXTURE = 3,
-                MAPPINGS = 4;
-        public static final int BAND_ALL = 0, BAND_BASS = 1, BAND_MID = 2, BAND_HIGH = 3, BANDS = 4;
-        /** colorMode: the group's own colours, or its video source's. */
-        public static final int COLORS_OWN = 0, COLORS_VIDEO = 1;
-
-        public final int[] colors = {0x20C0FF, 0xA040FF, 0xFF3080, 0xFFD060, 0xFFFFFF, 0x40FF80, 0x2040FF, 0xFF3030};
+        public final int[] colors = DEFAULT_COLORS.clone();
         public int colorCount = 2;
-        public int mapping;
-        public int colorMode;
-        public int motion;
-        public int pattern;
-        public int audioBand;
+        public Mapping mapping = Mapping.SEQUENCE;
+        public ColorMode colorMode = ColorMode.OWN;
+        public Motion motion = Motion.FIXED;
+        public Pattern pattern = Pattern.SPOT;
+        public Band audioBand = Band.ALL;
         public boolean audio;
         public boolean colorCycle;
-        public float brightness = 1;
-        public float range = 32;
-        public float spread = 12;
-        public float speed = 1;
-        public float pan;
-        public float tilt = 35;
+        public float brightness = BRIGHTNESS.initial();
+        public float range = RANGE.initial();
+        public float spread = SPREAD.initial();
+        public float speed = SPEED.initial();
+        public float pan = PAN.initial();
+        public float tilt = TILT.initial();
         public UUID target;
 
-        public void preset(int slot, UUID player) {
-            motion = slot == 0 ? MOTION_FIXED : slot == 3 ? MOTION_CIRCLE : slot == 5 ? MOTION_TRACK : MOTION_SWEEP;
-            pattern = slot == 0 || slot == 5 ? PATTERN_SPOT : slot < 3 ? PATTERN_BEAM
-                    : slot == 3 ? PATTERN_LASER_FAN : PATTERN_LASER_SHEET;
-            audio = slot > 0 && slot < 5;
-            colorCycle = slot == 2 || slot == 4;
-            colorMode = COLORS_OWN;
-            audioBand = BAND_ALL;
-            speed = 1;
-            spread = slot == 5 ? 30 : slot >= 3 ? 40 : 12;
-            if (slot == 5 && player != null) {
+        /** Takes {@code preset}'s effect; a tracking one follows {@code player}, if given. */
+        public void preset(Preset preset, UUID player) {
+            motion = preset.motion;
+            pattern = preset.pattern;
+            audio = preset.audio;
+            colorCycle = preset.colorCycle;
+            colorMode = ColorMode.OWN;
+            audioBand = Band.ALL;
+            speed = SPEED.initial();
+            spread = preset.spread;
+            if (preset.motion == Motion.TRACK && player != null) {
                 target = player;
             }
         }
@@ -90,19 +235,19 @@ public final class LightingSettings {
             CompoundTag tag = new CompoundTag();
             tag.putIntArray("Colors", colors.clone());
             tag.putInt("ColorCount", colorCount);
-            tag.putInt("Mapping", mapping);
-            tag.putInt("ColorMode", colorMode);
-            tag.putInt("Motion", motion);
-            tag.putInt("Pattern", pattern);
-            tag.putInt("AudioBand", audioBand);
+            tag.putInt("Mapping", mapping.ordinal());
+            tag.putInt("ColorMode", colorMode.ordinal());
+            tag.putInt("Motion", motion.ordinal());
+            tag.putInt("Pattern", pattern.ordinal());
+            tag.putInt("AudioBand", audioBand.ordinal());
             tag.putBoolean("Audio", audio);
             tag.putBoolean("ColorCycle", colorCycle);
-            tag.putFloat("Brightness", brightness);
-            tag.putFloat("Range", range);
-            tag.putFloat("Spread", spread);
-            tag.putFloat("Speed", speed);
-            tag.putFloat("Pan", pan);
-            tag.putFloat("Tilt", tilt);
+            BRIGHTNESS.save(tag, brightness);
+            RANGE.save(tag, range);
+            SPREAD.save(tag, spread);
+            SPEED.save(tag, speed);
+            PAN.save(tag, pan);
+            TILT.save(tag, tilt);
             if (target != null) {
                 tag.putUUID("Target", target);
             }
@@ -113,19 +258,19 @@ public final class LightingSettings {
             int[] saved = tag.getIntArray("Colors");
             System.arraycopy(saved, 0, colors, 0, Math.min(COLORS, saved.length));
             colorCount = tag.getInt("ColorCount");
-            mapping = tag.getInt("Mapping");
-            colorMode = tag.getInt("ColorMode");
-            motion = tag.getInt("Motion");
-            pattern = tag.getInt("Pattern");
-            audioBand = tag.getInt("AudioBand");
+            mapping = byId(Mapping.values(), tag.getInt("Mapping"));
+            colorMode = byId(ColorMode.values(), tag.getInt("ColorMode"));
+            motion = byId(Motion.values(), tag.getInt("Motion"));
+            pattern = byId(Pattern.values(), tag.getInt("Pattern"));
+            audioBand = byId(Band.values(), tag.getInt("AudioBand"));
             audio = tag.getBoolean("Audio");
             colorCycle = tag.getBoolean("ColorCycle");
-            brightness = tag.getFloat("Brightness");
-            range = tag.getFloat("Range");
-            spread = tag.getFloat("Spread");
-            speed = tag.getFloat("Speed");
-            pan = tag.getFloat("Pan");
-            tilt = tag.getFloat("Tilt");
+            brightness = BRIGHTNESS.load(tag);
+            range = RANGE.load(tag);
+            spread = SPREAD.load(tag);
+            speed = SPEED.load(tag);
+            pan = PAN.load(tag);
+            tilt = TILT.load(tag);
             target = tag.hasUUID("Target") ? tag.getUUID("Target") : null;
             normalize();
         }
@@ -136,24 +281,29 @@ public final class LightingSettings {
                 colors[i] &= 0xFFFFFF;
             }
             colorCount = Mth.clamp(colorCount, 1, COLORS);
-            mapping = Mth.clamp(mapping, 0, MAPPINGS - 1);
-            colorMode = Mth.clamp(colorMode, COLORS_OWN, COLORS_VIDEO);
-            motion = Mth.clamp(motion, 0, MOTIONS - 1);
-            pattern = Mth.clamp(pattern, 0, PATTERNS - 1);
-            audioBand = Mth.clamp(audioBand, 0, BANDS - 1);
-            brightness = bounded(brightness, 0, 1, 1);
-            range = bounded(range, 2, MAX_RANGE, 32);
-            spread = bounded(spread, 1, 70, 12);
-            speed = bounded(speed, 0.05f, 4, 1);
-            pan = bounded(pan, -180, 180, 0);
-            tilt = bounded(tilt, -85, 85, 35);
+            brightness = BRIGHTNESS.bounded(brightness);
+            range = RANGE.bounded(range);
+            spread = SPREAD.bounded(spread);
+            speed = SPEED.bounded(speed);
+            pan = PAN.bounded(pan);
+            tilt = TILT.bounded(tilt);
+        }
+
+        /** The colour it is showing in slot {@code slot}'s place (the selected one, say). */
+        public int color(int slot) {
+            return colors[Mth.clamp(slot, 0, COLORS - 1)];
+        }
+
+        /** Whether it shows its video source's colours now, a video being seen ({@code video}). */
+        public boolean videoColors(boolean video) {
+            return colorMode == ColorMode.VIDEO && video;
         }
     }
 
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("Enabled", enabled);
-        tag.putFloat("Master", master);
+        MASTER.save(tag, master);
         tag.putInt("SelectedGroup", selectedGroup);
         tag.putInt("SelectedColor", selectedColor);
         ListTag list = new ListTag();
@@ -166,7 +316,7 @@ public final class LightingSettings {
 
     public void load(CompoundTag tag) {
         enabled = tag.getBoolean("Enabled");
-        master = tag.getFloat("Master");
+        master = MASTER.load(tag);
         selectedGroup = tag.getInt("SelectedGroup");
         selectedColor = tag.getInt("SelectedColor");
         ListTag list = tag.getList("Groups", Tag.TAG_COMPOUND);
@@ -176,8 +326,9 @@ public final class LightingSettings {
         normalize();
     }
 
-    private static float bounded(float value, float min, float max, float fallback) {
-        return Float.isFinite(value) ? Mth.clamp(value, min, max) : fallback;
+    /** The group that is selected. */
+    public Group selected() {
+        return groups[selectedGroup];
     }
 
     public static int palette(int column, int row) {
@@ -198,11 +349,11 @@ public final class LightingSettings {
 
     public static int color(Group group, int order, int count, double seconds, int leftColor, int rightColor,
                             boolean video) {
-        boolean videoColors = group.colorMode == Group.COLORS_VIDEO && video;
+        boolean videoColors = group.videoColors(video);
         int n = videoColors ? 2 : group.colorCount;
         double position = switch (group.mapping) {
-            case Group.MAPPING_SPLIT -> Math.min(n - 1, Math.max(0, order) * n / Math.max(1, count));
-            case Group.MAPPING_GRADIENT -> count <= 1 ? 0 : Mth.clamp(order / (double) (count - 1), 0, 1) * (n - 1);
+            case SPLIT -> Math.min(n - 1, Math.max(0, order) * n / Math.max(1, count));
+            case GRADIENT -> count <= 1 ? 0 : Mth.clamp(order / (double) (count - 1), 0, 1) * (n - 1);
             default -> Math.floorMod(order, n);
         };
         if (group.colorCycle) {

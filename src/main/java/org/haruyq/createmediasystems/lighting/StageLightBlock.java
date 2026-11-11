@@ -37,6 +37,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class StageLightBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final MapCodec<StageLightBlock> CODEC = simpleCodec(StageLightBlock::new);
+    private final Spec spec;
     public static final BooleanProperty HANGING = BooleanProperty.create("hanging");
     private static final Map<String, Component> FAMILY_NAMES = new ConcurrentHashMap<>();
 
@@ -55,8 +56,34 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
                 : Component.literal(family);
     }
 
+    /**
+     * What a fixture of this block is like: its lens ({@code lensWidth} by {@code lensHeight}, from its middle), the
+     * patterns it draws (from {@code first} to {@code last}), and how dim it goes between beats while it tracks a
+     * player and follows the music ({@code trackFloor}; 0.12 otherwise).
+     */
+    public record Spec(float lensWidth, float lensHeight, LightingSettings.Pattern first, LightingSettings.Pattern last,
+                       float trackFloor) {
+        /** A moving head: a spot or a beam, kept bright on whom it follows. */
+        public static final Spec LIGHT = new Spec(0.255f, 0.205f, LightingSettings.Pattern.SPOT,
+                LightingSettings.Pattern.BEAM, 0.65f);
+        /** A laser projector: laser patterns only. */
+        public static final Spec LASER = new Spec(0.18f, 0.075f, LightingSettings.Pattern.LASER_RAY,
+                LightingSettings.Pattern.LASER_SHEET, 0.12f);
+
+        /** The pattern it draws for a group set to {@code pattern}: the nearest it can. */
+        public LightingSettings.Pattern pattern(LightingSettings.Pattern pattern) {
+            return LightingSettings.byId(LightingSettings.Pattern.values(),
+                    Math.max(first.ordinal(), Math.min(last.ordinal(), pattern.ordinal())));
+        }
+    }
+
     public StageLightBlock(Properties properties) {
+        this(properties, Spec.LIGHT);
+    }
+
+    public StageLightBlock(Properties properties, Spec spec) {
         super(properties);
+        this.spec = spec;
         registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH).setValue(HANGING, false));
     }
 
@@ -114,8 +141,9 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
             super(type, pos, state);
         }
 
-        public boolean laser() {
-            return getBlockState().is(LightingFeature.LASER_PROJECTOR.get());
+        /** What it is like (see Spec): its block's. */
+        public Spec spec() {
+            return getBlockState().getBlock() instanceof StageLightBlock block ? block.spec : Spec.LIGHT;
         }
 
         /** The family stage lights and laser projectors share: the console's own page runs them. */

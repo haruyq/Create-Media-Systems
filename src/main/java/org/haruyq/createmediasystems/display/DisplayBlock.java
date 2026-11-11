@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
-import org.haruyq.createmediasystems.lighting.LightingScreens;
+import org.haruyq.createmediasystems.client.Occluders;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -168,7 +168,18 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 : (l, p, s, be) -> ((Entity) be).tick((ServerLevel) l);
     }
 
-    public static class Entity extends BlockEntity implements IHaveGoggleInformation {
+    /**
+     * The panel of a screen {@code width} by {@code height} blocks anchored at {@code anchor} facing {@code facing},
+     * grown by {@code margin} around and reaching {@code front} out of the picture, in the anchor's block space.
+     */
+    public static AABB box(BlockPos anchor, Direction facing, double width, double height, float margin, float front) {
+        Screen screen = new Screen(facing);
+        Vec3 corner = Vec3.atLowerCornerOf(anchor);
+        return new AABB(corner.add(screen.at(-margin, -margin, -(float) DEPTH)),
+                corner.add(screen.at((float) width + margin, (float) height + margin, front)));
+    }
+
+    public static class Entity extends BlockEntity implements IHaveGoggleInformation, Occluders.Occluder {
         private Link source = Link.NONE;
         private int width = UNIT;
         private int height = UNIT;
@@ -185,7 +196,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         @Override
         public void onLoad() {
             super.onLoad();
-            LightingScreens.add(this);
+            Occluders.add(this);
         }
 
         public Optional<BlockPos> source() {
@@ -231,7 +242,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         }
 
         /** Links it to the Blu-ray player at {@code source}, or unlinks it; its viewers start over. */
-        void link(@Nullable BlockPos source) {
+        public void link(@Nullable BlockPos source) {
             this.source = Link.to(level, source);
             changed();
         }
@@ -259,14 +270,23 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
 
         /** Its panel, grown by {@code margin} around and reaching {@code front} out of the picture, in its block space. */
         public AABB box(float margin, float front) {
-            Screen screen = new Screen(facing());
-            Vec3 corner = Vec3.atLowerCornerOf(worldPosition);
-            return new AABB(corner.add(screen.at(-margin, -margin, -(float) DEPTH)),
-                    corner.add(screen.at((float) width() + margin, (float) height() + margin, front)));
+            return DisplayBlock.box(worldPosition, facing(), width(), height(), margin, front);
         }
 
         public boolean isImageViewer() {
             return getBlockState().getBlock() instanceof ImageViewerBlock;
+        }
+
+        /** A display's screen stops light; an image viewer's picture only in its frame. */
+        @Override
+        public boolean occludes() {
+            return !isImageViewer() || getBlockState().getValue(ImageViewerBlock.FRAMED);
+        }
+
+        /** Its panel, from its back to just in front of its picture. */
+        @Override
+        public AABB occluderBox() {
+            return box(0, 0.004f);
         }
 
         /** Plays its Blu-ray player's video's sound from the screen's middle, unless a speaker plays it. */
@@ -318,7 +338,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         @Override
         public void setRemoved() {
             super.setRemoved();
-            LightingScreens.remove(this);
+            Occluders.remove(this);
             if (level != null && !level.isClientSide) {
                 Streams.stop(this);
             }

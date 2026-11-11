@@ -5,6 +5,7 @@ import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.haruyq.createmediasystems.lighting.ConsoleLayout;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.LightingLinkItem;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
@@ -25,6 +26,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -148,7 +150,7 @@ public class LightingLinkGameTests {
     public static void consoleFormsAndBreaksUpOnTheNextTick(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(1, 2, 2));
-        BlockPos monitor = LightingConsoleBlock.at(origin, Direction.SOUTH, 3, 1, 1);
+        BlockPos monitor = ConsoleLayout.at(origin, Direction.SOUTH, 3, 1, 1);
         build(level, origin);
         level.setBlockAndUpdate(monitor, Blocks.AIR.defaultBlockState());
         helper.runAfterDelay(2, () -> {
@@ -157,7 +159,7 @@ public class LightingLinkGameTests {
                     .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
             helper.runAfterDelay(2, () -> {
                 helper.assertTrue(((LightingConsoleBlock.Entity) level.getBlockEntity(origin)).formed, "last monitor forms the console");
-                level.setBlockAndUpdate(LightingConsoleBlock.at(origin, Direction.SOUTH, 2, 0, 1), Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(ConsoleLayout.at(origin, Direction.SOUTH, 2, 0, 1), Blocks.AIR.defaultBlockState());
                 helper.runAfterDelay(2, () -> {
                     helper.assertTrue(!level.getBlockState(origin).getValue(LightingConsoleBlock.FORMED)
                             && !level.getBlockState(monitor).getValue(LightingConsoleBlock.FORMED), "a missing desk breaks it up");
@@ -174,21 +176,7 @@ public class LightingLinkGameTests {
     }
 
     private static List<BlockPos> build(ServerLevel level, BlockPos origin) {
-        List<BlockPos> blocks = new ArrayList<>();
-        Direction facing = Direction.SOUTH;
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 2; z++) {
-                BlockPos pos = LightingConsoleBlock.at(origin, facing, x, 0, z);
-                level.setBlockAndUpdate(pos, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState()
-                        .setValue(LightingConsoleBlock.FACING, facing));
-                blocks.add(pos);
-            }
-            BlockPos monitor = LightingConsoleBlock.at(origin, facing, x, 1, 1);
-            level.setBlockAndUpdate(monitor, LightingFeature.LIGHTING_MONITOR.get().defaultBlockState()
-                    .setValue(LightingConsoleBlock.FACING, facing));
-            blocks.add(monitor);
-        }
-        return blocks;
+        return new ArrayList<>(ConsoleLayout.place(level, origin, Direction.SOUTH, Block.UPDATE_ALL));
     }
 
     private static BlockEntity reload(ServerLevel level, BlockPos pos, CompoundTag tag) {

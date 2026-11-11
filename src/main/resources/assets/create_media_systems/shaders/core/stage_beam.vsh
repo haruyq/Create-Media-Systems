@@ -1,5 +1,8 @@
 #version 150
 
+// A beam strip a row of Sampler0 (LightingBeams.strip), expanded into its faded steps. The row layout and the fades
+// are LightingGpu's; LightingGpuTest checks this file against it.
+
 uniform samplerBuffer Sampler0;
 
 out vec3 Point;

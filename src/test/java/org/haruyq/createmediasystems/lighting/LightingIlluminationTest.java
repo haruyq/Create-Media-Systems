@@ -153,26 +153,26 @@ class LightingIlluminationTest {
     @Test
     void lightOnlyReachesTheForwardConeWithinItsRange() {
         double tangent = Math.tan(Math.toRadians(12));
-        assertEquals(1, LightingIllumination.exposure(new Vec3(0, 0, 10), FORWARD, tangent, 32, 0));
-        assertEquals(0, LightingIllumination.exposure(new Vec3(0, 0, -10), FORWARD, tangent, 32, 0));
-        assertEquals(0, LightingIllumination.exposure(new Vec3(0, 0, 33), FORWARD, tangent, 32, 0));
-        assertEquals(0, LightingIllumination.exposure(new Vec3(4, 0, 10), FORWARD, tangent, 32, 0));
+        assertEquals(1, LightingIllumination.exposure(0, 0, 10, FORWARD, tangent, 32, 0));
+        assertEquals(0, LightingIllumination.exposure(0, 0, -10, FORWARD, tangent, 32, 0));
+        assertEquals(0, LightingIllumination.exposure(0, 0, 33, FORWARD, tangent, 32, 0));
+        assertEquals(0, LightingIllumination.exposure(4, 0, 10, FORWARD, tangent, 32, 0));
     }
 
     @Test
     void coneEdgesFadeContinuously() {
         double tangent = 0.2;
-        float inner = LightingIllumination.exposure(new Vec3(1.4, 0, 10), FORWARD, tangent, 32, 0);
-        float outer = LightingIllumination.exposure(new Vec3(1.9, 0, 10), FORWARD, tangent, 32, 0);
+        float inner = LightingIllumination.exposure(1.4, 0, 10, FORWARD, tangent, 32, 0);
+        float outer = LightingIllumination.exposure(1.9, 0, 10, FORWARD, tangent, 32, 0);
         assertTrue(inner > outer && inner < 1 && outer > 0);
-        assertEquals(0, LightingIllumination.exposure(new Vec3(2, 0, 10), FORWARD, tangent, 32, 0));
+        assertEquals(0, LightingIllumination.exposure(2, 0, 10, FORWARD, tangent, 32, 0));
     }
 
     @Test
     void aBodyIntersectingANarrowBeamReceivesLight() {
         Vec3 center = new Vec3(0.2, 0, 10);
-        assertEquals(0, LightingIllumination.exposure(center, FORWARD, 0.01, 32, 0));
-        assertTrue(LightingIllumination.exposure(center, FORWARD, 0.01, 32, 0.21) > 0.99);
+        assertEquals(0, LightingIllumination.exposure(center.x, center.y, center.z, FORWARD, 0.01, 32, 0));
+        assertTrue(LightingIllumination.exposure(center.x, center.y, center.z, FORWARD, 0.01, 32, 0.21) > 0.99);
     }
 
     @Test

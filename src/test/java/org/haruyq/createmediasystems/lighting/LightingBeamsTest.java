@@ -13,7 +13,7 @@ class LightingBeamsTest {
     @Test
     void gpuPlaneKeepsTheSameSideAndClearanceAsCpuClipping() {
         Vec3 hit = new Vec3(-12.5, 6.25, 19);
-        var plane = LightingGeometry.Plane.toward(hit, new Vec3(1, 2, -3), new Vec3(-4, 8, 2));
+        var plane = LightingBeams.Clip.toward(hit, new Vec3(1, 2, -3), new Vec3(-4, 8, 2));
         FloatBuffer data = FloatBuffer.allocate(8);
         LightingBeams.plane(data, 4, plane);
         for (double offset : new double[] {-2, 0, 0.001, 0.003, 4}) {

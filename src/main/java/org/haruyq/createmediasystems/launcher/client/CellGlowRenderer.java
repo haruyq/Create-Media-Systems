@@ -10,7 +10,7 @@ import java.util.Map;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.client.IrisCompat;
-import org.haruyq.createmediasystems.display.ScreenLight;
+import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.launcher.CellLighting;
 import org.haruyq.createmediasystems.launcher.DiscCellCharger;
 import org.haruyq.createmediasystems.launcher.DiscCellItem;

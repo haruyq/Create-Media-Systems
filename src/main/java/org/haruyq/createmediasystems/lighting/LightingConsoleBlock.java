@@ -45,7 +45,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -133,30 +132,11 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         if (!state.getValue(FORMED)) {
             return;
         }
-        Direction facing = state.getValue(FACING);
-        boolean monitor = state.getBlock() instanceof LightingMonitorBlock;
-        BlockPos origin = at(monitor ? pos.below() : pos, facing, -state.getValue(COLUMN), 0,
-                monitor || state.getValue(BACK) ? -1 : 0);
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 2; z++) {
-                BlockPos part = at(origin, facing, x, 0, z);
-                if (level.getBlockState(part).getBlock() instanceof LightingConsoleBlock desk) {
-                    level.scheduleTick(part, desk, 1);
-                }
+        for (ConsoleLayout.Part part : ConsoleLayout.parts(ConsoleLayout.origin(pos, state), state.getValue(FACING))) {
+            if (!part.monitor() && level.getBlockState(part.pos()).getBlock() instanceof LightingConsoleBlock desk) {
+                level.scheduleTick(part.pos(), desk, 1);
             }
         }
-    }
-
-    public static BlockPos at(BlockPos origin, Direction facing, int x, int y, int z) {
-        return origin.relative(facing.getCounterClockWise(), x).relative(facing.getOpposite(), z).above(y);
-    }
-
-    public static Vec3 toLocal(BlockPos origin, Direction facing, Vec3 point) {
-        Vec3 offset = point.subtract(Vec3.atCenterOf(origin));
-        Direction right = facing.getCounterClockWise();
-        Direction back = facing.getOpposite();
-        return new Vec3(0.5 + offset.x * right.getStepX() + offset.z * right.getStepZ(),
-                point.y - origin.getY(), 0.5 + offset.x * back.getStepX() + offset.z * back.getStepZ());
     }
 
     @Nullable
@@ -164,10 +144,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         if (!level.isLoaded(pos)) {
             return null;
         }
-        if (level.getBlockState(pos).getBlock() instanceof LightingMonitorBlock) {
-            pos = pos.below();
-        }
-        return level.getBlockEntity(pos) instanceof Entity entity ? entity.controller() : null;
+        return level.getBlockEntity(ConsoleLayout.desk(pos, level.getBlockState(pos))) instanceof Entity entity
+                ? entity.controller() : null;
     }
 
     /** A fixture linked to a console: its link, the console group it is in, and its family, kept while it is unloaded. */
@@ -191,8 +169,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         public float pulse;
         public float bpm = AnalysisFrame.DEFAULT_BPM;
         public double motionPhase;
-        public int videoLeft = 0x20C0FF;
-        public int videoRight = 0xA040FF;
+        public int videoLeft = LightingSettings.DEFAULT_COLORS[0];
+        public int videoRight = LightingSettings.DEFAULT_COLORS[1];
         public boolean hasAudio;
         public boolean hasVideo;
         public long signalAt = -100;
@@ -334,9 +312,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             if (level == null || !getBlockState().getValue(FORMED)) {
                 return null;
             }
-            BlockState state = getBlockState();
-            BlockPos origin = at(worldPosition, state.getValue(FACING), -state.getValue(COLUMN), 0,
-                    state.getValue(BACK) ? -1 : 0);
+            BlockPos origin = ConsoleLayout.origin(worldPosition, getBlockState());
             return level.isLoaded(origin) && level.getBlockEntity(origin) instanceof Entity entity && entity.formed
                     ? entity : null;
         }
@@ -368,14 +344,10 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             }
             Direction facing = getBlockState().getValue(FACING);
             if (getBlockState().getValue(FORMED)) {
-                BlockPos origin = at(worldPosition, facing, -getBlockState().getValue(COLUMN), 0,
-                        getBlockState().getValue(BACK) ? -1 : 0);
-                for (int x = 0; x < 4; x++) {
-                    for (int z = 0; z < 2; z++) {
-                        if (!level.isLoaded(at(origin, facing, x, 0, z))
-                                || !level.isLoaded(at(origin, facing, x, 1, 1))) {
-                            return;
-                        }
+                BlockPos origin = ConsoleLayout.origin(worldPosition, getBlockState());
+                for (ConsoleLayout.Part part : ConsoleLayout.parts(origin, facing)) {
+                    if (!level.isLoaded(part.pos())) {
+                        return;
                     }
                 }
                 if (current == null) {
@@ -388,13 +360,10 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 }
                 return;
             }
-            for (int z = 0; z < 2; z++) {
-                for (int x = 0; x < 4; x++) {
-                    BlockPos origin = at(worldPosition, facing, -x, 0, -z);
-                    if (complete(origin, facing)) {
-                        form(origin, facing, true);
-                        return;
-                    }
+            for (BlockPos origin : ConsoleLayout.origins(worldPosition, facing)) {
+                if (complete(origin, facing)) {
+                    form(origin, facing, true);
+                    return;
                 }
             }
             if (getBlockState().getValue(FORMED)) {
@@ -405,20 +374,16 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         }
 
         private boolean complete(BlockPos origin, Direction facing) {
-            for (int x = 0; x < 4; x++) {
-                for (int z = 0; z < 2; z++) {
-                    BlockPos pos = at(origin, facing, x, 0, z);
-                    if (!matches(pos, facing, false)) {
-                        return false;
-                    }
-                    Entity other = (Entity) level.getBlockEntity(pos);
+            for (ConsoleLayout.Part part : ConsoleLayout.parts(origin, facing)) {
+                if (!matches(part.pos(), facing, part.monitor())) {
+                    return false;
+                }
+                if (!part.monitor()) {
+                    Entity other = (Entity) level.getBlockEntity(part.pos());
                     Entity owner = other == null ? null : other.controller();
                     if (owner != null && !owner.getBlockPos().equals(origin)) {
                         return false;
                     }
-                }
-                if (!matches(at(origin, facing, x, 1, 1), facing, true)) {
-                    return false;
                 }
             }
             return true;
@@ -434,20 +399,18 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         }
 
         private void form(BlockPos origin, Direction facing, boolean value) {
-            for (int x = 0; x < 4; x++) {
-                for (int z = 0; z < 2; z++) {
-                    BlockPos pos = at(origin, facing, x, 0, z);
-                    if (matches(pos, facing, false) && level.getBlockEntity(pos) instanceof Entity part) {
-                        part.formed = value;
-                        level.setBlock(pos, part.getBlockState().setValue(COLUMN, x).setValue(BACK, z == 1)
-                                .setValue(FORMED, value), Block.UPDATE_CLIENTS);
-                        part.changed();
-                    }
+            for (ConsoleLayout.Part part : ConsoleLayout.parts(origin, facing)) {
+                if (!matches(part.pos(), facing, part.monitor())) {
+                    continue;
                 }
-                BlockPos monitor = at(origin, facing, x, 1, 1);
-                if (matches(monitor, facing, true)) {
-                    level.setBlock(monitor, level.getBlockState(monitor).setValue(COLUMN, x).setValue(FORMED, value),
-                            Block.UPDATE_CLIENTS);
+                if (part.monitor()) {
+                    level.setBlock(part.pos(), level.getBlockState(part.pos()).setValue(COLUMN, part.column())
+                            .setValue(FORMED, value), Block.UPDATE_CLIENTS);
+                } else if (level.getBlockEntity(part.pos()) instanceof Entity desk) {
+                    desk.formed = value;
+                    level.setBlock(part.pos(), desk.getBlockState().setValue(COLUMN, part.column())
+                            .setValue(BACK, part.back()).setValue(FORMED, value), Block.UPDATE_CLIENTS);
+                    desk.changed();
                 }
             }
         }

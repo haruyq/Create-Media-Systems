@@ -8,7 +8,9 @@ import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
+import org.haruyq.createmediasystems.lighting.ConsoleLayout;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
+import org.haruyq.createmediasystems.lighting.LightingSettings;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
@@ -32,6 +34,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -46,7 +49,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 @EventBusSubscriber(modid = "create_media_systems")
 public final class SableLightingDemo {
-    private static final BlockPos DESK = new BlockPos(-1, 65, 5);
+    private static final BlockPos DESK = LightingLab.CONSOLE;
     private static final BlockPos MARKER = new BlockPos(26, 64, 14);
     private static final BlockPos WALL = new BlockPos(-16, 65, -6);
     private static final BlockPos PLATFORM = new BlockPos(16, 65, -6);
@@ -65,8 +68,7 @@ public final class SableLightingDemo {
     }
 
     private static boolean lab(ServerLevel level) {
-        return Boolean.getBoolean("cms.sableLightingDemo") && level.dimension() == ServerLevel.OVERWORLD
-                && level.getServer().getWorldData().getLevelName().equals("CMS Sable Lighting Lab");
+        return LightingLab.SABLE && level.dimension() == ServerLevel.OVERWORLD && LightingLab.runs(level.getServer());
     }
 
     @SubscribeEvent
@@ -213,18 +215,7 @@ public final class SableLightingDemo {
             }
         }
         BlockPos board = PLATFORM.offset(0, 1, 2);
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 2; z++) {
-                BlockPos pos = LightingConsoleBlock.at(board, Direction.SOUTH, x, 0, z);
-                level.setBlockAndUpdate(pos, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState()
-                        .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
-                platform.add(pos);
-            }
-            BlockPos pos = LightingConsoleBlock.at(board, Direction.SOUTH, x, 1, 1);
-            level.setBlockAndUpdate(pos, LightingFeature.LIGHTING_MONITOR.get().defaultBlockState()
-                    .setValue(LightingConsoleBlock.FACING, Direction.SOUTH));
-            platform.add(pos);
-        }
+        platform.addAll(ConsoleLayout.place(level, board, Direction.SOUTH, Block.UPDATE_ALL));
         LightingConsoleBlock.Entity aboard = (LightingConsoleBlock.Entity) level.getBlockEntity(board);
         aboard.updateStructure();
         light(level, aboard, PLATFORM.offset(-2, 1, 0), 0, Direction.SOUTH);
@@ -266,19 +257,19 @@ public final class SableLightingDemo {
             var settings = console.settings.groups[group];
             settings.audio = false;
             settings.colorCycle = false;
-            settings.motion = group == 5 ? 3 : 0;
-            settings.pattern = group == 2 ? 1 : 0;
+            settings.motion = group == 5 ? LightingSettings.Motion.TRACK : LightingSettings.Motion.FIXED;
+            settings.pattern = group == 2 ? LightingSettings.Pattern.BEAM : LightingSettings.Pattern.SPOT;
             settings.pan = group == 2 ? 50 : 0;
             settings.tilt = 0;
             settings.range = 40;
             settings.spread = group == 2 ? 5 : 12;
-            settings.colorMode = group == 2 ? 1 : 0;
+            settings.colorMode = group == 2 ? LightingSettings.ColorMode.VIDEO : LightingSettings.ColorMode.OWN;
         }
-        aboard.settings.groups[0].motion = 0;
-        aboard.settings.groups[0].pattern = 1;
+        aboard.settings.groups[0].motion = LightingSettings.Motion.FIXED;
+        aboard.settings.groups[0].pattern = LightingSettings.Pattern.BEAM;
         aboard.settings.groups[0].tilt = 0;
         aboard.settings.groups[0].range = 40;
-        aboard.settings.groups[0].colorMode = 1;
+        aboard.settings.groups[0].colorMode = LightingSettings.ColorMode.VIDEO;
         console.changed();
         aboard.changed();
     }
@@ -325,7 +316,7 @@ public final class SableLightingDemo {
     }
 
     private static boolean media(ServerLevel level, LightingConsoleBlock.Entity console) {
-        if (!(level.getBlockEntity(new BlockPos(-8, 65, 5)) instanceof VideoPlayerBlock.Entity ground) || ground.playlist().isEmpty()) {
+        if (!(level.getBlockEntity(LightingLab.PLAYER) instanceof VideoPlayerBlock.Entity ground) || ground.playlist().isEmpty()) {
             return false;
         }
         for (Body body : bodies) {

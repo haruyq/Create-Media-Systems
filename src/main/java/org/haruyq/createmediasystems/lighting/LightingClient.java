@@ -21,6 +21,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
@@ -49,43 +50,38 @@ public final class LightingClient implements ClientFeature {
      */
     private static void console(CreateSceneBuilder scene, SceneBuildingUtil util, BlockPos origin, boolean formed) {
         Direction facing = Direction.NORTH;
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 2; z++) {
-                BlockPos desk = LightingConsoleBlock.at(origin, facing, x, 0, z);
-                scene.world().setBlock(desk, LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState()
-                        .setValue(LightingConsoleBlock.FACING, facing).setValue(LightingConsoleBlock.COLUMN, x)
-                        .setValue(LightingConsoleBlock.BACK, z == 1), false);
+        BlockState desk = LightingFeature.LIGHTING_CONSOLE.get().defaultBlockState();
+        BlockState monitor = LightingFeature.LIGHTING_MONITOR.get().defaultBlockState();
+        boolean monitors = false;
+        for (ConsoleLayout.Part part : ConsoleLayout.parts(origin, facing)) {
+            if (part.monitor() && !monitors) {
+                monitors = true;
                 if (!formed) {
-                    scene.world().showSection(util.select().position(desk), Direction.DOWN);
-                    scene.idle(3);
+                    scene.idle(10);
                 }
             }
-        }
-        if (!formed) {
-            scene.idle(10);
-        }
-        for (int x = 0; x < 4; x++) {
-            // Clears what Create's schematic has above the front desks, so showing the console shows only it.
-            scene.world().setBlock(LightingConsoleBlock.at(origin, facing, x, 1, 0), Blocks.AIR.defaultBlockState(), false);
-            BlockPos monitor = LightingConsoleBlock.at(origin, facing, x, 1, 1);
-            scene.world().setBlock(monitor, LightingFeature.LIGHTING_MONITOR.get().defaultBlockState()
-                    .setValue(LightingMonitorBlock.FACING, facing).setValue(LightingMonitorBlock.COLUMN, x), false);
+            if (part.monitor()) {
+                // Clears what Create's schematic has above the front desks, so showing the console shows only it.
+                scene.world().setBlock(ConsoleLayout.at(origin, facing, part.column(), 1, 0), Blocks.AIR.defaultBlockState(), false);
+            }
+            scene.world().setBlock(part.pos(), ConsoleLayout.state(part, desk, monitor, facing, true)
+                    .setValue(LightingConsoleBlock.FORMED, false), false);
             if (!formed) {
-                scene.world().showSection(util.select().position(monitor), Direction.DOWN);
-                scene.idle(5);
+                scene.world().showSection(util.select().position(part.pos()), Direction.DOWN);
+                scene.idle(part.monitor() ? 5 : 3);
             }
         }
-        Selection whole = util.select().fromTo(origin, LightingConsoleBlock.at(origin, facing, 3, 1, 1));
+        Selection whole = util.select().fromTo(origin,
+                ConsoleLayout.at(origin, facing, ConsoleLayout.BAYS - 1, 1, ConsoleLayout.ROWS - 1));
         scene.world().modifyBlocks(whole, state -> state.hasProperty(LightingConsoleBlock.FORMED)
                 ? state.setValue(LightingConsoleBlock.FORMED, true) : state, false);
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 2; z++) {
+        for (ConsoleLayout.Part part : ConsoleLayout.parts(origin, facing)) {
+            if (!part.monitor()) {
                 // The ponder level keeps a block entity's old state when its block changes; the console reads it.
-                scene.world().modifyBlockEntity(LightingConsoleBlock.at(origin, facing, x, 0, z), LightingConsoleBlock.Entity.class,
-                        entity -> {
-                            entity.setBlockState(entity.getLevel().getBlockState(entity.getBlockPos()));
-                            entity.formed = true;
-                        });
+                scene.world().modifyBlockEntity(part.pos(), LightingConsoleBlock.Entity.class, entity -> {
+                    entity.setBlockState(entity.getLevel().getBlockState(entity.getBlockPos()));
+                    entity.formed = true;
+                });
             }
         }
         if (formed) {
@@ -97,7 +93,7 @@ public final class LightingClient implements ClientFeature {
         CreateSceneBuilder scene = plate(builder, "lighting_console", "The Lighting Console");
 
         BlockPos origin = util.grid().at(4, 1, 1);
-        BlockPos back = LightingConsoleBlock.at(origin, Direction.NORTH, 2, 1, 1);
+        BlockPos back = ConsoleLayout.at(origin, Direction.NORTH, 2, 1, 1);
         console(scene, util, origin, false);
         scene.effects().indicateSuccess(back);
         AABB whole = new AABB(1, 1, 1, 5, 3, 3);
@@ -133,7 +129,7 @@ public final class LightingClient implements ClientFeature {
         console(scene, util, origin, true);
         scene.idle(15);
         ItemStack link = new ItemStack(LightingFeature.LIGHTING_LINK.get());
-        BlockPos desk = LightingConsoleBlock.at(origin, Direction.NORTH, 1, 0, 0);
+        BlockPos desk = ConsoleLayout.at(origin, Direction.NORTH, 1, 0, 0);
         scene.overlay().showControls(util.vector().topOf(desk), Pointing.DOWN, 40).rightClick().withItem(link);
         scene.overlay().chaseBoundingBoxOutline(PonderPalette.OUTPUT, origin, new AABB(1, 1, 3, 5, 3, 5), 260);
         say(scene, 90, util.vector().topOf(desk), "Hold a LED Tuning Wrench and right-click a finished console to pick it.");
