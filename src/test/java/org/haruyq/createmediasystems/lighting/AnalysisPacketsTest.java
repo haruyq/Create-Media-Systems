@@ -13,7 +13,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;
-import org.haruyq.createmediasystems.stream.StreamPackets;
 
 class AnalysisPacketsTest {
     private static final UUID SOURCE = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -39,24 +38,18 @@ class AnalysisPacketsTest {
         assertEquals(received, roundTrip(AnalysisPackets.Received.CODEC, received));
     }
 
+    /** A client writes its own bytes: an upload saying it has more frames than a batch holds is refused unread. */
     @Test
     void decoderRejectsMoreThanBatchSize() {
         ByteBuf buf = Unpooled.buffer();
-        writeUuid(buf, SOURCE);
-        writeUuid(buf, SESSION);
-        StreamPackets.URL.encode(buf, "track");
-        buf.writeBoolean(false);
-        buf.writeByte(AnalysisPackets.BATCH_SIZE + 1);
-        assertThrows(DecoderException.class, () -> AnalysisPackets.Batch.CODEC.decode(buf));
+        AnalysisPackets.Upload.CODEC.encode(buf, new AnalysisPackets.Upload(SOURCE, SESSION, 3, 4, "track", false, List.of()));
+        buf.setByte(buf.writerIndex() - 1, AnalysisPackets.BATCH_SIZE + 1);
+        assertThrows(DecoderException.class, () -> AnalysisPackets.Upload.CODEC.decode(buf));
     }
 
     private static <T> T roundTrip(StreamCodec<ByteBuf, T> codec, T value) {
         ByteBuf buf = Unpooled.buffer();
         codec.encode(buf, value);
         return codec.decode(buf);
-    }
-
-    private static void writeUuid(ByteBuf buf, UUID value) {
-        buf.writeLong(value.getMostSignificantBits()).writeLong(value.getLeastSignificantBits());
     }
 }

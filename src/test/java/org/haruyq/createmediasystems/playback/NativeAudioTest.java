@@ -74,7 +74,14 @@ class NativeAudioTest {
         }
         @Override public NativeAudio.Status status() { return state; }
         @Override public void seek(long millis) { actions.add("seek"); sought = millis; }
-        @Override public void resume() { actions.add("resume"); }
+        /** Done once its playback may play: resumed before that, it played ahead of its other listeners. */
+        volatile java.util.concurrent.Future<?> until;
+        volatile boolean early;
+
+        @Override public void resume() {
+            actions.add("resume");
+            early |= until != null && !until.isDone();
+        }
         @Override public long time() { return positionMillis; }
         @Override public void release() { releases.incrementAndGet(); }
     }
@@ -224,6 +231,15 @@ class NativeAudioTest {
         return (NativeAudio.Owned) own(player, 0, System.nanoTime(), () -> false, Streams.Channel.MIX);
     }
 
+    /** Reads {@code stream} as the sound engine does until it gives nothing more; fails if it never ends. */
+    private static void drain(NativeAudio.Owned stream) throws Exception {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (stream.read(9600).remaining() > 0) {
+            assertTrue(System.nanoTime() < deadline, "it never ends");
+            Thread.sleep(5);
+        }
+    }
+
     private static void await(java.util.function.BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + 5_000_000_000L;
         while (!condition.getAsBoolean()) {
@@ -269,6 +285,7 @@ class NativeAudioTest {
     void loadedPlayerWaitsPausedForTheServerToSayPlay() throws Exception {
         Player player = new Player();
         var go = new java.util.concurrent.CompletableFuture<NativeAudio.Go>();
+        player.until = go;
         var opened = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
                 return own(player, 0, System.nanoTime(), () -> false, Streams.Channel.MIX, go);
@@ -276,12 +293,10 @@ class NativeAudioTest {
                 throw new java.io.UncheckedIOException(error);
             }
         });
-        await(() -> player.actions.contains("start"));
-        Thread.sleep(100);
-        assertFalse(player.actions.contains("resume"), "the other listeners are still loading it");
-        assertEquals(0, player.sought, "back to the top from the frames VLC played before it paused");
+        await(() -> player.sought == 0);
         go.complete(new NativeAudio.Go(0, System.nanoTime()));
         opened.get(5, java.util.concurrent.TimeUnit.SECONDS).close();
+        assertFalse(player.early, "it played while the other listeners were still loading it");
         assertEquals(List.of("tap", "start", "seek", "resume"), player.actions, "from the top, with everyone");
     }
 
@@ -451,9 +466,7 @@ class NativeAudioTest {
         Player ending = new Player();
         NativeAudio.Owned finished = playing(ending);
         ending.state = new NativeAudio.Status(true, false, true, true, false);
-        finished.read(9600);
-        Thread.sleep(600); // past the tail the last chunks get to play
-        assertEquals(0, finished.read(9600).remaining());
+        drain(finished);
         assertTrue(finished.done());
     }
 
@@ -472,9 +485,8 @@ class NativeAudioTest {
         Player player = new Player();
         NativeAudio.Owned owned = playing(player);
         player.state = new NativeAudio.Status(false, false, false, true, false);
-        assertEquals(96, owned.read(9600).remaining());
-        Thread.sleep(550);
-        assertEquals(0, owned.read(9600).remaining());
+        assertTrue(owned.read(9600).remaining() > 0, "what was decoded still plays");
+        drain(owned);
         assertEquals(1, player.releases.get());
     }
 

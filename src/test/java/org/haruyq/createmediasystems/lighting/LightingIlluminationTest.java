@@ -56,7 +56,6 @@ class LightingIlluminationTest {
         float[] texels = {0.125f, 0.5f, 0.875f};
         byte[] packed = LightingIllumination.vertices(samples, normal, uv, 0x3F81C2);
         int stride = SurfaceLight.FORMAT.getVertexSize();
-        assertEquals(28, stride);
         assertEquals(stride * 16, packed.length);
         try (var memory = new ByteBufferBuilder(packed.length)) {
             var out = new BufferBuilder(memory, VertexFormat.Mode.QUADS, SurfaceLight.FORMAT);

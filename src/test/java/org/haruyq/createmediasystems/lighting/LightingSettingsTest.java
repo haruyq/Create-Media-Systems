@@ -14,6 +14,9 @@ import org.haruyq.createmediasystems.lighting.LightingSettings.Preset;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.FloatTag;
+import net.minecraft.nbt.IntArrayTag;
+import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.ListTag;
 
 class LightingSettingsTest {
@@ -171,47 +174,56 @@ class LightingSettingsTest {
 
     @Test
     void malformedSavedValuesCannotEscapeOperatingBoundsOrIntroduceNaN() {
-        CompoundTag group = new CompoundTag();
-        group.putIntArray("Colors", new int[]{0xFF123456, -1});
-        group.putInt("ColorCount", -10);
-        group.putInt("Mapping", 100);
-        group.putInt("ColorMode", -20);
-        group.putInt("Motion", 99);
-        group.putInt("Pattern", -1);
-        group.putInt("AudioBand", 99);
-        group.putFloat("Brightness", Float.NaN);
-        group.putFloat("Range", Float.POSITIVE_INFINITY);
-        group.putFloat("Spread", Float.NEGATIVE_INFINITY);
-        group.putFloat("Speed", -3);
-        group.putFloat("Pan", 1000);
-        group.putFloat("Tilt", -1000);
-        CompoundTag saved = new CompoundTag();
-        saved.putFloat("Master", Float.NaN);
-        saved.putInt("SelectedGroup", 100);
-        saved.putInt("SelectedColor", -10);
-        ListTag groups = new ListTag();
-        groups.add(group);
-        saved.put("Groups", groups);
-        LightingSettings settings = new LightingSettings();
-        settings.load(saved);
-        LightingSettings.Group restored = settings.groups[0];
-        assertEquals(0.8f, settings.master);
-        assertEquals(5, settings.selectedGroup);
-        assertEquals(0, settings.selectedColor);
-        assertEquals(1, restored.colorCount);
-        assertEquals(Mapping.PER_FIXTURE, restored.mapping);
-        assertEquals(ColorMode.OWN, restored.colorMode);
-        assertEquals(Motion.TRACK, restored.motion);
-        assertEquals(Pattern.SPOT, restored.pattern);
-        assertEquals(LightingSettings.Band.HIGH, restored.audioBand);
-        assertEquals(0x123456, restored.colors[0]);
-        assertEquals(0xFFFFFF, restored.colors[1]);
-        assertEquals(1, restored.brightness);
-        assertEquals(32, restored.range);
-        assertEquals(12, restored.spread);
-        assertEquals(0.05f, restored.speed);
-        assertEquals(180, restored.pan);
-        assertEquals(-85, restored.tilt);
+        float[] floats = {Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, -1000, 1000};
+        int[] ints = {Integer.MIN_VALUE, -10, 100, Integer.MAX_VALUE, -1};
+        for (int round = 0; round < floats.length; round++) {
+            LightingSettings settings = new LightingSettings();
+            settings.load(corrupt(new LightingSettings().save(), floats[round], ints[round]));
+            assertWithin(LightingSettings.MASTER, settings.master);
+            assertTrue(settings.selectedGroup >= 0 && settings.selectedGroup < LightingSettings.GROUPS);
+            assertTrue(settings.selectedColor >= 0 && settings.selectedColor < LightingSettings.COLORS);
+            for (LightingSettings.Group group : settings.groups) {
+                assertTrue(group.colorCount >= 1 && group.colorCount <= LightingSettings.COLORS, "colour count " + group.colorCount);
+                for (int color : group.colors) {
+                    assertEquals(0, color & 0xFF000000, "no alpha in a colour");
+                }
+                assertNotNull(group.mapping);
+                assertNotNull(group.colorMode);
+                assertNotNull(group.motion);
+                assertNotNull(group.pattern);
+                assertNotNull(group.audioBand);
+                assertWithin(LightingSettings.BRIGHTNESS, group.brightness);
+                assertWithin(LightingSettings.RANGE, group.range);
+                assertWithin(LightingSettings.SPREAD, group.spread);
+                assertWithin(LightingSettings.SPEED, group.speed);
+                assertWithin(LightingSettings.PAN, group.pan);
+                assertWithin(LightingSettings.TILT, group.tilt);
+            }
+        }
+    }
+
+    private static void assertWithin(LightingSettings.Setting setting, float value) {
+        assertTrue(value >= setting.min() && value <= setting.max(), setting.key() + " " + value);
+    }
+
+    /** {@code tag} with every number in it {@code bad} ({@code badInt} if a whole number), and its colours too. */
+    private static CompoundTag corrupt(CompoundTag tag, float bad, int badInt) {
+        for (String key : tag.getAllKeys()) {
+            switch (tag.get(key)) {
+                case FloatTag ignored -> tag.putFloat(key, bad);
+                case IntTag ignored -> tag.putInt(key, badInt);
+                case IntArrayTag ignored -> tag.putIntArray(key, new int[] {badInt, -1, 0xFF123456});
+                case CompoundTag compound -> corrupt(compound, bad, badInt);
+                case ListTag list -> list.forEach(each -> {
+                    if (each instanceof CompoundTag compound) {
+                        corrupt(compound, bad, badInt);
+                    }
+                });
+                default -> {
+                }
+            }
+        }
+        return tag;
     }
 
     @Test

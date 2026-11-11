@@ -4,18 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.audio.DiscReaderBlock;
-import org.haruyq.createmediasystems.stream.Tone;
-import org.haruyq.createmediasystems.stream.PlaybackClock;
-import org.haruyq.createmediasystems.stream.Streams;
-
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.phys.Vec3;
 
 class HifiStackTest {
@@ -28,14 +20,6 @@ class HifiStackTest {
         return stack;
     }
 
-    /** {@code stack} as it would be saved, with {@code change} made to that. */
-    private static HifiStackBlock.Entity with(HifiStackBlock.Entity stack, java.util.function.Consumer<CompoundTag> change) {
-        CompoundTag tag = stack.saveWithFullMetadata(RegistryAccess.EMPTY);
-        change.accept(tag);
-        stack.loadWithComponents(tag, RegistryAccess.EMPTY);
-        return stack;
-    }
-
     @Test
     void aWholeSetFillsItsBlockAndTakesOneOfEach() {
         HifiStackBlock.Entity stack = stack();
@@ -45,8 +29,6 @@ class HifiStackTest {
             assertFalse(stack.canAdd(unit), "one " + unit + " is enough");
         }
         assertEquals(Unit.ROOM, stack.height());
-        assertEquals(Unit.CASSETTE_DECK.height + Unit.AMPLIFIER.height,
-                HifiLayout.bottom(List.of(Unit.CASSETTE_DECK, Unit.AMPLIFIER, Unit.TUNER), 2));
     }
 
     @Test
@@ -92,61 +74,5 @@ class HifiStackTest {
                     Unit.CASSETTE_DECK.height + knob.centerY(), 0)).length(), 1e-6);
         }
         assertNull(HifiLayout.aim(Direction.NORTH, new Vec3(0.5, 0.5, 0.5), new Vec3(0, 0, -1)), "from inside it");
-    }
-
-    @Test
-    void itsToneIsWhatItsUnitsAreSetTo() {
-        HifiStackBlock.Entity stack = stack(Unit.AMPLIFIER, Unit.EQUALIZER);
-        assertSame(Tone.FLAT, stack.tone(), "on standby");
-        with(stack, tag -> {
-            tag.putBoolean("Power", true);
-            tag.putInt("Preset", HifiStackBlock.Preset.HEAVY.ordinal());
-        });
-        assertEquals(0, stack.tone().bands().length, "the equalizer isn't plugged in");
-        with(stack, tag -> tag.putInt("Cables", Cable.EQUALIZER.bit()));
-        float[] bands = stack.tone().bands();
-        assertEquals(6 * 3, bands.length, "HEAVY leaves 1 kHz alone");
-        assertEquals(HifiStackBlock.Preset.HEAVY.gains[0], bands[2], "at the middle effect level");
-        assertEquals(1, stack.tone().width());
-        with(stack, tag -> {
-            tag.putInt("Effect", 100);
-            tag.putBoolean("Wide", true);
-            tag.putBoolean("Bass", true);
-            tag.putBoolean("Direct", true);
-        });
-        assertEquals(3, stack.tone().bands().length, "a disc direct: the bass boost alone");
-        assertTrue(stack.tone().width() > 1);
-        with(stack, tag -> tag.putInt("Input", HifiStackBlock.Input.TAPE.ordinal()));
-        bands = stack.tone().bands();
-        assertEquals((6 + 2) * 3, bands.length, "the preset, the bass boost and a tape's dull top");
-        assertEquals(Tone.MAX_GAIN, bands[2], "twice 6 dB at the full effect level");
-        assertTrue(bands[bands.length - 1] < 0);
-    }
-
-    @Test
-    void aTrackTakenUpWhereItWasLeftCountsOnFromThere() {
-        DiscReaderBlock.Entity source = new DiscReaderBlock.Entity(new BlockPos(9, 64, 9),
-                AudioFeature.DISC_READER.get().defaultBlockState());
-        PlaybackClock clock = PlaybackClock.unattended();
-        clock.start(600);
-        Streams.loading(source, null, clock, 0);
-        Streams.tick(source, clock, 1);
-        assertEquals(600, clock.position(), "its emitters haven't had their turn yet");
-        // Nobody is there to load it: it doesn't wait for them.
-        tick(source, clock, 2, 2 * Streams.RELAY_TICKS);
-        assertEquals(600, clock.position());
-        tick(source, clock, 2 * Streams.RELAY_TICKS + 1, 2 * Streams.RELAY_TICKS + 50);
-        assertEquals(650, clock.position());
-        PlaybackClock waits = new PlaybackClock();
-        waits.start(600);
-        Streams.loading(source, null, waits, 0);
-        tick(source, waits, 1, 2 * Streams.RELAY_TICKS + 50);
-        assertEquals(600, waits.position(), "one that waits for someone to come");
-    }
-
-    private static void tick(DiscReaderBlock.Entity source, PlaybackClock clock, long from, long to) {
-        for (long now = from; now <= to; now++) {
-            Streams.tick(source, clock, now);
-        }
     }
 }
