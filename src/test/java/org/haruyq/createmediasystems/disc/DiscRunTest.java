@@ -20,10 +20,17 @@ class DiscRunTest {
     @Test
     void keepsTheLastErrorAndWaitsForStderrBeforeReportingFailure(@TempDir Path directory) throws Exception {
         Path helper = directory.resolve("FailedReader.java");
+        Path partial = directory.resolve("partial.ts");
+        Files.write(partial, video(FIRST));
+        Files.write(partial, video(FIRST + 360_000), java.nio.file.StandardOpenOption.APPEND);
         Files.writeString(helper, "class FailedReader { public static void main(String[] args) { "
+                + "try { System.out.write(java.nio.file.Files.readAllBytes(java.nio.file.Path.of(args[0]))); "
+                + "System.out.flush(); } catch (java.io.IOException error) { throw new RuntimeException(error); } "
                 + "System.err.print(\"x\".repeat(12000)); System.err.println(\"Unable to read DVD sector 1234\"); System.exit(1); } }");
-        try (DiscRun run = new DiscRun(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(), helper.toString()),
+        try (DiscRun run = new DiscRun(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                helper.toString(), partial.toString()),
                 null, new DiscSource.Quality(480, 30, 1100), "libx264", 0)) {
+            assertArrayEquals(video(FIRST), run.take(), "The completed segment can still be shared");
             IOException failure = assertThrows(IOException.class, run::take);
             assertNotNull(failure.getCause());
             assertTrue(failure.getCause().getMessage().endsWith("Unable to read DVD sector 1234"));
@@ -40,7 +47,7 @@ class DiscRunTest {
             ts.write(p);
         }
         List<byte[]> segments = new ArrayList<>();
-        DiscRun.split(new ByteArrayInputStream(ts.toByteArray()), 1 << 20, segments::add);
+        segments.add(DiscRun.split(new ByteArrayInputStream(ts.toByteArray()), 1 << 20, segments::add));
         assertEquals(4, segments.size(), "a gap past several boundaries still cuts once");
         assertEquals(6 * 188, segments.get(0).length);
         for (byte[] segment : segments.subList(1, 4)) {

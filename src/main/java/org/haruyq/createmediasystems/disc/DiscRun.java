@@ -64,7 +64,7 @@ final class DiscRun implements AutoCloseable {
         reader = Thread.ofVirtual().start(() -> {
             try (InputStream out = process.getInputStream()) {
                 long[] from = {System.nanoTime()};
-                split(out, DiscSource.MAX_SEGMENT_BYTES, segment -> {
+                Sink publish = segment -> {
                     long took = System.nanoTime() - from[0];
                     if (startNanos == 0) {
                         startNanos = took;
@@ -73,7 +73,9 @@ final class DiscRun implements AutoCloseable {
                     }
                     segments.put(segment);
                     from[0] = System.nanoTime();
-                });
+                };
+                byte[] tail = split(out, DiscSource.MAX_SEGMENT_BYTES, publish);
+                finish(tail, publish);
             } catch (IOException e) {
                 failure = e;
             } catch (InterruptedException closed) {
@@ -126,24 +128,29 @@ final class DiscRun implements AutoCloseable {
             if (failure != null) {
                 throw failure;
             }
-            try {
-                if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                    throw new IOException("The disc reader did not stop at the end of the title");
-                }
-                errorReader.join(1000);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Disc reading was cancelled");
-            }
-            String text;
-            synchronized (errors) {
-                text = errors.toString();
-            }
-            IOException failed = DiscSource.failure(process.exitValue(), text, access);
-            throw failed != null ? failed : new IOException("The disc title ended before this segment", DiscSource.said(text));
+            throw new IOException("The disc title ended before this segment");
         }
         next++;
         return segment;
+    }
+
+    private void finish(byte[] tail, Sink publish) throws IOException, InterruptedException {
+        if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            throw new IOException("The disc reader did not stop at the end of the title");
+        }
+        errorReader.join(1000);
+        String text;
+        synchronized (errors) {
+            text = errors.toString();
+        }
+        IOException failed = DiscSource.failure(process.exitValue(), text, access);
+        if (failed != null) {
+            throw failed;
+        }
+        // A short final segment is valid only if FFmpeg completed the pass successfully.
+        if (tail.length > 0) {
+            publish.accept(tail);
+        }
     }
 
     @Override
@@ -161,9 +168,9 @@ final class DiscRun implements AutoCloseable {
     /**
      * Cuts FFmpeg's MPEG-TS output into segments of {@link DiscSource#SEGMENT_SECONDS} from its first video frame,
      * each from the video frame on a boundary (an IDR frame, see DiscSource#command) and led by the stream's PAT and
-     * PMT, so it plays on its own.
+     * PMT. Returns the final segment, which still needs the process's exit status before it can be published.
      */
-    static void split(InputStream in, int limit, Sink sink) throws IOException, InterruptedException {
+    static byte[] split(InputStream in, int limit, Sink sink) throws IOException, InterruptedException {
         ByteArrayOutputStream header = new ByteArrayOutputStream(), current = new ByteArrayOutputStream();
         byte[] packet = new byte[TS];
         int pmt = -1;
@@ -199,9 +206,7 @@ final class DiscRun implements AutoCloseable {
                 throw new IOException("The disc encoder exceeded its output limit");
             }
         }
-        if (first >= 0) {
-            sink.accept(current.toByteArray());
-        }
+        return first >= 0 ? current.toByteArray() : END;
     }
 
     /** The PTS of a video PES starting in this TS packet, or -1. */

@@ -284,6 +284,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
 
     private List<String> command(int segment, double seconds, Quality quality, String encoder, boolean continuous) {
         List<String> command = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-v", "error", "-nostdin"));
+        if (continuous) {
+            command.add("-xerror");
+        }
         if (bluray) {
             // Decode references before each in-point; select removes the preroll on the playlist's timeline.
             command.addAll(List.of("-copyts", "-itsoffset", Integer.toString(-SEGMENT_SECONDS)));
