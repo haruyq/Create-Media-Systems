@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,8 +11,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.BlockIdentity;
+import org.haruyq.createmediasystems.stream.Link;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.MapCodec;
@@ -169,28 +170,20 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         return level.getBlockEntity(pos) instanceof Entity entity ? entity.controller() : null;
     }
 
-    /** How a fixture is linked to a console: its group, its id (see SourceLinks) and its family, kept while unloaded. */
-    private record Link(int group, @Nullable UUID id, String family) {
-        static final Link NONE = new Link(0, null, StageLightBlock.Entity.DEFAULT_FAMILY);
+    /** A fixture linked to a console: its link, the console group it is in, and its family, kept while it is unloaded. */
+    private record Fixture(Link link, int group, String family) {
     }
 
     public static class Entity extends BlockEntity implements IHaveGoggleInformation {
         public final LightingSettings settings = new LightingSettings();
-        /** Its fixtures, in their order; each has its {@link Link} in {@code links}. */
-        public final List<BlockPos> fixtures = new ArrayList<>();
-        private final Map<BlockPos, Link> links = new HashMap<>();
-        private UUID identity;
-        private UUID audioId;
-        private UUID videoId;
-        private BlockPos resolvedAudio;
-        private BlockPos resolvedVideo;
-        private boolean refreshingLinks;
+        /** Its fixtures, in their order: a fixture's order is its place among those of its group. */
+        private final List<Fixture> fixtures = new ArrayList<>();
+        private Link audio = Link.NONE;
+        private Link video = Link.NONE;
         public final CompoundTag[] presets = new CompoundTag[LightingSettings.PRESETS];
         /** Other mods' settings for this console (see extras), by their mod id. */
         private final CompoundTag extras = new CompoundTag();
         public boolean formed;
-        public BlockPos audioSource;
-        public BlockPos videoSource;
         public float audioLevel;
         public float bass;
         public float mid;
@@ -220,104 +213,119 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             return extras.getCompound(owner);
         }
 
+        /** Its identity (see Link), on the server once anything linked to it; null before that, and on a client. */
+        @Nullable
         public UUID identity() {
-            if (level != null && !level.isClientSide) {
-                identity = SourceLinks.identifyBlock(level, worldPosition);
-            }
-            return identity;
+            return level == null ? null : BlockIdentity.of(level, worldPosition);
+        }
+
+        @Nullable
+        public BlockPos audioSource() {
+            return audio.pos();
+        }
+
+        @Nullable
+        public BlockPos videoSource() {
+            return video.pos();
         }
 
         public void setAudioSource(@Nullable BlockPos pos) {
-            audioSource = pos == null ? null : pos.immutable();
-            audioId = level == null ? null : SourceLinks.identify(level, audioSource);
-            resolvedAudio = audioSource;
+            audio = linkTo(pos);
             hasAudio = false;
         }
 
         public void setVideoSource(@Nullable BlockPos pos) {
-            videoSource = pos == null ? null : pos.immutable();
-            videoId = level == null ? null : SourceLinks.identify(level, videoSource);
-            resolvedVideo = videoSource;
+            video = linkTo(pos);
             hasVideo = false;
         }
 
+        private Link linkTo(@Nullable BlockPos pos) {
+            return level == null ? new Link(pos == null ? null : pos.immutable(), null) : Link.to(level, pos);
+        }
+
+        /** Its fixtures' positions, in their order. */
+        public List<BlockPos> fixtures() {
+            return fixtures.stream().map(fixture -> fixture.link().pos()).toList();
+        }
+
+        private int indexOf(BlockPos pos) {
+            for (int i = 0; i < fixtures.size(); i++) {
+                if (pos.equals(fixtures.get(i).link().pos())) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /** Whether the fixture at {@code pos} is linked to it. */
+        public boolean links(BlockPos pos) {
+            return indexOf(pos) >= 0;
+        }
+
+        /** The group of the fixture at {@code pos}; 0 if it is not linked. */
+        public int group(BlockPos pos) {
+            int index = indexOf(pos);
+            return index < 0 ? 0 : fixtures.get(index).group();
+        }
+
+        /** The fixture at {@code pos}'s place among its group's, from 0; 0 if it is not linked. */
+        public int order(BlockPos pos) {
+            int index = indexOf(pos);
+            int order = 0;
+            for (int i = 0; i < index; i++) {
+                order += fixtures.get(i).group() == fixtures.get(index).group() ? 1 : 0;
+            }
+            return order;
+        }
+
+        /**
+         * Follows its fixtures and media to where Sable moved them, and drops the fixtures replaced, gone, or linked
+         * to another console since; each loaded fixture it keeps follows it in turn. On the server's root desk: every
+         * second, and before links change.
+         */
         public void refreshLinks() {
-            if (level == null || level.isClientSide || refreshingLinks || !isRoot()) {
+            if (level == null || level.isClientSide || !isRoot()) {
                 return;
             }
-            refreshingLinks = true;
+            Link self = Link.to(level, worldPosition);
             boolean updated = false;
-            try {
-                UUID before = identity;
-                identity();
-                updated = !Objects.equals(before, identity);
-                List<BlockPos> positions = new ArrayList<>();
-                Map<BlockPos, Link> resolved = new HashMap<>();
-                for (BlockPos previous : fixtures) {
-                    Link link = link(previous);
-                    UUID id = link.id();
-                    if (id == null && level.isLoaded(previous)
-                            && level.getBlockEntity(previous) instanceof StageLightBlock.Entity light && light.follows(this)) {
-                        id = SourceLinks.identifyBlock(level, previous);
-                        updated |= id != null;
-                    }
-                    BlockPos pos = SourceLinks.resolve(level, id, previous);
-                    if (pos == null || positions.contains(pos)) {
+            List<Fixture> kept = new ArrayList<>();
+            for (Fixture fixture : fixtures) {
+                Link link = fixture.link().follow(level);
+                BlockPos pos = link.pos();
+                if (pos == null || kept.stream().anyMatch(other -> pos.equals(other.link().pos()))) {
+                    updated = true;
+                    continue;
+                }
+                String family = fixture.family();
+                if (level.isLoaded(pos)) {
+                    if (!(level.getBlockEntity(pos) instanceof StageLightBlock.Entity light) || !light.follows(this)) {
                         updated = true;
                         continue;
                     }
-                    String family = link.family();
-                    if (level.isLoaded(pos)) {
-                        if (!(level.getBlockEntity(pos) instanceof StageLightBlock.Entity light) || !light.follows(this)) {
-                            updated = true;
-                            continue;
-                        }
-                        light.follow(this);
-                        updated |= !light.family().equals(family);
-                        family = light.family();
-                    }
-                    positions.add(pos);
-                    resolved.put(pos, new Link(link.group(), id, family));
-                    updated |= !pos.equals(previous);
+                    light.follow(self);
+                    family = light.family();
                 }
-                fixtures.clear();
-                fixtures.addAll(positions);
-                links.clear();
-                links.putAll(resolved);
-                BlockPos previousAudio = audioSource;
-                BlockPos previousVideo = videoSource;
-                if (!Objects.equals(audioSource, resolvedAudio)) {
-                    setAudioSource(audioSource);
-                }
-                if (!Objects.equals(videoSource, resolvedVideo)) {
-                    setVideoSource(videoSource);
-                }
-                if (audioId == null) {
-                    audioId = SourceLinks.identify(level, audioSource);
-                    updated |= audioId != null;
-                }
-                if (videoId == null) {
-                    videoId = SourceLinks.identify(level, videoSource);
-                    updated |= videoId != null;
-                }
-                audioSource = SourceLinks.resolve(level, audioId, audioSource);
-                videoSource = SourceLinks.resolve(level, videoId, videoSource);
-                resolvedAudio = audioSource;
-                resolvedVideo = videoSource;
-                if (!Objects.equals(previousAudio, audioSource)) {
-                    hasAudio = false;
-                    updated = true;
-                }
-                if (!Objects.equals(previousVideo, videoSource)) {
-                    hasVideo = false;
-                    updated = true;
-                }
-                if (updated) {
-                    reorder();
-                    changed();
-                }
-            } finally {
-                refreshingLinks = false;
+                Fixture now = new Fixture(link, fixture.group(), family);
+                updated |= !now.equals(fixture);
+                kept.add(now);
+            }
+            fixtures.clear();
+            fixtures.addAll(kept);
+            Link followedAudio = audio.follow(level);
+            Link followedVideo = video.follow(level);
+            if (!followedAudio.equals(audio)) {
+                hasAudio &= Objects.equals(followedAudio.pos(), audio.pos());
+                audio = followedAudio;
+                updated = true;
+            }
+            if (!followedVideo.equals(video)) {
+                hasVideo &= Objects.equals(followedVideo.pos(), video.pos());
+                video = followedVideo;
+                updated = true;
+            }
+            if (updated) {
+                changed();
             }
         }
 
@@ -339,18 +347,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         private void tick() {
             if (level.getGameTime() % 20 == 0) {
-                if (isRoot()) {
-                    refreshLinks();
-                }
+                refreshLinks();
                 updateStructure();
-                if (formed && isRoot()) {
-                    boolean removed = unlinkIf(pos -> level.isLoaded(pos)
-                            && (!(level.getBlockEntity(pos) instanceof StageLightBlock.Entity light) || !light.follows(this)));
-                    reorder();
-                    if (removed) {
-                        changed();
-                    }
-                }
             }
             if (formed && isRoot()) {
                 AnalysisCoordinator.use(this);
@@ -455,27 +453,21 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         }
 
         public boolean bind(StageLightBlock.Entity light, int group) {
-            if (!formed || group < 0 || group >= LightingSettings.GROUPS
-                    || SableCompat.distance(level, worldPosition, light.getBlockPos()) > SourceLinks.MAX_LINK_DISTANCE) {
+            BlockPos pos = light.getBlockPos();
+            if (!formed || group < 0 || group >= LightingSettings.GROUPS || !Link.inReach(level, worldPosition, pos)) {
                 return false;
             }
             refreshLinks();
-            unlinkIf(pos -> level.isLoaded(pos) && !(level.getBlockEntity(pos) instanceof StageLightBlock.Entity));
-            if (!fixtures.contains(light.getBlockPos()) && fixtures.size() >= MAX_LIGHTS || !accepts(light, group)) {
+            if (!links(pos) && fixtures.size() >= MAX_LIGHTS || !accepts(light, group)) {
                 return false;
             }
-            Entity previous = light.linkedController();
-            if (previous != null) {
-                previous.remove(light.getBlockPos());
+            Entity previous = light.linked();
+            if (previous != null && previous != this) {
+                previous.remove(pos);
             }
-            fixtures.remove(light.getBlockPos());
-            light.follow(this);
-            light.group = group;
-            fixtures.add(light.getBlockPos().immutable());
-            links.put(light.getBlockPos().immutable(),
-                    new Link(group, SourceLinks.identifyBlock(level, light.getBlockPos()), light.family()));
-            reorder();
-            light.changed();
+            unlinkIf(pos::equals);
+            fixtures.add(new Fixture(Link.to(level, pos), group, light.family()));
+            light.follow(Link.to(level, worldPosition));
             changed();
             return true;
         }
@@ -488,9 +480,9 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         @Nullable
         private String family(int group, @Nullable BlockPos except) {
-            for (BlockPos pos : fixtures) {
-                if (!pos.equals(except) && link(pos).group() == group) {
-                    return link(pos).family();
+            for (Fixture fixture : fixtures) {
+                if (!fixture.link().pos().equals(except) && fixture.group() == group) {
+                    return fixture.family();
                 }
             }
             return null;
@@ -502,54 +494,30 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             return family == null || family.equals(light.family());
         }
 
-        public void reorder() {
-            int[] counts = new int[LightingSettings.GROUPS];
-            for (BlockPos pos : fixtures) {
-                int order = counts[link(pos).group()]++;
-                if (level.isLoaded(pos) && level.getBlockEntity(pos) instanceof StageLightBlock.Entity light
-                        && light.follows(this) && light.order != order) {
-                    light.order = order;
-                    light.changed();
-                }
-            }
-        }
-
         public int groupSize(int group) {
-            return Math.max(1, (int) links.values().stream().filter(link -> link.group() == group).count());
+            return Math.max(1, (int) fixtures.stream().filter(fixture -> fixture.group() == group).count());
         }
 
         public void remove(BlockPos pos) {
             unlinkIf(pos::equals);
-            reorder();
             changed();
         }
 
         /** Unlinks the fixtures {@code unlinked} picks; whether there were any. */
         private boolean unlinkIf(Predicate<BlockPos> unlinked) {
-            return fixtures.removeIf(pos -> {
-                if (!unlinked.test(pos)) {
-                    return false;
-                }
-                links.remove(pos);
-                return true;
-            });
+            return fixtures.removeIf(fixture -> unlinked.test(fixture.link().pos()));
         }
 
-        /** How {@code pos} is linked: group 0, of the default family, if it never said. */
-        private Link link(BlockPos pos) {
-            return links.getOrDefault(pos, Link.NONE);
-        }
-
+        /** Moves the fixture at {@code pos} {@code step} places within its group (by its sign). */
         public void move(BlockPos pos, int step) {
-            int current = fixtures.indexOf(pos);
+            int current = indexOf(pos);
             if (current < 0 || step == 0) {
                 return;
             }
-            int group = link(pos).group();
+            int group = fixtures.get(current).group();
             for (int next = current + Integer.signum(step); next >= 0 && next < fixtures.size(); next += Integer.signum(step)) {
-                if (link(fixtures.get(next)).group() == group) {
-                    java.util.Collections.swap(fixtures, current, next);
-                    reorder();
+                if (fixtures.get(next).group() == group) {
+                    Collections.swap(fixtures, current, next);
                     changed();
                     return;
                 }
@@ -584,38 +552,25 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         @Override
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
-            if (identity != null) {
-                tag.putUUID("Identity", identity);
-            }
             tag.put("Settings", settings.save());
             tag.putBoolean("Formed", formed);
-            if (audioSource != null) {
-                tag.putLong("AudioSource", audioSource.asLong());
-            }
-            if (videoSource != null) {
-                tag.putLong("VideoSource", videoSource.asLong());
-            }
-            if (audioId != null) {
-                tag.putUUID("AudioId", audioId);
-            }
-            if (videoId != null) {
-                tag.putUUID("VideoId", videoId);
-            }
-            tag.putLongArray("Fixtures", fixtures.stream().mapToLong(BlockPos::asLong).toArray());
-            tag.putIntArray("FixtureGroups", fixtures.stream().mapToInt(pos -> link(pos).group()).toArray());
+            audio.save(tag, "AudioSource", "AudioId");
+            video.save(tag, "VideoSource", "VideoId");
+            tag.putLongArray("Fixtures", fixtures.stream().mapToLong(fixture -> fixture.link().pos().asLong()).toArray());
+            tag.putIntArray("FixtureGroups", fixtures.stream().mapToInt(Fixture::group).toArray());
             ListTag ids = new ListTag();
-            ListTag kinds = new ListTag();
-            for (BlockPos pos : fixtures) {
-                if (link(pos).id() != null) {
+            ListTag families = new ListTag();
+            for (Fixture fixture : fixtures) {
+                if (fixture.link().id() != null) {
                     CompoundTag id = new CompoundTag();
-                    id.putLong("Pos", pos.asLong());
-                    id.putUUID("Id", link(pos).id());
+                    id.putLong("Pos", fixture.link().pos().asLong());
+                    id.putUUID("Id", fixture.link().id());
                     ids.add(id);
                 }
-                kinds.add(StringTag.valueOf(link(pos).family()));
+                families.add(StringTag.valueOf(fixture.family()));
             }
             tag.put("FixtureIds", ids);
-            tag.put("FixtureFamilies", kinds);
+            tag.put("FixtureFamilies", families);
             ListTag saved = new ListTag();
             for (CompoundTag preset : presets) {
                 saved.add(preset == null ? new CompoundTag() : preset.copy());
@@ -633,15 +588,9 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 settings.load(tag.getCompound("Settings"));
             }
             formed = tag.getBoolean("Formed");
-            identity = tag.hasUUID("Identity") ? tag.getUUID("Identity") : null;
-            audioSource = tag.contains("AudioSource") ? BlockPos.of(tag.getLong("AudioSource")) : null;
-            videoSource = tag.contains("VideoSource") ? BlockPos.of(tag.getLong("VideoSource")) : null;
-            audioId = tag.hasUUID("AudioId") ? tag.getUUID("AudioId") : null;
-            videoId = tag.hasUUID("VideoId") ? tag.getUUID("VideoId") : null;
-            resolvedAudio = audioSource;
-            resolvedVideo = videoSource;
+            audio = Link.load(tag, "AudioSource", "AudioId");
+            video = Link.load(tag, "VideoSource", "VideoId");
             fixtures.clear();
-            links.clear();
             Map<BlockPos, UUID> ids = new HashMap<>();
             for (Tag saved : tag.getList("FixtureIds", Tag.TAG_COMPOUND)) {
                 CompoundTag id = (CompoundTag) saved;
@@ -649,17 +598,16 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                     ids.put(BlockPos.of(id.getLong("Pos")), id.getUUID("Id"));
                 }
             }
-            ListTag kinds = tag.getList("FixtureFamilies", Tag.TAG_STRING);
+            ListTag families = tag.getList("FixtureFamilies", Tag.TAG_STRING);
             int[] groups = tag.getIntArray("FixtureGroups");
-            int index = 0;
-            for (long saved : tag.getLongArray("Fixtures")) {
-                BlockPos pos = BlockPos.of(saved);
-                if (fixtures.size() < MAX_LIGHTS && !fixtures.contains(pos)) {
-                    fixtures.add(pos);
-                    links.put(pos, new Link(index < groups.length ? Mth.clamp(groups[index], 0, LightingSettings.GROUPS - 1) : 0,
-                            ids.get(pos), index < kinds.size() ? kinds.getString(index) : StageLightBlock.Entity.DEFAULT_FAMILY));
+            long[] positions = tag.getLongArray("Fixtures");
+            for (int i = 0; i < positions.length; i++) {
+                BlockPos pos = BlockPos.of(positions[i]);
+                if (fixtures.size() < MAX_LIGHTS && !links(pos)) {
+                    fixtures.add(new Fixture(new Link(pos, ids.get(pos)),
+                            i < groups.length ? Mth.clamp(groups[i], 0, LightingSettings.GROUPS - 1) : 0,
+                            i < families.size() ? families.getString(i) : StageLightBlock.Entity.DEFAULT_FAMILY));
                 }
-                index++;
             }
             for (String owner : List.copyOf(extras.getAllKeys())) {
                 extras.remove(owner);

@@ -6,7 +6,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.MediaSource;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -136,7 +136,7 @@ public final class RangeQuill {
         }
         BlockPos source = payload.disconnect() ? null : payload.connectTo().or(speaker::source).orElse(null);
         if (source != null && !source.equals(speaker.source().orElse(null))
-                && !SourceLinks.linkable(player, source, payload.speaker(), MediaSource.class)) {
+                && !Link.linkable(player, source, payload.speaker(), MediaSource.class)) {
             return;
         }
         speaker.configure(player.serverLevel(), source, payload.volume(), payload.channel());

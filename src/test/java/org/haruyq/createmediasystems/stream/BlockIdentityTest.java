@@ -11,17 +11,17 @@ import org.junit.jupiter.api.Test;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 
-class SourceLinksTest {
+class BlockIdentityTest {
     @Test
     void movedSourcesKeepTheirIdentityAcrossSaves() {
-        SourceLinks links = new SourceLinks();
+        BlockIdentity links = new BlockIdentity();
         UUID source = UUID.randomUUID();
         UUID other = UUID.randomUUID();
         BlockPos plot = new BlockPos(30_000_000, 64, 30_000_000);
         links.put(source, BlockPos.ZERO);
         links.put(other, BlockPos.ZERO.above());
         links.put(source, plot);
-        links = SourceLinks.load(links.save(new CompoundTag(), null), null);
+        links = BlockIdentity.load(links.save(new CompoundTag(), null), null);
         assertEquals(plot, links.position(source));
         assertEquals(BlockPos.ZERO.above(), links.position(other));
         links.put(source, plot);

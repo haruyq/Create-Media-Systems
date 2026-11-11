@@ -274,7 +274,7 @@ public final class LightingControls {
         BlockHitResult at = pointed(Reach.HAND);
         if (at != null && mc.level.getBlockEntity(at.getBlockPos()) instanceof StageLightBlock.Entity light) {
             int action = controlDown() ? 1 : mc.player.isShiftKeyDown() ? 2 : 0;
-            int value = action == 0 ? Math.floorMod(light.group + step, LightingSettings.GROUPS)
+            int value = action == 0 ? Math.floorMod(light.group() + step, LightingSettings.GROUPS)
                     : action == 1 ? Math.floorMod(light.individualColor + step, LightingSettings.COLORS) : step;
             PacketDistributor.sendToServer(new LightingPackets.Fixture(light.getBlockPos(), action, value));
             return true;
@@ -516,8 +516,8 @@ public final class LightingControls {
                 BlockHitResult at = pointed(Reach.HAND);
                 if (at != null && mc.level.getBlockEntity(at.getBlockPos()) instanceof StageLightBlock.Entity light) {
                     LightingConsoleBlock.Entity owner = light.controller();
-                    status("fixture_help", LightingText.group(owner == null ? null : owner.settings, light.group),
-                            LightingText.number(light.order + 1), LightingText.number(light.individualColor + 1));
+                    status("fixture_help", LightingText.group(owner == null ? null : owner.settings, light.group()),
+                            LightingText.number(light.order() + 1), LightingText.number(light.individualColor + 1));
                 }
             }
         }
@@ -568,8 +568,8 @@ public final class LightingControls {
             case GROUP -> LightingText.message("select").withColor(LightingText.MUTED);
             case AIM -> LightingText.number(Math.round(g.pan) + "° / " + Math.round(g.tilt) + "°");
             case SOURCES -> LightingText.message("source_state",
-                    LightingText.source(hit.console.audioSource != null, hit.console.hasAudio),
-                    LightingText.source(hit.console.videoSource != null, hit.console.hasVideo));
+                    LightingText.source(hit.console.audioSource() != null, hit.console.hasAudio),
+                    LightingText.source(hit.console.videoSource() != null, hit.console.hasVideo));
             default -> LightingText.text("", LightingText.TEXT);
         };
     }

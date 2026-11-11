@@ -2,12 +2,11 @@ package org.haruyq.createmediasystems.lighting;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Link;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.MapCodec;
@@ -102,10 +101,8 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
      * {@link LightingIllumination#render} lights the faces its beam reaches. They draw themselves.
      */
     public static class Entity extends BlockEntity implements IHaveGoggleInformation {
-        public BlockPos console;
-        private UUID consoleId;
-        public int group;
-        public int order;
+        /** Its console; the console keeps its group and order (see LightingConsoleBlock.Entity.fixtures). */
+        private Link console = Link.NONE;
         public int individualColor;
 
         public Entity(BlockPos pos, BlockState state) {
@@ -138,47 +135,50 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
             return getBlockState().getBlock().getName();
         }
 
+        /** Where its console was last seen; null if it has none. */
+        @Nullable
+        public BlockPos console() {
+            return console.pos();
+        }
+
+        /** Its console, if that is formed and runs it, as this side has it. */
         @Nullable
         public LightingConsoleBlock.Entity controller() {
-            LightingConsoleBlock.Entity owner = linkedController();
+            LightingConsoleBlock.Entity owner = linked();
             return owner != null && owner.controller() == owner ? owner : null;
         }
 
+        /** The console that has it among its fixtures, as this side has it, formed or not. */
         @Nullable
-        public LightingConsoleBlock.Entity linkedController() {
-            if (level != null && !level.isClientSide) {
-                UUID before = consoleId;
-                if (consoleId == null && console != null && level.isLoaded(console)
-                        && level.getBlockEntity(console) instanceof LightingConsoleBlock.Entity owner) {
-                    consoleId = owner.identity();
-                }
-                BlockPos resolved = SourceLinks.resolve(level, consoleId, console);
-                if (!Objects.equals(console, resolved) || !Objects.equals(before, consoleId)) {
-                    console = resolved;
-                    changed();
-                }
-            }
-            LightingConsoleBlock.Entity owner = level == null || console == null || !level.isLoaded(console) ? null
-                    : level.getBlockEntity(console) instanceof LightingConsoleBlock.Entity entity ? entity : null;
-            if (owner != null) {
-                owner.refreshLinks();
-            }
-            return owner != null && owner.fixtures.contains(worldPosition) && follows(owner) ? owner : null;
+        LightingConsoleBlock.Entity linked() {
+            BlockPos at = console.pos();
+            return level != null && at != null && level.isLoaded(at)
+                    && level.getBlockEntity(at) instanceof LightingConsoleBlock.Entity owner && owner.links(worldPosition)
+                    ? owner : null;
         }
 
+        /** Its group on its console; 0 without one. */
+        public int group() {
+            LightingConsoleBlock.Entity owner = linked();
+            return owner == null ? 0 : owner.group(worldPosition);
+        }
+
+        /** Its place among its group's fixtures, from 0. */
+        public int order() {
+            LightingConsoleBlock.Entity owner = linked();
+            return owner == null ? 0 : owner.order(worldPosition);
+        }
+
+        /** Whether it points at {@code owner}: by identity, or by position if either has none (saved before identities). */
         boolean follows(LightingConsoleBlock.Entity owner) {
-            if (consoleId != null) {
-                UUID id = owner.identity();
-                return id == null ? owner.getBlockPos().equals(console) : consoleId.equals(id);
-            }
-            return owner.getBlockPos().equals(console);
+            UUID id = owner.identity();
+            return console.id() != null && id != null ? console.id().equals(id) : owner.getBlockPos().equals(console.pos());
         }
 
-        void follow(LightingConsoleBlock.Entity owner) {
-            UUID id = owner.identity();
-            if (!owner.getBlockPos().equals(console) || !Objects.equals(consoleId, id)) {
-                console = owner.getBlockPos().immutable();
-                consoleId = id;
+        /** Points it at the console {@code owner} links to, as that console is now. */
+        void follow(Link owner) {
+            if (!owner.equals(console)) {
+                console = owner;
                 changed();
             }
         }
@@ -191,12 +191,14 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         }
 
         public void unlink() {
-            LightingConsoleBlock.Entity owner = linkedController();
+            if (level != null) {
+                console = console.follow(level);
+            }
+            LightingConsoleBlock.Entity owner = linked();
             if (owner != null) {
                 owner.remove(worldPosition);
             }
-            console = null;
-            consoleId = null;
+            console = Link.NONE;
             changed();
         }
 
@@ -204,33 +206,23 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
             LightingConsoleBlock.Entity owner = controller();
             tooltip.add(fixtureName().copy().withColor(LightingText.TEXT));
-            tooltip.add(console == null ? LightingText.message("unlinked")
-                    : LightingText.group(owner == null ? null : owner.settings, group));
-            tooltip.add(LightingText.message("fixture", LightingText.number(order + 1), LightingText.number(individualColor + 1)));
+            tooltip.add(console.pos() == null ? LightingText.message("unlinked")
+                    : LightingText.group(owner == null ? null : owner.settings, group()));
+            tooltip.add(LightingText.message("fixture", LightingText.number(order() + 1), LightingText.number(individualColor + 1)));
             return true;
         }
 
         @Override
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
-            if (console != null) {
-                tag.putLong("Console", console.asLong());
-            }
-            if (consoleId != null) {
-                tag.putUUID("ConsoleId", consoleId);
-            }
-            tag.putInt("Group", group);
-            tag.putInt("Order", order);
+            console.save(tag, "Console", "ConsoleId");
             tag.putInt("IndividualColor", individualColor);
         }
 
         @Override
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
-            console = tag.contains("Console") ? BlockPos.of(tag.getLong("Console")) : null;
-            consoleId = tag.hasUUID("ConsoleId") ? tag.getUUID("ConsoleId") : null;
-            group = Mth.clamp(tag.getInt("Group"), 0, LightingSettings.GROUPS - 1);
-            order = Mth.clamp(tag.getInt("Order"), 0, LightingConsoleBlock.MAX_LIGHTS - 1);
+            console = Link.load(tag, "Console", "ConsoleId");
             individualColor = Mth.clamp(tag.getInt("IndividualColor"), 0, LightingSettings.COLORS - 1);
         }
 

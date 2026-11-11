@@ -2,7 +2,7 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -88,7 +88,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
     }
 
     public static class Entity extends BlockEntity {
-        private final SourceLinks.Link source = new SourceLinks.Link();
+        private Link source = Link.NONE;
         private float volume = 1;
         private Streams.Channel channel = Streams.Channel.MIX;
 
@@ -102,7 +102,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         }
 
         public Optional<BlockPos> source() {
-            return source.get(level, this::setChanged);
+            return Optional.ofNullable(source.pos());
         }
 
         public float volume() {
@@ -115,7 +115,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
 
         /** New volume: listeners keep playing at the new volume. New source or channel: they start over. */
         public void configure(ServerLevel level, @Nullable BlockPos source, float volume, Streams.Channel channel) {
-            this.source.set(level, source);
+            this.source = Link.to(level, source);
             this.volume = Mth.clamp(volume, 0, 1);
             this.channel = channel;
             setChanged();
@@ -134,7 +134,17 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
             }
         }
 
+        /** Its source as it is now, where Sable moved it. */
+        public void followSource(ServerLevel level) {
+            Link followed = source.follow(level);
+            if (!followed.equals(source)) {
+                source = followed;
+                setChanged();
+            }
+        }
+
         private void relay(ServerLevel level, BlockState state) {
+            followSource(level);
             Direction facing = state.getValue(FACING);
             Streams.relay(level, this, source(), mouth(worldPosition, facing), Optional.of(facing), channel, volume);
         }
@@ -161,7 +171,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         @Override
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
-            source.save(level, tag);
+            source.save(tag, "Source", "SourceId");
             tag.putFloat("Volume", volume);
             tag.putInt("Channel", channel.ordinal());
         }
@@ -169,7 +179,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         @Override
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
-            source.load(tag);
+            source = Link.load(tag, "Source", "SourceId");
             volume = tag.contains("Volume") ? tag.getFloat("Volume") : 1;
             channel = Streams.Channel.byId(tag.getInt("Channel"));
         }

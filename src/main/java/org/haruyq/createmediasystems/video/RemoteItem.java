@@ -1,12 +1,11 @@
 package org.haruyq.createmediasystems.video;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.Remotable;
-import org.haruyq.createmediasystems.stream.SourceLinks;
+import org.haruyq.createmediasystems.stream.Link;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -48,10 +47,9 @@ public class RemoteItem extends Item {
             return InteractionResult.PASS;
         }
         if (!context.getLevel().isClientSide) {
-            context.getItemInHand().set(VideoFeature.REMOTE_TARGET.get(),
-                    GlobalPos.of(context.getLevel().dimension(), context.getClickedPos().immutable()));
-            context.getItemInHand().set(VideoFeature.REMOTE_SOURCE.get(),
-                    SourceLinks.identify(context.getLevel(), context.getClickedPos()));
+            Link link = Link.to(context.getLevel(), context.getClickedPos());
+            context.getItemInHand().set(VideoFeature.REMOTE_TARGET.get(), GlobalPos.of(context.getLevel().dimension(), link.pos()));
+            context.getItemInHand().set(VideoFeature.REMOTE_SOURCE.get(), link.id());
             player.displayClientMessage(Component.translatable("create_media_systems.remote.paired"), true);
         }
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
@@ -61,6 +59,7 @@ public class RemoteItem extends Item {
         return player.getMainHandItem().is(VideoFeature.REMOTE.get()) ? player.getMainHandItem() : player.getOffhandItem();
     }
 
+    /** Where the player {@code stack} is paired with is now (the stack follows it); null if unpaired or it is gone. */
     @Nullable
     public static GlobalPos target(Level level, ItemStack stack) {
         GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
@@ -68,25 +67,9 @@ public class RemoteItem extends Item {
             return target;
         }
         Level targetLevel = level.getServer().getLevel(target.dimension());
-        if (targetLevel == null) {
-            return null;
-        }
-        UUID id = stack.get(VideoFeature.REMOTE_SOURCE.get());
-        if (id == null) {
-            id = SourceLinks.identify(targetLevel, target.pos());
-            if (id != null) {
-                stack.set(VideoFeature.REMOTE_SOURCE.get(), id);
-            }
-        }
-        BlockPos pos = SourceLinks.resolve(targetLevel, id, target.pos());
-        if (pos == null) {
-            return null;
-        }
-        GlobalPos resolved = GlobalPos.of(target.dimension(), pos);
-        if (!resolved.equals(target)) {
-            stack.set(VideoFeature.REMOTE_TARGET.get(), resolved);
-        }
-        return resolved;
+        BlockPos pos = targetLevel == null ? null
+                : Link.follow(targetLevel, stack, VideoFeature.REMOTE_TARGET.get(), VideoFeature.REMOTE_SOURCE.get());
+        return pos == null ? null : GlobalPos.of(target.dimension(), pos);
     }
 
     @Override

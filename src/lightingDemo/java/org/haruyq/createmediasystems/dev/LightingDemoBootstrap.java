@@ -95,7 +95,7 @@ public final class LightingDemoBootstrap {
                 && console.formed && console.hasAudio && console.hasVideo) {
             verified = true;
             LogUtils.getLogger().info("Lighting demo ready: {} fixtures, audio={}, video={}, level={}, colors={}/{}, master={}, firstColor={}",
-                    console.fixtures.size(), console.hasAudio, console.hasVideo, console.audioLevel,
+                    console.fixtures().size(), console.hasAudio, console.hasVideo, console.audioLevel,
                     Integer.toHexString(console.videoLeft), Integer.toHexString(console.videoRight),
                     console.settings.master, Integer.toHexString(console.settings.groups[0].colors[0]));
         }
@@ -125,7 +125,7 @@ public final class LightingDemoBootstrap {
     public static void build(ServerLevel level) {
         BlockPos origin = new BlockPos(-1, 65, 5);
         BlockEntity root = level.getBlockEntity(origin);
-        if (root instanceof LightingConsoleBlock.Entity console && console.formed && !console.fixtures.isEmpty()) {
+        if (root instanceof LightingConsoleBlock.Entity console && console.formed && !console.fixtures().isEmpty()) {
             return;
         }
         level.setDayTime(18000);
@@ -192,10 +192,10 @@ public final class LightingDemoBootstrap {
                 disc.set(VideoFeature.PLAYLIST.get(), List.of(mediaUrl, next));
             }
             player.insert(disc, null);
-            console.videoSource = playerPos.immutable();
+            console.setVideoSource(playerPos);
             if (level.getBlockEntity(speakerPos) instanceof SpeakerBlock.Entity speaker) {
                 speaker.configure(level, playerPos, 1, org.haruyq.createmediasystems.stream.Streams.Channel.MIX);
-                console.audioSource = playerPos.immutable();
+                console.setAudioSource(playerPos);
             }
             if (level.getBlockEntity(displayPos) instanceof DisplayBlock.Entity display) {
                 try {

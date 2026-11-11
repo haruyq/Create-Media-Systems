@@ -168,7 +168,7 @@ public final class SableLightingDemo {
                         instanceof LightingConsoleBlock.Entity aboard && aboard.hasAudio && aboard.hasVideo && console.hasVideo) {
                     verified = true;
                     LogUtils.getLogger().info("Sable lighting demo ready: ships={}, groundFixtures={}, onboardFixtures={}, groundVideo={}, onboardAudio={}, onboardVideo={}",
-                            bodies.size(), console.fixtures.size(), aboard.fixtures.size(), console.hasVideo, aboard.hasAudio, aboard.hasVideo);
+                            bodies.size(), console.fixtures().size(), aboard.fixtures().size(), console.hasVideo, aboard.hasAudio, aboard.hasVideo);
                 }
             }
         }
@@ -177,7 +177,7 @@ public final class SableLightingDemo {
     private static void build(ServerLevel level, LightingConsoleBlock.Entity console) {
         boolean drops = level.getGameRules().getBoolean(GameRules.RULE_DOBLOCKDROPS);
         level.getGameRules().getRule(GameRules.RULE_DOBLOCKDROPS).set(false, level.getServer());
-        for (BlockPos pos : new ArrayList<>(console.fixtures)) {
+        for (BlockPos pos : console.fixtures()) {
             level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
         }
         for (int x = -28; x <= 28; x++) {
