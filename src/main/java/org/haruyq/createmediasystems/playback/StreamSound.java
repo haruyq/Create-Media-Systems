@@ -122,7 +122,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             // The very same music stream gets Doppler pitch, not an overlaid sound effect.
             double next = emitter.pitch().getAsDouble();
             if (Double.isFinite(next)) {
-                pitch = (float) Mth.clamp(pitch + .38 * (next - pitch), .65, 1.60);
+                pitch = DopplerMath.smooth(pitch, next);
             }
         }
         age++;

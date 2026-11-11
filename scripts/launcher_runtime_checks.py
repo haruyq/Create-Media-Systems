@@ -49,7 +49,7 @@ def result(name, row):
     print('PASS', name, flush=True)
 
 def music(row):
-    return [sound for sound in row['sounds'] if sound['class'] in ('StreamSound', 'FlyingJukeboxSound')]
+    return [sound for sound in row['sounds'] if sound['class'] in ('StreamSound', 'EmitterRecordSound')]
 
 if __name__ == '__main__':
     command('cell-demo vanilla')

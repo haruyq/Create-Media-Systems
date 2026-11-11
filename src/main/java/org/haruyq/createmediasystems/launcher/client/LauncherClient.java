@@ -14,6 +14,8 @@ import org.haruyq.createmediasystems.launcher.LauncherMechanics;
 import org.haruyq.createmediasystems.launcher.CellLighting;
 import org.haruyq.createmediasystems.launcher.DiscLauncherTrigger;
 import org.haruyq.createmediasystems.launcher.LauncherFeedback;
+import org.haruyq.createmediasystems.launcher.DiscProjectile;
+import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -105,7 +107,7 @@ public final class LauncherClient {
         };
         LauncherHud.register(modBus);
         PointLights.add(new CellLights());
-        DiscAudioClient.register(modBus);
+        EmitterAudioManager.add(DiscEmitter::near);
     }
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
@@ -114,6 +116,7 @@ public final class LauncherClient {
 
     private static void onClientTick(ClientTickEvent.Post event) {
         var mc=Minecraft.getInstance();var player=mc.player;
+        if(mc.level!=null)for(var entity:mc.level.entitiesForRendering())if(entity instanceof DiscProjectile disc)disc.refreshAttachedPose();
         if(currentPlayer!=player){currentPlayer=player;triggerDown=false;lastShot=Long.MIN_VALUE;MOTION.reset();DAMAGE.reset();cameraKick=0;}
         boolean holding=player!=null && player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()) && !player.isSpectator() && player.isAlive();
         boolean active=holding && mc.screen==null && mc.getOverlay()==null

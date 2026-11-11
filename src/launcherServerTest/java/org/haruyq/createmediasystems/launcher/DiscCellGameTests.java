@@ -361,10 +361,10 @@ public final class DiscCellGameTests {
     public static void decoderDurationOnlyFillsUnknownMetadataAndPersists(GameTestHelper h) {
         var player = h.makeMockPlayer(GameType.SURVIVAL);
         var shot = new DiscProjectile(h.getLevel(), player, original());
-        for (double invalid : new double[] {Double.NaN, Double.POSITIVE_INFINITY, -1, 0, 86401}) shot.noteDuration(invalid);
+        for (double invalid : new double[] {Double.NaN, Double.POSITIVE_INFINITY, -1, 0, 86401}) shot.learnLength(invalid);
         h.assertTrue(shot.trackLength() < 0, "Invalid decoder metadata cannot change the server lifetime");
-        shot.noteDuration(254);
-        shot.noteDuration(1);
+        shot.learnLength(254);
+        shot.learnLength(1);
         h.assertTrue(shot.trackLength() == 254, "A later client cannot shorten an established track");
         CompoundTag tag = new CompoundTag(); shot.save(tag);
         var restored = new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(), h.getLevel()); restored.load(tag);

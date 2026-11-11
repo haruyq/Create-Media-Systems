@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Portable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.*;
@@ -25,7 +26,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 /** A real collision-aware trolley, with server-owned inventory, battery, puller and playback clock. */
-public final class PartyBoxEntity extends Entity {
+public final class PartyBoxEntity extends Entity implements Portable {
     private static final EntityDataAccessor<ItemStack> DISC = SynchedEntityData.defineId(PartyBoxEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final EntityDataAccessor<ItemStack> BATTERY = SynchedEntityData.defineId(PartyBoxEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final EntityDataAccessor<Integer> ENERGY = SynchedEntityData.defineId(PartyBoxEntity.class, EntityDataSerializers.INT);
@@ -67,7 +68,7 @@ public final class PartyBoxEntity extends Entity {
     public int volume() { return entityData.get(VOLUME); }
     public int bass() { return entityData.get(BASS); }
     public int lights() { return entityData.get(LIGHTS); }
-    public int revision() { return entityData.get(REVISION); }
+    @Override public int revision() { return entityData.get(REVISION); }
     public boolean playing() { return entityData.get(PLAYING); }
     public Optional<UUID> puller() { return entityData.get(PULLER); }
     /** Its playback clock, as its synced data keeps it for every side; the length it learned is the server's alone. */
@@ -110,8 +111,9 @@ public final class PartyBoxEntity extends Entity {
         tickPower();if(!playing())return;
         PlaybackClock clock = clock(); clock.pause(level().getGameTime()); keep(clock);
     }
-    /** A listener's client tells its track's length, for a track the server can't tell the length of. */
-    public void noteDuration(double seconds) {
+    /** Any listener's client within 128 blocks tells its track's length. */
+    @Override public boolean takesLengthFrom(ServerPlayer player) { return player.distanceToSqr(this) < 128 * 128; }
+    @Override public void learnLength(double seconds) {
         PlaybackClock clock = clock(); clock.learn(seconds); keep(clock);
     }
     public void togglePull(Player player) {

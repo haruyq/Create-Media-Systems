@@ -18,6 +18,7 @@ import org.haruyq.createmediasystems.megaphone.client.MegaphoneClient;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.partybox.client.PartyBoxClient;
 import org.haruyq.createmediasystems.playback.ClientStreams;
+import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import org.haruyq.createmediasystems.train.TrainClient;
 import org.haruyq.createmediasystems.video.VideoClient;
 
@@ -36,7 +37,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 public final class CreateMediaSystemsClient {
     /** In the order their listeners are added, which is the order they hear an event in. */
     private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT, LauncherClient::register, PartyBoxClient::register,
-            MegaphoneClient::register, ClientStreams::register, new AudioClient(), new DisplayClient(),
+            MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(), new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
             DiscClient::register);
 

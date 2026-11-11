@@ -22,6 +22,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /** Client side of in-train announcements: each is heard from the train speakers of the carriage we are on. */
 final class Announcements {
+    /** Where each reader's announcements play (see TrainDiscReaderBehaviour.Announce#channel). */
+    private static final Map<String, ClientStreams.Slot> SLOTS = new HashMap<>();
+
     private Announcements() {
     }
 
@@ -33,7 +36,7 @@ final class Announcements {
             return at == null ? last[0] : (last[0] = at);
         }, null, () -> true, () -> carriage(payload.carriages()) != null,
                 () -> speaker(payload.carriages(), speakers) == null ? 0 : payload.volume(), null);
-        ClientStreams.play("train/" + payload.channel(), new StreamSound(new StreamSpec(payload.url(),
+        SLOTS.computeIfAbsent(payload.channel(), channel -> new ClientStreams.Slot("train/" + channel)).play(new StreamSound(new StreamSpec(payload.url(),
                 payload.startSeconds(), Streams.Channel.MIX, SoundSource.VOICE, heard,
                 seconds -> Minecraft.getInstance().execute(() -> PacketDistributor.sendToServer(new StreamPackets.Started(
                         new StreamPackets.Target.Channel(payload.channel()), (float) seconds))))));

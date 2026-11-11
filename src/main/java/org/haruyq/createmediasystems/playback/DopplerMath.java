@@ -1,4 +1,9 @@
-package org.haruyq.createmediasystems.launcher;
+package org.haruyq.createmediasystems.playback;
+
+import org.jetbrains.annotations.Nullable;
+
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Physical (non-cosmetic) Doppler pitch for a moving musical source.
@@ -11,42 +16,37 @@ public final class DopplerMath {
     public static final double TICKS_PER_SECOND = 20.0;
     public static final double MIN_PITCH = 0.65;
     public static final double MAX_PITCH = 1.60;
+    /** The longest step (blocks/tick) taken for motion: longer is a spawn, a teleport or a collision. */
+    private static final double MAX_STEP = 2;
 
     private DopplerMath() {}
 
-    /** Client position steps include collision and interpolation; ignore spawn/teleport discontinuities. */
-    public static double observedRatio(
-            double sourceX, double sourceY, double sourceZ,
-            double sourceVx, double sourceVy, double sourceVz,
-            double listenerX, double listenerY, double listenerZ,
-            double listenerVx, double listenerVy, double listenerVz) {
-        double sourceStep = sourceVx * sourceVx + sourceVy * sourceVy + sourceVz * sourceVz;
-        double listenerStep = listenerVx * listenerVx + listenerVy * listenerVy + listenerVz * listenerVz;
-        if (!Double.isFinite(sourceStep) || !Double.isFinite(listenerStep)
-                || sourceStep > 4 || listenerStep > 4) return 1.0;
-        return ratio(sourceX, sourceY, sourceZ, sourceVx, sourceVy, sourceVz,
-                listenerX, listenerY, listenerZ, listenerVx, listenerVy, listenerVz);
+    /** How far {@code entity} moved in its last client tick, as a velocity; null for a jump (see {@link #steady}). */
+    @Nullable
+    public static Vec3 step(Entity entity) {
+        return steady(new Vec3(entity.getX() - entity.xo, entity.getY() - entity.yo, entity.getZ() - entity.zo));
+    }
+
+    /**
+     * A position step (blocks/tick) as a velocity: client steps include collision and interpolation, so a spawn or
+     * teleport discontinuity is none (null).
+     */
+    @Nullable
+    static Vec3 steady(Vec3 step) {
+        double length = step.lengthSqr();
+        return Double.isFinite(length) && length <= MAX_STEP * MAX_STEP ? step : null;
     }
 
     /** All velocities are blocks PER TICK. Returns a bounded pitch ratio, not a frequency in Hz. */
-    public static double ratio(
-            double sourceX, double sourceY, double sourceZ,
-            double sourceVx, double sourceVy, double sourceVz,
-            double listenerX, double listenerY, double listenerZ,
-            double listenerVx, double listenerVy, double listenerVz) {
-        double dx = listenerX - sourceX;
-        double dy = listenerY - sourceY;
-        double dz = listenerZ - sourceZ;
-        double distanceSquared = dx * dx + dy * dy + dz * dz;
+    public static double ratio(Vec3 source, Vec3 sourceVelocity, Vec3 listener, Vec3 listenerVelocity) {
+        Vec3 toListener = listener.subtract(source);
+        double distanceSquared = toListener.lengthSqr();
         if (!Double.isFinite(distanceSquared) || distanceSquared < 0.0025) return 1.0;
-        double inverseDistance = 1.0 / Math.sqrt(distanceSquared);
-        double ux = dx * inverseDistance;
-        double uy = dy * inverseDistance;
-        double uz = dz * inverseDistance;
+        Vec3 unit = toListener.scale(1.0 / Math.sqrt(distanceSquared));
         // The unit vector goes from source -> listener; a positive source radial
         // component means approaching. A positive listener radial component means receding.
-        double sourceRadial = (sourceVx * ux + sourceVy * uy + sourceVz * uz) * TICKS_PER_SECOND;
-        double listenerRadial = (listenerVx * ux + listenerVy * uy + listenerVz * uz) * TICKS_PER_SECOND;
+        double sourceRadial = sourceVelocity.dot(unit) * TICKS_PER_SECOND;
+        double listenerRadial = listenerVelocity.dot(unit) * TICKS_PER_SECOND;
         if (!Double.isFinite(sourceRadial) || !Double.isFinite(listenerRadial)) return 1.0;
         // Prevent division through zero in pathological vehicles / teleports.
         sourceRadial = clamp(sourceRadial, -0.9 * SPEED_OF_SOUND, 0.9 * SPEED_OF_SOUND);

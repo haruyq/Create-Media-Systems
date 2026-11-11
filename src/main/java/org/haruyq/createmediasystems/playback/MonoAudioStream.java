@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.launcher.client;
+package org.haruyq.createmediasystems.playback;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -8,12 +8,12 @@ import javax.sound.sampled.AudioFormat;
 import net.minecraft.client.sounds.AudioStream;
 
 /**
- * Stereo-to-mono downmix for vanilla/data-pack jukebox tracks, so the *music*
+ * Stereo-to-mono downmix for vanilla/data-pack jukebox tracks a music emitter plays, so the *music*
  * is spatialized by OpenAL. Stereo OpenAL buffers cannot be positioned in 3D.
  * Converts PCM16 LE in a streaming manner and carries incomplete frames between
  * reads. URL-based CMS audio is already 48 kHz mono and never passes through here.
  */
-public final class MonoDiscAudioStream implements AudioStream {
+final class MonoAudioStream implements AudioStream {
     private final AudioStream source;
     private final AudioFormat format;
     private final boolean stereo;
@@ -21,7 +21,7 @@ public final class MonoDiscAudioStream implements AudioStream {
     private final byte[] carry = new byte[4];
     private int carryLength;
 
-    public MonoDiscAudioStream(AudioStream source) {
+    MonoAudioStream(AudioStream source) {
         this.source = source;
         AudioFormat original = source.getFormat();
         if (original.getChannels() == 2 && original.getSampleSizeInBits() == 16
@@ -33,7 +33,7 @@ public final class MonoDiscAudioStream implements AudioStream {
             stereo = false;
             format = original;
         } else {
-            throw new IllegalArgumentException("Unsupported disc audio format: " + original);
+            throw new IllegalArgumentException("Unsupported record audio format: " + original);
         }
     }
 
@@ -66,7 +66,7 @@ public final class MonoDiscAudioStream implements AudioStream {
     }
 
     /** Seek a local record to the same musical position already playing for other listeners. */
-    public void skipSeconds(double seconds) throws IOException {
+    void skipSeconds(double seconds) throws IOException {
         if (!Double.isFinite(seconds) || seconds <= 0) return;
         long samples = (long) (seconds * format.getSampleRate());
         while (samples > 0) {

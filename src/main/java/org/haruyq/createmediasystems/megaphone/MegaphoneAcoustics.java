@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.megaphone;
 
+import org.haruyq.createmediasystems.playback.MusicEmitter;
+
 import net.minecraft.world.phys.Vec3;
 
 /** A forward horn beam, with a quiet but audible rear lobe. Distances are Minecraft adaptations. */
@@ -15,6 +17,6 @@ public final class MegaphoneAcoustics {
     /** FE a playing horn spends per tick at {@code volume} (0..32). */
     public static double drainPerTick(int volume){double level=Math.clamp(volume,0,32)/32.0;return 2+6*level*level;}
     public static double gain(double distance,int volume,double direction){
-        double d=Math.max(0,distance)/24;return Math.clamp(volume,0,32)/32.0*.95*direction/(1+d*d);
+        return Math.clamp(volume,0,32)/32.0*.95*direction*MusicEmitter.falloff(distance,24);
     }
 }

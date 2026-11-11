@@ -70,11 +70,11 @@ public final class PartyBoxGameTests {
     }
     @GameTest(template="empty") public static void controlsRejectPacketsWithoutTheActualNearbyMenu(GameTestHelper h) {
         var box=box(h,10000);h.getLevel().addFreshEntity(box);var p=player(h);p.setPos(box.getX(),box.getY(),box.getZ()+1);
-        PartyBoxAction.handle(p,new PartyBoxAction(box.getId(),PartyBoxAction.Kind.VOLUME,32,box.revision()));
+        PartyBoxAction.handle(p,new PartyBoxAction(box.getId(),PartyBoxAction.Kind.VOLUME,32));
         h.assertTrue(box.volume()==18,"Unopened menu cannot remotely control a speaker");
         p.containerMenu=new PartyBoxMenu(3,p.getInventory(),box);
-        PartyBoxAction.handle(p,new PartyBoxAction(box.getId(),PartyBoxAction.Kind.VOLUME,1000,box.revision()));h.assertTrue(box.volume()==32,"Server bounds the volume");
-        p.setPos(box.getX()+40,box.getY(),box.getZ());PartyBoxAction.handle(p,new PartyBoxAction(box.getId(),PartyBoxAction.Kind.VOLUME,0,box.revision()));
+        PartyBoxAction.handle(p,new PartyBoxAction(box.getId(),PartyBoxAction.Kind.VOLUME,1000));h.assertTrue(box.volume()==32,"Server bounds the volume");
+        p.setPos(box.getX()+40,box.getY(),box.getZ());PartyBoxAction.handle(p,new PartyBoxAction(box.getId(),PartyBoxAction.Kind.VOLUME,0));
         h.assertTrue(box.volume()==32,"A stale far-away menu cannot alter the speaker");h.succeed();
     }
     @GameTest(template="empty") public static void packingReturnsExactlyOneOwnedSpeakerAndNoLooseOriginals(GameTestHelper h) {

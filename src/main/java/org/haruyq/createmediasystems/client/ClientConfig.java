@@ -20,7 +20,7 @@ public final class ClientConfig {
             .comment("Most disk space displays' kept videos may take, in MB; the longest unplayed goes first. 0 keeps none, and fetches no video ahead.")
             .defineInRange("videoCacheMegabytes", 5120, 0, 1 << 22);
     public static final ModConfigSpec.IntValue MAX_AUDIBLE_DISC_PROJECTIONS = BUILDER
-            .comment("Nearest projected CDs decoded at once on this computer. Every CD's server playback clock keeps running, including outside this voice budget. Returning CDs seek to their own current position.")
+            .comment("Nearest portable music sources (launched CDs, PartyBoxes, megaphones) played at once on this computer, all kinds together. Every source's server playback clock keeps running, including outside this voice budget. Returning sources seek to their own current position.")
             .defineInRange("maxAudibleDiscProjections", 12, 1, 64);
     private static final ModConfigSpec.IntValue MAX_VIDEO_HEIGHT = BUILDER
             .comment("Tallest video (in pixels) displays pick when a page offers several, so this computer can decode it in time (4K AV1 can't be, in software, on most). 0 picks the best there is.")

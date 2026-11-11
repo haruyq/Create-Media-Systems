@@ -10,6 +10,7 @@ import com.mojang.logging.LogUtils;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 import org.haruyq.createmediasystems.launcher.LauncherMagazine;
 import org.haruyq.createmediasystems.mixin.*;
+import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -74,7 +75,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("partybox-action ")){
                     String[] bits=action.split(" ");var target=mc.level.getEntity(Integer.parseInt(bits[1]));
                     if(target instanceof org.haruyq.createmediasystems.partybox.PartyBoxEntity box)
-                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),org.haruyq.createmediasystems.partybox.PartyBoxAction.Kind.byId(Integer.parseInt(bits[2])),Integer.parseInt(bits[3]),box.revision()));
+                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),org.haruyq.createmediasystems.partybox.PartyBoxAction.Kind.byId(Integer.parseInt(bits[2])),Integer.parseInt(bits[3])));
                 }
                 if(action.equals("launcher-reload")) net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                         org.haruyq.createmediasystems.launcher.DiscLauncherReloadPacket.INSTANCE);
@@ -151,7 +152,7 @@ public final class LauncherDebugClient {
             row.put("screen",mc.screen==null?"none":mc.screen.getClass().getSimpleName());
             row.put("camera",mc.options.getCameraType().name());
             row.put("guiScale",mc.getWindow().getGuiScale());
-            row.put("megaphonePlaybacks",org.haruyq.createmediasystems.megaphone.client.MegaphoneClient.playbacks());
+            row.put("emitters",EmitterAudioManager.heard());
             var groundItems=new ArrayList<Map<String,Object>>();
             for(var entity:mc.level.entitiesForRendering())if(entity instanceof net.minecraft.world.entity.item.ItemEntity item && item.getItem().is(LauncherFeature.DISC_LAUNCHER.get()))
                 groundItems.add(Map.of("x",item.getX(),"y",item.getY(),"z",item.getZ(),"item",item.getItem().toString()));
@@ -214,11 +215,12 @@ public final class LauncherDebugClient {
                 Map<String,Object> b=new LinkedHashMap<>();b.put("id",box.getId());b.put("uuid",box.getUUID().toString());
                 b.put("x",box.getX());b.put("y",box.getY());b.put("z",box.getZ());b.put("playing",box.playing());
                 b.put("lean",box.lean);b.put("yaw",box.getYRot());
-                b.put("pitchTarget",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.pitchAt(box));
+                var heard=EmitterAudioManager.heard(box.getUUID());
+                b.put("pitchTarget",heard==null?-1:heard.pitch());
                 b.put("vx",box.getX()-box.xo);b.put("vy",box.getY()-box.yo);b.put("vz",box.getZ()-box.zo);
                 b.put("seconds",box.seconds());b.put("energy",box.energy());b.put("volume",box.volume());b.put("bass",box.bass());b.put("lights",box.lights());
-                b.put("audibleSeconds",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.audibleSeconds(box.getUUID()));
-                b.put("apiRequestStart",org.haruyq.createmediasystems.playback.ClientStreams.requestedSeconds(box.getUUID()));
+                b.put("audibleSeconds",heard==null?-1:heard.audibleSeconds());
+                b.put("apiRequestStart",heard==null?-1:heard.requestedSeconds());
                 b.put("puller",box.puller().map(UUID::toString).orElse(""));b.put("beat",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.beat(box));
                 b.put("native",decoded(box.getUUID()));partyBoxes.add(b);
             }
@@ -229,8 +231,10 @@ public final class LauncherDebugClient {
                 m.put("id",d.getId());m.put("uuid",d.getUUID().toString());m.put("x",d.getX());m.put("y",d.getY());m.put("z",d.getZ());
                 m.put("vx",d.getDeltaMovement().x);m.put("vy",d.getDeltaMovement().y);m.put("vz",d.getDeltaMovement().z);
                 m.put("embedded",d.embedded());m.put("elapsed",d.elapsedMusicSeconds());
-                m.put("audibleSeconds",DiscAudioClient.audibleSeconds(d.getUUID()));
-                m.put("apiRequestStart",org.haruyq.createmediasystems.playback.ClientStreams.requestedSeconds(d.getUUID()));
+                var heard=EmitterAudioManager.heard(d.getUUID());
+                m.put("audibleSeconds",heard==null?-1:heard.audibleSeconds());
+                m.put("apiRequestStart",heard==null?-1:heard.requestedSeconds());
+                m.put("startSeconds",heard==null?-1:heard.startSeconds());
                 m.put("attached",d.attached());m.put("attachedHead",d.attachedToHead());m.put("attachedId",d.attachmentTargetId());
                 m.put("attachedPart",d.attachmentPart());
                 m.put("attachedBone",d.attachmentBone());
@@ -238,10 +242,10 @@ public final class LauncherDebugClient {
                 var anchor=d.attachmentPosition(1);m.put("anchor",List.of(anchor.x,anchor.y,anchor.z));
                 m.put("playback",d.getItem().get(LauncherFeature.DISC_PLAYBACK.get()));
                 m.put("audio",decoded(d.getUUID()));
-                m.put("pitchTarget",DiscAudioClient.pitchAt(d));m.put("gainTarget",DiscAudioClient.gain(d));
+                m.put("pitchTarget",heard==null?-1:heard.pitch());m.put("gainTarget",heard==null?-1:heard.gain());
                 m.put("item",d.getItem().toString());discs.add(m);
                 m.put("url", org.haruyq.createmediasystems.stream.MediaItem.url(d.getItem()));
-                m.put("managed", org.haruyq.createmediasystems.playback.ClientStreams.contains(d.getUUID()));
+                m.put("managed", heard!=null && heard.stream());
             }
             row.put("discs",discs);
             var engine=((SoundManagerAccessor)mc.getSoundManager()).create_media_systems$soundEngine();
@@ -249,10 +253,9 @@ public final class LauncherDebugClient {
             List<Map<String,Object>> sounds=new ArrayList<>();
             for(var entry:new ArrayList<>(access.create_media_systems$instanceToChannel().entrySet())) {
                 SoundInstance s=entry.getKey();
-                if (!(s instanceof FlyingJukeboxSound) && !s.getClass().getSimpleName().equals("PartyBoxSound") && !s.getClass().getSimpleName().equals("MegaphoneSound") && !s.getLocation().getNamespace().equals("create_media_systems")) continue;
+                if (!EmitterAudioManager.plays(s) && !s.getLocation().getNamespace().equals("create_media_systems")) continue;
                 Map<String,Object> m=new LinkedHashMap<>();
                 m.put("name",s.getLocation().toString());m.put("class",s.getClass().getSimpleName());
-                if(s instanceof FlyingJukeboxSound song)m.put("initialOffset",song.initialOffsetSeconds());
                 m.put("pitch",s.getPitch());m.put("volume",s.getVolume());m.put("x",s.getX());m.put("y",s.getY());m.put("z",s.getZ());
                 sounds.add(m);
                 entry.getValue().execute(channel->{

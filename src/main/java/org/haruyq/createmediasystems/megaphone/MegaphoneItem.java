@@ -1,7 +1,9 @@
 package org.haruyq.createmediasystems.megaphone;
 
 import org.haruyq.createmediasystems.HeldItemMenu;
+import org.haruyq.createmediasystems.stream.Portable;
 import java.util.List;
+import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,7 +13,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.Level;
 
-public final class MegaphoneItem extends Item {
+public final class MegaphoneItem extends Item implements Portable.Held {
     public final boolean black;
     public MegaphoneItem(Properties properties,boolean black){super(properties.stacksTo(1));this.black=black;}
     @Override public InteractionResultHolder<ItemStack> use(Level level,Player player,InteractionHand hand) {
@@ -29,6 +31,15 @@ public final class MegaphoneItem extends Item {
             // The server clock is absolute; battery settlement is batched to avoid equipment packets every tick.
             if(level.getGameTime()%20==0 || MegaphoneData.id(item).isEmpty())MegaphoneData.tick(item,level);
         }
+    }
+    /** Its holder's own client tells its track's length; it plays only in their hand. */
+    @Override public Portable held(ItemStack item,ServerPlayer holder,UUID id) {
+        if(MegaphoneData.id(item).filter(id::equals).isEmpty())return null;
+        return new Portable() {
+            @Override public int revision(){return MegaphoneData.revision(item);}
+            @Override public boolean takesLengthFrom(ServerPlayer player){return player==holder;}
+            @Override public void learnLength(double seconds){MegaphoneData.learnLength(item,seconds);}
+        };
     }
     @Override public boolean shouldCauseReequipAnimation(ItemStack old,ItemStack next,boolean slotChanged){return slotChanged || !ItemStack.isSameItem(old,next);}
     @Override public void appendHoverText(ItemStack item,TooltipContext context,List<Component> lines,TooltipFlag flag) {

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.launcher;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Portable;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
@@ -33,7 +34,7 @@ import org.joml.Vector3f;
  * leaves that SAME entity/audio source in the world until expiry. Projections
  * cannot be picked up; the original, including its media components, stays in the cell.
  */
-public final class DiscProjectile extends ThrowableItemProjectile {
+public final class DiscProjectile extends ThrowableItemProjectile implements Portable {
     private static final int UNKNOWN_LIFETIME_TICKS = 20 * 180;
     private static final int MAX_FLIGHT_TICKS = 20 * 5;
     private static final EntityDataAccessor<Boolean> EMBEDDED =
@@ -199,13 +200,16 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     }
     /** Client entity order must not leave attached blades a tick behind an animated target. */
     public void refreshAttachedPose(){if(level().isClientSide && attached() && !isRemoved())followAttachment();}
+    /** Its clock never changes once launched: always its first revision. */
+    @Override public int revision() { return clock().revision(); }
 
     public DiscCellTier cellTier() { return DiscCellTier.at(entityData.get(CELL_TIER)); }
     public void setCellTier(DiscCellTier tier) { entityData.set(CELL_TIER, tier.level); }
     public float damage() { return cellTier().damage; }
     @Override public ItemStack getPickResult() { return ItemStack.EMPTY; }
-    /** Its shooter's client tells its track's length, for a track the server can't tell the length of. */
-    public void noteDuration(double seconds) {
+    /** Only its shooter's client tells its track's length. */
+    @Override public boolean takesLengthFrom(ServerPlayer player) { return getOwner() == player; }
+    @Override public void learnLength(double seconds) {
         if (!level().isClientSide) learn(seconds);
     }
     private void learn(double seconds) {

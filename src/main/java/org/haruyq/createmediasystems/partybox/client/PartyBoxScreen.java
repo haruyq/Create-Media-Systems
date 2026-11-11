@@ -14,7 +14,7 @@ public final class PartyBoxScreen extends AbstractContainerScreen<PartyBoxMenu> 
     private Button play,bass,lights,pull;
     public PartyBoxScreen(PartyBoxMenu menu,Inventory inventory,Component title){super(menu,inventory,title);imageWidth=300;imageHeight=240;}
     private static final DevicePanel.Palette PALETTE=new DevicePanel.Palette(0xFF2A3039,0xFF414852,0xFF5C6572,0xFFFF5A2E,0xFFE8EDF3);
-    private void action(PartyBoxAction.Kind kind,int value){if(menu.box!=null)PacketDistributor.sendToServer(new PartyBoxAction(menu.box.getId(),kind,value,menu.box.revision()));}
+    private void action(PartyBoxAction.Kind kind,int value){if(menu.box!=null)PacketDistributor.sendToServer(new PartyBoxAction(menu.box.getId(),kind,value));}
     private Button button(int x,int y,int w,Component name,Runnable action){return addRenderableWidget(DevicePanel.button(leftPos+x,topPos+y,w,name,PALETTE,action));}
     @Override protected void init(){
         super.init();

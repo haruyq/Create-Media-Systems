@@ -47,7 +47,7 @@ public final class MegaphoneData {
         clock.save(t);settled(t,now);commit(item,t);return true;
     }
     /** A listener's client tells its track's length, for a track the server can't tell the length of. */
-    public static void noteDuration(ItemStack item,double seconds) {
+    public static void learnLength(ItemStack item,double seconds) {
         var t=state(item).copy();var clock=PlaybackClock.read(t);clock.learn(seconds);clock.save(t);commit(item,t);
     }
     /** Its battery has paid up to {@code now}: a tick settled it while it played, and standing costs nothing. */

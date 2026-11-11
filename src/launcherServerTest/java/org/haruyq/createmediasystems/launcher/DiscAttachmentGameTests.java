@@ -69,7 +69,7 @@ public final class DiscAttachmentGameTests {
         d.onHitEntity(new EntityHitResult(p,p.position().add(-.36,1,0)));p.setHealth(0);d.tick();
         h.assertTrue(d.isRemoved(),"The blade cannot transfer from a dead player to their respawn");
         var living=h.makeMockPlayer(GameType.CREATIVE);living.setPos(base(h));var expired=disc(h,living);
-        expired.onHitEntity(new EntityHitResult(living,living.position().add(-.36,1,0)));expired.noteDuration(1);
+        expired.onHitEntity(new EntityHitResult(living,living.position().add(-.36,1,0)));expired.learnLength(1);
         expired.musicStartedAgo(21);var tag=new CompoundTag();expired.save(tag);
         var loaded=new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(),h.getLevel());loaded.load(tag);loaded.tick();
         h.assertTrue(loaded.isRemoved() && loaded.getPickResult().isEmpty(),"Track expiry removes the blade without an obtainable original");h.succeed();

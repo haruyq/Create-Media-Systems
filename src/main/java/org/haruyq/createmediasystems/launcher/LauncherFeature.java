@@ -131,6 +131,5 @@ public final class LauncherFeature implements Feature {
         DiscLauncherReloadPacket.registerPayloads(registrar);
         DiscLauncherTrigger.register(registrar);
         LauncherFeedback.register(registrar);
-        DiscPlaybackMetadata.register(registrar);
     }
 }

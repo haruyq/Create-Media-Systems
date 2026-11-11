@@ -39,7 +39,7 @@ public final class CreateMediaSystems {
     /** The root of every CMS command, the server's and the client's: {@code /cms}. */
     public static final String COMMAND = "cms";
     /** Bumped whenever a payload's format changes, so a client and server that differ refuse each other. */
-    private static final String PROTOCOL = "19";
+    private static final String PROTOCOL = "20";
 
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);

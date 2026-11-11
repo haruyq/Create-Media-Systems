@@ -36,7 +36,7 @@ class AudibleAudioStreamTest {
         var audio=new AudibleAudioStream(new Source(),10);long now=10_000_000_000L;
         audio.heard.note(now,10,88200,1.2f);double heard=audio.heard.seconds(now+1_500_000_000L),server=11.5;
         assertTrue(heard-server>.25);
-        assertFalse(PlaybackSync.realign(heard,server,50,1.2),"Travelling music must retain its natural Doppler pitch instead of repeatedly seeking");
-        assertTrue(PlaybackSync.realign(heard,server,50,1),"Once stationary, actual phase drift must recover to the source's own server clock");
+        assertFalse(EmitterAudioManager.realign(heard,server,50,1.2),"Travelling music must retain its natural Doppler pitch instead of repeatedly seeking");
+        assertTrue(EmitterAudioManager.realign(heard,server,50,1),"Once stationary, actual phase drift must recover to the source's own server clock");
     }
 }
