@@ -7,7 +7,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/** Direct P2P between players, which the server introduces through the API (see P2p). */
 public final class P2pFeature implements Feature {
     /** Read by P2p only, and never sent to players. */
     public static final ModConfigSpec.ConfigValue<String> SERVER_TOKEN = ServerConfig.secret("p2pServerToken",

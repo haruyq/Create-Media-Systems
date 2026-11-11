@@ -35,11 +35,7 @@ final class LinkRate {
         }
     }
 
-    /**
-     * {@code bytes} took {@code nanos} from being queued to being acknowledged. Paced at {@link #bps}, a connection
-     * that keeps up takes about its paced time; well over that, it is slower than the pace, which drops to what it
-     * managed; on pace, the pace recovers a tenth toward the probe's ceiling.
-     */
+    /** {@code bytes} took {@code nanos} from being queued to being acknowledged. */
     void delivered(long bytes, long nanos) {
         if (bytes <= 0 || nanos <= 0) {
             return;

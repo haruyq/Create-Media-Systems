@@ -17,7 +17,6 @@ public interface Remotable extends PlaylistView, MediaSource {
      */
     void control(Action action, int value, @Nullable Player by);
 
-    /** Empty, stopped, paused or playing, as its remote shows it. */
     Component state();
 
     /**

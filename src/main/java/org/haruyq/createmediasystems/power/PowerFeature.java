@@ -18,7 +18,6 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** Rechargeable items: the energy they keep, the battery pack, and FE access to every {@link ChargeableItem}. */
 public final class PowerFeature implements Feature {
     /** The FE a {@link ChargeableItem} holds. */
     public static final Supplier<DataComponentType<Integer>> ENERGY = COMPONENTS.registerComponentType(

@@ -32,7 +32,6 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 
-/** The mod on a client: each feature's client part, then the client config they add to, and their Ponder scenes. */
 @Mod(value = CreateMediaSystems.MOD_ID, dist = Dist.CLIENT)
 public final class CreateMediaSystemsClient {
     /** In the order their listeners are added, which is the order they hear an event in. */

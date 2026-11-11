@@ -79,7 +79,6 @@ public final class DriveClient {
     /** The disc in the real drive as last looked; null until it has been, for this emulator. */
     @Nullable
     private static volatile Optional<Disc> found;
-    /** Whether there was a drive to look at. */
     private static volatile boolean drive;
     /** When the real drive was last seen making a disc out. The looking thread's. */
     private static long settling = System.nanoTime() - SETTLE_NANOS;

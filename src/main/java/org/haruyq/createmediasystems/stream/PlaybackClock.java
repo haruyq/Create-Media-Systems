@@ -147,7 +147,6 @@ public final class PlaybackClock {
         }
     }
 
-    /** Stops {@code at} ticks in. */
     private void stopAt(long at) {
         offset = Math.max(0, at);
         start = NEVER;
@@ -155,7 +154,6 @@ public final class PlaybackClock {
         revision++;
     }
 
-    /** Stops, back at the top of its track. */
     public void stop() {
         stopAt(0);
     }
@@ -219,12 +217,10 @@ public final class PlaybackClock {
         }
     }
 
-    /** Forgets its track's length: a new track went in. */
     public void forget() {
         length = -1;
     }
 
-    /** {@code seconds} as m:ss, or h:mm:ss from an hour. */
     public static String format(double seconds) {
         long s = Math.max(0, (long) seconds);
         return s >= 3600 ? String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)

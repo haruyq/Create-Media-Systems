@@ -15,7 +15,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
-/** The battery pack's model. */
 public final class BatteryRenderer extends BlockEntityWithoutLevelRenderer {
     private static final int SHELL = 0x23252A;
 
@@ -23,7 +22,6 @@ public final class BatteryRenderer extends BlockEntityWithoutLevelRenderer {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
     }
 
-    /** The power package's client part. */
     public static final ClientFeature CLIENT = (IEventBus modBus) -> modBus.addListener(
             (RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
                 private BatteryRenderer renderer;

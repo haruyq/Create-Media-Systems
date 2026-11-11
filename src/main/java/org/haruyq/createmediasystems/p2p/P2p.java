@@ -164,7 +164,6 @@ public final class P2p {
      */
     private static CompletableFuture<?> answered(Player player, Member member, Room room, Answer answer, Throwable error) {
         Protocol.Ticket ticket = error == null ? ticketFrom(answer, player.id(), room) : null;
-        // Still what the player waits for, and whether the room they asked to join still is.
         boolean wanted = MEMBERS.get(player.id()) == member && !player.gone().getAsBoolean() && !stopping;
         boolean live = room == null || ROOMS.get(room.host()) == room;
         String reason = null;
@@ -185,7 +184,6 @@ public final class P2p {
             return CompletableFuture.completedFuture(null);
         }
         if (!wanted || !live) {
-            // Left, asked again, logged out, stopping or the host left meanwhile: the ticket is not wanted.
             return delete(room == null ? "p2p/sessions/" + ticket.sessionId()
                     : "p2p/sessions/" + room.id() + "/peers/" + player.id());
         }

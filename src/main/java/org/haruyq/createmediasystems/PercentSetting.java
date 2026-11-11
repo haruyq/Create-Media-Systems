@@ -15,7 +15,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.BlockHitResult;
 
-/** A value from 0 to 100%, set with a wrench like any Create value: a Blu-ray player's volume and lighting, a train disc reader's volume. */
 public final class PercentSetting {
     /** Where a block entity's one default-type setting is saved. */
     public static final String DEFAULT_TAG = "ScrollValue";
@@ -23,12 +22,10 @@ public final class PercentSetting {
     private PercentSetting() {
     }
 
-    /** The setting saved under {@code tag} in {@code data}: 100 if none is. */
     public static int saved(CompoundTag data, String tag) {
         return data.contains(tag) ? data.getInt(tag) : 100;
     }
 
-    /** A value from 0 to 100%, 100 at first, set with a wrench on {@code box}. */
     public static ScrollValueBehaviour create(SmartBlockEntity entity, String key, CenteredSideValueBoxTransform box) {
         return create(entity, key, box, ScrollValueBehaviour.TYPE, DEFAULT_TAG);
     }

@@ -13,12 +13,10 @@ public interface DiscDrive {
     @Nullable
     DiscKind ready();
 
-    /** Its ready disc's link. */
     String link();
 
     /** What plays a drive's disc while it holds none of its own. */
     interface Fed {
-        /** Whether it plays a disc of {@code kind}. */
         boolean plays(DiscKind kind);
 
         /** The drive beside it took a disc ({@code by} put it in) or lost it. */

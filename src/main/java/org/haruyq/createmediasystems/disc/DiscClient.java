@@ -213,7 +213,6 @@ public final class DiscClient {
         return request;
     }
 
-    /** What the P2P debug overlay shows of the disc stream (see DiscStream#stats); nothing without one. */
     private static List<P2pOverlay.Line> overlay(boolean hosting, long now) {
         DiscStream current = stream;
         return current == null ? List.of() : current.stats().lines(hosting, now);
@@ -285,7 +284,6 @@ public final class DiscClient {
         throw new IOException("Could not connect directly to the disc host; check /cms p2p status");
     }
 
-    /** Stops reading and sharing the disc. */
     public static synchronized void clear() {
         generation++;
         if (reading != null) {
