@@ -57,17 +57,13 @@ public final class SpeakerStressServer {
     private SpeakerStressServer() {
     }
 
-    private static boolean on() {
-        return Boolean.getBoolean("cms.speakerStress");
-    }
-
     private static String url(String source) {
         return "http://127.0.0.1:" + MEDIA_PORT + "/stress.mp4?src=" + source;
     }
 
     @SubscribeEvent
     public static void started(ServerStartedEvent event) throws IOException, ReflectiveOperationException {
-        if (!on() || !event.getServer().isDedicatedServer()) {
+        if (!event.getServer().isDedicatedServer()) {
             return;
         }
         startMedia();
@@ -96,7 +92,7 @@ public final class SpeakerStressServer {
 
     @SubscribeEvent
     public static void loggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (on() && event.getEntity() instanceof ServerPlayer player) {
+        if (event.getEntity() instanceof ServerPlayer player) {
             // Always the same place, among the three walls, within all of their ranges.
             player.teleportTo(player.serverLevel(), 0.5, Y, 2.5, 180, 0);
         }
@@ -137,7 +133,7 @@ public final class SpeakerStressServer {
     @SubscribeEvent
     public static void tick(ServerTickEvent.Post event) throws IOException, ReflectiveOperationException {
         MinecraftServer server = event.getServer();
-        if (!on() || !server.isDedicatedServer() || server.getTickCount() % 20 != 0) {
+        if (!server.isDedicatedServer() || server.getTickCount() % 20 != 0) {
             return;
         }
         Path dir = server.getServerDirectory();

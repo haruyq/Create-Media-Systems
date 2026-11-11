@@ -66,9 +66,6 @@ public final class SpeakerStressClient {
 
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) {
-        if (!Boolean.getBoolean("cms.speakerStress")) {
-            return;
-        }
         Minecraft mc = Minecraft.getInstance();
         Path dir = mc.gameDirectory.toPath();
         try {
