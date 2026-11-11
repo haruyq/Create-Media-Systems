@@ -166,17 +166,12 @@ public final class SpeakerStressClient {
         });
     }
 
-    /** The native players open here (see NativeAudio.SHARED), as JSON. */
+    /** The native players open here (see NativeAudio#playbacks), as JSON. */
     private static String players() throws ReflectiveOperationException {
-        Map<?, ?> shared = (Map<?, ?>) staticField(Class.forName("org.haruyq.createmediasystems.playback.NativeAudio"), "SHARED");
         StringBuilder json = new StringBuilder("[");
-        List<Object> all;
-        synchronized (shared) {
-            all = new ArrayList<>(shared.values());
-        }
-        for (Object player : all) {
-            Object key = field(player, "key");
-            String source = String.valueOf(call(key, "source"));
+        for (Object player : org.haruyq.createmediasystems.playback.NativeAudio.playbacks()) {
+            Object id = field(player, "id");
+            String source = String.valueOf(call(id, "track"));
             var playing = (java.util.concurrent.CompletableFuture<?>) field(player, "playing");
             Object owner = field(player, "owner");
             Object status = owner.getClass().getMethod("status").invoke(owner);
@@ -248,7 +243,7 @@ public final class SpeakerStressClient {
         if (direct == null) {
             return none;
         }
-        Object tap = field(direct, "tap");
+        Object tap = field(direct, "source");
         Object queue = field(tap, "queue");
         List<byte[]> chunks = new ArrayList<>();
         long newest = -1;

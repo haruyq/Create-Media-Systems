@@ -383,7 +383,8 @@ public final class LightingBenchmark {
             if (phase != current) {
                 previous = 0;
                 started = 0;
-                var video = NativeAudio.screen(PLAYER);
+                var playback = NativeAudio.playback(PLAYER);
+                var video = playback == null ? null : playback.frame();
                 if (!(LightingLab.console(minecraft.level) instanceof LightingConsoleBlock.Entity console)
                         || console.fixtures().size() != FIXTURES || console.settings.enabled != current.mode.fixtures()
                         || console.settings.groups[0].pattern != current.mode.pattern()

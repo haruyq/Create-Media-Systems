@@ -26,7 +26,7 @@ class VlcAudioTest {
 
     @Test
     void callbacksKeepStandbyEligibleWithoutAudioTapsOrLightingDemand() {
-        VlcPlayer player = new VlcPlayer(null, 0);
+        VlcPlayer player = new VlcPlayer(null, 0, 0);
         assertFalse(player.recentMedia(System.nanoTime()));
         try (Memory sample = new Memory(4)) {
             player.audio.play.invoke(null, sample, 1, START);
@@ -47,7 +47,7 @@ class VlcAudioTest {
 
     @Test
     void lightingColorsExpireEvenWhenCallsKeepRequestingAnalysis() {
-        VlcPlayer.Frame frame = new VlcPlayer.Frame();
+        VideoFrame frame = new VideoFrame();
         try (Memory format = new Memory(20)) {
             format.setInt(4, 8);
             format.setInt(8, 8);

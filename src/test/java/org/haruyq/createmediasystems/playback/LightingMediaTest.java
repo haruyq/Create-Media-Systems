@@ -83,17 +83,17 @@ class LightingMediaTest {
         }
         Feed.Reader feed = Feed.read(UUID.randomUUID().toString(), 0,
                 offset -> new ByteArrayInputStream(mono), reason -> fail(reason));
-        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, null, Streams.Channel.MIX, null);
+        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, null, Streams.Channel.MIX, null, false);
         try {
             feed.prebuffer(mono.length, System.currentTimeMillis() + 5000);
             long at = START * 1000;
-            stream.queued(at, 0, mono.length);
+            stream.heard.note(at, 0, mono.length / 2, 1);
             assertNull(stream.lighting(at - 1));
             assertTrue(stream.lighting(at + 500_000_000).bass() > 0.4);
             assertEquals(0, feed.position());
             assertArrayEquals(mono, feed.peek(0, mono.length));
             assertArrayEquals(mono, feed.read(mono.length));
-            stream.queued(at + 1_000_000_000, -1, Pcm.BYTES_PER_SECOND / 4);
+            stream.heard.note(at + 1_000_000_000, -1, Pcm.RATE / 4, 1);
             assertEquals(0, stream.lighting(at + 1_100_000_000).level());
             assertNull(stream.lighting(at + 1_500_000_000));
         } finally {
@@ -107,10 +107,10 @@ class LightingMediaTest {
         Feed.Reader feed = Feed.read(UUID.randomUUID().toString(), 0,
                 offset -> new ByteArrayInputStream(mono), reason -> fail(reason));
         BlockPos source = new BlockPos(12, 34, 56);
-        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, source, Streams.Channel.MIX, null);
+        StreamSound.PcmStream stream = new StreamSound.PcmStream(feed, source, Streams.Channel.MIX, null, false);
         try {
             feed.prebuffer(mono.length, System.currentTimeMillis() + 5000);
-            stream.queued(System.nanoTime() - 500_000_000L, 0, mono.length);
+            stream.heard.note(System.nanoTime() - 500_000_000L, 0, mono.length / 2, 1);
             assertNotNull(LightingMedia.relay(source, null));
         } finally {
             stream.close();

@@ -7,7 +7,7 @@ import net.minecraft.client.sounds.AudioStream;
 import org.junit.jupiter.api.Test;
 
 class MegaphoneAudioStreamTest {
-    static class Tone implements AudioStream,DeviceClock.Timed {
+    static class Tone implements CmsStream {
         final double frequency,amplitude;int sample;boolean closed;
         Tone(double hz,double amplitude){frequency=hz;this.amplitude=amplitude;}
         public AudioFormat getFormat(){return new AudioFormat(48000,16,1,true,false);}

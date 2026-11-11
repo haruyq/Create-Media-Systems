@@ -120,7 +120,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             long now = Util.getMillis();
             float fall = Math.min(1, (now - at) / 1000f);
             at = now;
-            Spectrum.Frame heard = stack.power() ? NativeAudio.spectrum(stack.getBlockPos()) : null;
+            NativeAudio.Playback playback = stack.power() ? NativeAudio.playback(stack.getBlockPos()) : null;
+            Spectrum.Frame heard = playback == null ? null : playback.spectrum();
             for (int band = 0; band < bands.length; band++) {
                 bands[band] = Math.max(heard == null ? 0 : heard.bands()[band], bands[band] - fall * 1.6f);
                 peaks[band] = Math.max(bands[band], peaks[band] - fall * 0.3f);

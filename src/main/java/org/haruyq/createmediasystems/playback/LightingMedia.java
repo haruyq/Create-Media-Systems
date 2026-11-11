@@ -45,20 +45,20 @@ public final class LightingMedia {
     /** The signal of {@code track} as the source at {@code source} plays it here now, or null if it doesn't. */
     @Nullable
     public static Sample sample(BlockPos source, String track) {
-        VlcPlayer player = NativeAudio.lighting(source, track);
-        AudioFrame audio = player == null ? null : player.audio.lighting();
+        NativeAudio.Playback playback = NativeAudio.playback(source, track);
+        AudioFrame audio = playback == null ? null : playback.lightingAudio();
         if (audio == null) {
             audio = relay(source, track);
         }
-        Colors video = player == null || player.frame == null ? null : player.frame.lighting();
+        Colors video = playback == null ? null : playback.lightingColors();
         return audio == null && video == null ? null
                 : Sample.of(audio, video == null ? 0 : video.left, video == null ? 0 : video.right, video != null);
     }
 
     public static Clock clock(BlockPos source, String track, long now) {
-        VlcPlayer player = NativeAudio.lighting(source, track);
-        return player == null ? new Clock(ClientStreams.position(source, track), false, false)
-                : new Clock(player.time(), true, NativeAudio.lightingLive(source, track) && player.recentMedia(now));
+        NativeAudio.Playback playback = NativeAudio.playback(source, track);
+        return playback == null || !playback.plays() ? new Clock(ClientStreams.position(source, track), false, false)
+                : new Clock(playback.time(), true, playback.liveAndFlowing(now));
     }
 
     record AudioFrame(long at, float level, float bass, float mid, float high, float pulse, float bpm) {

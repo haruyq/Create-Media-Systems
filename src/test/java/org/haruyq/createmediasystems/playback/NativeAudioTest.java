@@ -15,6 +15,7 @@ import javax.sound.sampled.AudioFormat;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.sounds.SoundSource;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.client.sounds.AudioStream;
@@ -24,8 +25,21 @@ class NativeAudioTest {
 
     private static final URI SOURCE = URI.create("https://media.invalid/synthetic.mkv");
     private static final NativeAudio.Status VOD = new NativeAudio.Status(true, false, true, false, false);
+    private static final StreamSpec.Emitter HEARD = new StreamSpec.Emitter(null, null, () -> true, () -> true, () -> 1, null);
 
-    static final class Tap implements AudioStream, DeviceClock.Timed {
+    /** What a stream of {@code source} from {@code start} s plays: of {@code playback}'s {@code load} if not null. */
+    private static StreamSpec spec(URI source, BlockPos playback, long load, double start, Streams.Channel channel) {
+        StreamSpec spec = new StreamSpec(source.toString(), start, channel, SoundSource.RECORDS, HEARD, s -> {});
+        return playback == null ? spec : spec.from(playback, load, null);
+    }
+
+    /** The same, of the moving disc {@code disc}. */
+    private static StreamSpec spec(URI source, BlockPos playback, long load, double start, Streams.Channel channel,
+                                   StreamSpec.DiscClock disc) {
+        return spec(source, playback, load, start, channel).movingDisc(disc.id(), disc.seconds());
+    }
+
+    static final class Tap implements CmsStream {
         final AtomicInteger closes = new AtomicInteger();
 
         @Override public AudioFormat getFormat() { return new AudioFormat(48_000, 16, 1, true, false); }
@@ -83,12 +97,10 @@ class NativeAudioTest {
         Player first = new Player();
         Player second = new Player();
         long asked = System.nanoTime();
-        var a = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 27.5);
-        var b = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 1.25);
-        try (AudioStream one = NativeAudio.open(() -> first, SOURCE, null, 0, null, 0, asked,
-                () -> false, Streams.Channel.MIX, null, s -> {}, a)) {
-            try (AudioStream two = NativeAudio.open(() -> second, SOURCE, null, 0, null, 0, asked,
-                    () -> false, Streams.Channel.MIX, null, s -> {}, b)) {
+        var a = new StreamSpec.DiscClock(java.util.UUID.randomUUID(), () -> 27.5);
+        var b = new StreamSpec.DiscClock(java.util.UUID.randomUUID(), () -> 1.25);
+        try (AudioStream one = NativeAudio.open(() -> first, spec(SOURCE, null, 0, 0, Streams.Channel.MIX, a), asked, () -> false, null)) {
+            try (AudioStream two = NativeAudio.open(() -> second, spec(SOURCE, null, 0, 0, Streams.Channel.MIX, b), asked, () -> false, null)) {
                 assertEquals(27500, first.opened, "CD A follows its own server position");
                 assertEquals(1250, second.opened, "CD B must not tap A even when fired in the same tick");
                 assertEquals(1, first.actions.stream().filter("start"::equals).count());
@@ -104,12 +116,10 @@ class NativeAudioTest {
     void rejoiningOneDiscUsesThatDiscsPlayerRatherThanTheOtherShots() throws Exception {
         Player player = new Player();
         long asked = System.nanoTime();
-        var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 8.0);
-        try (AudioStream one = NativeAudio.open(() -> player, SOURCE, null, 0, null, 8, asked,
-                () -> false, Streams.Channel.MIX, null, s -> {}, disc);
+        var disc = new StreamSpec.DiscClock(java.util.UUID.randomUUID(), () -> 8.0);
+        try (AudioStream one = NativeAudio.open(() -> player, spec(SOURCE, null, 0, 8, Streams.Channel.MIX, disc), asked, () -> false, null);
              AudioStream rejoined = NativeAudio.open(() -> fail("same CD must share its own decoder"),
-                     SOURCE, null, 0, null, 8, asked + 20_000_000_000L,
-                     () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
+                     spec(SOURCE, null, 0, 8, Streams.Channel.MIX, disc), asked + 20_000_000_000L, () -> false, null)) {
             assertEquals(8000, player.opened);
             assertEquals(1, player.actions.stream().filter("start"::equals).count());
         }
@@ -119,9 +129,8 @@ class NativeAudioTest {
     @Test
     void anInputOpenedAtTheServerPositionIsNotSoughtAgainWhilePaused() throws Exception {
         Player player = new Player();
-        var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 45.0);
-        try (AudioStream ignored = NativeAudio.open(() -> player, SOURCE, null, 0, null, 45,
-                System.nanoTime(), () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
+        var disc = new StreamSpec.DiscClock(java.util.UUID.randomUUID(), () -> 45.0);
+        try (AudioStream ignored = NativeAudio.open(() -> player, spec(SOURCE, null, 0, 45, Streams.Channel.MIX, disc), System.nanoTime(), () -> false, null)) {
             assertEquals(List.of("tap", "start", "resume"), player.actions,
                     "Do not race VLC's input start-time with another paused seek");
         }
@@ -131,9 +140,8 @@ class NativeAudioTest {
     void aDiscThatStalledWhileOpeningCatchesUpToItsOwnServerClock() throws Exception {
         Player player = new Player();
         player.positionMillis = 8500;
-        var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 10.0);
-        try (AudioStream stream = NativeAudio.open(() -> player, SOURCE, null, 0, null, 10,
-                System.nanoTime(), () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
+        var disc = new StreamSpec.DiscClock(java.util.UUID.randomUUID(), () -> 10.0);
+        try (AudioStream stream = NativeAudio.open(() -> player, spec(SOURCE, null, 0, 10, Streams.Channel.MIX, disc), System.nanoTime(), () -> false, null)) {
             assertEquals(-1, player.sought, "Input start-time is not interrupted while paused");
             long deadline = System.nanoTime() + 5_000_000_000L;
             while (player.sought < 0 && System.nanoTime() < deadline) {
@@ -154,16 +162,14 @@ class NativeAudioTest {
             return player;
         };
         long asked = System.nanoTime();
-        AudioStream jukebox = NativeAudio.open(open, source, null, 0, null, 0, asked, () -> false, Streams.Channel.MIX, null, s -> {});
+        AudioStream jukebox = NativeAudio.open(open, spec(source, null, 0, 0, Streams.Channel.MIX), asked, () -> false, null);
         // Linked 10 s later, when the server says the track is 10 s in.
-        AudioStream speaker = NativeAudio.open(open, source, null, 0, null, 10, asked + 10_000_000_000L,
-                () -> false, Streams.Channel.RIGHT, null, s -> {});
+        AudioStream speaker = NativeAudio.open(open, spec(source, null, 0, 10, Streams.Channel.RIGHT), asked + 10_000_000_000L, () -> false, null);
         assertEquals(1, players.size());
         assertEquals(List.of("tap", "start", "resume", "tap"), players.get(0).actions);
         assertEquals(Streams.Channel.RIGHT, players.get(0).channel);
         // The track started over: a playback of its own.
-        AudioStream restarted = NativeAudio.open(open, source, null, 0, null, 0, asked + 30_000_000_000L,
-                () -> false, Streams.Channel.MIX, null, s -> {});
+        AudioStream restarted = NativeAudio.open(open, spec(source, null, 0, 0, Streams.Channel.MIX), asked + 30_000_000_000L, () -> false, null);
         assertEquals(2, players.size());
 
         jukebox.close();
@@ -194,7 +200,7 @@ class NativeAudioTest {
 
     private static AudioStream open(Supplier<NativeAudio.Backend> players, URI source, long asked, Streams.Channel channel) {
         try {
-            return NativeAudio.open(players, source, JUKEBOX, 0, null, 0, asked, () -> false, channel, null, s -> {});
+            return NativeAudio.open(players, spec(source, JUKEBOX, 0, 0, channel), asked, () -> false, null);
         } catch (IOException error) {
             throw new java.io.UncheckedIOException(error);
         }
@@ -204,8 +210,8 @@ class NativeAudioTest {
     private static AudioStream own(Player player, double startSeconds, long asked, java.util.function.BooleanSupplier cancelled,
                                    Streams.Channel channel, java.util.concurrent.CompletableFuture<NativeAudio.Go> go)
             throws IOException {
-        return NativeAudio.open(() -> player, URI.create("https://media.invalid/" + java.util.UUID.randomUUID() + ".mkv"),
-                null, 0, null, startSeconds, asked, cancelled, channel, go, s -> {});
+        return NativeAudio.open(() -> player, spec(URI.create("https://media.invalid/" + java.util.UUID.randomUUID() + ".mkv"),
+                null, 0, startSeconds, channel), asked, cancelled, go);
     }
 
     private static AudioStream own(Player player, double startSeconds, long asked, java.util.function.BooleanSupplier cancelled,
@@ -237,13 +243,12 @@ class NativeAudioTest {
         };
         BlockPos jukebox = new BlockPos(0, 64, 0);
         long asked = System.nanoTime();
-        AudioStream left = NativeAudio.open(open, source, jukebox, 0, null, 0, asked, () -> false, Streams.Channel.LEFT, null, s -> {});
+        AudioStream left = NativeAudio.open(open, spec(source, jukebox, 0, 0, Streams.Channel.LEFT), asked, () -> false, null);
         // 60 s on, a server at 18 TPS says only 54 s have played.
-        AudioStream right = NativeAudio.open(open, source, jukebox, 0, null, 54, asked + 60_000_000_000L,
-                () -> false, Streams.Channel.RIGHT, null, s -> {});
+        AudioStream right = NativeAudio.open(open, spec(source, jukebox, 0, 54, Streams.Channel.RIGHT), asked + 60_000_000_000L, () -> false, null);
         // Another source playing the same disc is a playback of its own.
-        AudioStream other = NativeAudio.open(open, source, new BlockPos(9, 64, 9), 0, null, 54, asked + 60_000_000_000L,
-                () -> false, Streams.Channel.MIX, null, s -> {});
+        AudioStream other = NativeAudio.open(open, spec(source, new BlockPos(9, 64, 9), 0, 54, Streams.Channel.MIX),
+                asked + 60_000_000_000L, () -> false, null);
         assertEquals(2, players.size());
         assertEquals(List.of("tap", "start", "resume", "tap"), players.get(0).actions);
         left.close();
@@ -505,13 +510,11 @@ class NativeAudioTest {
             return player;
         };
         long asked = System.nanoTime();
-        AudioStream left = NativeAudio.open(open, source, JUKEBOX, 7, null, 0, asked, () -> false,
-                Streams.Channel.LEFT, null, s -> {});
-        AudioStream right = NativeAudio.open(open, source, JUKEBOX, 7, null, 0, asked + 3_000_000_000L,
-                () -> false, Streams.Channel.RIGHT, null, s -> {});
+        AudioStream left = NativeAudio.open(open, spec(source, JUKEBOX, 7, 0, Streams.Channel.LEFT), asked, () -> false,
+                null);
+        AudioStream right = NativeAudio.open(open, spec(source, JUKEBOX, 7, 0, Streams.Channel.RIGHT), asked + 3_000_000_000L, () -> false, null);
         assertEquals(1, players.size(), "one load, one player");
-        AudioStream restarted = NativeAudio.open(open, source, JUKEBOX, 8, null, 0, asked + 500_000_000L,
-                () -> false, Streams.Channel.MIX, null, s -> {});
+        AudioStream restarted = NativeAudio.open(open, spec(source, JUKEBOX, 8, 0, Streams.Channel.MIX), asked + 500_000_000L, () -> false, null);
         assertEquals(2, players.size(), "a new load is a new playback, however soon");
         left.close();
         right.close();

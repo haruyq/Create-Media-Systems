@@ -8,25 +8,20 @@ import javax.sound.sampled.AudioFormat;
 import net.minecraft.client.sounds.AudioStream;
 
 /** Real low-frequency PCM boost, applied per speaker after decoding; never affects another CMS source. */
-public final class BassAudioStream implements AudioStream, DeviceClock.Timed {
-    private final AudioStream source;
+public final class BassAudioStream extends CmsStream.Wrapper {
     private final IntSupplier mode;
     private final double alpha;
     private final double[] low;
     private double blend;
     private final java.util.function.DoubleConsumer meter;
-    public BassAudioStream(AudioStream source, IntSupplier mode) {
-        this(source, mode, value -> {});
-    }
     public BassAudioStream(AudioStream source, IntSupplier mode, java.util.function.DoubleConsumer meter) {
-        this.source=source; this.mode=mode;
+        super(source); this.mode=mode;
         this.meter=meter;
         AudioFormat f=source.getFormat();
         if(f.getSampleSizeInBits()!=16 || f.isBigEndian() || !AudioFormat.Encoding.PCM_SIGNED.equals(f.getEncoding()))
             throw new IllegalArgumentException("PartyBox needs little-endian PCM16");
         low=new double[f.getChannels()]; alpha=1-Math.exp(-2*Math.PI*140/f.getSampleRate());
     }
-    @Override public AudioFormat getFormat() { return source.getFormat(); }
     @Override public ByteBuffer read(int bytes) throws IOException {
         ByteBuffer data=source.read(bytes).order(ByteOrder.LITTLE_ENDIAN);
         int start=data.position(), channels=low.length;
@@ -47,7 +42,4 @@ public final class BassAudioStream implements AudioStream, DeviceClock.Timed {
         if(samples>0)meter.accept(Math.min(1,Math.sqrt(square/samples)*6));
         return data;
     }
-    @Override public void close() throws IOException { source.close(); }
-    @Override public long attach(int sourceId,long now) { return source instanceof DeviceClock.Timed t ? t.attach(sourceId,now) : 0; }
-    @Override public boolean advancesWhilePaused() { return source instanceof DeviceClock.Timed t && t.advancesWhilePaused(); }
 }

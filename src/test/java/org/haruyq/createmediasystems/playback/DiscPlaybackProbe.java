@@ -16,7 +16,7 @@ public final class DiscPlaybackProbe {
     }
 
     private static final class Output {
-        final VlcPlayer.Frame frame = new VlcPlayer.Frame();
+        final VideoFrame frame = new VideoFrame();
         final VlcAudio audio = new VlcAudio();
         volatile long samples, gap, end;
         int height;

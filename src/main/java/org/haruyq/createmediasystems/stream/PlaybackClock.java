@@ -13,6 +13,8 @@ import net.minecraft.nbt.CompoundTag;
  */
 public final class PlaybackClock {
     public static final int TICKS_PER_SECOND = 20;
+    /** One tick on a client's clock (System.nanoTime), for its copies of the server's waits. */
+    public static final long NANOS_PER_TICK = 1_000_000_000L / TICKS_PER_SECOND;
     /** {@code start} while it doesn't count (stopped, paused, or standing), and {@code last} before its first tick. */
     static final long NEVER = Long.MIN_VALUE;
 

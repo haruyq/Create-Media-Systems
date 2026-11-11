@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
-import org.haruyq.createmediasystems.playback.VlcPlayer;
+import org.haruyq.createmediasystems.playback.VideoFrame;
 import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
@@ -115,7 +115,7 @@ final class DisplayQuillHandler {
             Images.Picture picture = ImageViewerRenderer.picture(viewer);
             return picture != null ? picture.width / (double) picture.height : DisplayBlock.Ratio.WIDE.value;
         }
-        VlcPlayer.Frame frame = DisplayRenderer.frame((DisplayBlock.Entity) screen);
+        VideoFrame frame = DisplayRenderer.frame((DisplayBlock.Entity) screen);
         return frame != null && frame.height() > 0 ? frame.width() / (double) frame.height() : DisplayBlock.Ratio.WIDE.value;
     }
 

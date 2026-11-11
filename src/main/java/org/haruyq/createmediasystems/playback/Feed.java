@@ -265,7 +265,11 @@ final class Feed {
             }
         }
 
+        /** Where in the track the byte at {@code bytes} (a {@link #position}) is (s). */
         double mediaSeconds(long bytes) {return startSeconds+bytes/(double)Pcm.BYTES_PER_SECOND;}
+
+        /** The byte (a {@link #position}) at {@code seconds} into the track. */
+        long bytesAt(double seconds) {return Pcm.bytes(seconds-startSeconds);}
 
         @Nullable
         byte[] peek(long from, int length) {

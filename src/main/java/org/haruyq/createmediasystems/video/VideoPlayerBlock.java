@@ -298,7 +298,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                 tooltip.add(Component.empty());
             }
             if (playing && !transport.paused() && level != null && level.isClientSide) {
-                NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
+                NativeAudio.Playback playback = NativeAudio.playback(worldPosition);
+                NativeAudio.Progress progress = playback == null ? null : playback.progress();
                 if (progress != null) {
                     tooltip.add(Component.literal("     ").append(progress.loading()
                             ? Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW)

@@ -21,7 +21,7 @@ class PcmStreamTest {
         AtomicBoolean first = new AtomicBoolean(true);
         return new StreamSound.PcmStream(Feed.read(java.util.UUID.randomUUID().toString(), 0,
                 offset -> first.getAndSet(false) ? source : resume.from(offset), onInterrupted), null,
-                Streams.Channel.MIX, null);
+                Streams.Channel.MIX, null, false);
     }
 
     /** format=ogg: half a second of a 440 Hz tone (made as the API makes it) comes out as the same PCM. */

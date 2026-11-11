@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.StreamSound;
+import org.haruyq.createmediasystems.playback.StreamSpec;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -27,16 +28,15 @@ final class Announcements {
     static void play(TrainDiscReaderBehaviour.Announce payload) {
         Map<Integer, List<Vec3>> speakers = new HashMap<>();
         Vec3[] last = {Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()};
-        ClientStreams.play("train/" + payload.channel(), new StreamSound(
-                ClientStreams.apiStream(payload.url(), payload.startSeconds(), Streams.Channel.MIX), payload.url(),
-                null, 0, payload.startSeconds(), SoundSource.VOICE,
-                () -> {
-                    Vec3 at = speaker(payload.carriages(), speakers);
-                    return at == null ? last[0] : (last[0] = at);
-                }, null, () -> true, () -> carriage(payload.carriages()) != null,
-                () -> speaker(payload.carriages(), speakers) == null ? 0 : payload.volume(), null, Streams.Channel.MIX,
+        var heard = new StreamSpec.Emitter(() -> {
+            Vec3 at = speaker(payload.carriages(), speakers);
+            return at == null ? last[0] : (last[0] = at);
+        }, null, () -> true, () -> carriage(payload.carriages()) != null,
+                () -> speaker(payload.carriages(), speakers) == null ? 0 : payload.volume(), null);
+        ClientStreams.play("train/" + payload.channel(), new StreamSound(new StreamSpec(payload.url(),
+                payload.startSeconds(), Streams.Channel.MIX, SoundSource.VOICE, heard,
                 seconds -> Minecraft.getInstance().execute(() -> PacketDistributor.sendToServer(new StreamPackets.Started(
-                        new StreamPackets.Target.Channel(payload.channel()), (float) seconds)))));
+                        new StreamPackets.Target.Channel(payload.channel()), (float) seconds))))));
     }
 
     /** The carriage of {@code carriages} we are on, by the same test the server picks passengers with. */

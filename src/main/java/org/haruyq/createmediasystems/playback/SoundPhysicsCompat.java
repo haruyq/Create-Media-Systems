@@ -6,9 +6,6 @@ import java.lang.invoke.MethodType;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.haruyq.createmediasystems.stream.StreamFeature;
-import org.haruyq.createmediasystems.mixin.ChannelAccessor;
-import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
-import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL;
@@ -17,7 +14,6 @@ import org.lwjgl.openal.SOFTDeferredUpdates;
 
 import com.mojang.logging.LogUtils;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
@@ -80,12 +76,10 @@ public final class SoundPhysicsCompat {
      * Physics itself does.
      */
     void update(SoundInstance sound, Vec3 tracedFrom, Vec3 playedAt) {
-        var engine = ((SoundManagerAccessor) Minecraft.getInstance().getSoundManager()).create_media_systems$soundEngine();
-        var handle = ((SoundEngineAccessor) engine).create_media_systems$instanceToChannel().get(sound);
-        if (handle == null || !request(new Request(tracedFrom, playedAt))) {
+        if (!SoundChannels.playing(sound) || !request(new Request(tracedFrom, playedAt))) {
             return;
         }
-        handle.execute(channel -> {
+        SoundChannels.withSource(sound, source -> {
             Request request = take();
             Vec3 at = request.at();
             // Sound Physics moves the source to where its echoes seem to come from midway through tracing, then sets
@@ -96,7 +90,6 @@ public final class SoundPhysicsCompat {
                 SOFTDeferredUpdates.alDeferUpdatesSOFT();
             }
             try {
-                int source = ((ChannelAccessor) channel).create_media_systems$source();
                 Vec3 from = request.from();
                 Object ignored = PROCESS_SOUND.invoke(source, from.x, from.y, from.z, SoundSource.BLOCKS,
                         StreamFeature.STREAM.getId());

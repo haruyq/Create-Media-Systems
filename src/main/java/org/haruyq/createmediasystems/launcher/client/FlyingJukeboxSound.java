@@ -80,7 +80,7 @@ final class FlyingJukeboxSound extends AbstractTickableSoundInstance {
             try {
                 double at=disc.elapsedMusicSeconds();mono.skipSeconds(at);
                 for(int i=0;i<2;i++){double ahead=disc.elapsedMusicSeconds()-at;if(ahead<.02)break;mono.skipSeconds(ahead);at+=ahead;}
-                var clock=new AudibleAudioStream(mono,at,null);audibleClock=clock;return clock;
+                var clock=new AudibleAudioStream(mono,at);audibleClock=clock;return clock;
             } catch (IOException error) {
                 try { mono.close(); } catch (IOException ignored) {}
                 throw new CompletionException(error);

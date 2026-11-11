@@ -77,11 +77,11 @@ public final class MegaphoneClient {
             var disc=MegaphoneData.disc(item,mc.level);String url=MediaItem.url(disc);
             if(url!=null && UrlPolicy.isAllowed(url)) {
                 double start=source.seconds();
-                var sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
-                        source::position,null,source::present,source::audible,source::gain,null,Streams.Channel.MIX,
+                var heard=new StreamSpec.Emitter(source::position,null,source::present,source::audible,source::gain,source::pitch);
+                var sound=new StreamSound(new StreamSpec(url,start,Streams.Channel.MIX,SoundSource.RECORDS,heard,
                         length->mc.execute(()->{if(mc.getConnection()!=null && source.player()==mc.player)
-                            PacketDistributor.sendToServer(new MegaphoneLength(source.id(),source.revision(),length));}));
-                sound.setDiscPlayback(id.get(),source::seconds);sound.setDynamicPitch(source::pitch);sound.setMegaphone(source::drive,source::volume);
+                            PacketDistributor.sendToServer(new MegaphoneLength(source.id(),source.revision(),length));}))
+                        .movingDisc(id.get(),source::seconds).decorated(pcm->new MegaphoneAudioStream(pcm,source::drive,source::volume)).viaApi());
                 ClientStreams.play(id.get(),sound);PLAYING.put(id.get(),new Playing(source,null,true,ticks));
             } else MediaItem.song(disc,mc.level.registryAccess()).ifPresent(song->{
                 var sound=new MegaphoneSound(source,song.value().soundEvent().value());mc.getSoundManager().play(sound);PLAYING.put(id.get(),new Playing(source,sound,false,ticks));

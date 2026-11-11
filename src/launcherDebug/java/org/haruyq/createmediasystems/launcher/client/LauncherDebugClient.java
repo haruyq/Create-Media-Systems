@@ -219,7 +219,7 @@ public final class LauncherDebugClient {
                 b.put("audibleSeconds",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.audibleSeconds(box.getUUID()));
                 b.put("apiRequestStart",org.haruyq.createmediasystems.playback.ClientStreams.requestedSeconds(box.getUUID()));
                 b.put("puller",box.puller().map(UUID::toString).orElse(""));b.put("beat",org.haruyq.createmediasystems.partybox.client.PartyBoxClient.beat(box));
-                b.put("native",org.haruyq.createmediasystems.playback.NativeAudio.discProgress(box.getUUID()));partyBoxes.add(b);
+                b.put("native",decoded(box.getUUID()));partyBoxes.add(b);
             }
             row.put("partyBoxes",partyBoxes);
             List<Map<String,Object>> discs=new ArrayList<>();
@@ -236,7 +236,7 @@ public final class LauncherDebugClient {
                 m.put("attachedUUID",d.attachmentTargetUUID().map(UUID::toString).orElse(""));
                 var anchor=d.attachmentPosition(1);m.put("anchor",List.of(anchor.x,anchor.y,anchor.z));
                 m.put("playback",d.getItem().get(LauncherFeature.DISC_PLAYBACK.get()));
-                m.put("audio",org.haruyq.createmediasystems.playback.NativeAudio.discProgress(d.getUUID()));
+                m.put("audio",decoded(d.getUUID()));
                 m.put("pitchTarget",DiscAudioClient.pitchAt(d));m.put("gainTarget",DiscAudioClient.gain(d));
                 m.put("item",d.getItem().toString());discs.add(m);
                 m.put("url", org.haruyq.createmediasystems.stream.MediaItem.url(d.getItem()));
@@ -270,5 +270,11 @@ public final class LauncherDebugClient {
                 catch(Exception e){LogUtils.getLogger().warn("Launcher probe write failed",e);}
             });
         } catch(Exception e){LogUtils.getLogger().warn("Launcher debug failed",e);}
+    }
+
+    /** Where the native player of the moving disc {@code id} actually is; null if none plays it. */
+    private static org.haruyq.createmediasystems.playback.NativeAudio.Progress decoded(java.util.UUID id) {
+        var playback=org.haruyq.createmediasystems.playback.NativeAudio.playback(id);
+        return playback==null?null:playback.decoded();
     }
 }
