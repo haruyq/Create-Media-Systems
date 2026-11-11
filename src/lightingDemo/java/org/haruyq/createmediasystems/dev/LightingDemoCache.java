@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.playback;
+package org.haruyq.createmediasystems.dev;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -10,6 +10,7 @@ import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.lighting.AnalysisPackets;
 import org.haruyq.createmediasystems.lighting.AnalysisPlayback;
 import org.haruyq.createmediasystems.lighting.AnalysisTimeline;
+import org.haruyq.createmediasystems.playback.VideoCache;
 
 import com.mojang.logging.LogUtils;
 
@@ -24,8 +25,7 @@ public final class LightingDemoCache {
 
     public static void seedNext(String next, Path media, int discHeight) {
         Path game = FMLPaths.GAMEDIR.get().toAbsolutePath().normalize();
-        if (Boolean.getBoolean("cms.sableLightingDemo") || !Boolean.getBoolean("cms.lightingNetworkTest")
-                && !game.getFileName().toString().equals("run-lighting-demo")) {
+        if (LightingLab.SABLE || !LightingLab.NETWORK && !game.getFileName().toString().equals("run-lighting-demo")) {
             return;
         }
         if (ClientConfig.VIDEO_CACHE_MEGABYTES.get() <= 0) {
@@ -35,10 +35,7 @@ public final class LightingDemoCache {
         try {
             URI source = URI.create(next);
             int height = ClientConfig.maxHeight(discHeight);
-            VideoCache.get().keep(source, height, media, Integer.getInteger("cms.demoSeconds", 60));
-            if (VideoCache.get().lookup(source, height) == null) {
-                throw new IOException("Seeded next track could not be read by VideoCache");
-            }
+            VideoCache.seed(source, height, media, Integer.getInteger("cms.demoSeconds", 60));
             LogUtils.getLogger().info("Lighting demo next-track cache ready: url={}, height={}", source, height);
         } catch (IOException | RuntimeException error) {
             LogUtils.getLogger().error("Could not seed the lighting demo next-track cache", error);
@@ -46,7 +43,7 @@ public final class LightingDemoCache {
     }
 
     public static void verify() {
-        if (reused || Boolean.getBoolean("cms.sableLightingDemo")) {
+        if (reused || LightingLab.SABLE) {
             return;
         }
         try {

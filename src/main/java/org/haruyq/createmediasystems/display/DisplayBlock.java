@@ -242,7 +242,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         }
 
         /** Links it to the Blu-ray player at {@code source}, or unlinks it; its viewers start over. */
-        void link(@Nullable BlockPos source) {
+        public void link(@Nullable BlockPos source) {
             this.source = Link.to(level, source);
             changed();
         }

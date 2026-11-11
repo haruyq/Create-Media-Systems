@@ -32,7 +32,7 @@ public final class LightingNetworkProbe {
 
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) {
-        if (!Boolean.getBoolean("cms.lightingNetworkTest")) {
+        if (!LightingLab.NETWORK) {
             return;
         }
         long now = System.nanoTime();

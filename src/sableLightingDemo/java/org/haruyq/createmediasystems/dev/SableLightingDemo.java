@@ -49,7 +49,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 @EventBusSubscriber(modid = "create_media_systems")
 public final class SableLightingDemo {
-    private static final BlockPos DESK = new BlockPos(-1, 65, 5);
+    private static final BlockPos DESK = LightingLab.CONSOLE;
     private static final BlockPos MARKER = new BlockPos(26, 64, 14);
     private static final BlockPos WALL = new BlockPos(-16, 65, -6);
     private static final BlockPos PLATFORM = new BlockPos(16, 65, -6);
@@ -68,8 +68,7 @@ public final class SableLightingDemo {
     }
 
     private static boolean lab(ServerLevel level) {
-        return Boolean.getBoolean("cms.sableLightingDemo") && level.dimension() == ServerLevel.OVERWORLD
-                && level.getServer().getWorldData().getLevelName().equals("CMS Sable Lighting Lab");
+        return LightingLab.SABLE && level.dimension() == ServerLevel.OVERWORLD && LightingLab.runs(level.getServer());
     }
 
     @SubscribeEvent
@@ -317,7 +316,7 @@ public final class SableLightingDemo {
     }
 
     private static boolean media(ServerLevel level, LightingConsoleBlock.Entity console) {
-        if (!(level.getBlockEntity(new BlockPos(-8, 65, 5)) instanceof VideoPlayerBlock.Entity ground) || ground.playlist().isEmpty()) {
+        if (!(level.getBlockEntity(LightingLab.PLAYER) instanceof VideoPlayerBlock.Entity ground) || ground.playlist().isEmpty()) {
             return false;
         }
         for (Body body : bodies) {

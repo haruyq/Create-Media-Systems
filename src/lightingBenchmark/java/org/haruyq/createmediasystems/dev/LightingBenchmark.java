@@ -55,8 +55,7 @@ public final class LightingBenchmark {
     private static final Vec3 CAMERA = new Vec3(0.5, FLOOR + (DENSE ? 22.5 : 12.5), DENSE ? 64.5 : 24.5);
     private static final float CAMERA_YAW = 180;
     private static final float CAMERA_PITCH = 12;
-    private static final BlockPos CONSOLE = new BlockPos(-1, 65, 5);
-    private static final BlockPos PLAYER = new BlockPos(-8, 65, 5);
+    private static final BlockPos PLAYER = LightingLab.PLAYER;
     private static final BlockPos DISPLAY = new BlockPos(6, FLOOR + 4, -6);
     private static volatile Phase active;
 
@@ -64,13 +63,13 @@ public final class LightingBenchmark {
     }
 
     @SubscribeEvent
-    public static void tick(ServerTickEvent.Post event) throws ReflectiveOperationException {
+    public static void tick(ServerTickEvent.Post event) {
         if (!enabled() || event.getServer().getTickCount() % 10 != 0) {
             return;
         }
         ServerLevel level = event.getServer().overworld();
-        if (level.players().isEmpty() || !event.getServer().getWorldData().getLevelName().equals(LightingDemoBootstrap.LEVEL_NAME)
-                || !(level.getBlockEntity(CONSOLE) instanceof LightingConsoleBlock.Entity console)
+        if (level.players().isEmpty() || !LightingLab.runs(event.getServer())
+                || !(LightingLab.console(level) instanceof LightingConsoleBlock.Entity console)
                 || !console.formed || !(level.getBlockEntity(PLAYER) instanceof VideoPlayerBlock.Entity player)) {
             return;
         }
@@ -85,9 +84,8 @@ public final class LightingBenchmark {
             return;
         }
         configure(level, console, mode);
-        var lighting = VideoPlayerBlock.Entity.class.getDeclaredField("lighting");
-        lighting.setAccessible(true);
-        ((ScrollValueBehaviour) lighting.get(player)).setValue(mode.displayLighting());
+        // Its lighting setting: the player's default scroll value (see VideoPlayerBlock).
+        player.getBehaviour(ScrollValueBehaviour.TYPE).setValue(mode.displayLighting());
         player.control(Remotable.Action.SELECT, 1, null);
         active = new Phase(mode, System.nanoTime());
         level.players().forEach(LightingBenchmark::camera);
@@ -116,8 +114,7 @@ public final class LightingBenchmark {
         return Mode.LASER_HIT;
     }
 
-    private static void build(ServerLevel level, LightingConsoleBlock.Entity console, VideoPlayerBlock.Entity player)
-            throws ReflectiveOperationException {
+    private static void build(ServerLevel level, LightingConsoleBlock.Entity console, VideoPlayerBlock.Entity player) {
         for (BlockPos pos : console.fixtures()) {
             if (level.getBlockEntity(pos) instanceof StageLightBlock.Entity) {
                 level.removeBlock(pos, false);
@@ -160,9 +157,7 @@ public final class LightingBenchmark {
                     : i == 4 ? Direction.WEST : Direction.SOUTH;
             level.setBlockAndUpdate(at, DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, facing));
             if (level.getBlockEntity(at) instanceof DisplayBlock.Entity display) {
-                var link = DisplayBlock.Entity.class.getDeclaredMethod("link", BlockPos.class);
-                link.setAccessible(true);
-                link.invoke(display, PLAYER);
+                display.link(PLAYER);
                 display.resize((DENSE ? 32 : 12) * DisplayBlock.UNIT, DENSE ? 288 : 108, DisplayBlock.Ratio.WIDE);
             }
         }
@@ -389,7 +384,7 @@ public final class LightingBenchmark {
                 previous = 0;
                 started = 0;
                 var video = NativeAudio.screen(PLAYER);
-                if (!(minecraft.level.getBlockEntity(CONSOLE) instanceof LightingConsoleBlock.Entity console)
+                if (!(LightingLab.console(minecraft.level) instanceof LightingConsoleBlock.Entity console)
                         || console.fixtures().size() != FIXTURES || console.settings.enabled != current.mode.fixtures()
                         || console.settings.groups[0].pattern != current.mode.pattern()
                         || console.settings.groups[0].tilt != current.mode.tilt(0)
