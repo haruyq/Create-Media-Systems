@@ -22,6 +22,9 @@ class DiscToolsIntegrationTest {
         assertTrue(Files.size(installed.resolve("README.txt")) > 100);
         String demuxers = new String(DiscSource.run(List.of(tools.ffmpeg(), "-v", "error", "-demuxers"), 128 * 1024, 15), StandardCharsets.UTF_8);
         assertTrue(demuxers.contains("dvdvideo"));
+        String dvd = new String(DiscSource.run(List.of(tools.ffmpeg(), "-hide_banner", "-h", "demuxer=dvdvideo"),
+                128 * 1024, 15), StandardCharsets.UTF_8);
+        assertTrue(dvd.contains("read_ahead") && dvd.contains("(default true)"));
         for (String fixture : List.of("CMS_DISC_DVD_FIXTURE", "CMS_DISC_SHORT_FIXTURE")) {
             String path = System.getenv(fixture);
             if (path != null) {

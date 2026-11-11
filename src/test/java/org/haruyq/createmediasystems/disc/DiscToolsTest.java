@@ -103,9 +103,9 @@ class DiscToolsTest {
             assertTrue(Files.isRegularFile(installed.resolve("ffprobe.exe")));
             assertTrue(Files.isRegularFile(installed.resolve("LICENSE")));
             assertFalse(Files.exists(directory.resolve("escaped.exe")));
-            Files.delete(installed.resolve("avcodec-63.dll"));
+            Files.delete(installed.resolve("libstdc++-6.dll"));
             assertEquals(installed, DiscTools.install(directory, uri, hash, downloads::incrementAndGet));
-            assertTrue(Files.isRegularFile(installed.resolve("avcodec-63.dll")));
+            assertTrue(Files.isRegularFile(installed.resolve("libstdc++-6.dll")));
             assertEquals(3, downloads.get());
             server.stop(0);
             assertEquals(installed, DiscTools.install(directory, uri, hash, () -> fail("Cached tools must work offline")));
@@ -129,7 +129,7 @@ class DiscToolsTest {
         try {
             assertThrows(IOException.class, () -> DiscTools.install(directory,
                     URI.create("http://127.0.0.1:" + server.getAddress().getPort()), hash, () -> {}));
-            assertFalse(Files.exists(directory.resolve("9.0.2-win64")));
+            assertFalse(Files.exists(directory.resolve("9.0.2-cms-dvd1-win64")));
         } finally {
             server.stop(0);
         }
@@ -138,11 +138,11 @@ class DiscToolsTest {
     private static byte[] archive(boolean complete) throws Exception {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
-            for (String name : List.of("bin/ffmpeg.exe", "bin/ffprobe.exe", "bin/avcodec-63.dll", "LICENSE", "README.txt", "bin/../../escaped.exe")) {
+            for (String name : List.of("bin/ffmpeg.exe", "bin/ffprobe.exe", "bin/libstdc++-6.dll", "LICENSE", "README.txt", "bin/../../escaped.exe")) {
                 if (!complete && name.endsWith("ffprobe.exe")) {
                     continue;
                 }
-                zip.putNextEntry(new ZipEntry("ffmpeg-9.0.2-full_build-shared/" + name));
+                zip.putNextEntry(new ZipEntry("ffmpeg-9.0.2-cms-dvd1/" + name));
                 zip.write(new byte[]{1, 2, 3});
                 zip.closeEntry();
             }

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.disc;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.SynchronousQueue;
@@ -19,12 +20,7 @@ final class DiscRun implements AutoCloseable {
     /** A frame's PTS this far before a boundary already starts the next segment: frames sit exactly on it. */
     private static final long BOUNDARY_TOLERANCE_TICKS = 1000;
     private static final byte[] END = new byte[0];
-    /**
-     * How many segments on from its next a pass still goes for one asked for, rather than a new pass seeking there:
-     * a player that asks again for one that failed, seeks a little on to catch up, or plays beside another.
-     * ponytail: a fixed 16 s, which any encoder that keeps up with playback is through sooner than a drive seeks
-     * (10 s and more on a real one); measure both if a drive ever makes a new pass the cheaper way.
-     */
+    /** Read-ahead limit until this pass has measured its throughput. */
     static final int REACH = 4;
 
     final DiscSource.Quality quality;
@@ -33,8 +29,11 @@ final class DiscRun implements AutoCloseable {
     private final DiscSource.Access access;
     private final SynchronousQueue<byte[]> segments = new SynchronousQueue<>();
     private final Thread reader;
+    private final Thread errorReader;
     private final StringBuilder errors = new StringBuilder();
     private volatile IOException failure;
+    /** Startup and subsequent segment costs, excluding time waiting for the consumer. */
+    private volatile long startNanos, stepNanos;
     private int next;
     private boolean ended;
 
@@ -49,20 +48,32 @@ final class DiscRun implements AutoCloseable {
             throw new IOException("FFmpeg/FFprobe could not start; set discFfmpegPath and discFfprobePath in cms-client.toml");
         }
         process.getOutputStream().close();
-        Thread.ofVirtual().start(() -> {
-            try (InputStream err = process.getErrorStream()) {
-                String text = new String(err.readNBytes(8192), StandardCharsets.UTF_8);
-                synchronized (errors) {
-                    errors.append(text);
+        errorReader = Thread.ofVirtual().start(() -> {
+            try (var err = new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8)) {
+                char[] buffer = new char[1024];
+                for (int read; (read = err.read(buffer)) != -1;) {
+                    synchronized (errors) {
+                        errors.append(buffer, 0, read);
+                        if (errors.length() > 8192) errors.delete(0, errors.length() - 8192);
+                    }
                 }
-                err.transferTo(java.io.OutputStream.nullOutputStream());
             } catch (IOException ended) {
                 // The process was stopped.
             }
         });
         reader = Thread.ofVirtual().start(() -> {
             try (InputStream out = process.getInputStream()) {
-                split(out, DiscSource.MAX_SEGMENT_BYTES, segments::put);
+                long[] from = {System.nanoTime()};
+                split(out, DiscSource.MAX_SEGMENT_BYTES, segment -> {
+                    long took = System.nanoTime() - from[0];
+                    if (startNanos == 0) {
+                        startNanos = took;
+                    } else {
+                        stepNanos = took;
+                    }
+                    segments.put(segment);
+                    from[0] = System.nanoTime();
+                });
             } catch (IOException e) {
                 failure = e;
             } catch (InterruptedException closed) {
@@ -78,13 +89,24 @@ final class DiscRun implements AutoCloseable {
 
     /**
      * How many segments it hands over before {@code index} (0: that is its next), at this picture size and frame
-     * rate and encoder; -1 if it doesn't get there: it is past it, or more than {@link #REACH} short of it. A bit
+     * rate and encoder; -1 if it doesn't get there: it is past it, or a new pass seeking there has it sooner. A bit
      * rate alone changing doesn't restart it: below 2 Mbps that changes with every measure of the connection, and
      * each restart seeks again, which takes seconds and lands off the boundary.
      */
     int ahead(int index, DiscSource.Quality quality, String encoder) {
-        return !ended && index >= next && index - next <= REACH && this.quality.height() == quality.height()
-                && this.quality.fps() == quality.fps() && this.encoder.equals(encoder) ? index - next : -1;
+        return !ended && index >= next && sooner(index - next, startNanos, stepNanos)
+                && this.quality.height() == quality.height() && this.quality.fps() == quality.fps()
+                && this.encoder.equals(encoder) ? index - next : -1;
+    }
+
+    /** Reading through the skipped segments must cost no more than starting another pass. */
+    static boolean sooner(int ahead, long startNanos, long stepNanos) {
+        return ahead == 0 || (stepNanos == 0 ? ahead <= REACH : (ahead + 1) * stepNanos <= startNanos);
+    }
+
+    /** The segment it hands over next. */
+    int next() {
+        return next;
     }
 
     /** The next segment, waiting up to 30 s for it to be encoded. */
@@ -108,6 +130,7 @@ final class DiscRun implements AutoCloseable {
                 if (!process.waitFor(10, TimeUnit.SECONDS)) {
                     throw new IOException("The disc reader did not stop at the end of the title");
                 }
+                errorReader.join(1000);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Disc reading was cancelled");
@@ -117,7 +140,7 @@ final class DiscRun implements AutoCloseable {
                 text = errors.toString();
             }
             IOException failed = DiscSource.failure(process.exitValue(), text, access);
-            throw failed != null ? failed : new IOException("The disc title ended before this segment");
+            throw failed != null ? failed : new IOException("The disc title ended before this segment", DiscSource.said(text));
         }
         next++;
         return segment;

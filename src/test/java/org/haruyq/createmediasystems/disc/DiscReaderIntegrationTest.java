@@ -99,9 +99,7 @@ class DiscReaderIntegrationTest {
             assertEquals(0, run.ahead(3, new DiscSource.Quality(480, 30, 700), "libx264"), "a bit rate alone goes on");
             assertEquals(-1, run.ahead(3, new DiscSource.Quality(720, 30, 2500), "libx264"));
             DiscSource.Quality same = new DiscSource.Quality(480, 30, 1100);
-            assertEquals(2, run.ahead(5, same, "libx264"), "asked out of order, it goes on past the two before");
             assertEquals(-1, run.ahead(2, same, "libx264"), "behind it, only a new pass gets there");
-            assertEquals(-1, run.ahead(3 + DiscRun.REACH + 1, same, "libx264"), "far on, a new pass seeks there sooner");
         }
     }
 

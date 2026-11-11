@@ -25,11 +25,11 @@ import java.util.zip.ZipFile;
 import com.sun.jna.Platform;
 
 final class DiscTools {
-    private static final String VERSION = "9.0.2";
-    private static final String ROOT = "ffmpeg-" + VERSION + "-full_build-shared/";
-    private static final URI DOWNLOAD = URI.create("https://github.com/GyanD/codexffmpeg/releases/download/"
-            + VERSION + "/ffmpeg-" + VERSION + "-full_build-shared.zip");
-    private static final String SHA256 = "8d31e162f1616e37aab3fa2db991b97e1b8dbeb1c8465fd81a81be16ff91b328";
+    private static final String VERSION = "9.0.2-cms-dvd1";
+    private static final String ROOT = "ffmpeg-" + VERSION + "/";
+    private static final URI DOWNLOAD = URI.create("https://github.com/haruyq/Create-Media-Systems/releases/download/disc-ffmpeg-"
+            + VERSION + "/ffmpeg-" + VERSION + "-win64.zip");
+    private static final String SHA256 = "e54ccd2c7761ef23b01fe0567972dabeb96bcda9633405963cdd4ef54900c9c1";
     private static final int MAX_DOWNLOAD = 256 * 1024 * 1024;
     private static final int MAX_UNPACKED = 768 * 1024 * 1024;
 
@@ -92,7 +92,7 @@ final class DiscTools {
             }
             for (String line : files.subList(1, files.size())) {
                 String[] parts = line.split("\t");
-                if (parts.length != 2 || !parts[0].matches("[a-zA-Z0-9_.-]+")
+                if (parts.length != 2 || !parts[0].matches("[a-zA-Z0-9_.+-]+")
                         || Files.size(directory.resolve(parts[0])) != Long.parseLong(parts[1])) {
                     return false;
                 }
@@ -166,7 +166,7 @@ final class DiscTools {
                     continue;
                 }
                 name = name.substring(ROOT.length());
-                if (!name.matches("bin/(ffmpeg\\.exe|ffprobe\\.exe|[a-zA-Z0-9_-]+\\.dll)|LICENSE|README\\.txt")) {
+                if (!name.matches("bin/(ffmpeg\\.exe|ffprobe\\.exe|[a-zA-Z0-9_+-]+\\.dll)|LICENSE|README\\.txt")) {
                     continue;
                 }
                 Path file = directory.resolve(name.substring(name.lastIndexOf('/') + 1));

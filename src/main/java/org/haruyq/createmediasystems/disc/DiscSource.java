@@ -320,9 +320,15 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
 
     /** A hardware encoder would not encode: the disc may read well enough for another (see DiscStream). */
     static final class EncoderFailed extends IOException {
-        EncoderFailed() {
-            super("The hardware encoder failed");
+        EncoderFailed(String errors) {
+            super("The hardware encoder failed", said(errors));
         }
+    }
+
+    /** What FFmpeg said as it failed, as the cause of what the player is told: for this computer's log alone. */
+    static IOException said(String errors) {
+        String text = errors.strip();
+        return text.isEmpty() ? null : new IOException(text.length() > 2000 ? text.substring(text.length() - 2000) : text);
     }
 
     /**
@@ -334,11 +340,11 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
             return null;
         }
         if (exitCode != 0 && HARDWARE_ENCODER.matcher(errors).find()) {
-            return new EncoderFailed();
+            return new EncoderFailed(errors);
         }
         return new IOException(access == null
                 ? "The disc reader failed; use an unencrypted disc and an FFmpeg build with DVD-Video, H.264 and AC-3 support"
-                : "The disc reader failed; check the disc, selected title and reader extension");
+                : "The disc reader failed; check the disc, selected title and reader extension", said(errors));
     }
 
     static byte[] run(List<String> command, int limit, int timeout) throws IOException {
