@@ -31,6 +31,9 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import org.haruyq.createmediasystems.launcher.DiscLauncherItem;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
@@ -55,6 +58,7 @@ public final class LauncherClient {
             .defineEnum("launcherCrosshairFeedback", LauncherDamageDisplay.Crosshair.X_WITH_SHIELD);
     private static final LauncherGunMotion MOTION=new LauncherGunMotion();
     private static final LauncherDamageDisplay DAMAGE=new LauncherDamageDisplay();
+    private static LauncherFeedback.Lock lock = LauncherFeedback.Lock.NONE;
     public static LauncherDamageDisplay damageDisplay(){return DAMAGE;}
     private static boolean triggerDown;
     private static Object currentPlayer;
@@ -72,6 +76,17 @@ public final class LauncherClient {
     public static float hitAge(){return (System.nanoTime()-hitAt)/1_000_000_000f;}
     public static boolean headHit(){return headHit;}
     public static boolean killed(){return killed;}
+
+    static Entity lockedPart(Minecraft mc) {
+        if (mc.level == null || mc.player == null || lock.target() < 0 || !mc.player.isUsingItem()
+                || !mc.options.keyUse.isDown() || !DiscLauncherItem.hasAimModule(mc.player.getMainHandItem())) return null;
+        Entity target = mc.level.getEntity(lock.target());
+        if (target == null || !target.isAlive()) return null;
+        if (target instanceof EnderDragon dragon && lock.part() >= 0 && lock.part() < dragon.getSubEntities().length) {
+            return dragon.getSubEntities()[lock.part()];
+        }
+        return target;
+    }
     private static final KeyMapping RELOAD_KEY = new KeyMapping(
             "key.create_media_systems.disc_launcher_reload",
             KeyConflictContext.IN_GAME,
@@ -123,6 +138,9 @@ public final class LauncherClient {
                 net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
     }
 
+    /** The server locked, or released, this player's aim-module target. */
+    public static void lock(LauncherFeedback.Lock feedback) { lock = feedback; }
+
     private static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(RELOAD_KEY);
     }
@@ -130,7 +148,7 @@ public final class LauncherClient {
     private static void onClientTick(ClientTickEvent.Post event) {
         var mc=Minecraft.getInstance();var player=mc.player;
         if(mc.level!=null)for(var entity:mc.level.entitiesForRendering())if(entity instanceof DiscProjectile disc)disc.refreshAttachedPose();
-        if(currentPlayer!=player){currentPlayer=player;triggerDown=false;lastShot=Long.MIN_VALUE;MOTION.reset();DAMAGE.reset();cameraKick=0;}
+        if(currentPlayer!=player){currentPlayer=player;triggerDown=false;lastShot=Long.MIN_VALUE;MOTION.reset();DAMAGE.reset();cameraKick=0;lock=LauncherFeedback.Lock.NONE;}
         boolean holding=player!=null && player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()) && !player.isSpectator() && player.isAlive();
         boolean active=holding && mc.screen==null && mc.getOverlay()==null
                 && (mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed() || additionalInputActive.getAsBoolean());

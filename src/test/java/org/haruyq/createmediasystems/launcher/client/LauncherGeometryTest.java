@@ -34,8 +34,8 @@ class LauncherGeometryTest {
     /** Opened, the whole front assembly turns as one rigid piece: every vertex keeps its distance from every other. */
     @Test void everyOpticAndReceiverVertexFollowsTheSameReloadHinge() {
         RecordedMesh closed = new RecordedMesh(), open = new RecordedMesh();
-        LauncherRenderer.frontAssembly(new PoseStack(), closed, closed, 0, 0, 0, 0, 0);
-        LauncherRenderer.frontAssembly(new PoseStack(), open, open, 1, 0, 0, 0, 0);
+        LauncherRenderer.frontAssembly(new PoseStack(), closed, closed, 0, 0, 0, true, 0, 0);
+        LauncherRenderer.frontAssembly(new PoseStack(), open, open, 1, 0, 0, true, 0, 0);
         assertEquals(closed.vertices.size(), open.vertices.size());
         closed.assertOutward();
         open.assertOutward();

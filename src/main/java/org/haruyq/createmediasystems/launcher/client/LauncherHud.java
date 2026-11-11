@@ -9,6 +9,7 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
@@ -88,7 +89,10 @@ public final class LauncherHud {
         }
         g.pose().popPose();
         if(mc.options.getCameraType().isFirstPerson() && !mc.getDebugOverlay().showDebugScreen()) {
-            reticle(g,mc,unit,aim,reload,progress);damageNumbers(g,mc,unit,partial);
+            Entity locked = reload ? null : LauncherClient.lockedPart(mc);
+            if (locked != null) lockMarker(g, mc, locked, unit, partial);
+            reticle(g,mc,unit,aim,reload,locked != null);
+            damageNumbers(g,mc,unit,partial);
         }
     }
     private static void socket(GuiGraphics g,float x,float y,float width,int color,String text) {
@@ -114,7 +118,25 @@ public final class LauncherHud {
             if(cell.getItem() instanceof DiscCellItem && DiscCellItem.hasMaster(cell) && DiscCellItem.shots(cell)>0)spareCells+=cell.getCount();
         }
     }
-    private static void reticle(GuiGraphics g,Minecraft mc,float unit,float aim,boolean reload,float progress) {
+    private static final int LOCK_COLOR = 0xFFC1ACFF;
+
+    private static void lockMarker(GuiGraphics g, Minecraft mc, Entity target, float unit, float partial) {
+        var center = target.getPosition(partial).add(0, target.getBbHeight() * .5, 0);
+        var at = project(mc, g, center.x, center.y, center.z, partial);
+        if (at == null) return;
+        g.pose().pushPose();
+        g.pose().translate(at[0], at[1], 0);
+        g.pose().scale(unit, unit, 1);
+        for (int x : new int[] {-1, 1}) for (int y : new int[] {-1, 1}) {
+            line(g, x * 15, y * 15, x * 9, y * 15, 3, 0xA0000000);
+            line(g, x * 15, y * 15, x * 15, y * 9, 3, 0xA0000000);
+            line(g, x * 15, y * 15, x * 9, y * 15, 1.25f, LOCK_COLOR);
+            line(g, x * 15, y * 15, x * 15, y * 9, 1.25f, LOCK_COLOR);
+        }
+        g.pose().popPose();
+    }
+
+    private static void reticle(GuiGraphics g,Minecraft mc,float unit,float aim,boolean reload,boolean locked) {
         if(reload)return;
         reticleDrawn=true;
         g.pose().pushPose();g.pose().translate(g.guiWidth()*.5f,g.guiHeight()*.5f,0);g.pose().scale(unit,unit,1);
@@ -125,7 +147,7 @@ public final class LauncherHud {
             line(g,a*gap,0,a*(gap+5),0,1.4f,(alpha<<24)|0xF0F2EA);
             line(g,0,a*gap,0,a*(gap+5),1.4f,(alpha<<24)|0xF0F2EA);
         }
-        int dot=aim>.7?0xFFFF5149:WHITE;
+        int dot=locked?LOCK_COLOR:aim>.7?0xFFFF5149:WHITE;
         polygon(g,0xA0000000,0,-2.5f,2.5f,0,0,2.5f,-2.5f,0);
         polygon(g,dot,0,-1.1f,1.1f,0,0,1.1f,-1.1f,0);
         float age=LauncherClient.hitAge();

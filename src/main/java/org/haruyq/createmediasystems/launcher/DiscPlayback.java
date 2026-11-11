@@ -35,6 +35,12 @@ public record DiscPlayback(UUID id, String source, long positionTicks) {
         return new DiscPlayback(id, source, ticks);
     }
 
+    static boolean canStartAt(Level level, ItemStack disc, int seconds) {
+        if (seconds == 0 || !MediaItem.allowed(disc)) return true;
+        double length = MediaItem.lengthSeconds(disc, level.registryAccess());
+        return length <= 0 || seconds < length;
+    }
+
     /** Changing the media starts that CD's new track at zero, keeping its physical identity. */
     static DiscPlayback prepare(Level level, ItemStack item) {
         String source = source(level, item);

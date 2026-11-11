@@ -15,11 +15,21 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 public final class DiscLauncherItem extends Item {
     public static final int FIRE_INTERVAL_TICKS = 4;
 
     public DiscLauncherItem(Properties properties) { super(properties); }
+
+    public static boolean hasAimModule(ItemStack launcher) {
+        return launcher.getOrDefault(LauncherFeature.LAUNCHER_AIM_MODULE.get(), false);
+    }
+
+    static boolean aiming(Player player, ItemStack stack) {
+        return stack.getItem() instanceof DiscLauncherItem && player.isUsingItem()
+                && player.getUsedItemHand() == InteractionHand.MAIN_HAND && player.getUseItem().is(stack.getItem());
+    }
 
     @Override
     public boolean shouldCauseReequipAnimation(ItemStack previous, ItemStack next, boolean slotChanged) {
@@ -65,20 +75,24 @@ public final class DiscLauncherItem extends Item {
             player.displayClientMessage(Component.translatable("cell.create_media_systems.empty"), true);
             return false;
         }
-        if (!MediaItem.allowed(DiscCellItem.master(before))) {
+        ItemStack master = DiscCellItem.master(before);
+        if (!MediaItem.allowed(master)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true);
+            return false;
+        }
+        int startSeconds = DiscCellItem.startSeconds(before);
+        if (!DiscPlayback.canStartAt(level, master, startSeconds)) {
+            player.displayClientMessage(Component.translatable("cell.create_media_systems.start_past_end"), true);
             return false;
         }
         DiscCellTier tier = LauncherMagazine.tier(stack);
         ItemStack disc = LauncherMagazine.pop(stack);
         if (disc.isEmpty()) return false;
-        DiscProjectile projectile = new DiscProjectile(level, player, disc);
+        boolean aimed = aiming(player, stack);
+        Vec3 forward = Vec3.directionFromRotation(pitch, yaw);
+        Vec3 direction = aimed ? LauncherAimLock.direction(player, stack, forward) : forward;
+        DiscProjectile projectile = DiscProjectile.forShot(player, disc, startSeconds, direction, aimed);
         projectile.setCellTier(tier);
-        projectile.setPos(player.getEyePosition());
-        var direction=net.minecraft.world.phys.Vec3.directionFromRotation(pitch,yaw);
-        boolean aimed=player.isUsingItem() && player.getUseItem().is(stack.getItem());
-        // Eye-line origin and no inherited strafe velocity: the reticle is the shot's actual direction.
-        projectile.shoot(direction.x,direction.y,direction.z,5.2f,aimed?0f:.15f);
         if (!level.addFreshEntity(projectile)) {
             LauncherMagazine.setCell(stack, before);
             return false;
@@ -132,6 +146,9 @@ public final class DiscLauncherItem extends Item {
                     tier.shots, (int) tier.damage).withStyle(ChatFormatting.GOLD));
         if (LauncherMagazine.reloading(stack)) {
             tooltip.add(Component.translatable("create_media_systems.launcher.reloading").withStyle(ChatFormatting.YELLOW));
+        }
+        if (hasAimModule(stack)) {
+            tooltip.add(Component.translatable("create_media_systems.launcher.aim_module").withStyle(ChatFormatting.LIGHT_PURPLE));
         }
         tooltip.add(Component.translatable("create_media_systems.launcher.controls").withStyle(ChatFormatting.GRAY));
     }

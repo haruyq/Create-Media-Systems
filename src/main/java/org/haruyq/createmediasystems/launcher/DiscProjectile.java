@@ -12,6 +12,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -35,8 +36,10 @@ import org.joml.Vector3f;
  * cannot be picked up; the original, including its media components, stays in the cell.
  */
 public final class DiscProjectile extends ThrowableItemProjectile implements Portable {
+    static final float LAUNCH_SPEED = 5.2f;
     private static final int UNKNOWN_LIFETIME_TICKS = 20 * 180;
     private static final int MAX_FLIGHT_TICKS = 20 * 5;
+    private static final int BLOCK_ATTACHMENT_TICKS = 20 * 60;
     private static final EntityDataAccessor<Boolean> EMBEDDED =
             SynchedEntityData.defineId(DiscProjectile.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Long> MUSIC_START_TICK =
@@ -58,6 +61,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     private static final EntityDataAccessor<Integer> ATTACH_BONE =
             SynchedEntityData.defineId(DiscProjectile.class,EntityDataSerializers.INT);
     private long spawnedAtTick = Long.MIN_VALUE;
+    private long embeddedAtTick = Long.MIN_VALUE;
     /** Its track's length in seconds once learned; server only (see clock). */
     private double length = -1;
     private long nextDurationCheckTick;
@@ -70,14 +74,26 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     }
 
     public DiscProjectile(Level level, LivingEntity owner, ItemStack disc) {
+        this(level, owner, disc, DiscPlayback.prepare(level, disc));
+    }
+
+    private DiscProjectile(Level level, LivingEntity owner, ItemStack disc, DiscPlayback playback) {
         super(LauncherFeature.DISC_PROJECTILE.get(), owner, level);
         ItemStack original = disc.copyWithCount(1);
-        DiscPlayback playback = DiscPlayback.prepare(level, original);
         original.set(LauncherFeature.DISC_PLAYBACK.get(), playback);
         setItem(original);
         setNoGravity(true);
         spawnedAtTick = level.getGameTime();
         entityData.set(MUSIC_START_TICK, spawnedAtTick - playback.positionTicks());
+    }
+
+    static DiscProjectile forShot(Player shooter, ItemStack disc, int startSeconds, Vec3 direction, boolean aimed) {
+        Level level = shooter.level();
+        DiscPlayback playback = DiscPlayback.prepare(level, disc).at(startSeconds * 20L);
+        DiscProjectile projectile = new DiscProjectile(level, shooter, disc, playback);
+        projectile.setPos(shooter.getEyePosition());
+        projectile.shoot(direction.x, direction.y, direction.z, LAUNCH_SPEED, aimed ? 0f : .15f);
+        return projectile;
     }
 
     @Override
@@ -118,6 +134,10 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
 
     public boolean embedded() {
         return entityData.get(EMBEDDED);
+    }
+
+    boolean blockAttachmentExpired() {
+        return embedded() && !attached() && embeddedAtTick <= level().getGameTime() - BLOCK_ATTACHMENT_TICKS;
     }
 
     public boolean attached(){return entityData.get(ATTACHED_TO).isPresent();}
@@ -193,9 +213,15 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         Vec3 step=next.subtract(position());setPos(next);setDeltaMovement(step.lengthSqr()>4?Vec3.ZERO:step);return true;
     }
 
-    /** Follow even if the old chunk stopped receiving entity ticks as the target moved away. */
-    void tickLoaded() {
-        if(tickPlayback() && attached())followAttachment();
+    /** Loaded discs can outlive the simulation ticks for their chunk. */
+    void tickLoaded(boolean checkPlayback) {
+        if (attached()) {
+            if (tickPlayback()) followAttachment();
+        } else if (checkPlayback) {
+            tickPlayback();
+        } else if (blockAttachmentExpired()) {
+            discard();
+        }
     }
     /** Client entity order must not leave attached blades a tick behind an animated target. */
     public void refreshAttachedPose(){if(level().isClientSide && attached() && !isRemoved())followAttachment();}
@@ -230,6 +256,10 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     boolean tickPlayback() {
         if (isRemoved()) return false;
         if (!level().isClientSide) {
+            if (blockAttachmentExpired()) {
+                discard();
+                return false;
+            }
             if (!getItem().has(LauncherFeature.DISC_PLAYBACK.get())) {
                 ItemStack original = getItem().copyWithCount(1);
                 original.set(LauncherFeature.DISC_PLAYBACK.get(), DiscPlayback.prepare(level(), original));
@@ -266,7 +296,10 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     // never by writing its save format by hand.
     void musicStartedAgo(long ticks) { entityData.set(MUSIC_START_TICK, level().getGameTime() - ticks); }
     void firedAgo(long ticks) { spawnedAtTick = level().getGameTime() - ticks; }
-    void stuckHere() { entityData.set(EMBEDDED, true); setDeltaMovement(Vec3.ZERO); setNoGravity(true); }
+    /** It is stuck where it is, as in a block or a body. */
+    void stuckHere() { embeddedAgo(0); entityData.set(EMBEDDED, true); setDeltaMovement(Vec3.ZERO); setNoGravity(true); }
+    /** It stuck {@code ticks} ago, independently of its playback clock. */
+    void embeddedAgo(long ticks) { embeddedAtTick = level().getGameTime() - ticks; }
     /** Its track is {@code seconds} long, as the server learned it; negative while unknown. */
     void trackLasts(double seconds) { length = seconds; }
     double trackLength() { return length; }
@@ -339,9 +372,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         if (embedded()) return;
         Vec3 hitAt = hit.getLocation();
         setPos(hitAt.x, hitAt.y, hitAt.z);
-        setDeltaMovement(Vec3.ZERO);
-        setNoGravity(true);
-        entityData.set(EMBEDDED, true);
+        stuckHere();
     }
 
     @Override
@@ -349,6 +380,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         super.addAdditionalSaveData(tag);
         tag.putBoolean("CmsDiscEmbedded", embedded());
         tag.putLong("CmsDiscMusicStart", entityData.get(MUSIC_START_TICK));
+        if (embedded()) tag.putLong("CmsDiscEmbeddedAt", embeddedAtTick);
         tag.putLong("CmsDiscSpawnedAt", spawnedAtTick);
         tag.putDouble("CmsDiscDuration", length);
         tag.putInt("CmsDiscCellTier", cellTier().level);
@@ -363,6 +395,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         super.readAdditionalSaveData(tag);
         entityData.set(EMBEDDED, tag.getBoolean("CmsDiscEmbedded"));
         entityData.set(MUSIC_START_TICK, tag.contains("CmsDiscMusicStart") ? tag.getLong("CmsDiscMusicStart") : Long.MIN_VALUE);
+        embeddedAtTick = tag.contains("CmsDiscEmbeddedAt") ? tag.getLong("CmsDiscEmbeddedAt") : level().getGameTime();
         spawnedAtTick = tag.contains("CmsDiscSpawnedAt") ? tag.getLong("CmsDiscSpawnedAt")
                 : entityData.get(MUSIC_START_TICK);
         length = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;
