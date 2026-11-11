@@ -36,9 +36,8 @@ import net.minecraft.world.phys.Vec3;
 public final class LightingBeams {
     static final VertexFormat FORMAT = VertexFormat.builder().add("Position", VertexFormatElement.POSITION).build();
     private static final int ROWS = 1024;
-    private static final int FLOATS = 64;
-    /** Three clipping planes leave at most seven corners, or five triangles, per quad. */
-    private static final int VERTICES = 8 * 5 * 3;
+    private static final int FLOATS = LightingGpu.ROW_FLOATS;
+    private static final int VERTICES = LightingGpu.ROW_VERTICES;
     private static final List<Batch> BATCHES = new ArrayList<>();
     private static int program;
     private static int sampler;
@@ -80,26 +79,53 @@ public final class LightingBeams {
         return program != 0 && level == Minecraft.getInstance().level;
     }
 
-    /** How a strip fades along it, from its near edge to its far one; stage_beam.vsh's modes, in order. */
+    /**
+     * How a strip fades along it, from its near edge to its far one: stage_beam.vsh's modes, in order. Drawn on the
+     * CPU (LightingRenderer, where the GPU can't), it fades the same way, through steps, near and far.
+     */
     public enum Fade {
         /** In eight steps, to a quarter: a beam's cone. */
         CONE,
         /** In eight steps, more gently, never quite out: a laser's sheet. */
         SHEET,
         /** Not at all, in one piece: a ray. */
-        SOLID
+        SOLID;
+
+        /** The steps it is drawn in. */
+        int steps() {
+            return this == SOLID ? 1 : LightingGpu.STEPS;
+        }
+
+        /** Its alpha at the near edge of step {@code step}, from {@code alpha} at its own. */
+        int near(float alpha, int step) {
+            return switch (this) {
+                case CONE -> (int) Math.floor(alpha * (1 - step / (float) LightingGpu.STEPS * LightingGpu.CONE_FADE));
+                case SHEET -> (int) Math.floor(alpha * (1 - step / (float) LightingGpu.SHEET_FADE_STEPS) + 0.5f);
+                case SOLID -> (int) Math.floor(alpha + 0.5f);
+            };
+        }
+
+        /** Its alpha at the far edge of step {@code step}. */
+        int far(float alpha, int step) {
+            return switch (this) {
+                case CONE -> near(alpha, step + 1);
+                case SHEET -> Math.max(1, near(alpha, step) - LightingGpu.SHEET_FAR_DROP);
+                case SOLID -> near(alpha, step);
+            };
+        }
     }
 
     /** A plane a strip is cut at: the side its normal points to, its source's, is kept. */
     public record Clip(Vec3 point, Vec3 normal) {
         /** The plane through {@code point} across {@code normal}, the part toward {@code source} kept. */
         public static Clip toward(Vec3 point, Vec3 normal, Vec3 source) {
-            LightingGeometry.Plane plane = LightingGeometry.Plane.toward(point, normal, source);
-            return new Clip(plane.point(), plane.normal());
+            Vec3 n = normal.normalize();
+            return new Clip(point, source.subtract(point).dot(n) < 0 ? n.scale(-1) : n);
         }
 
-        LightingGeometry.Plane plane() {
-            return new LightingGeometry.Plane(point, normal);
+        /** How far {@code at} is on the kept side (negative: cut away). */
+        public double distance(Vec3 at) {
+            return (at.x - point.x) * normal.x + (at.y - point.y) * normal.y + (at.z - point.z) * normal.z;
         }
     }
 
@@ -111,17 +137,6 @@ public final class LightingBeams {
      */
     public static void strip(Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA, int colorB, Fade fade,
                              float alpha, @Nullable Clip first, @Nullable Clip second, @Nullable Clip third) {
-        strip(matrix, a, b, c, d, colorA, colorB, fade, alpha, first == null ? null : first.plane(),
-                second == null ? null : second.plane(), third == null ? null : third.plane());
-    }
-
-    static boolean pending() {
-        return pending;
-    }
-
-    static void strip(Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA, int colorB,
-                      Fade fade, float alpha, LightingGeometry.Plane first, LightingGeometry.Plane second,
-                      LightingGeometry.Plane third) {
         long now = LightingIllumination.frame();
         if (frame != now) {
             frame = now;
@@ -137,18 +152,24 @@ public final class LightingBeams {
         Batch buffer = BATCHES.get(batch);
         FloatBuffer data = buffer.data;
         int at = buffer.rows++ * FLOATS;
-        point(data, at, a);
-        point(data, at + 4, b);
-        point(data, at + 8, c);
-        point(data, at + 12, d);
-        plane(data, at + 16, first);
-        plane(data, at + 20, second);
-        plane(data, at + 24, third);
-        color(data, at + 28, colorA);
-        color(data, at + 32, colorB);
-        data.put(at + 36, fade.ordinal()).put(at + 37, alpha);
-        matrix.get(at + 40, data);
+        int corners = at + LightingGpu.TEXEL_CORNERS * 4;
+        point(data, corners, a);
+        point(data, corners + 4, b);
+        point(data, corners + 8, c);
+        point(data, corners + 12, d);
+        int planes = at + LightingGpu.TEXEL_PLANES * 4;
+        plane(data, planes, first);
+        plane(data, planes + 4, second);
+        plane(data, planes + 8, third);
+        color(data, at + LightingGpu.TEXEL_COLORS * 4, colorA);
+        color(data, at + LightingGpu.TEXEL_COLORS * 4 + 4, colorB);
+        data.put(at + LightingGpu.TEXEL_SETTINGS * 4, fade.ordinal()).put(at + LightingGpu.TEXEL_SETTINGS * 4 + 1, alpha);
+        matrix.get(at + LightingGpu.TEXEL_MATRIX * 4, data);
         pending = true;
+    }
+
+    static boolean pending() {
+        return pending;
     }
 
     private static void point(FloatBuffer data, int at, Vec3 point) {
@@ -160,7 +181,7 @@ public final class LightingBeams {
                 .put(at + 2, (color & 255) / 255f);
     }
 
-    static void plane(FloatBuffer data, int at, LightingGeometry.Plane plane) {
+    static void plane(FloatBuffer data, int at, @Nullable Clip plane) {
         if (plane == null) {
             data.put(at, 0).put(at + 1, 0).put(at + 2, 0).put(at + 3, 1);
         } else {

@@ -16,7 +16,7 @@ class LightingGeometryTest {
 
     @Test
     void clipsTheFullGlowWidthAtAnObliqueWall() {
-        LightingGeometry.Plane wall = LightingGeometry.Plane.toward(new Vec3(0, 0, 5), new Vec3(0, 0, -1), SOURCE);
+        LightingBeams.Clip wall = LightingBeams.Clip.toward(new Vec3(0, 0, 5), new Vec3(0, 0, -1), SOURCE);
         List<LightingGeometry.Vertex> ribbon = polygon(new Vec3(0, 0, -0.06), new Vec3(0, 0, 0.06),
                 new Vec3(5, 0, 5.06), new Vec3(5, 0, 4.94));
         List<LightingGeometry.Vertex> clipped = LightingGeometry.clip(ribbon, wall);
@@ -28,7 +28,7 @@ class LightingGeometryTest {
     @Test
     void aMiddleHitPlaneStopsAWedgeWhoseOuterRaysMiss() {
         List<LightingGeometry.Vertex> fan = polygon(SOURCE, new Vec3(-2, 0, 10), new Vec3(2, 0, 10));
-        LightingGeometry.Plane pillar = LightingGeometry.Plane.toward(new Vec3(0, 0, 4), new Vec3(0, 0, -1), SOURCE);
+        LightingBeams.Clip pillar = LightingBeams.Clip.toward(new Vec3(0, 0, 4), new Vec3(0, 0, -1), SOURCE);
         List<LightingGeometry.Vertex> clipped = LightingGeometry.clip(fan, pillar);
         assertTrue(clipped.size() >= 3);
         assertTrue(clipped.stream().allMatch(vertex -> vertex.point().z <= 4 - LightingGeometry.CLEARANCE + 1e-9));
@@ -36,8 +36,8 @@ class LightingGeometryTest {
 
     @Test
     void respectsBothWallsAtACorner() {
-        LightingGeometry.Plane wallX = LightingGeometry.Plane.toward(new Vec3(3, 0, 0), new Vec3(-1, 0, 0), SOURCE);
-        LightingGeometry.Plane wallZ = LightingGeometry.Plane.toward(new Vec3(0, 0, 5), new Vec3(0, 0, -1), SOURCE);
+        LightingBeams.Clip wallX = LightingBeams.Clip.toward(new Vec3(3, 0, 0), new Vec3(-1, 0, 0), SOURCE);
+        LightingBeams.Clip wallZ = LightingBeams.Clip.toward(new Vec3(0, 0, 5), new Vec3(0, 0, -1), SOURCE);
         List<LightingGeometry.Vertex> fan = polygon(SOURCE, new Vec3(6, 0, 3), new Vec3(2, 0, 8));
         List<LightingGeometry.Vertex> clipped = LightingGeometry.clip(LightingGeometry.clip(fan, wallX), wallZ);
         assertTrue(clipped.size() >= 3);
@@ -49,7 +49,7 @@ class LightingGeometryTest {
 
     @Test
     void interpolatesColorAndOpacityAtTheCut() {
-        LightingGeometry.Plane wall = new LightingGeometry.Plane(new Vec3(0.5, 0, 0), new Vec3(-1, 0, 0));
+        LightingBeams.Clip wall = new LightingBeams.Clip(new Vec3(0.5, 0, 0), new Vec3(-1, 0, 0));
         List<LightingGeometry.Vertex> triangle = List.of(
                 new LightingGeometry.Vertex(new Vec3(0, 0, 0), 0x0000FF, 0),
                 new LightingGeometry.Vertex(new Vec3(1, 0, 0), 0xFF0000, 200),
@@ -63,7 +63,7 @@ class LightingGeometryTest {
 
     @Test
     void fullyBlockedPolygonsProduceNoGeometry() {
-        LightingGeometry.Plane wall = LightingGeometry.Plane.toward(new Vec3(0, 0, 2), new Vec3(0, 0, -1), SOURCE);
+        LightingBeams.Clip wall = LightingBeams.Clip.toward(new Vec3(0, 0, 2), new Vec3(0, 0, -1), SOURCE);
         assertTrue(LightingGeometry.clip(polygon(new Vec3(-1, 0, 3), new Vec3(1, 0, 3), new Vec3(0, 1, 4)), wall).isEmpty());
     }
 
@@ -77,7 +77,7 @@ class LightingGeometryTest {
         Random random = new Random(42);
         for (int i = 0; i < 100; i++) {
             Vec3 normal = new Vec3(random.nextDouble(-1, 1), random.nextDouble(-1, 1), random.nextDouble(-1, 1)).normalize();
-            LightingGeometry.Plane plane = new LightingGeometry.Plane(normal.scale(random.nextDouble(-2, 2)), normal);
+            LightingBeams.Clip plane = new LightingBeams.Clip(normal.scale(random.nextDouble(-2, 2)), normal);
             List<LightingGeometry.Vertex> clipped = LightingGeometry.clip(quad, plane);
             int outside = LightingGeometry.outsideCorners(plane, a, b, c, d);
             assertEquals(clipped.isEmpty(), outside == 4);
@@ -86,7 +86,7 @@ class LightingGeometryTest {
         assertEquals(0, LightingGeometry.outsideCorners(null, a, b, c, d));
 
         double edge = LightingGeometry.CLEARANCE;
-        LightingGeometry.Plane plane = new LightingGeometry.Plane(SOURCE, new Vec3(0, 0, 1));
+        LightingBeams.Clip plane = new LightingBeams.Clip(SOURCE, new Vec3(0, 0, 1));
         assertEquals(0, LightingGeometry.outsideCorners(plane, a.add(0, 0, edge), b.add(0, 0, edge),
                 c.add(0, 0, Math.nextUp(edge)), d.add(0, 0, edge)));
         assertEquals(1, LightingGeometry.outsideCorners(plane, a.add(0, 0, Math.nextDown(edge)), b.add(0, 0, edge),
@@ -95,7 +95,7 @@ class LightingGeometryTest {
 
     @Test
     void normalsAreOrientedTowardTheLightSource() {
-        LightingGeometry.Plane wall = LightingGeometry.Plane.toward(new Vec3(0, 0, 5), new Vec3(0, 0, 1), SOURCE);
+        LightingBeams.Clip wall = LightingBeams.Clip.toward(new Vec3(0, 0, 5), new Vec3(0, 0, 1), SOURCE);
         assertTrue(wall.distance(SOURCE) > 0);
         assertEquals(-1, wall.normal().z);
     }

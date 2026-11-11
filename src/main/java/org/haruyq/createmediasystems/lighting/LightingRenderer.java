@@ -18,6 +18,7 @@ import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
 import org.haruyq.createmediasystems.lighting.LightingSettings.Pattern;
 
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
 import org.joml.Vector3f;
@@ -399,12 +400,12 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return rays.clip(world(from), world(to));
         }
 
-        LightingGeometry.Plane plane(LightingRaycast.Hit hit) {
+        LightingBeams.Clip plane(LightingRaycast.Hit hit) {
             if (hit.block().getType() != HitResult.Type.BLOCK) {
                 return null;
             }
             Vec3 normal = LightingGeometry.normalToLocal(hit.normal(), basisX, basisY, basisZ);
-            return LightingGeometry.Plane.toward(local(hit.point()), normal, origin);
+            return LightingBeams.Clip.toward(local(hit.point()), normal, origin);
         }
     }
 
@@ -412,8 +413,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         Vec3[] ends = new Vec3[0];
         Vec3[] directions = new Vec3[0];
         LightingRaycast.Hit[] intersections = new LightingRaycast.Hit[0];
-        LightingGeometry.Plane[] planes = new LightingGeometry.Plane[0];
-        LightingGeometry.Plane[] middle = new LightingGeometry.Plane[0];
+        LightingBeams.Clip[] planes = new LightingBeams.Clip[0];
+        LightingBeams.Clip[] middle = new LightingBeams.Clip[0];
         /** The frame last traced, and from where: a light held still traces again only when a block changes. */
         long traced = -2;
 
@@ -469,11 +470,11 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 ends = new Vec3[count];
                 directions = new Vec3[count];
                 intersections = new LightingRaycast.Hit[count];
-                planes = new LightingGeometry.Plane[count];
+                planes = new LightingBeams.Clip[count];
             }
             int sectors = cone ? SIDES : pattern == Pattern.LASER_SHEET ? RAYS - 1 : 0;
             if (middle.length != sectors) {
-                middle = new LightingGeometry.Plane[sectors];
+                middle = new LightingBeams.Clip[sectors];
             }
             double tangent = Math.tan(Math.toRadians(coneSpread(pattern, spread)) / 2);
             for (int i = 0; i < count; i++) {
@@ -500,63 +501,27 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         }
     }
 
-    private static void cone(VertexConsumer out, Matrix4f matrix, BeamFrame frame, Trace trace, int color, float strength,
-                             boolean narrow) {
+    private static void cone(@Nullable VertexConsumer out, Matrix4f matrix, BeamFrame frame, Trace trace, int color,
+                             float strength, boolean narrow) {
         Vec3 origin = frame.origin;
-        Vec3 center = trace.ends[SIDES];
-        if (out == null) {
-            for (int i = 0; i < SIDES; i++) {
-                int next = (i + 1) % SIDES;
-                LightingBeams.strip(matrix, origin, origin, trace.ends[next], trace.ends[i], color, color,
-                        LightingBeams.Fade.CONE, strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next],
-                        trace.middle[i]);
-            }
-            ray(null, matrix, frame, center, color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
-            return;
-        }
-        // Each edge's points from the lamp out, shared by the two strips either side of it.
-        Vec3[][] along = new Vec3[SIDES][9];
         for (int i = 0; i < SIDES; i++) {
-            for (int step = 0; step <= 8; step++) {
-                along[i][step] = origin.lerp(trace.ends[i], step / 8.0);
-            }
-        }
-        for (int i = 0; i < SIDES; i++) {
-            Vec3[] edgeA = along[i];
-            Vec3[] edgeB = along[(i + 1) % SIDES];
-            for (int step = 0; step < 8; step++) {
-                double t0 = step / 8.0;
-                double t1 = (step + 1) / 8.0;
-                int alpha0 = (int) (strength * (narrow ? 38 : 17) * (1 - t0 * 0.75));
-                int alpha1 = (int) (strength * (narrow ? 38 : 17) * (1 - t1 * 0.75));
-                clippedQuad(out, matrix, edgeA[step], edgeB[step], edgeB[step + 1], edgeA[step + 1],
-                        color, color, alpha0, alpha0, alpha1, alpha1,
-                        trace.planes[i], trace.planes[(i + 1) % SIDES], trace.middle[i]);
-            }
+            int next = (i + 1) % SIDES;
+            strip(out, matrix, origin, origin, trace.ends[next], trace.ends[i], color, color, LightingBeams.Fade.CONE,
+                    strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next], trace.middle[i]);
         }
         // A camera-facing inner shaft keeps the beam visible while looking along its cone.
-        ray(out, matrix, frame, center, color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
+        ray(out, matrix, frame, trace.ends[SIDES], color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
     }
 
-    private static void sheet(VertexConsumer out, Matrix4f matrix, Vec3 origin, Vec3 a, Vec3 b,
-                              int colorA, int colorB, float strength, LightingGeometry.Plane planeA,
-                              LightingGeometry.Plane planeB, LightingGeometry.Plane middle) {
-        if (out == null) {
-            LightingBeams.strip(matrix, origin, origin, b, a, colorA, colorB, LightingBeams.Fade.SHEET, strength * 26,
-                    planeA, planeB, middle);
-            return;
-        }
-        for (int step = 0; step < 8; step++) {
-            double t0 = step / 8.0;
-            double t1 = (step + 1) / 8.0;
-            int alpha = Math.round(strength * 26 * (1 - step / 11f));
-            clippedQuad(out, matrix, origin.lerp(a, t0), origin.lerp(b, t0), origin.lerp(b, t1), origin.lerp(a, t1),
-                    colorA, colorB, alpha, alpha, Math.max(1, alpha - 3), Math.max(1, alpha - 3), planeA, planeB, middle);
-        }
+    private static void sheet(@Nullable VertexConsumer out, Matrix4f matrix, Vec3 origin, Vec3 a, Vec3 b,
+                              int colorA, int colorB, float strength, LightingBeams.Clip planeA,
+                              LightingBeams.Clip planeB, LightingBeams.Clip middle) {
+        strip(out, matrix, origin, origin, b, a, colorA, colorB, LightingBeams.Fade.SHEET, strength * 26,
+                planeA, planeB, middle);
     }
 
-    private static void ray(VertexConsumer out, Matrix4f matrix, BeamFrame frame, Vec3 end, int color, float strength,
-                            float width, LightingGeometry.Plane center) {
+    private static void ray(@Nullable VertexConsumer out, Matrix4f matrix, BeamFrame frame, Vec3 end, int color,
+                            float strength, float width, LightingBeams.Clip center) {
         Vec3 origin = frame.origin;
         if (origin.distanceToSqr(end) < 0.000001) {
             return;
@@ -571,24 +536,41 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             side = along.cross(new Vec3(1, 0, 0)).normalize();
         }
         Vec3 widest = side.scale(width * 5);
-        LightingGeometry.Plane left = frame.plane(frame.clip(origin.subtract(widest), end.subtract(widest)));
-        LightingGeometry.Plane right = frame.plane(frame.clip(origin.add(widest), end.add(widest)));
+        LightingBeams.Clip left = frame.plane(frame.clip(origin.subtract(widest), end.subtract(widest)));
+        LightingBeams.Clip right = frame.plane(frame.clip(origin.add(widest), end.add(widest)));
         for (int layer = 2; layer >= 0; layer--) {
             Vec3 edge = side.scale(width * (1 + layer * 2));
             int alpha = Math.round(strength * (layer == 0 ? 180 : layer == 1 ? 28 : 9));
-            if (out == null) {
-                LightingBeams.strip(matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
-                        color, color, LightingBeams.Fade.SOLID, alpha, center, left, right);
-                continue;
-            }
-            clippedQuad(out, matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge),
-                    color, color, alpha, alpha, alpha, alpha, center, left, right);
+            strip(out, matrix, origin.subtract(edge), origin.add(edge), end.add(edge), end.subtract(edge), color, color,
+                    LightingBeams.Fade.SOLID, alpha, center, left, right);
+        }
+    }
+
+    /**
+     * A beam strip (see LightingBeams.strip): on the GPU, or with no {@code out} to draw it in, into {@code out}, faded
+     * in its fade's steps as stage_beam.vsh does.
+     */
+    private static void strip(@Nullable VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA,
+                              int colorB, LightingBeams.Fade fade, float alpha, LightingBeams.Clip first,
+                              LightingBeams.Clip second, LightingBeams.Clip third) {
+        if (out == null) {
+            LightingBeams.strip(matrix, a, b, c, d, colorA, colorB, fade, alpha, first, second, third);
+            return;
+        }
+        int steps = fade.steps();
+        for (int step = 0; step < steps; step++) {
+            double t0 = step / (double) steps;
+            double t1 = (step + 1) / (double) steps;
+            int near = fade.near(alpha, step);
+            int far = fade.far(alpha, step);
+            clippedQuad(out, matrix, a.lerp(d, t0), b.lerp(c, t0), b.lerp(c, t1), a.lerp(d, t1), colorA, colorB,
+                    near, near, far, far, first, second, third);
         }
     }
 
     private static void clippedQuad(VertexConsumer out, Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d,
-                                    int colorA, int colorB, int aa, int ab, int ac, int ad, LightingGeometry.Plane first,
-                                    LightingGeometry.Plane second, LightingGeometry.Plane third) {
+                                    int colorA, int colorB, int aa, int ab, int ac, int ad, LightingBeams.Clip first,
+                                    LightingBeams.Clip second, LightingBeams.Clip third) {
         int outsideFirst = LightingGeometry.outsideCorners(first, a, b, c, d);
         if (outsideFirst == 4) {
             return;

@@ -427,12 +427,42 @@ public final class LightingIllumination {
     static int cellCorners(byte[] seen, int x, int y) {
         int middle = seen[9 + y * 2 + x] > 0 ? 1 : 0;
         int corners = 0;
-        for (int corner = 0; corner < 4; corner++) {
-            int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
-            int cy = y + (corner >= 2 ? 1 : 0);
-            corners |= CORNER_LIGHT[(seen[cy * 3 + cx] > 0 ? 1 : 0) + middle] << corner * 8;
+        for (int corner = 0; corner < LightingGpu.CELL_VERTICES; corner++) {
+            corners |= CORNER_LIGHT[(seen[cornerPoint(x, y, corner)] > 0 ? 1 : 0) + middle] << corner * 8;
         }
         return corners;
+    }
+
+    /** The grid point (of the 3×3, row by row) that is corner {@code corner} of cell ({@code x}, {@code y}), counter-clockwise from its lowest. */
+    private static int cornerPoint(int x, int y, int corner) {
+        int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
+        int cy = y + (corner >= 2 ? 1 : 0);
+        return cy * 3 + cx;
+    }
+
+    /** Takes a face's vertex: its point, its atlas u and v, and the cell and corner it is of. */
+    @FunctionalInterface
+    private interface CellVertex {
+        void accept(Vec3 point, float u, float v, int cell, int corner);
+    }
+
+    /**
+     * Each of a face's 2×2 cells {@code drawn} picks, its corners in the order spot_light.vsh reads their light
+     * (see cellCorners), the atlas u and v between the face's corners {@code uv}.
+     */
+    private static void cells(Vec3[] samples, float[] uv, java.util.function.IntPredicate drawn, CellVertex out) {
+        for (int cell = 0; cell < 4; cell++) {
+            if (!drawn.test(cell)) {
+                continue;
+            }
+            for (int corner = 0; corner < LightingGpu.CELL_VERTICES; corner++) {
+                int point = cornerPoint(cell % 2, cell / 2, corner);
+                float u = point % 3 * 0.5f;
+                float v = point / 3 * 0.5f;
+                out.accept(samples[point], Mth.lerp(v, Mth.lerp(u, uv[0], uv[2]), Mth.lerp(u, uv[6], uv[4])),
+                        Mth.lerp(v, Mth.lerp(u, uv[1], uv[3]), Mth.lerp(u, uv[7], uv[5])), cell, corner);
+            }
+        }
     }
 
     static byte[] vertices(Vec3[] samples, Vec3 normal, float[] uv, int tint) {
@@ -440,22 +470,12 @@ public final class LightingIllumination {
         byte nx = (byte) (Mth.clamp((float) normal.x, -1, 1) * 127);
         byte ny = (byte) (Mth.clamp((float) normal.y, -1, 1) * 127);
         byte nz = (byte) (Mth.clamp((float) normal.z, -1, 1) * 127);
-        for (int y = 0; y < 2; y++) {
-            for (int x = 0; x < 2; x++) {
-                for (int corner = 0; corner < 4; corner++) {
-                    int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
-                    int cy = y + (corner >= 2 ? 1 : 0);
-                    float u = cx * 0.5f;
-                    float v = cy * 0.5f;
-                    Vec3 point = samples[cy * 3 + cx];
-                    out.putFloat((float) point.x).putFloat((float) point.y).putFloat((float) point.z);
-                    out.putFloat(Mth.lerp(v, Mth.lerp(u, uv[0], uv[2]), Mth.lerp(u, uv[6], uv[4])));
-                    out.putFloat(Mth.lerp(v, Mth.lerp(u, uv[1], uv[3]), Mth.lerp(u, uv[7], uv[5])));
-                    out.put((byte) (tint >> 16)).put((byte) (tint >> 8)).put((byte) tint).put((byte) 255);
-                    out.put(nx).put(ny).put(nz).put((byte) 0);
-                }
-            }
-        }
+        cells(samples, uv, cell -> true, (point, u, v, cell, corner) -> {
+            out.putFloat((float) point.x).putFloat((float) point.y).putFloat((float) point.z);
+            out.putFloat(u).putFloat(v);
+            out.put((byte) (tint >> 16)).put((byte) (tint >> 8)).put((byte) tint).put((byte) 255);
+            out.put(nx).put(ny).put(nz).put((byte) 0);
+        });
         return out.array();
     }
 
@@ -483,20 +503,19 @@ public final class LightingIllumination {
         }
     }
 
-    static float exposure(Vec3 offset, Vec3 direction, double tangent, double range, double margin) {
-        return exposure(offset.x, offset.y, offset.z, direction, tangent, range, margin);
-    }
-
-    /** How brightly the light reaches a point {@code (x, y, z)} from it, 0 to 1 (spot_light.fsh does the same). */
+    /**
+     * How brightly the light reaches a point {@code (x, y, z)} from it, 0 to 1 (spot_light.fsh does the same, with
+     * LightingGpu's constants).
+     */
     static float exposure(double x, double y, double z, Vec3 direction, double tangent, double range, double margin) {
         double along = x * direction.x + y * direction.y + z * direction.z;
         if (along <= 0 || along >= range) {
             return 0;
         }
-        double radius = Math.max(0.08, along * tangent);
+        double radius = Math.max(LightingGpu.MIN_RADIUS, along * tangent);
         double radial = Math.max(0, Math.sqrt(Math.max(0, x * x + y * y + z * z - along * along)) - margin) / radius;
-        float edge = Mth.clamp((float) ((1 - radial) / 0.35), 0, 1);
-        float distance = Mth.clamp((float) ((range - along) / Math.max(1, range * 0.2)), 0, 1);
+        float edge = Mth.clamp((float) ((1 - radial) / LightingGpu.EDGE_SOFTNESS), 0, 1);
+        float distance = Mth.clamp((float) ((range - along) / Math.max(1, range * LightingGpu.END_FADE)), 0, 1);
         return edge * edge * (3 - 2 * edge) * distance;
     }
 
@@ -527,11 +546,12 @@ public final class LightingIllumination {
             }
             Vec3 local = SableCompat.toRenderBlockSpace(entity.level(), lamp.getBlockPos(), target)
                     .subtract(Vec3.atLowerCornerOf(lamp.getBlockPos()));
-            float value = exposure(local.subtract(beam.origin), beam.direction, beam.tangent, beam.range,
+            Vec3 offset = local.subtract(beam.origin);
+            float value = exposure(offset.x, offset.y, offset.z, beam.direction, beam.tangent, beam.range,
                     entity.getBbWidth() * 0.35) * beam.strength;
             Vec3 origin = SableCompat.toRenderWorld(entity.level(), lamp.getBlockPos(),
                     beam.origin.add(Vec3.atLowerCornerOf(lamp.getBlockPos())));
-            if (value > 0 && visible(new LightingRaycast(entity.level(), lamp.getBlockPos(), true), origin, target)) {
+            if (value > 0 && new LightingRaycast(entity.level(), lamp.getBlockPos(), true).visible(origin, target)) {
                 intensity += value;
             }
         }
@@ -588,7 +608,7 @@ public final class LightingIllumination {
         }
         BlockPos center = hit.block().getBlockPos();
         Vec3 offset = Vec3.atLowerCornerOf(lamp.getBlockPos());
-        Pose3dc lampPose = renderPose(level, lamp.getBlockPos());
+        Pose3dc lampPose = SableCompat.pose(level, lamp.getBlockPos(), true);
         Vec3 impact = (lampPose == null ? hit.point() : lampPose.transformPositionInverse(hit.point())).subtract(offset);
         int radius = Mth.ceil(Math.min(Mth.clamp(maxRadius, 1, MAX_RADIUS), origin.distanceTo(impact) * beam.tangent)) + 1;
         Direction.Axis axis = hit.block().getDirection().getAxis();
@@ -598,7 +618,7 @@ public final class LightingIllumination {
         }
         Vec3 absoluteOrigin = origin.add(offset);
         Vec3 from = lampPose == null ? absoluteOrigin : lampPose.transformPosition(absoluteOrigin);
-        Pose3dc targetPose = renderPose(level, center);
+        Pose3dc targetPose = SableCompat.pose(level, center, true);
         boolean moving = lampPose != null || targetPose != null
                 || rays.hasSubLevels(new AABB(from, hit.point()).inflate((radius + SCAN_MARGIN + 2) * Math.sqrt(3)));
         if (moving != beam.moving) {
@@ -665,7 +685,7 @@ public final class LightingIllumination {
         boolean posed = SableCompanion.INSTANCE.getContaining(level, lamp.getBlockPos())
                 != SableCompanion.INSTANCE.getContaining(level, surface);
         // Every face found belongs to the scanned centre's sub-level, or to the world.
-        Pose3dc facePose = renderPose(level, surface);
+        Pose3dc facePose = SableCompat.pose(level, surface, true);
         // On the same moving sub-level, only where they are in the world (to trace to) changes.
         boolean carried = posed || facePose != null;
         // A still light with every face in its beam traced has nothing to look at till something changes.
@@ -832,12 +852,13 @@ public final class LightingIllumination {
             VertexBuffer.unbind();
         }
         if (beam.resident) {
-            int height = Math.max(1, (cells + 255) / 256);
+            int width = LightingGpu.VISIBILITY_WIDTH;
+            int height = Math.max(1, (cells + width - 1) / width);
             if (beam.visibility == null || beam.visibility.getPixels().getHeight() != height) {
                 if (beam.visibility != null) {
                     beam.visibility.close();
                 }
-                beam.visibility = new DynamicTexture(256, height, false);
+                beam.visibility = new DynamicTexture(width, height, false);
             }
             beam.cells = new int[cells];
             Arrays.fill(beam.cells, UNSET);
@@ -861,25 +882,10 @@ public final class LightingIllumination {
             Geometry geometry = face.shown;
             int r = face.tint >> 16 & 255, g = face.tint >> 8 & 255, b = face.tint & 255;
             float nx = (float) geometry.normal.x, ny = (float) geometry.normal.y, nz = (float) geometry.normal.z;
-            for (int y = 0; y < 2; y++) {
-                for (int x = 0; x < 2; x++) {
-                    int corners = face.corners(x, y);
-                    if (corners == 0) {
-                        continue;
-                    }
-                    for (int corner = 0; corner < 4; corner++) {
-                        int cx = x + (corner == 1 || corner == 2 ? 1 : 0);
-                        int cy = y + (corner >= 2 ? 1 : 0);
-                        float u = cx * 0.5f;
-                        float v = cy * 0.5f;
-                        Vec3 point = geometry.samples[cy * 3 + cx];
-                        float s = Mth.lerp(v, Mth.lerp(u, face.uv[0], face.uv[2]), Mth.lerp(u, face.uv[6], face.uv[4]));
-                        float t = Mth.lerp(v, Mth.lerp(u, face.uv[1], face.uv[3]), Mth.lerp(u, face.uv[7], face.uv[5]));
-                        out.addVertex((float) point.x, (float) point.y, (float) point.z).setUv(s, t)
-                                .setColor(r, g, b, corners >>> corner * 8 & 255).setNormal(nx, ny, nz);
-                    }
-                }
-            }
+            cells(geometry.samples, face.uv, cell -> face.corners(cell % 2, cell / 2) != 0, (point, u, v, cell, corner) ->
+                    out.addVertex((float) point.x, (float) point.y, (float) point.z).setUv(u, v)
+                            .setColor(r, g, b, face.corners(cell % 2, cell / 2) >>> corner * 8 & 255)
+                            .setNormal(nx, ny, nz));
         }
         return out.build();
     }
@@ -908,14 +914,15 @@ public final class LightingIllumination {
                 }
                 beam.cells[at] = corners;
                 // A byte a corner, red first: spot_light.vsh reads each vertex's own.
-                pixels.setPixelRGBA(at % 256, at / 256, corners);
-                first = Math.min(first, at / 256);
-                last = Math.max(last, at / 256);
+                int width = LightingGpu.VISIBILITY_WIDTH;
+                pixels.setPixelRGBA(at % width, at / width, corners);
+                first = Math.min(first, at / width);
+                last = Math.max(last, at / width);
             }
         }
         if (last >= first) {
             beam.visibility.bind();
-            pixels.upload(0, 0, first, 0, first, 256, last - first + 1, false, false);
+            pixels.upload(0, 0, first, 0, first, LightingGpu.VISIBILITY_WIDTH, last - first + 1, false, false);
         }
         beam.empty = beam.litCells == 0;
         beam.changedFaces.clear();
@@ -1012,20 +1019,11 @@ public final class LightingIllumination {
         SURFACES.clear();
     }
 
-    private static Pose3dc renderPose(Level level, BlockPos pos) {
-        return SableCompat.pose(level, pos, true);
-    }
-
     static Vec3 sample(Vec3[] points, float u, float v, Vec3 offset) {
         return new Vec3(
                 Mth.lerp(v, Mth.lerp(u, points[0].x, points[1].x), Mth.lerp(u, points[3].x, points[2].x)) + offset.x,
                 Mth.lerp(v, Mth.lerp(u, points[0].y, points[1].y), Mth.lerp(u, points[3].y, points[2].y)) + offset.y,
                 Mth.lerp(v, Mth.lerp(u, points[0].z, points[1].z), Mth.lerp(u, points[3].z, points[2].z)) + offset.z);
-    }
-
-    private static boolean visible(LightingRaycast rays, Vec3 from, Vec3 to) {
-        LightingRaycast.Hit hit = rays.clip(from, to);
-        return hit.block().getType() == HitResult.Type.MISS || hit.point().distanceToSqr(to) < 1e-8;
     }
 
     private record Key(long pos, int quad) {
@@ -1065,7 +1063,8 @@ public final class LightingIllumination {
             boolean facing = still.normal.dot(origin.subtract(still.middle)) > 0;
             if (facing) {
                 if (remaining < face.seen.length
-                        || exposure(still.middle.subtract(origin), direction, tangent, range, LEAD) <= 0) {
+                        || exposure(still.middle.x - origin.x, still.middle.y - origin.y, still.middle.z - origin.z,
+                                direction, tangent, range, LEAD) <= 0) {
                     continue;
                 }
                 remaining -= face.seen.length;

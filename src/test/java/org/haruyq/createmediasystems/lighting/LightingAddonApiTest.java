@@ -24,8 +24,8 @@ class LightingAddonApiTest {
         // A floor under the source, its normal given pointing down: turned to face the source.
         LightingBeams.Clip floor = LightingBeams.Clip.toward(Vec3.ZERO, new Vec3(0, -1, 0), source);
         assertTrue(floor.normal().distanceTo(new Vec3(0, 1, 0)) < 1e-9);
-        assertTrue(floor.plane().distance(source) > 0);
-        assertTrue(floor.plane().distance(new Vec3(0, -1, 0)) < 0);
+        assertTrue(floor.distance(source) > 0);
+        assertTrue(floor.distance(new Vec3(0, -1, 0)) < 0);
     }
 
     @Test
