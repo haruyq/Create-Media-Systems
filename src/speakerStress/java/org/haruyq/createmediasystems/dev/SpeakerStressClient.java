@@ -148,8 +148,8 @@ public final class SpeakerStressClient {
         int orphanStreams = orphans;
         int engineStreams = streamsActive;
         String players = players();
-        Object report = staticField(org.haruyq.createmediasystems.client.Reports.class, "last");
-        String said = report == null ? null : ((net.minecraft.network.chat.Component) report).getString();
+        var report = org.haruyq.createmediasystems.client.Reports.last();
+        String said = report == null ? null : report.getString();
         if (said != null && !said.equals(lastReport)) {
             lastReport = said;
             LogUtils.getLogger().info("Speaker stress: the game said \"{}\"", said);

@@ -1,5 +1,8 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.PowerFeature;
+import org.haruyq.createmediasystems.power.BatteryItem;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.nio.file.*;
 import java.util.*;
 import com.mojang.logging.LogUtils;
@@ -40,6 +43,21 @@ public final class LauncherDebugServer {
     private static final Map<UUID, Visit> visits = new HashMap<>();
     private static final Path SNAPSHOT = DIR.resolve("cell-demo-state.nbt");
     private static String commandPlayer="DiscTester";
+
+    /** Keeps the player's inventory, place and view (in memory and on disk) to give back when the demo ends; once. */
+    private static void remember(ServerPlayer p) throws java.io.IOException {
+        if (savedInventory != null) return;
+        saveSnapshot(p);
+        savedInventory = new ArrayList<>();
+        for (int i = 0; i < p.getInventory().getContainerSize(); i++) savedInventory.add(p.getInventory().getItem(i).copy());
+        savedSelected = p.getInventory().selected;
+        savedPosition = p.position(); savedYaw = p.getYRot(); savedPitch = p.getXRot(); savedDimension = p.level().dimension();
+    }
+
+    /** Every {@code type} entity in the lab's area of {@code level}. */
+    private static <T extends net.minecraft.world.entity.Entity> List<T> everywhere(net.minecraft.server.level.ServerLevel level, Class<T> type) {
+        return level.getEntitiesOfClass(type, new AABB(-1000, -1000, -1000, 1000, 1000, 1000));
+    }
 
     static void saveSnapshot(ServerPlayer p) throws java.io.IOException {
         demoPlayer=p.getUUID();
@@ -104,7 +122,7 @@ public final class LauncherDebugServer {
     }
 
     private static void clearTargets(ServerLevel level) {
-        level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000))
+        everywhere(level,net.minecraft.world.entity.LivingEntity.class)
                 .stream().filter(e->e.getTags().contains("cms_gun_target")).forEach(Entity::discard);
     }
 
@@ -116,7 +134,7 @@ public final class LauncherDebugServer {
     static ItemStack cell(DiscCellTier tier, String kind) {
         ItemStack cell = new ItemStack(LauncherFeature.cell(tier));
         DiscCellItem.setMaster(cell, disc(kind));
-        DiscCellItem.setEnergy(cell, tier.capacity());
+        ChargeableItem.setEnergy(cell, tier.capacity());
         return cell;
     }
     @SubscribeEvent public static void spawned(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) {
@@ -153,7 +171,7 @@ public final class LauncherDebugServer {
         log("READY",p);
     }
     static void log(String action,ServerPlayer p) {
-        String text=action+" tick="+p.level().getGameTime()+" loaded="+LauncherMagazine.count(p.getMainHandItem())+" reserved="+LauncherMagazine.reserved(p.getMainHandItem()).size()+" inventory="+p.getInventory().items;
+        String text=action+" tick="+p.level().getGameTime()+" loaded="+LauncherMagazine.count(p.getMainHandItem())+" reserved="+(LauncherMagazine.pending(p.getMainHandItem()).isEmpty()?0:1)+" inventory="+p.getInventory().items;
         LogUtils.getLogger().info("LAUNCHER_DEBUG {}",text);
         try {Files.writeString(DIR.resolve("server-checks.log"),text+"\n",StandardOpenOption.CREATE,StandardOpenOption.APPEND);}catch(Exception e){throw new RuntimeException(e);}
     }
@@ -167,8 +185,8 @@ public final class LauncherDebugServer {
     static void equip(ServerPlayer p,String kind) {
         p.getInventory().clearContent();select(p,0);
         p.getInventory().setItem(0,new ItemStack(LauncherFeature.DISC_LAUNCHER.get()));
-        for(int i=1;i<=6;i++) if (!DiscCellTier.at(i).optional() || net.neoforged.fml.ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID))
-            p.getInventory().setItem(i,cell(DiscCellTier.at(i),kind));
+        for(DiscCellTier tier:DiscCellTier.values()) if (tier.available())
+            p.getInventory().setItem(tier.level,cell(tier,kind));
         p.inventoryMenu.broadcastChanges();
     }
     @SubscribeEvent
@@ -195,7 +213,7 @@ public final class LauncherDebugServer {
             if(!Files.exists(cmd))return;
             String action=Files.readString(cmd).strip();Files.delete(cmd);
             String[] parts=action.split(" ");ServerLevel l=p.serverLevel();
-            var all=l.getEntitiesOfClass(DiscProjectile.class,new AABB(-1000,-1000,-1000,1000,1000,1000));
+            var all=everywhere(l,DiscProjectile.class);
             switch(parts[0]) {
                 case "control-player" -> {
                     if(savedInventory!=null)throw new IllegalStateException("Restore the current demo before switching its player");
@@ -204,15 +222,12 @@ public final class LauncherDebugServer {
                     commandPlayer=parts[1];
                 }
                 case "megaphone-demo" -> {
-                    if(savedInventory==null){
-                        saveSnapshot(p);savedInventory=new ArrayList<>();for(int i=0;i<p.getInventory().getContainerSize();i++)savedInventory.add(p.getInventory().getItem(i).copy());
-                        savedSelected=p.getInventory().selected;savedPosition=p.position();savedYaw=p.getYRot();savedPitch=p.getXRot();savedDimension=p.level().dimension();
-                    }
+                    remember(p);
                     p.getInventory().clearContent();select(p,0);p.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
                     p.teleportTo(event.getServer().overworld(),700.5,116,688.5,0,0);p.getAbilities().flying=true;p.onUpdateAbilities();
                     for(int i=0;i<2;i++){
                         var horn=new ItemStack(i==0?MegaphoneFeature.MEGAPHONE_WHITE.get():MegaphoneFeature.MEGAPHONE_BLACK.get());
-                        var battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                        var battery=new ItemStack(PowerFeature.BATTERY.get());ChargeableItem.setEnergy(battery,BatteryItem.CAPACITY);
                         var media=disc(parts.length>1?parts[1]:"vanilla");
                         if(parts.length>1 && parts[1].equals("youtube"))media.set(AudioFeature.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
                         org.haruyq.createmediasystems.megaphone.MegaphoneData.contents(horn,p.level(),media,battery);
@@ -255,25 +270,23 @@ public final class LauncherDebugServer {
                 case "partybox-grant" -> {
                     if(p.getInventory().countItem(PartyBoxFeature.PARTYBOX.get())==0){
                         p.getInventory().placeItemBackInInventory(new ItemStack(PartyBoxFeature.PARTYBOX.get()));
-                        ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
-                        org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                        ItemStack battery=new ItemStack(PowerFeature.BATTERY.get());
+                        ChargeableItem.setEnergy(battery,BatteryItem.CAPACITY);
                         p.getInventory().placeItemBackInInventory(battery);p.inventoryMenu.broadcastChanges();
                     }
                 }
                 case "partybox-demo" -> {
                     if(savedInventory==null){
-                        saveSnapshot(p);savedInventory=new ArrayList<>();
-                        for(int i=0;i<p.getInventory().getContainerSize();i++)savedInventory.add(p.getInventory().getItem(i).copy());
-                        savedSelected=p.getInventory().selected;savedPosition=p.position();savedYaw=p.getYRot();savedPitch=p.getXRot();savedDimension=p.level().dimension();
+                        remember(p);
                     }
-                    l.getEntitiesOfClass(org.haruyq.createmediasystems.partybox.PartyBoxEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000))
+                    everywhere(l,org.haruyq.createmediasystems.partybox.PartyBoxEntity.class)
                             .stream().filter(box->box.getTags().contains("cms_partybox_check")).forEach(Entity::discard);
                     p.getInventory().clearContent();select(p,0);p.getAbilities().flying=false;p.onUpdateAbilities();
                     p.teleportTo(l,.5,100,9.5,180,25);
                     var box=new org.haruyq.createmediasystems.partybox.PartyBoxEntity(PartyBoxFeature.PARTYBOX_ENTITY.get(),l);
                     box.setPos(.5,100,7.8);box.setYRot(180);box.addTag("cms_partybox_check");
-                    ItemStack battery=new ItemStack(PartyBoxFeature.PARTYBOX_BATTERY.get());
-                    org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.setEnergy(battery,org.haruyq.createmediasystems.partybox.PartyBoxSpecs.CAPACITY_FE);
+                    ItemStack battery=new ItemStack(PowerFeature.BATTERY.get());
+                    ChargeableItem.setEnergy(battery,BatteryItem.CAPACITY);
                     box.inventory.setItem(1,battery);ItemStack media=disc(parts.length>1?parts[1]:"vanilla");
                     if(parts.length>1 && parts[1].equals("youtube"))media.set(AudioFeature.URL.get(),"https://youtu.be/m1TPvPU9WTw?si=eGxskvi9oXZlcCF6");
                     box.inventory.setItem(0,media);
@@ -282,11 +295,7 @@ public final class LauncherDebugServer {
                 }
                 case "cell-demo" -> {
                     if (savedInventory == null) {
-                        saveSnapshot(p);
-                        savedInventory = new ArrayList<>();
-                        for (int i = 0; i < p.getInventory().getContainerSize(); i++) savedInventory.add(p.getInventory().getItem(i).copy());
-                        savedSelected = p.getInventory().selected;
-                        savedPosition = p.position(); savedYaw = p.getYRot(); savedPitch = p.getXRot();savedDimension=p.level().dimension();
+                        remember(p);
                     }
                     equip(p, parts.length > 1 ? parts[1] : "vanilla");
                     p.teleportTo(event.getServer().overworld(), .5, 100, 9.5, 180, 0);
@@ -317,7 +326,7 @@ public final class LauncherDebugServer {
                     var charger = (DiscCellCharger) l.getBlockEntity(pos);
                     charger.take();
                     ItemStack demo = cell(DiscCellTier.RESONANT, "vanilla");
-                    if(parts.length==1)DiscCellItem.setEnergy(demo,0);
+                    if(parts.length==1)ChargeableItem.setEnergy(demo,0);
                     charger.insert(demo);
                     if(parts.length>1 && parts[1].equals("static"))l.setBlockAndUpdate(motor,Blocks.AIR.defaultBlockState());
                     p.teleportTo(l, .5, 100, 9.5, -145, 15);
@@ -326,9 +335,9 @@ public final class LauncherDebugServer {
                     previewAge = -1;
                     clearTargets(l);
                     all.stream().filter(d -> d.getTags().contains("cms_launcher_check")).forEach(Entity::discard);
-                    l.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000))
+                    everywhere(l,net.minecraft.world.entity.item.ItemEntity.class)
                             .stream().filter(e->e.getTags().contains("cms_ground_check")).forEach(Entity::discard);
-                    l.getEntitiesOfClass(org.haruyq.createmediasystems.partybox.PartyBoxEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000))
+                    everywhere(l,org.haruyq.createmediasystems.partybox.PartyBoxEntity.class)
                             .stream().filter(box->box.getTags().contains("cms_partybox_check")).forEach(Entity::discard);
                     for (var entry : demoBlocks.entrySet()) {
                         if (l.getBlockEntity(entry.getKey()) instanceof DiscCellCharger charger) charger.take();
@@ -364,7 +373,7 @@ public final class LauncherDebugServer {
                     gun.remove(LauncherFeature.LAUNCHER_EJECT_ONLY.get());
                     DiscCellTier tier = DiscCellTier.at(Integer.parseInt(parts[1]));
                     ItemStack fixture = cell(tier, "vanilla");
-                    if (parts.length > 2) DiscCellItem.setEnergy(fixture, Integer.parseInt(parts[2]));
+                    if (parts.length > 2) ChargeableItem.setEnergy(fixture, Integer.parseInt(parts[2]));
                     LauncherMagazine.setCell(gun, fixture);
                     p.inventoryMenu.broadcastChanges();
                 }
@@ -387,7 +396,7 @@ public final class LauncherDebugServer {
                     var host=event.getServer().getPlayerList().getPlayerByName("DiscTester");
                     Vec3 center=host!=null && host.level()==l?host.position().add(0,0,4):p.position().add(0,0,-3);
                     boolean projection=parts.length>1 && parts[1].startsWith("disc");
-                    for(var box:l.getEntitiesOfClass(org.haruyq.createmediasystems.partybox.PartyBoxEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000)))
+                    for(var box:everywhere(l,org.haruyq.createmediasystems.partybox.PartyBoxEntity.class))
                         if(box.getTags().contains("cms_partybox_check")){box.setNoGravity(true);box.setPos(center);if(projection)box.pause();else box.play();}
                     if(projection) {
                         clearTargets(l);all.stream().filter(d->d.getTags().contains("cms_launcher_check")).forEach(Entity::discard);
@@ -396,7 +405,7 @@ public final class LauncherDebugServer {
                         if(parts[1].equals("disc-youtube"))media.set(AudioFeature.URL.get(),"https://www.youtube.com/watch?v=tVSCbJZ54tc");
                         var disc=new DiscProjectile(l,p,media);disc.addTag("cms_launcher_check");disc.setDeltaMovement(3,0,0);
                         disc.onHitEntity(new EntityHitResult(target,target.position().add(-.76,1,0)));
-                        var tag=new net.minecraft.nbt.CompoundTag();disc.save(tag);tag.putLong("CmsDiscMusicStart",l.getGameTime()-620);disc.load(tag);l.addFreshEntity(disc);
+                        disc.musicStartedAgo(620);l.addFreshEntity(disc);
                     }
                     p.teleportTo(l,center.x,center.y,center.z+3,180,0);p.getAbilities().flying=true;p.onUpdateAbilities();
                 }
@@ -406,8 +415,7 @@ public final class LauncherDebugServer {
                         String url=org.haruyq.createmediasystems.stream.MediaItem.url(disc.getItem());if(url==null)continue;
                         double duration=org.haruyq.createmediasystems.stream.Streams.duration(url);
                         if(duration<=3)throw new IllegalStateException("Wait for API duration metadata");
-                        var tag=new net.minecraft.nbt.CompoundTag();disc.save(tag);tag.putDouble("CmsDiscDuration",duration);
-                        tag.putLong("CmsDiscMusicStart",l.getGameTime()-(long)((duration-2)*20));disc.load(tag);
+                        disc.trackLasts(duration);disc.musicStartedAgo((long)((duration-2)*20));
                     }
                 }
                 case "cell-stage" -> {
@@ -456,12 +464,8 @@ public final class LauncherDebugServer {
                         var d = new DiscProjectile(l, p, item);
                         d.setPos(p.getX() + 2 + i * 3, p.getY() + 12, p.getZ());
                         d.addTag("cms_playback_check");
-                        var tag = new net.minecraft.nbt.CompoundTag();
-                        d.save(tag);
-                        tag.putBoolean("CmsDiscEmbedded", true);
-                        tag.putLong("CmsDiscEmbeddedAt", l.getGameTime());
-                        tag.putLong("CmsDiscMusicStart", l.getGameTime() - (i == 0 ? 260 : 40));
-                        d.load(tag);
+                        d.stuckHere();
+                        d.musicStartedAgo(i == 0 ? 260 : 40);
                         l.addFreshEntity(d);
                         log("PLAYBACK_CHECK_" + i + " uuid=" + d.getUUID(), p);
                     }
@@ -477,7 +481,7 @@ public final class LauncherDebugServer {
                 }
                 case "gun-target" -> {
                     if(savedInventory==null)throw new IllegalStateException("Start cell-demo before target checks");
-                    l.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000))
+                    everywhere(l,net.minecraft.world.entity.LivingEntity.class)
                             .stream().filter(e->e.getTags().contains("cms_gun_target")).forEach(Entity::discard);
                     var target=new net.minecraft.world.entity.animal.IronGolem(net.minecraft.world.entity.EntityType.IRON_GOLEM,l);
                     target.setPos(10.5,100,-5.5);target.setNoAi(true);target.setPersistenceRequired();target.addTag("cms_gun_target");
@@ -489,7 +493,7 @@ public final class LauncherDebugServer {
                     float pitch=(float)-Math.toDegrees(Math.atan2(targetY-(100+p.getEyeHeight()),15));
                     p.teleportTo(l,10.5,100,9.5,180,pitch);
                 }
-                case "gun-target-clear" -> l.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,new AABB(-1000,-1000,-1000,1000,1000,1000))
+                case "gun-target-clear" -> everywhere(l,net.minecraft.world.entity.LivingEntity.class)
                         .stream().filter(e->e.getTags().contains("cms_gun_target")).forEach(Entity::discard);
                 case "pin-player" -> {
                     if(savedInventory==null)throw new IllegalStateException("Start cell-demo before the pin check");
@@ -526,7 +530,7 @@ public final class LauncherDebugServer {
                         log("PASS_SAVE_METADATA "+tag,p);
                     }
                 }
-                case "expire" -> {for(var d:all){var tag=new net.minecraft.nbt.CompoundTag();d.save(tag);tag.putLong("CmsDiscMusicStart",l.getGameTime()-3600);d.load(tag);}}
+                case "expire" -> {for(var d:all)d.musicStartedAgo(3600);}
                 case "golem" -> {
                     l.getEntitiesOfClass(net.minecraft.world.entity.animal.IronGolem.class,new AABB(-5,99,-10,5,106,0)).forEach(Entity::discard);
                     var golem=net.minecraft.world.entity.EntityType.IRON_GOLEM.create(l);

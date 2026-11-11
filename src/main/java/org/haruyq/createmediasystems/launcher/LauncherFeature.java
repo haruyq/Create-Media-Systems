@@ -11,6 +11,7 @@ import static org.haruyq.createmediasystems.CreateMediaSystems.RECIPE_SERIALIZER
 import static org.haruyq.createmediasystems.CreateMediaSystems.SOUNDS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.id;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -33,7 +34,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
@@ -61,8 +61,6 @@ public final class LauncherFeature implements Feature {
             "launcher_shot_at", b -> b.persistent(Codec.LONG).networkSynchronized(ByteBufCodecs.VAR_LONG));
     public static final Supplier<DataComponentType<ItemContainerContents>> CELL_MASTER = COMPONENTS.registerComponentType(
             "cell_master", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
-    public static final Supplier<DataComponentType<Integer>> CELL_ENERGY = COMPONENTS.registerComponentType(
-            "cell_energy", b -> b.persistent(Codec.INT).networkSynchronized(ByteBufCodecs.VAR_INT));
     public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_CELL = COMPONENTS.registerComponentType(
             "launcher_cell", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
     public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_PENDING_CELL = COMPONENTS.registerComponentType(
@@ -79,14 +77,9 @@ public final class LauncherFeature implements Feature {
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_CHARGE_SOUND =
             SOUNDS.register("disc_charge", () -> SoundEvent.createVariableRangeEvent(id("disc_charge")));
 
-    public static final DeferredItem<DiscCellItem> COPPER_DISC_CELL = cell("copper", DiscCellTier.COPPER);
-    public static final DeferredItem<DiscCellItem> BRASS_DISC_CELL = cell("brass", DiscCellTier.BRASS);
-    public static final DeferredItem<DiscCellItem> DIAMOND_DISC_CELL = cell("diamond", DiscCellTier.DIAMOND);
-    public static final DeferredItem<DiscCellItem> NETHERITE_DISC_CELL = cell("netherite", DiscCellTier.NETHERITE);
-    public static final DeferredItem<DiscCellItem> RESONANT_DISC_CELL = cell("resonant", DiscCellTier.RESONANT);
-    public static final DeferredItem<DiscCellItem> CHEMI_DISC_CELL = cell("chemi", DiscCellTier.CHEMI);
-    public static final List<DeferredItem<DiscCellItem>> DISC_CELLS = List.of(COPPER_DISC_CELL, BRASS_DISC_CELL,
-            DIAMOND_DISC_CELL, NETHERITE_DISC_CELL, RESONANT_DISC_CELL, CHEMI_DISC_CELL);
+    /** One cell per tier, in tier order. */
+    public static final List<DeferredItem<DiscCellItem>> DISC_CELLS = Arrays.stream(DiscCellTier.values())
+            .map(LauncherFeature::registerCell).toList();
     public static final Supplier<MenuType<DiscCellMenu>> DISC_CELL_MENU =
             MENUS.register("disc_cell", () -> IMenuTypeExtension.create(DiscCellMenu::new));
     public static final Supplier<DiscCellUpgradeRecipe.Serializer> CELL_UPGRADE_RECIPE =
@@ -107,13 +100,13 @@ public final class LauncherFeature implements Feature {
                     DiscProjectile::new, MobCategory.MISC).sized(.35f, .12f)
                     .clientTrackingRange(10).updateInterval(1).build(MOD_ID + ":disc_projectile"));
 
-    private static DeferredItem<DiscCellItem> cell(String name, DiscCellTier tier) {
-        return ITEMS.register(name + "_disc_cell", () -> new DiscCellItem(tier, new Item.Properties()
+    private static DeferredItem<DiscCellItem> registerCell(DiscCellTier tier) {
+        return ITEMS.register(tier.itemId(), () -> new DiscCellItem(tier, new Item.Properties()
                 .rarity(tier.level >= 5 ? Rarity.EPIC : tier.level >= 3 ? Rarity.RARE : Rarity.UNCOMMON)));
     }
 
     public static DiscCellItem cell(DiscCellTier tier) {
-        return DISC_CELLS.get(tier.level - 1).get();
+        return DISC_CELLS.get(tier.ordinal()).get();
     }
 
     @Override
@@ -126,12 +119,9 @@ public final class LauncherFeature implements Feature {
 
     /** A cell made of another mod's material is listed only when that mod is there. */
     private static void hideUnavailableCells(BuildCreativeModeTabContentsEvent event) {
-        if (ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID)) {
-            return;
-        }
-        for (DeferredItem<DiscCellItem> cell : DISC_CELLS) {
-            if (cell.get().tier.optional()) {
-                event.remove(new ItemStack(cell.get()), CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
+        for (DiscCellTier tier : DiscCellTier.values()) {
+            if (!tier.available()) {
+                event.remove(new ItemStack(cell(tier)), CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
             }
         }
     }

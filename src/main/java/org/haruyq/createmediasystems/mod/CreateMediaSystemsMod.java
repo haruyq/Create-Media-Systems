@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.mod;
 
+import org.haruyq.createmediasystems.power.PowerFeature;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,7 +33,7 @@ import net.neoforged.fml.common.Mod;
 @Mod(CreateMediaSystems.MOD_ID)
 public final class CreateMediaSystemsMod {
     /** Making each loads its registry entries. */
-    private static final List<Feature> FEATURES = List.of(new StreamFeature(), new MegaphoneFeature(),
+    private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature());
 
@@ -56,7 +57,7 @@ public final class CreateMediaSystemsMod {
     private static List<Supplier<? extends Item>> tabOrder() {
         List<Supplier<? extends Item>> order = new ArrayList<>(List.of(
                 MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
-                PartyBoxFeature.PARTYBOX, PartyBoxFeature.PARTYBOX_BATTERY));
+                PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY));
         order.addAll(LauncherFeature.DISC_CELLS);
         order.addAll(List.of(LauncherFeature.DISC_CELL_CHARGER_ITEM, LauncherFeature.DISC_LAUNCHER,
                 AudioFeature.CUSTOM_DISC, TrainFeature.ANNOUNCEMENT_SCHEDULE, TrainFeature.TRAIN_DISC_READER_ITEM,

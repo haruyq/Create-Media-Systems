@@ -49,7 +49,6 @@ public final class DiscLauncherItem extends Item {
         if(level.isClientSide || !player.isAlive() || player.isSpectator() || !(stack.getItem() instanceof DiscLauncherItem)
                 || !Float.isFinite(yaw) || !Float.isFinite(pitch) || Math.abs(pitch)>90)return false;
         long now = level.getGameTime();
-        LauncherMagazine.migrateLegacy(player, stack);
         Long previous=stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
         if (LauncherMagazine.reloading(stack) || player.getCooldowns().isOnCooldown(stack.getItem())
                 || previous!=null && now>=previous && now-previous<FIRE_INTERVAL_TICKS)return false;
@@ -99,6 +98,7 @@ public final class DiscLauncherItem extends Item {
     @Override
     public void inventoryTick(ItemStack stack, Level level, Entity entity, int slotId, boolean isSelected) {
         if (level.isClientSide || !(entity instanceof Player player)) return;
+        // The one place a carried launcher passes through: a pre-cell launcher refunds its discs on its first tick.
         LauncherMagazine.migrateLegacy(player, stack);
         Long started = stack.get(LauncherFeature.LAUNCHER_RELOAD_START.get());
         if (started == null) return;
@@ -108,10 +108,10 @@ public final class DiscLauncherItem extends Item {
             LauncherMagazine.finish(player, stack);
             level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
                     LauncherFeature.DISC_LATCH_SOUND.get(), SoundSource.PLAYERS, 0.65f, 1.4f);
-        } else if (isSelected && (age == 12 || age == 28 || age == 50 || age == 74)) {
+        } else if (isSelected && LauncherTimeline.Cue.at(age) instanceof LauncherTimeline.Cue cue) {
             level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
-                    age == 74 ? LauncherFeature.DISC_CHARGE_SOUND.get() : LauncherFeature.DISC_INSERT_SOUND.get(),
-                    SoundSource.PLAYERS, 0.65f, age == 12 ? 0.7f : 1.15f);
+                    cue == LauncherTimeline.Cue.CHARGE ? LauncherFeature.DISC_CHARGE_SOUND.get() : LauncherFeature.DISC_INSERT_SOUND.get(),
+                    SoundSource.PLAYERS, 0.65f, cue.pitch);
         }
     }
 

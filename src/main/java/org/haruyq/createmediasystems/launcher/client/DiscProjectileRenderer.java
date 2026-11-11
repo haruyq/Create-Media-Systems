@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.client.mesh.Tint;
+import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -42,14 +44,14 @@ public final class DiscProjectileRenderer extends EntityRenderer<DiscProjectile>
         }
         pose.mulPose(Axis.YP.rotationDegrees(entity.embedded()?Math.floorMod(entity.getUUID().hashCode(),360):(entity.tickCount+partial)*46f));
         pose.scale(.09f,.09f,.09f);
-        LauncherRenderer.disc(pose, buffers.getBuffer(LauncherRenderer.solid()),
+        LauncherRenderer.disc(pose, buffers.getBuffer(Mesh.solid()),
                 0,0,0,3.6f,packedLight,OverlayTexture.NO_OVERLAY);
-        LauncherRenderer.discGlowRing(pose, LauncherRenderer.tint(buffers.getBuffer(RenderType.entityTranslucentEmissive(LauncherRenderer.MATERIALS)),
+        LauncherRenderer.discGlowRing(pose, new Tint(buffers.getBuffer(Mesh.emissive()),
                 entity.cellTier().color, 90), 0xF000F0, OverlayTexture.NO_OVERLAY);
         pose.popPose();
         super.render(entity,yaw,partial,pose,buffers,packedLight);
     }
 
     @Override
-    public ResourceLocation getTextureLocation(DiscProjectile entity) { return LauncherRenderer.MATERIALS; }
+    public ResourceLocation getTextureLocation(DiscProjectile entity) { return Mesh.ATLAS; }
 }

@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import net.minecraft.core.BlockPos;
@@ -30,14 +31,10 @@ public final class LauncherServerGameTests {
         var pos = helper.absolutePos(new BlockPos(1, 2, 1));
         level.setBlockAndUpdate(pos.below(),net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
         disc.setPos(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
-        CompoundTag tag = new CompoundTag();
-        disc.save(tag);
-        tag.putLong("CmsDiscMusicStart", level.getGameTime() - positionTicks);
-        tag.putLong("CmsDiscSpawnedAt", level.getGameTime());
-        tag.putBoolean("CmsDiscEmbedded", true);
-        tag.putLong("CmsDiscEmbeddedAt", level.getGameTime());
-        tag.putDouble("CmsDiscDuration", duration);
-        disc.load(tag);
+        disc.musicStartedAgo(positionTicks);
+        disc.firedAgo(0);
+        disc.stuckHere();
+        disc.trackLasts(duration);
         level.addFreshEntity(disc);
         return disc;
     }
@@ -49,9 +46,9 @@ public final class LauncherServerGameTests {
         helper.assertTrue(first.playbackPositionTicks() == 400 && second.playbackPositionTicks() == 60,
                 "The server holds a separate playback clock for each CD of the same song");
         ItemStack returned = first.playbackItem();
-        var cell = new ItemStack(LauncherFeature.COPPER_DISC_CELL.get());
+        var cell = new ItemStack(LauncherFeature.cell(DiscCellTier.COPPER));
         DiscCellItem.setMaster(cell, returned);
-        DiscCellItem.setEnergy(cell, DiscCellTier.COPPER.capacity());
+        ChargeableItem.setEnergy(cell, DiscCellTier.COPPER.capacity());
         var launcher = new ItemStack(LauncherFeature.DISC_LAUNCHER.get());
         LauncherMagazine.setCell(launcher, cell);
         var round = LauncherMagazine.pop(launcher);
@@ -73,10 +70,7 @@ public final class LauncherServerGameTests {
     @GameTest(template="empty")
     public static void aLongSongIsNotCutOffAtThreeMinutes(GameTestHelper helper) {
         var disc = playing(helper, "long-song", 190 * 20, 254);
-        CompoundTag tag = new CompoundTag();
-        disc.save(tag);
-        tag.putLong("CmsDiscSpawnedAt", helper.getLevel().getGameTime() - 190 * 20);
-        disc.load(tag);
+        disc.firedAgo(190 * 20);
         disc.tick();
         helper.assertTrue(!disc.isRemoved(), "A 254-second song still plays at 190 seconds");
         helper.succeed();
@@ -142,9 +136,7 @@ public final class LauncherServerGameTests {
         disc.setItem(original);disc.setNoGravity(true);
         var pos=helper.absolutePos(new BlockPos(1,2,1));disc.setPos(pos.getX()+.5,pos.getY(),pos.getZ()+.5);
         level.addFreshEntity(disc);
-        CompoundTag tag=new CompoundTag();disc.save(tag);
-        tag.putLong("CmsDiscMusicStart",level.getGameTime()-3600);
-        tag.putLong("CmsDiscSpawnedAt",level.getGameTime()-3600);disc.load(tag);
+        disc.musicStartedAgo(3600);disc.firedAgo(3600);
         disc.tick();
         helper.assertTrue(disc.isRemoved(),"Expired audio emitter removed");
         helper.runAfterDelay(2,()-> {

@@ -1,9 +1,9 @@
 package org.haruyq.createmediasystems.disc;
 
-import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.annulus;
-import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.box;
-import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.quad;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.box;
+import static org.haruyq.createmediasystems.client.mesh.Mesh.quad;
 
+import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
@@ -182,8 +182,8 @@ public final class DriveScreen extends Screen {
         p.pushPose();
         p.translate(0, .0505f, out);
         p.mulPose(Axis.XP.rotationDegrees(-90));
-        annulus(p, v, 0, .44f, .075f, 0x2A2D33, light, 1);
-        annulus(p, v, .006f, .075f, 0, 0x4A4E57, light, 1);
+        Mesh.ring(p, v, 0, 0, 0, .44f, .075f, 48, 1, 0x2A2D33, light);
+        Mesh.ring(p, v, 0, 0, .006f, .075f, 0, 48, 1, 0x4A4E57, light);
         p.popPose();
         if (closed > 0) {
             // Put in as a hand does, before the tray moves (and taken out so after): from the front, its front edge
@@ -215,27 +215,27 @@ public final class DriveScreen extends Screen {
     private static void disc(PoseStack p, VertexConsumer v, @Nullable DriveEmulatorBlock.Disc disc, int light) {
         switch (disc) {
             case null -> {
-                annulus(p, v, 0, .43f, .15f, 0xC9CED4, light, 1);
-                annulus(p, v, 0, .15f, .11f, 0xE3E6EA, light, 1);
+                Mesh.ring(p, v, 0, 0, 0, .43f, .15f, 48, 1, 0xC9CED4, light);
+                Mesh.ring(p, v, 0, 0, 0, .15f, .11f, 48, 1, 0xE3E6EA, light);
             }
             case BLU_RAY -> {
-                annulus(p, v, 0, .43f, .15f, 0x2B63C9, light, 1);
-                annulus(p, v, 0, .15f, .11f, 0x9CC7F2, light, 1);
+                Mesh.ring(p, v, 0, 0, 0, .43f, .15f, 48, 1, 0x2B63C9, light);
+                Mesh.ring(p, v, 0, 0, 0, .15f, .11f, 48, 1, 0x9CC7F2, light);
             }
             case DVD -> {
-                annulus(p, v, 0, .43f, .40f, 0xD9CFEA, light, 1);
-                annulus(p, v, 0, .40f, .15f, 0xB49BD8, light, 1);
-                annulus(p, v, 0, .15f, .11f, 0xE6DEF3, light, 1);
+                Mesh.ring(p, v, 0, 0, 0, .43f, .40f, 48, 1, 0xD9CFEA, light);
+                Mesh.ring(p, v, 0, 0, 0, .40f, .15f, 48, 1, 0xB49BD8, light);
+                Mesh.ring(p, v, 0, 0, 0, .15f, .11f, 48, 1, 0xE6DEF3, light);
             }
             case CD -> {
-                annulus(p, v, 0, .43f, .36f, 0xC6E3EC, light, 1);
-                annulus(p, v, 0, .36f, .29f, 0xD6D2EE, light, 1);
-                annulus(p, v, 0, .29f, .22f, 0xF0D4DF, light, 1);
-                annulus(p, v, 0, .22f, .15f, 0xF1EBC8, light, 1);
-                annulus(p, v, 0, .15f, .11f, 0xECEEF0, light, 1);
+                Mesh.ring(p, v, 0, 0, 0, .43f, .36f, 48, 1, 0xC6E3EC, light);
+                Mesh.ring(p, v, 0, 0, 0, .36f, .29f, 48, 1, 0xD6D2EE, light);
+                Mesh.ring(p, v, 0, 0, 0, .29f, .22f, 48, 1, 0xF0D4DF, light);
+                Mesh.ring(p, v, 0, 0, 0, .22f, .15f, 48, 1, 0xF1EBC8, light);
+                Mesh.ring(p, v, 0, 0, 0, .15f, .11f, 48, 1, 0xECEEF0, light);
             }
         }
-        annulus(p, v, 0, .11f, .055f, 0xDDE6EE, light, 1);
+        Mesh.ring(p, v, 0, 0, 0, .11f, .055f, 48, 1, 0xDDE6EE, light);
     }
 
     @Override

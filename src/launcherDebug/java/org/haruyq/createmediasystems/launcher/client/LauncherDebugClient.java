@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import java.nio.file.*;
 import java.lang.reflect.Field;
@@ -34,7 +35,7 @@ public final class LauncherDebugClient {
     private static boolean firing,crouchFire;
     private static boolean inputCapture,aimHeld;
     private static boolean savedPauseOnLostFocus;
-    static {LauncherClient.additionalInputActive=()->inputCapture;}
+    static {LauncherClient.additionalInput(()->inputCapture);}
     private static final Gson JSON = new Gson();
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) {
@@ -73,7 +74,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("partybox-action ")){
                     String[] bits=action.split(" ");var target=mc.level.getEntity(Integer.parseInt(bits[1]));
                     if(target instanceof org.haruyq.createmediasystems.partybox.PartyBoxEntity box)
-                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),Integer.parseInt(bits[2]),Integer.parseInt(bits[3]),box.revision()));
+                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),org.haruyq.createmediasystems.partybox.PartyBoxAction.Kind.byId(Integer.parseInt(bits[2])),Integer.parseInt(bits[3]),box.revision()));
                 }
                 if(action.equals("launcher-reload")) net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                         org.haruyq.createmediasystems.launcher.DiscLauncherReloadPacket.INSTANCE);
@@ -82,7 +83,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("launcher-aim ")){aimHeld=action.substring(13).equals("1");mc.options.keyUse.setDown(aimHeld);}
                 if(action.equals("megaphone-open") && mc.player!=null && mc.gameMode!=null)mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);
                 if(action.startsWith("megaphone-action ") && mc.player!=null){var bits=action.split(" ");net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                    new org.haruyq.createmediasystems.megaphone.MegaphoneAction(mc.player.containerMenu.containerId,Integer.parseInt(bits[1]),Integer.parseInt(bits[2])));}
+                    new org.haruyq.createmediasystems.megaphone.MegaphoneAction(mc.player.containerMenu.containerId,org.haruyq.createmediasystems.megaphone.MegaphoneAction.Kind.byId(Integer.parseInt(bits[1])),Integer.parseInt(bits[2])));}
                 if(action.startsWith("input-capture ")) {
                     boolean capture=action.substring(14).equals("1");
                     if(capture && !inputCapture){savedPauseOnLostFocus=mc.options.pauseOnLostFocus;mc.options.pauseOnLostFocus=false;}
@@ -156,7 +157,7 @@ public final class LauncherDebugClient {
                 groundItems.add(Map.of("x",item.getX(),"y",item.getY(),"z",item.getZ(),"item",item.getItem().toString()));
             row.put("groundLaunchers",groundItems);
             if(mc.level.getBlockEntity(new net.minecraft.core.BlockPos(2,100,7)) instanceof org.haruyq.createmediasystems.launcher.DiscCellCharger charger)
-                row.put("charger",Map.of("speed",charger.getSpeed(),"energy",org.haruyq.createmediasystems.launcher.DiscCellItem.energy(charger.cell()),"cell",charger.cell().toString()));
+                row.put("charger",Map.of("speed",charger.getSpeed(),"energy",ChargeableItem.energy(charger.cell()),"cell",charger.cell().toString()));
             row.put("player",mc.player.getName().getString());
             row.put("spectator",mc.player.isSpectator());
             row.put("allowedHosts",org.haruyq.createmediasystems.ServerConfig.ALLOWED_HOSTS.get());
@@ -166,15 +167,15 @@ public final class LauncherDebugClient {
             row.put("crouching",mc.player.isCrouching());row.put("bodyYaw",mc.player.yBodyRot);row.put("headYaw",mc.player.yHeadRot);
             row.put("loaded",LauncherMagazine.count(mc.player.getMainHandItem()));
             row.put("capacity",org.haruyq.createmediasystems.launcher.LauncherReadout.of(mc.player.getMainHandItem()).capacity());
-            row.put("reserved",LauncherMagazine.reserved(mc.player.getMainHandItem()).size());
+            row.put("reserved",LauncherMagazine.pending(mc.player.getMainHandItem()).isEmpty()?0:1);
             row.put("reloading",LauncherMagazine.reloading(mc.player.getMainHandItem()));
             row.put("ejecting",LauncherMagazine.ejecting(mc.player.getMainHandItem()));
             row.put("aim",LauncherClient.aim(1));row.put("gunKick",LauncherClient.kick(1));
-            row.put("reticleDrawn",LauncherHud.reticleDrawn);
+            var diagnostics=LauncherClient.diagnostics();row.put("reticleDrawn",diagnostics.reticleDrawn());
             row.put("trigger",mc.options.keyAttack.isDown());row.put("aimKey",mc.options.keyUse.isDown());
             row.put("usingItem",mc.player.isUsingItem());row.put("yaw",mc.player.getYRot());row.put("pitch",mc.player.getXRot());
-            row.put("confirmedShots",LauncherClient.confirmedShots);row.put("confirmedHits",LauncherClient.confirmedHits);row.put("confirmedHeadshots",LauncherClient.confirmedHeadshots);
-            row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",LauncherClient.hitDamage());
+            row.put("confirmedShots",diagnostics.confirmedShots());row.put("confirmedHits",diagnostics.confirmedHits());row.put("confirmedHeadshots",diagnostics.confirmedHeadshots());
+            row.put("hitAge",LauncherClient.hitAge());row.put("headHit",LauncherClient.headHit());row.put("hitDamage",diagnostics.hitDamage());
             row.put("damageTotal",LauncherClient.damageDisplay().total());
             double damageAge=LauncherClient.damageDisplay().age(System.nanoTime()/1_000_000_000.0);row.put("damageAge",Double.isFinite(damageAge)?damageAge:-1);
             row.put("damageMode",LauncherClient.DAMAGE_NUMBERS.get().name());
@@ -194,7 +195,7 @@ public final class LauncherDebugClient {
             row.put("dragons",dragons);
             var cell = LauncherMagazine.cell(mc.player.getMainHandItem());
             row.put("cellLevel", cell.getItem() instanceof org.haruyq.createmediasystems.launcher.DiscCellItem item ? item.tier.level : 0);
-            row.put("cellEnergy", org.haruyq.createmediasystems.launcher.DiscCellItem.energy(cell));
+            row.put("cellEnergy", ChargeableItem.energy(cell));
             row.put("master", org.haruyq.createmediasystems.launcher.DiscCellItem.master(cell).toString());
             row.put("inventory", mc.player.getInventory().items.toString());
             row.put("flying",mc.player.getAbilities().flying);
@@ -204,7 +205,7 @@ public final class LauncherDebugClient {
                     "playing",org.haruyq.createmediasystems.megaphone.MegaphoneData.playing(item),"black",horn.black,
                     "seconds",org.haruyq.createmediasystems.megaphone.MegaphoneData.seconds(item,mc.level),"volume",org.haruyq.createmediasystems.megaphone.MegaphoneData.volume(item),
                     "drive",org.haruyq.createmediasystems.megaphone.MegaphoneData.drive(item),"revision",org.haruyq.createmediasystems.megaphone.MegaphoneData.revision(item),
-                    "energy",org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem.energy(org.haruyq.createmediasystems.megaphone.MegaphoneData.battery(item,mc.level))));
+                    "energy",ChargeableItem.energy(org.haruyq.createmediasystems.megaphone.MegaphoneData.battery(item,mc.level))));
             }
             var playerRenderer=(net.minecraft.client.renderer.entity.player.PlayerRenderer)mc.getEntityRenderDispatcher().getRenderer(mc.player);
             row.put("arm",List.of(playerRenderer.getModel().rightArm.xRot,playerRenderer.getModel().rightArm.yRot,playerRenderer.getModel().rightArm.zRot));

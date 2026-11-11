@@ -1,5 +1,8 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.client.PointLights;
+import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.client.mesh.CellLight;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
@@ -55,15 +58,19 @@ public final class LauncherClient {
     private static long hitAt,lastShot=Long.MIN_VALUE;
     private static boolean headHit,killed;
     private static float hitDamage,cameraKick;
-    public static int confirmedShots,confirmedHits,confirmedHeadshots;
+    private static int confirmedShots,confirmedHits,confirmedHeadshots;
     /** Optional focus provider for non-mouse input integrations; the default uses normal game focus. */
-    public static java.util.function.BooleanSupplier additionalInputActive=()->false;
+    private static java.util.function.BooleanSupplier additionalInputActive=()->false;
+    /** Lets {@code active} count as input focus besides the game window's (a harness driving the client). */
+    public static void additionalInput(java.util.function.BooleanSupplier active){additionalInputActive=active;}
+    /** What the local player's launcher has confirmed so far, read-only, for diagnostics. */
+    public record Diagnostics(int confirmedShots,int confirmedHits,int confirmedHeadshots,float hitDamage,boolean reticleDrawn) {}
+    public static Diagnostics diagnostics(){return new Diagnostics(confirmedShots,confirmedHits,confirmedHeadshots,hitDamage,LauncherHud.reticleDrawn);}
     public static float aim(float partial){return MOTION.aim(partial);}
     public static float kick(float partial){return MOTION.kick(partial);}
     public static float hitAge(){return (System.nanoTime()-hitAt)/1_000_000_000f;}
     public static boolean headHit(){return headHit;}
     public static boolean killed(){return killed;}
-    public static float hitDamage(){return hitDamage;}
     private static final KeyMapping RELOAD_KEY = new KeyMapping(
             "key.create_media_systems.disc_launcher_reload",
             KeyConflictContext.IN_GAME,
@@ -97,7 +104,7 @@ public final class LauncherClient {
                     net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
         };
         LauncherHud.register(modBus);
-        CellGlowRenderer.register(modBus);
+        PointLights.add(new CellLights());
         DiscAudioClient.register(modBus);
     }
 
@@ -140,26 +147,20 @@ public final class LauncherClient {
     }
 
     public static LauncherTimeline.Frame frame(ItemStack stack, Level level, float partialTick) {
-        if (level == null) return LauncherTimeline.sample(-1f, -1f);
-        Long reloadAt = stack.get(LauncherFeature.LAUNCHER_RELOAD_START.get());
-        Long shotAt = stack.get(LauncherFeature.LAUNCHER_SHOT_AT.get());
-        float reload = reloadAt == null ? -1f : level.getGameTime()-reloadAt+partialTick;
-        float shot = shotAt == null ? -1f : level.getGameTime()-shotAt+partialTick;
-        return LauncherTimeline.sample(reload, shot);
+        return LauncherTimeline.sample(stack, level, partialTick);
     }
 
-    public record CellVisual(ItemStack stack, LauncherMechanics.CellPose pose, int color, float strength) {}
+    /** The gun's animation now, and the cell it shows: where on its path, its colour and glow. */
+    public record CellVisual(ItemStack stack, LauncherTimeline.Frame motion, LauncherMechanics.CellPose pose, int color, float strength) {}
 
     public static CellVisual cellVisual(ItemStack gun, Level level, float partial) {
-        Long start = gun.get(LauncherFeature.LAUNCHER_RELOAD_START.get());
-        float age = start == null || level == null ? -1 : level.getGameTime()-start+partial;
-        var motion = frame(gun, level, partial);
+        float age = LauncherTimeline.reloadAge(gun, level, partial);
+        var motion = LauncherTimeline.sample(age, LauncherTimeline.shotAge(gun, level, partial));
         var path = LauncherMechanics.cellPose(age, motion);
         ItemStack cell = path.incoming() ? LauncherMagazine.ejecting(gun) ? ItemStack.EMPTY : LauncherMagazine.pending(gun)
                 : LauncherMagazine.cell(gun);
-        if (!(cell.getItem() instanceof DiscCellItem item)) return new CellVisual(cell, path, 0x82949E, 0);
-        float charge = (float) DiscCellItem.energy(cell) / item.tier.capacity();
-        return new CellVisual(cell, path, item.tier.color, CellLighting.strength(charge));
+        if (!(cell.getItem() instanceof DiscCellItem item)) return new CellVisual(cell, motion, path, 0x82949E, 0);
+        return new CellVisual(cell, motion, path, item.tier.color, CellLighting.strength(ChargeableItem.charge(cell)));
     }
 
     private static void registerExtensions(RegisterClientExtensionsEvent event) {
@@ -182,10 +183,7 @@ public final class LauncherClient {
             @Override
             public boolean applyForgeHandTransform(PoseStack pose, LocalPlayer player, HumanoidArm arm,
                                                     ItemStack held, float partial, float equip, float swing) {
-                LauncherTimeline.Frame f = frame(held, player.level(), partial);
-                float hand = arm == HumanoidArm.RIGHT ? 1f : -1f;
-                float bob = (float)Math.sin((player.tickCount + partial) * 0.055f) * 0.0025f;
-                weaponPose(pose, f, hand, equip, bob);
+                weaponPose(pose, frame(held, player.level(), partial), arm == HumanoidArm.RIGHT ? 1f : -1f, equip, bob(player, partial));
                 return true;
             }
         }, LauncherFeature.DISC_LAUNCHER.get());
@@ -194,6 +192,24 @@ public final class LauncherClient {
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(LauncherFeature.DISC_PROJECTILE.get(), DiscProjectileRenderer::new);
         event.registerBlockEntityRenderer(LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), DiscCellChargerRenderer::new);
+    }
+
+    /** The gun's idle sway in first person. */
+    static float bob(net.minecraft.world.entity.player.Player player, float partial) {
+        return (float) Math.sin((player.tickCount + partial) * 0.055f) * 0.0025f;
+    }
+
+    /** The first-person gun model's space, in its 1/16 units' frame: the hand pose, then ItemRenderer's centring. */
+    static void gunSpace(PoseStack pose, LauncherTimeline.Frame f, float hand, float bob) {
+        weaponPose(pose, f, hand, 0, bob);
+        pose.translate(-.5f, -.5f, -.5f);
+    }
+
+    /** The cell's light on whatever is drawn in {@link #gunSpace}. */
+    private static CellLight spill(PoseStack pose, CellVisual visual, float strength) {
+        var path = visual.pose();
+        return new CellLight(pose.last().pose(), path.x() / 16, path.y() / 16, path.z() / 16, 18f / 16, visual.color(),
+                visual.strength() * strength);
     }
 
     static void weaponPose(PoseStack pose, LauncherTimeline.Frame f, float hand, float equip, float bob) {
@@ -215,22 +231,20 @@ public final class LauncherClient {
         if(event.getHand()==InteractionHand.MAIN_HAND){gripHand(event,launcher,true);return;}
         event.setCanceled(true);
         if(!LauncherMagazine.reloading(launcher)){gripHand(event,launcher,false);return;}
-        float age = player.level().getGameTime()-launcher.get(LauncherFeature.LAUNCHER_RELOAD_START.get())+event.getPartialTick();
-        if (age < 10 || age >= LauncherMechanics.HAND_END
-                || LauncherMagazine.ejecting(launcher) && age >= LauncherMechanics.INCOMING_AT) return;
-        var motion = frame(launcher, player.level(), event.getPartialTick());
+        float age = LauncherTimeline.reloadAge(launcher, player.level(), event.getPartialTick());
+        if (age < LauncherTimeline.HAND_IN.start() || age >= LauncherTimeline.HAND_OUT.end()
+                || LauncherMagazine.ejecting(launcher) && age >= LauncherTimeline.INCOMING_AT) return;
         float hand = player.getMainArm() == HumanoidArm.RIGHT ? 1 : -1;
         var visual = cellVisual(launcher, player.level(), event.getPartialTick());
         if (visual.stack().isEmpty()) return;
+        var motion = visual.motion();
         var pose = event.getPoseStack();
         var buffers = event.getMultiBufferSource();
         pose.pushPose();
-        weaponPose(pose, motion, hand, 0, 0);
         // ItemRenderer centers the weapon after the hand transform; use the same origin for the cell and hand.
-        pose.translate(-.5f, -.5f, -.5f);
+        gunSpace(pose, motion, hand, 0);
         var path = visual.pose();
-        CellLight spill = new CellLight(pose.last().pose(), path.x() / 16, path.y() / 16, path.z() / 16,
-                18f / 16, visual.color(), visual.strength() * 1.8f);
+        CellLight spill = spill(pose, visual, 1.8f);
         float withdraw = 1 - motion.supportHand();
         pose.translate(-hand * withdraw * .4f, -withdraw * .3f, withdraw * .15f);
         // Only the receiver draws the cell, at the same scale throughout. The palm supports its bottom cap.
@@ -248,10 +262,9 @@ public final class LauncherClient {
         var mc=Minecraft.getInstance();var player=mc.player;
         float hand=player.getMainArm()==HumanoidArm.RIGHT?1:-1;
         var pose=event.getPoseStack();pose.pushPose();
-        weaponPose(pose,frame(launcher,player.level(),event.getPartialTick()),hand,0,0);
-        pose.translate(-.5f,-.5f,-.5f);
-        var visual=cellVisual(launcher,player.level(),event.getPartialTick());var p=visual.pose();
-        var spill=new CellLight(pose.last().pose(),p.x()/16,p.y()/16,p.z()/16,18f/16,visual.color(),visual.strength()*1.4f);
+        var visual=cellVisual(launcher,player.level(),event.getPartialTick());
+        gunSpace(pose,visual.motion(),hand,0);
+        var spill=spill(pose,visual,1.4f);
         pose.translate(.5f,(primary?4:7)/16f,(primary?17.4f:4.8f)/16f);
         pose.mulPose(Axis.YP.rotationDegrees(hand*(primary?-12:15)));
         pose.scale(.82f,.82f,.82f);

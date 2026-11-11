@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class CellJeiCompatibilityTest {
     @Test void jeiAcceptsEveryCellUpgradeAsAVisibleShapelessCraftingRecipe() {
         var category=new CraftingCategoryExtension();
-        for(int level=2;level<=6;level++) {
+        for(int level=2;level<=DiscCellTier.values().length;level++) {
             CraftingRecipe recipe=new DiscCellUpgradeRecipe(level);
             var holder=new RecipeHolder<>(CreateMediaSystems.id("display_check_"+level),recipe);
             assertTrue(category.isHandled(holder),"JEI hides cell tier "+level);

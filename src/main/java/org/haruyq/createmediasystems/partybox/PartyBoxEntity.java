@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.partybox;
 
+import org.haruyq.createmediasystems.power.BatteryItem;
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.Optional;
 import java.util.UUID;
 import org.haruyq.createmediasystems.stream.DiscKind;
@@ -92,7 +94,7 @@ public final class PartyBoxEntity extends Entity {
             entityData.set(DISC, next.copy());
         }
         entityData.set(BATTERY, inventory.getItem(1).copy());
-        entityData.set(ENERGY, PartyBoxBatteryItem.energy(inventory.getItem(1)));
+        entityData.set(ENERGY, ChargeableItem.energy(inventory.getItem(1)));
         if (!next.isEmpty() && energy() > 0 && !playing()) play();
     }
     public boolean play() {
@@ -124,7 +126,7 @@ public final class PartyBoxEntity extends Entity {
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (level().isClientSide) return InteractionResult.SUCCESS;
         ItemStack held = player.getItemInHand(hand);
-        int slot = held.getItem() instanceof PartyBoxBatteryItem ? 1 : MediaItem.fits(held, DiscKind.Slot.PORTABLE) ? 0 : -1;
+        int slot = held.getItem() instanceof BatteryItem ? 1 : MediaItem.fits(held, DiscKind.Slot.PORTABLE) ? 0 : -1;
         if (slot >= 0) {
             if (slot == 0 && !MediaItem.allowed(held)) {
                 player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true); return InteractionResult.CONSUME;
@@ -206,7 +208,7 @@ public final class PartyBoxEntity extends Entity {
         long now = level().getGameTime();
         int energy = drain.settle(clock, now, energy(), PartyBoxSpecs.drainPerTick(volume(), bass(), lights()));
         entityData.set(ENERGY, energy);
-        PartyBoxBatteryItem.setEnergy(inventory.getItem(1), energy);
+        ChargeableItem.setEnergy(inventory.getItem(1), energy);
         if (tickCount % 20 == 0) clock.learn(MediaItem.lengthSeconds(disc(), level().registryAccess()));
         if (clock.running() && clock.ended(now)) clock.stop();
         keep(clock);
@@ -233,7 +235,7 @@ public final class PartyBoxEntity extends Entity {
         inventory.setItem(1, ItemStack.parseOptional(registryAccess(), tag.getCompound("Battery")));
         changing=false;
         entityData.set(DISC, inventory.getItem(0).copy()); entityData.set(BATTERY, inventory.getItem(1).copy());
-        entityData.set(ENERGY, Math.min(PartyBoxBatteryItem.energy(inventory.getItem(1)), Math.max(0, tag.getInt("Energy"))));
+        entityData.set(ENERGY, Math.min(ChargeableItem.energy(inventory.getItem(1)), Math.max(0, tag.getInt("Energy"))));
         setVolume(tag.contains("Volume") ? tag.getInt("Volume") : 18); setBass(tag.getInt("Bass")); setLights(tag.getInt("Lights"));
         // Packed into an item it stood still; in the world its clock ran on while unloaded, and its battery pays for that.
         long now = level().getGameTime();

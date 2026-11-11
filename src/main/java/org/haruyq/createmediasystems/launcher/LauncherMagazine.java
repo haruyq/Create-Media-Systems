@@ -19,9 +19,6 @@ public final class LauncherMagazine {
         if (cell.isEmpty()) launcher.remove(LauncherFeature.LAUNCHER_CELL.get());
         else launcher.set(LauncherFeature.LAUNCHER_CELL.get(), ItemContainerContents.fromItems(List.of(cell.copyWithCount(1))));
     }
-    public static List<ItemStack> reserved(ItemStack launcher) {
-        return pending(launcher).isEmpty() ? List.of() : List.of(pending(launcher));
-    }
     public static boolean reloading(ItemStack launcher) { return launcher.has(LauncherFeature.LAUNCHER_RELOAD_START.get()); }
     public static boolean ejecting(ItemStack launcher) { return launcher.getOrDefault(LauncherFeature.LAUNCHER_EJECT_ONLY.get(), false); }
     public static int count(ItemStack launcher) { return DiscCellItem.shots(cell(launcher)); }
@@ -34,14 +31,13 @@ public final class LauncherMagazine {
     public static boolean reserve(Player player,ItemStack launcher,long gameTick,boolean automatic) {
         if (reloading(launcher)) return false;
         if (automatic && count(launcher)>0) return false;
-        migrateLegacy(player, launcher);
+        // A charged cell first; a manual reload takes an empty one if there is no other, an automatic one never.
         int chosen = -1;
-        for (int pass = 0; pass < 2 && chosen < 0; pass++) {
+        for (int pass = 0; pass < (automatic ? 1 : 2) && chosen < 0; pass++) {
             for (int n = 0; n < player.getInventory().getContainerSize(); n++) {
                 int slot = n == 0 ? 40 : n <= 40 ? n - 1 : n;
                 ItemStack candidate = player.getInventory().getItem(slot);
                 if (candidate.getItem() instanceof DiscCellItem && DiscCellItem.hasMaster(candidate)
-                        && (!automatic || DiscCellItem.shots(candidate)>0)
                         && (pass == 1 || DiscCellItem.shots(candidate) > 0)) { chosen = slot; break; }
             }
         }

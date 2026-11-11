@@ -27,16 +27,14 @@ public final class DiscAirCleanupGameTests {
     }
     @GameTest(template="empty")
     public static void missedShotsExpireEvenWithoutMovementTicksAndAfterSaveLoad(GameTestHelper h) {
-        var d=flying(h);var tag=new CompoundTag();d.save(tag);
-        tag.putLong("CmsDiscSpawnedAt",h.getLevel().getGameTime()-100);d.load(tag);d.tickPlayback();
+        var d=flying(h);d.firedAgo(100);var tag=new CompoundTag();d.save(tag);d.load(tag);d.tickPlayback();
         h.assertTrue(d.isRemoved() && d.tickCount==0 && d.getPickResult().isEmpty(),"A missed shot cannot hover until its song ends, even outside simulation distance");h.succeed();
     }
     @GameTest(template="empty")
     public static void stalledShotsAndLegacyOrphansAreRemoved(GameTestHelper h) {
-        var d=flying(h);var tag=new CompoundTag();d.save(tag);
-        tag.putLong("CmsDiscSpawnedAt",h.getLevel().getGameTime()-5);d.load(tag);d.setDeltaMovement(Vec3.ZERO);d.tickPlayback();
+        var d=flying(h);d.firedAgo(5);d.setDeltaMovement(Vec3.ZERO);d.tickPlayback();
         h.assertTrue(d.isRemoved(),"A stopped flying projection cannot remain in the air");
-        var old=flying(h);var oldTag=new CompoundTag();old.save(oldTag);oldTag.putBoolean("CmsDiscEmbedded",true);old.load(oldTag);old.tickPlayback();
+        var old=flying(h);old.stuckHere();old.tickPlayback();
         h.assertTrue(old.isRemoved(),"Unsupported embedded discs from older saves are cleaned up too");h.succeed();
     }
     @GameTest(template="empty")

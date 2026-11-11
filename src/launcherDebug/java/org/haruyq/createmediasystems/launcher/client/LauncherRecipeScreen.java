@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.power.BatteryItem;
+import org.haruyq.createmediasystems.launcher.DiscCellCharger;
 import com.google.gson.*;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -44,10 +46,10 @@ final class LauncherRecipeScreen extends Screen {
         recipes.add(shaped("disc_launcher","ディスクランチャー",0));
         recipes.add(shaped("disc_cell_charger","セル充電器",0));
         recipes.add(shaped("copper_disc_cell",CELLS[0],1));
-        for(int level=2;level<=6;level++) {
-            var target=DiscCellTier.at(level);var slots=new ArrayList<String>();
-            slots.add("create_media_systems:"+DiscCellTier.at(level-1).id+"_disc_cell");slots.addAll(target.upgradeMaterials());
-            recipes.add(new Recipe(target.id+"_disc_cell",CELLS[level-1],"DiscCellTier.upgradeMaterials",true,level,List.copyOf(slots)));
+        for(var target:DiscCellTier.values())if(target.previous()!=null) {
+            int level=target.level;var slots=new ArrayList<String>();
+            slots.add("create_media_systems:"+target.previous().itemId());slots.addAll(target.upgradeMaterials());
+            recipes.add(new Recipe(target.itemId(),CELLS[level-1],"DiscCellTier.upgradeMaterials",true,level,List.copyOf(slots)));
         }
         recipes.add(shaped("partybox_stage_320","SBL PartyBox Stage 320",0));
         recipes.add(shaped("partybox_battery","PartyBox 交換式バッテリー",0));
@@ -69,16 +71,18 @@ final class LauncherRecipeScreen extends Screen {
         catch(Exception error) {throw new IllegalStateException(error);}
     }
     private String name(String id) {
-        for(var tier:DiscCellTier.values())if(id.equals("create_media_systems:"+tier.id+"_disc_cell"))return "Lv."+tier.level+" "+CELLS[tier.level-1];
+        for(var tier:DiscCellTier.values())if(id.equals("create_media_systems:"+tier.itemId()))return "Lv."+tier.level+" "+CELLS[tier.level-1];
         return NAMES.getOrDefault(id,id.substring(id.indexOf(':')+1));
     }
     private void text(GuiGraphics g,String s,int x,int y,float scale,int color) {
         g.pose().pushPose();g.pose().translate(x,y,0);g.pose().scale(scale,scale,1);g.drawString(font,s,0,0,color,false);g.pose().popPose();
     }
+    /** The other mod's materials are marked A, B, C... in DiscCellTier.plantItems() order. */
+    private static String plantLetter(String id) { return String.valueOf((char)('A'+DiscCellTier.plantItems().indexOf(id))); }
     private void item(GuiGraphics g,String id,int x,int y,float scale) {
         var key=ResourceLocation.parse(id);
         if(!BuiltInRegistries.ITEM.containsKey(key)) {
-            String letter=switch(key.getPath()){case "mox_pellet"->"A";case "tungsten_divertor_cassette"->"B";case "titanium_sheet"->"C";case "zircaloy_cladding_tube"->"D";default->"E";};
+            String letter=plantLetter(id);
             text(g,letter,x+7,y+4,3,0xFFB9FF64);return;
         }
         g.pose().pushPose();g.pose().translate(x,y,0);g.pose().scale(scale,scale,1);
@@ -110,7 +114,7 @@ final class LauncherRecipeScreen extends Screen {
         for(var entry:counts.entrySet()) {
             String id=entry.getKey();String label=name(id)+" ×"+entry.getValue();
             if(id.startsWith(DiscCellTier.PLANT_MOD_ID+":")) {
-                String letter=switch(ResourceLocation.parse(id).getPath()){case "mox_pellet"->"A";case "tungsten_divertor_cassette"->"B";case "titanium_sheet"->"C";case "zircaloy_cladding_tube"->"D";default->"E";};
+                String letter=plantLetter(id);
                 label=letter+"  "+label;
             }
             float scale=Math.min(1.7f,(w-47f)/font.width(label));
@@ -126,11 +130,11 @@ final class LauncherRecipeScreen extends Screen {
             text(g,"満充電 "+tier.shots+"発  /  ダメージ "+(int)tier.damage,x+21,noteY,1.6f,accent);
             text(g,String.format(Locale.ROOT,"%,d FE  /  1発 %,d FE",tier.capacity(),tier.energyPerShot),x+21,noteY+24,1.35f,0xFF9EB4C1);
         } else if(r.id.equals("partybox_battery")) {
-            text(g,"244,800 FE / 68 Wh",x+21,noteY,1.8f,accent);
+            text(g,String.format(Locale.ROOT,"%,d FE / 68 Wh",BatteryItem.CAPACITY),x+21,noteY,1.8f,accent);
             text(g,"作成直後は空。セル充電器で充電。",x+21,noteY+25,1.5f,0xFF9EB4C1);
         } else if(r.id.equals("disc_cell_charger")) {
             text(g,"Create 回転軸（下面）/ FE 入力",x+21,noteY,1.7f,accent);
-            text(g,"16 RPM以上 / セル・PartyBox電池に対応",x+21,noteY+25,1.4f,0xFF9EB4C1);
+            text(g,DiscCellCharger.MIN_RPM+" RPM以上 / セル・PartyBox電池に対応",x+21,noteY+25,1.4f,0xFF9EB4C1);
         } else if(r.id.equals("partybox_stage_320")) {
             text(g,"ディスク＋充電済み電池を装着して再生",x+21,noteY,1.5f,accent);
             text(g,"スピーカーは既存アイテムを使用",x+21,noteY+25,1.4f,0xFF9EB4C1);

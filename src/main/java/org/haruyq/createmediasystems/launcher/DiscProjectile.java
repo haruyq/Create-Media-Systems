@@ -11,8 +11,6 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.boss.EnderDragonPart;
-import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -58,7 +56,6 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             SynchedEntityData.defineId(DiscProjectile.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> ATTACH_BONE =
             SynchedEntityData.defineId(DiscProjectile.class,EntityDataSerializers.INT);
-    private long embeddedAtTick = -1L;
     private long spawnedAtTick = Long.MIN_VALUE;
     /** Its track's length in seconds once learned; server only (see clock). */
     private double length = -1;
@@ -149,30 +146,24 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         return attachedTarget;
     }
     private static Vec3 vector(Vector3f v){return new Vec3(v.x,v.y,v.z);}
-    private DiscAttachmentFrame attachmentFrame(LivingEntity target,float partial) {
-        return target instanceof EnderDragon dragon && attachmentPart()>=0
-                ?DiscAttachmentFrame.atDragonPart(dragon,attachmentPart(),partial):DiscAttachmentFrame.at(target,attachedToHead(),partial);
+    /** Where on its target it sits, as its synced data keeps it. */
+    private AttachmentAnchor anchor(){return AttachmentAnchor.of(attachedToHead(),attachmentPart(),attachmentBone());}
+    private void keep(AttachmentAnchor anchor) {
+        entityData.set(ATTACH_HEAD,anchor.head());entityData.set(ATTACH_PART,anchor.part());entityData.set(ATTACH_BONE,anchor.bone());
     }
     public Vec3 attachmentPosition(float partial) {
         var target=attachmentTarget();
-        if(target instanceof EnderDragon dragon && attachmentBone()>=0)return DiscDragonAttachment.bone(dragon,attachmentBone(),partial).position(vector(entityData.get(ATTACH_POINT)));
-        return target==null?position():attachmentFrame(target,partial).world(vector(entityData.get(ATTACH_POINT)));
+        return target==null?position():anchor().position(target,vector(entityData.get(ATTACH_POINT)),partial);
     }
     public Vec3 attachmentDirection(float partial) {
         var target=attachmentTarget();
-        if(target instanceof EnderDragon dragon && attachmentBone()>=0)return DiscDragonAttachment.bone(dragon,attachmentBone(),partial).direction(vector(entityData.get(ATTACH_FORWARD)));
-        return target==null?new Vec3(0,0,1):attachmentFrame(target,partial)
-                .worldDirection(vector(entityData.get(ATTACH_FORWARD))).normalize();
+        return target==null?new Vec3(0,0,1):anchor().direction(target,vector(entityData.get(ATTACH_FORWARD)),partial);
     }
-    private void attach(LivingEntity target,Vec3 point,Vec3 incoming,boolean head) {
+    private void attach(LivingEntity target,AttachmentAnchor anchor,Vec3 point,Vec3 incoming) {
         attachedTarget=target;entityData.set(ATTACHED_TO,Optional.of(target.getUUID()));entityData.set(ATTACHED_ID,target.getId());
-        entityData.set(ATTACH_HEAD,head);
-        var frame=attachmentFrame(target,1);
-        // The swept hit is just outside the skin. Move the blade centre slightly in, leaving its outer half visible.
-        var local=frame.local(point.add(incoming.scale(.10)));var direction=frame.localDirection(incoming);
-        if(target instanceof EnderDragon dragon && attachmentPart()>=0) {
-            var contact=DiscDragonAttachment.contact(dragon,attachmentPart(),point,incoming);entityData.set(ATTACH_BONE,contact.bone());local=contact.point();direction=contact.direction();
-        }
+        var placed=anchor.place(target,point,incoming);
+        keep(placed.anchor());
+        var local=placed.point();var direction=placed.direction();
         entityData.set(ATTACH_POINT,new Vector3f((float)local.x,(float)local.y,(float)local.z));
         entityData.set(ATTACH_FORWARD,new Vector3f((float)direction.x,(float)direction.y,(float)direction.z));
         attachmentDeaths=target instanceof ServerPlayer p?p.getStats().getValue(Stats.CUSTOM.get(Stats.DEATHS)):-1;
@@ -261,12 +252,25 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             }
             boolean ended = clock().ended(level().getGameTime());
             if (ended || length <= 0 && level().getGameTime() - spawnedAtTick >= UNKNOWN_LIFETIME_TICKS) {
-                recover(ended);
+                // Projections are never obtainable items: the original stays in its cell. Its music sees it go and stops.
+                discard();
                 return false;
             }
         }
         return true;
     }
+
+    // Fixtures (the launcher game tests and harness, in this package) set what a save would carry through these,
+    // never by writing its save format by hand.
+    /** Its music started {@code ticks} ago. */
+    void musicStartedAgo(long ticks) { entityData.set(MUSIC_START_TICK, level().getGameTime() - ticks); }
+    /** It was fired {@code ticks} ago. */
+    void firedAgo(long ticks) { spawnedAtTick = level().getGameTime() - ticks; }
+    /** It is stuck where it is, as in a block or a body. */
+    void stuckHere() { entityData.set(EMBEDDED, true); setDeltaMovement(Vec3.ZERO); setNoGravity(true); }
+    /** Its track is {@code seconds} long, as the server learned it; negative while unknown. */
+    void trackLasts(double seconds) { length = seconds; }
+    double trackLength() { return length; }
 
     @Override
     protected Item getDefaultItem() {
@@ -277,14 +281,10 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     protected void onHitEntity(EntityHitResult hit) {
         if (!level().isClientSide && !embedded()) {
             var struck=hit.getEntity();
-            var target=struck instanceof EnderDragonPart part?part.parentMob:struck;
-            int partIndex=-1;
-            if(struck instanceof EnderDragonPart part) {
-                var parts=part.parentMob.getSubEntities();for(int i=0;i<parts.length;i++)if(parts[i]==part){partIndex=i;break;}
-            }
+            var strike=AttachmentAnchor.strike(struck,hit.getLocation());
+            var target=strike.target();
             Vec3 incoming=getDeltaMovement().lengthSqr()>1e-8?getDeltaMovement().normalize():getOwner()!=null?getOwner().getLookAngle():new Vec3(0,0,1);
-            boolean head=struck instanceof EnderDragonPart part?part==part.parentMob.head
-                    :target instanceof LivingEntity living && DiscHitZones.headshot(living,hit.getLocation());
+            boolean head=strike.head();
             float amount=damage()*(head?DiscHitZones.HEAD_MULTIPLIER:1);
             float before=target instanceof LivingEntity living?living.getHealth():0;
             float absorbedBefore=target instanceof LivingEntity living?living.getAbsorptionAmount():0;
@@ -298,8 +298,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             }
             if(target instanceof LivingEntity living) {
                 embed(hit);
-                entityData.set(ATTACH_PART,partIndex);
-                if(living.getHealth()>0)attach(living,hit.getLocation(),incoming,head);
+                if(living.getHealth()>0)attach(living,strike.anchor(),hit.getLocation(),incoming);
                 else discard();
             } else discard(); // Boats, frames and other non-living hits cannot become unsupported emitters.
         }
@@ -343,14 +342,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         setPos(hitAt.x, hitAt.y, hitAt.z);
         setDeltaMovement(Vec3.ZERO);
         setNoGravity(true);
-        embeddedAtTick = level().getGameTime();
         entityData.set(EMBEDDED, true);
-    }
-
-    private void recover(boolean ended) {
-        if (isRemoved()) return;
-        // Projections are never obtainable items. The original remains inside the energy cell.
-        discard(); // The matching music instance sees its entity disappear and stops.
     }
 
     @Override
@@ -358,15 +350,12 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         super.addAdditionalSaveData(tag);
         tag.putBoolean("CmsDiscEmbedded", embedded());
         tag.putLong("CmsDiscMusicStart", entityData.get(MUSIC_START_TICK));
-        tag.putLong("CmsDiscEmbeddedAt", embeddedAtTick);
         tag.putLong("CmsDiscSpawnedAt", spawnedAtTick);
         tag.putDouble("CmsDiscDuration", length);
         tag.putInt("CmsDiscCellTier", cellTier().level);
         if (blockAnchor != null) tag.putLong("CmsDiscBlockAnchor",blockAnchor.asLong());
         attachmentTargetUUID().ifPresent(id->tag.putUUID("CmsDiscAttachedTo",id));
-        tag.putBoolean("CmsDiscAttachHead",attachedToHead());tag.putInt("CmsDiscAttachmentDeaths",attachmentDeaths);
-        tag.putInt("CmsDiscAttachPart",attachmentPart());
-        tag.putInt("CmsDiscAttachBone",attachmentBone());
+        anchor().save(tag);tag.putInt("CmsDiscAttachmentDeaths",attachmentDeaths);
         writeVector(tag,"CmsDiscAttachPoint",entityData.get(ATTACH_POINT));writeVector(tag,"CmsDiscAttachForward",entityData.get(ATTACH_FORWARD));
     }
 
@@ -375,17 +364,15 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         super.readAdditionalSaveData(tag);
         entityData.set(EMBEDDED, tag.getBoolean("CmsDiscEmbedded"));
         entityData.set(MUSIC_START_TICK, tag.contains("CmsDiscMusicStart") ? tag.getLong("CmsDiscMusicStart") : Long.MIN_VALUE);
-        embeddedAtTick = tag.getLong("CmsDiscEmbeddedAt");
         spawnedAtTick = tag.contains("CmsDiscSpawnedAt") ? tag.getLong("CmsDiscSpawnedAt")
                 : entityData.get(MUSIC_START_TICK);
         length = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;
         blockAnchor = tag.contains("CmsDiscBlockAnchor") ? BlockPos.of(tag.getLong("CmsDiscBlockAnchor")) : null;
         setCellTier(DiscCellTier.at(tag.contains("CmsDiscCellTier") ? tag.getInt("CmsDiscCellTier") : 1));
         entityData.set(ATTACHED_TO,tag.hasUUID("CmsDiscAttachedTo")?Optional.of(tag.getUUID("CmsDiscAttachedTo")):Optional.empty());
-        entityData.set(ATTACHED_ID,-1);attachedTarget=null;entityData.set(ATTACH_HEAD,tag.getBoolean("CmsDiscAttachHead"));
-        entityData.set(ATTACH_PART,tag.contains("CmsDiscAttachPart")?Math.clamp(tag.getInt("CmsDiscAttachPart"),-1,7):-1);
-        entityData.set(ATTACH_BONE,tag.contains("CmsDiscAttachBone")?Math.clamp(tag.getInt("CmsDiscAttachBone"),-1,22):-1);
-        entityData.set(ATTACH_POINT,readVector(tag,"CmsDiscAttachPoint",new Vector3f(),attachmentBone()>=0?8:2));
+        entityData.set(ATTACHED_ID,-1);attachedTarget=null;
+        var anchor=AttachmentAnchor.read(tag);keep(anchor);
+        entityData.set(ATTACH_POINT,readVector(tag,"CmsDiscAttachPoint",new Vector3f(),anchor.pointBound()));
         var forward=readVector(tag,"CmsDiscAttachForward",new Vector3f(0,0,1),1);
         entityData.set(ATTACH_FORWARD,forward.lengthSquared()<1e-8f?new Vector3f(0,0,1):forward.normalize());
         attachmentDeaths=tag.contains("CmsDiscAttachmentDeaths")?tag.getInt("CmsDiscAttachmentDeaths"):-1;

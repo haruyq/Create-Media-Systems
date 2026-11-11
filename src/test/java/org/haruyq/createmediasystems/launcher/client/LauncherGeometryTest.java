@@ -36,13 +36,12 @@ class LauncherGeometryTest {
         }
     }
 
-    @Test void allSixCuboidFacesSurviveBackfaceCulling() throws Exception {
-        var box=LauncherRenderer.class.getDeclaredMethod("box",PoseStack.class,VertexConsumer.class,
-                float.class,float.class,float.class,float.class,float.class,float.class,int.class,int.class,int.class);
-        box.setAccessible(true);
-        Mesh mesh=new Mesh();
-        box.invoke(null,new PoseStack(),mesh,0f,0f,0f,2f,3f,4f,0,0,0);
-        mesh.assertOutward();
+    @Test void allSixCuboidFacesSurviveBackfaceCulling() {
+        Mesh tiled=new Mesh(),flat=new Mesh();
+        org.haruyq.createmediasystems.client.mesh.Mesh.box(new PoseStack(),tiled,0,0,0,2,3,4,
+                org.haruyq.createmediasystems.client.mesh.Mesh.Tile.METAL,0,0);
+        org.haruyq.createmediasystems.client.mesh.Mesh.box(new PoseStack(),flat,0,0,0,2,3,4,0xFFFFFF,0);
+        tiled.assertOutward();flat.assertOutward();
     }
 
     @Test void everyDiscSectorHasTheCorrectFrontFace() {

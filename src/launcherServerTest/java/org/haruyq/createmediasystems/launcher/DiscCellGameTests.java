@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,7 +27,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -43,7 +43,7 @@ public final class DiscCellGameTests {
     private static ItemStack cell(DiscCellTier tier, int energy) {
         ItemStack cell = new ItemStack(LauncherFeature.cell(tier));
         DiscCellItem.setMaster(cell, original());
-        DiscCellItem.setEnergy(cell, energy);
+        ChargeableItem.setEnergy(cell, energy);
         return cell;
     }
 
@@ -79,7 +79,7 @@ public final class DiscCellGameTests {
                 && DiscCellItem.shots(LauncherMagazine.pending(gun))==96,"Only an empty cell starts automatic replacement");
         LauncherMagazine.finish(player,gun);
         h.assertTrue(LauncherMagazine.count(gun)==96 && player.getInventory().items.stream().anyMatch(s->s.is(LauncherFeature.cell(DiscCellTier.NETHERITE))
-                && DiscCellItem.energy(s)==0 && DiscCellItem.hasMaster(s)),"The exhausted original cell is returned intact");
+                && ChargeableItem.energy(s)==0 && DiscCellItem.hasMaster(s)),"The exhausted original cell is returned intact");
         h.succeed();
     }
 
@@ -124,11 +124,11 @@ public final class DiscCellGameTests {
     public static void depletedCellKeepsTheMasterAndCanBeRecharged(GameTestHelper h) {
         ItemStack cell = cell(DiscCellTier.COPPER, 2000);
         DiscCellItem.project(cell); DiscCellItem.project(cell);
-        h.assertTrue(DiscCellItem.project(cell).isEmpty() && DiscCellItem.energy(cell) == 0, "A depleted cell cannot fire");
+        h.assertTrue(DiscCellItem.project(cell).isEmpty() && ChargeableItem.energy(cell) == 0, "A depleted cell cannot fire");
         h.assertTrue(ItemStack.matches(original(), DiscCellItem.master(cell)), "Depletion cannot destroy the original");
         var energy = cell.getCapability(Capabilities.EnergyStorage.ITEM);
         h.assertTrue(energy != null && energy.receiveEnergy(100000, true) == 24000, "FE simulation reports its capacity");
-        h.assertTrue(DiscCellItem.energy(cell) == 0, "Simulating a charge changes nothing");
+        h.assertTrue(ChargeableItem.energy(cell) == 0, "Simulating a charge changes nothing");
         h.assertTrue(energy.receiveEnergy(100000, false) == 24000 && DiscCellItem.shots(cell) == 24, "FE refills the real cell");
         h.assertTrue(energy.extractEnergy(10000, false) == 0, "A cell cannot be used to generate/extract free power");
         h.succeed();
@@ -200,7 +200,7 @@ public final class DiscCellGameTests {
             var grid = CraftingInput.of(3, 3, inputs);
             h.assertTrue(recipe.matches(grid, h.getLevel()), "Vanilla/Create materials craft level " + level);
             ItemStack upgraded = recipe.assemble(grid, h.getLevel().registryAccess());
-            h.assertTrue(upgraded.is(LauncherFeature.cell(target)) && DiscCellItem.energy(upgraded) == 1234
+            h.assertTrue(upgraded.is(LauncherFeature.cell(target)) && ChargeableItem.energy(upgraded) == 1234
                     && ItemStack.matches(DiscCellItem.master(previous), DiscCellItem.master(upgraded)), "Upgrade keeps the original and stored energy");
             inputs.set(1, new ItemStack(Items.DIRT));
             h.assertTrue(!recipe.matches(CraftingInput.of(3, 3, inputs), h.getLevel()), "Missing an expensive material must fail");
@@ -212,7 +212,7 @@ public final class DiscCellGameTests {
     public static void plantRecipeIsConditionalButOrdinaryCellsAlwaysExist(GameTestHelper h) {
         for (DiscCellTier tier : DiscCellTier.values()) {
             var recipe = h.getLevel().getRecipeManager().byKey(CreateMediaSystems.id(tier.id + "_disc_cell"));
-            h.assertTrue(recipe.isPresent() == (!tier.optional() || ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID)),
+            h.assertTrue(recipe.isPresent() == tier.available(),
                     "Only the Chemi Apex recipe depends on Create Plant");
         }
         h.succeed();
@@ -220,9 +220,9 @@ public final class DiscCellGameTests {
 
     @GameTest(template="empty")
     public static void loadedCellUpgradesExposeCompleteCraftingInputsAndOutputsToRecipeViewers(GameTestHelper h) {
-        for(int level=2;level<=6;level++) {
+        for(int level=2;level<=DiscCellTier.values().length;level++) {
             var holder=h.getLevel().getRecipeManager().byKey(CreateMediaSystems.id(DiscCellTier.at(level).id+"_disc_cell"));
-            if(holder.isEmpty()) {h.assertTrue(level==6 && !ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID),"Only the optional top-tier recipe may be absent");continue;}
+            if(holder.isEmpty()) {h.assertTrue(!DiscCellTier.at(level).available(),"Only the optional top-tier recipe may be absent");continue;}
             var recipe=(DiscCellUpgradeRecipe)holder.get().value();
             h.assertTrue(!recipe.isSpecial() && recipe.getType()==net.minecraft.world.item.crafting.RecipeType.CRAFTING,"Recipe viewers must handle the loaded upgrade as ordinary crafting");
             var ingredients=recipe.getIngredients();h.assertTrue(ingredients.size()==9,"Expose the previous cell and all eight materials");
@@ -238,8 +238,8 @@ public final class DiscCellGameTests {
     @GameTest(template="empty")
     public static void plantMaterialsUpgradeToTheUltimateCellWhenPresent(GameTestHelper h) {
         if (Boolean.getBoolean("cms.cellPlantTest"))
-            h.assertTrue(ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID), "The requested optional-mod fixture must actually load");
-        if (!ModList.get().isLoaded(DiscCellTier.PLANT_MOD_ID)) { h.succeed(); return; }
+            h.assertTrue(DiscCellTier.CHEMI.available(), "The requested optional-mod fixture must actually load");
+        if (!DiscCellTier.CHEMI.available()) { h.succeed(); return; }
         var holder = h.getLevel().getRecipeManager().byKey(CreateMediaSystems.id("chemi_disc_cell")).orElseThrow();
         var recipe = (DiscCellUpgradeRecipe) holder.value();
         ItemStack previous = cell(DiscCellTier.RESONANT, 123456);
@@ -252,7 +252,7 @@ public final class DiscCellGameTests {
         var grid = CraftingInput.of(3, 3, inputs);
         h.assertTrue(recipe.matches(grid, h.getLevel()), "The condition-enabled recipe accepts the verified Plant materials");
         ItemStack apex = recipe.assemble(grid, h.getLevel().registryAccess());
-        h.assertTrue(apex.is(LauncherFeature.CHEMI_DISC_CELL.get()) && DiscCellItem.energy(apex) == 123456
+        h.assertTrue(apex.is(LauncherFeature.cell(DiscCellTier.CHEMI)) && ChargeableItem.energy(apex) == 123456
                 && ItemStack.matches(DiscCellItem.master(previous), DiscCellItem.master(apex)), "The ultimate upgrade preserves the original and energy");
         h.succeed();
     }
@@ -282,7 +282,7 @@ public final class DiscCellGameTests {
                 "The charger is recoverable with its proper survival pickaxe tier");
         charger.insert(cell(DiscCellTier.COPPER, 0));
         var port = h.getLevel().getCapability(Capabilities.EnergyStorage.BLOCK, pos, null);
-        h.assertTrue(port != null && port.receiveEnergy(1000, true) == 1000 && DiscCellItem.energy(charger.cell()) == 0,
+        h.assertTrue(port != null && port.receiveEnergy(1000, true) == 1000 && ChargeableItem.energy(charger.cell()) == 0,
                 "Charging simulation leaves the dock unchanged");
         port.receiveEnergy(1000, false);
         CompoundTag saved = charger.saveWithoutMetadata(h.getLevel().registryAccess());
@@ -291,7 +291,7 @@ public final class DiscCellGameTests {
         h.assertTrue(ItemStack.matches(charger.cell(), restored.cell()), "Block save/reload keeps the original and exact energy");
         h.getLevel().destroyBlock(pos, false);
         var drops = h.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(pos).inflate(2));
-        h.assertTrue(drops.size() == 1 && DiscCellItem.energy(drops.getFirst().getItem()) == 1000
+        h.assertTrue(drops.size() == 1 && ChargeableItem.energy(drops.getFirst().getItem()) == 1000
                 && ItemStack.matches(original(), DiscCellItem.master(drops.getFirst().getItem())), "Breaking a charger returns one cell, never a loose copy of its original");
         h.succeed();
     }
@@ -305,7 +305,7 @@ public final class DiscCellGameTests {
         var charger = (DiscCellCharger) h.getLevel().getBlockEntity(dock);
         charger.insert(cell(DiscCellTier.COPPER, 0));
         h.runAfterDelay(30, () -> {
-            h.assertTrue(Math.abs(charger.getSpeed()) >= 16 && DiscCellItem.energy(charger.cell()) > 0,
+            h.assertTrue(Math.abs(charger.getSpeed()) >= 16 && ChargeableItem.energy(charger.cell()) > 0,
                     "A real Create shaft connection charges the cell without CEE, Plant or FE machinery");
             h.succeed();
         });
@@ -332,11 +332,10 @@ public final class DiscCellGameTests {
 
     @GameTest(template="empty", timeoutTicks=40)
     public static void legacyReloadLightExpiresWithoutLeavingABlockBehind(GameTestHelper h) {
-        var player = h.makeMockPlayer(GameType.SURVIVAL);
         BlockPos feet = h.absolutePos(new BlockPos(1, 1, 1));
-        player.setPos(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
-        h.getLevel().setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
-        ReloadGlowBlock.illuminate(player);
+        // As an old save left it: the block, and the scheduled tick that was to remove it.
+        h.getLevel().setBlockAndUpdate(feet.above(), LauncherFeature.RELOAD_GLOW.get().defaultBlockState());
+        h.getLevel().scheduleTick(feet.above(), LauncherFeature.RELOAD_GLOW.get(), 8);
         h.assertTrue(h.getLevel().getBlockState(feet.above()).is(LauncherFeature.RELOAD_GLOW.get()), "Legacy saves may still contain the old white light block");
         h.runAfterDelay(12, () -> {
             h.assertTrue(h.getLevel().getBlockState(feet.above()).isAir(), "The temporary light cannot remain after reloading stops");
@@ -363,17 +362,14 @@ public final class DiscCellGameTests {
         var player = h.makeMockPlayer(GameType.SURVIVAL);
         var shot = new DiscProjectile(h.getLevel(), player, original());
         for (double invalid : new double[] {Double.NaN, Double.POSITIVE_INFINITY, -1, 0, 86401}) shot.noteDuration(invalid);
-        CompoundTag tag = new CompoundTag(); shot.save(tag);
-        h.assertTrue(tag.getDouble("CmsDiscDuration") < 0, "Invalid decoder metadata cannot change the server lifetime");
+        h.assertTrue(shot.trackLength() < 0, "Invalid decoder metadata cannot change the server lifetime");
         shot.noteDuration(254);
         shot.noteDuration(1);
-        shot.save(tag);
-        h.assertTrue(tag.getDouble("CmsDiscDuration") == 254, "A later client cannot shorten an established track");
+        h.assertTrue(shot.trackLength() == 254, "A later client cannot shorten an established track");
+        CompoundTag tag = new CompoundTag(); shot.save(tag);
         var restored = new DiscProjectile(LauncherFeature.DISC_PROJECTILE.get(), h.getLevel()); restored.load(tag);
-        CompoundTag savedAgain = new CompoundTag(); restored.save(savedAgain);
-        h.assertTrue(savedAgain.getDouble("CmsDiscDuration") == 254, "Chunk reload keeps the established duration");
-        tag.putLong("CmsDiscMusicStart", h.getLevel().getGameTime() - 254 * 20);
-        restored.load(tag);
+        h.assertTrue(restored.trackLength() == 254, "Chunk reload keeps the established duration");
+        restored.musicStartedAgo(254 * 20);
         h.assertTrue(!restored.tickPlayback() && restored.isRemoved(), "An expired reloaded projection disappears immediately");
         h.succeed();
     }

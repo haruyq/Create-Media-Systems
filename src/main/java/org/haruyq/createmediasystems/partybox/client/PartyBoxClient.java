@@ -42,9 +42,10 @@ public final class PartyBoxClient {
         bus.addListener((RegisterClientExtensionsEvent event)->event.registerItem(new IClientItemExtensions() {
             private PartyBoxItemRenderer renderer;
             @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() { if(renderer==null)renderer=new PartyBoxItemRenderer();return renderer; }
-        },PartyBoxFeature.PARTYBOX.get(),PartyBoxFeature.PARTYBOX_BATTERY.get()));
+        },PartyBoxFeature.PARTYBOX.get()));
         bus.addListener((net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent event)->Minecraft.getInstance().execute(PartyBoxClient::stopAll));
         NeoForge.EVENT_BUS.addListener(PartyBoxClient::tick);
+        org.haruyq.createmediasystems.client.PointLights.add(PartyBoxRenderer.LIGHTS);
     }
     public static boolean audible(PartyBoxEntity box) {
         var camera=Minecraft.getInstance().getCameraEntity();
@@ -88,7 +89,7 @@ public final class PartyBoxClient {
                         ()->audible(box),()->gain(box),()->pitchAt(box));
                 StreamSound sound=new StreamSound(new StreamSpec(url,start,Streams.Channel.MIX,SoundSource.RECORDS,heard,
                         length->mc.execute(()->{if(mc.getConnection()!=null && box.revision()==revision && Double.isFinite(length) && length>0)
-                            PacketDistributor.sendToServer(new PartyBoxAction(box.getId(),7,(int)Math.ceil(length),revision));}))
+                            PacketDistributor.sendToServer(new PartyBoxAction(box.getId(),PartyBoxAction.Kind.LENGTH,(int)Math.ceil(length),revision));}))
                         .movingDisc(box.getUUID(),box::seconds).decorated(pcm->new BassAudioStream(pcm,box::bass,meter::sample)));
                 ClientStreams.play(box.getUUID(),sound);PLAYING.put(box.getUUID(),new Playing(box,revision,true,null,ticks,meter));
             } else {
