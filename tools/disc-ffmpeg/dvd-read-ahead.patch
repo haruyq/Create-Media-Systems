@@ -1,0 +1,27 @@
+--- a/libavformat/dvdvideodec.c
++++ b/libavformat/dvdvideodec.c
+@@ -149,6 +149,7 @@
+     int                         opt_pg;             /* the user-provided PG number (1-indexed) */
+     int                         opt_pgc;            /* the user-provided PGC number (1-indexed) */
+     int                         opt_preindex;       /* pre-indexing mode (2-pass read) */
++    int                         opt_read_ahead;
+     int                         opt_region;         /* the user-provided region digit */
+     int                         opt_title;          /* the user-provided title number (1-indexed) */
+     int                         opt_trim;           /* trim padding cells at beginning */
+@@ -531,7 +532,7 @@
+ 
+     if (!state->dvdnav                                                          ||
+         dvdnav_open_status != DVDNAV_STATUS_OK                                  ||
+-        dvdnav_set_readahead_flag(state->dvdnav, 0) != DVDNAV_STATUS_OK         ||
++        dvdnav_set_readahead_flag(state->dvdnav, c->opt_read_ahead) != DVDNAV_STATUS_OK ||
+         dvdnav_set_PGC_positioning_flag(state->dvdnav, 1) != DVDNAV_STATUS_OK   ||
+         dvdnav_get_region_mask(state->dvdnav, &disc_region_mask) != DVDNAV_STATUS_OK) {
+ 
+@@ -1840,6 +1841,7 @@
+     {"pg",              "entry PG number (when paired with PGC number)",           OFFSET(opt_pg),             AV_OPT_TYPE_INT,    { .i64=1 },     1,          255,       AV_OPT_FLAG_DECODING_PARAM },
+     {"pgc",             "entry PGC number (0=auto)",                               OFFSET(opt_pgc),            AV_OPT_TYPE_INT,    { .i64=0 },     0,          999,       AV_OPT_FLAG_DECODING_PARAM },
+     {"preindex",        "enable for accurate chapter markers, slow (2-pass read)",  OFFSET(opt_preindex),       AV_OPT_TYPE_BOOL,   { .i64=0 },     0,          1,         AV_OPT_FLAG_DECODING_PARAM },
++    {"read_ahead",      "batch consecutive DVD sector reads",                      OFFSET(opt_read_ahead),     AV_OPT_TYPE_BOOL,   { .i64=1 },     0,          1,         AV_OPT_FLAG_DECODING_PARAM },
+     {"region",          "playback region number (0=free)",                          OFFSET(opt_region),         AV_OPT_TYPE_INT,    { .i64=0 },     0,          8,         AV_OPT_FLAG_DECODING_PARAM },
+     {"title",           "title number (0=auto)",                                    OFFSET(opt_title),          AV_OPT_TYPE_INT,    { .i64=0 },     0,          99,        AV_OPT_FLAG_DECODING_PARAM },
+     {"trim",            "trim padding cells from start",                           OFFSET(opt_trim),           AV_OPT_TYPE_BOOL,   { .i64=1 },     0,          1,         AV_OPT_FLAG_DECODING_PARAM },
