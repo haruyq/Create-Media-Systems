@@ -10,7 +10,7 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.lighting.LightingRenderer;
+import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.playback.Spectrum;
 import org.haruyq.createmediasystems.stream.DiscKind;
@@ -461,8 +461,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             this.buffers = buffers;
             this.light = light;
             this.text = text;
-            metal = new LightingRenderer.Output(buffers, METAL);
-            ink = new LightingRenderer.Output(buffers, LightingRenderer.SCREEN);
+            metal = new QuadOutput(buffers, METAL);
+            ink = new QuadOutput(buffers, QuadOutput.FLAT);
         }
 
         /** A lit quad through four corners, facing ({@code nx}, {@code ny}, {@code nz}). */

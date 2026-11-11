@@ -10,9 +10,10 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.client.IrisCompat;
+import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.display.ScreenLight;
+import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
@@ -72,12 +73,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     .setTransparencyState(RenderStateShard.LIGHTNING_TRANSPARENCY)
                     .setCullState(RenderStateShard.NO_CULL)
                     .setWriteMaskState(RenderStateShard.COLOR_WRITE)
-                    .createCompositeState(false));
-    public static final RenderType SCREEN = RenderType.create("create_media_systems_lighting_controls",
-            DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, false,
-            RenderType.CompositeState.builder()
-                    .setShaderState(new RenderStateShard.ShaderStateShard(GameRenderer::getPositionColorShader))
-                    .setCullState(RenderStateShard.NO_CULL)
                     .createCompositeState(false));
     private static final Map<StageLightBlock.Entity, Trace> TRACES = new WeakHashMap<>();
     private static final Map<StageLightBlock.Entity, LightingMotion> MOTION = new WeakHashMap<>();
@@ -191,7 +186,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     /** Opaque, unlit, position and colour: a stage light's lens. */
     public static RenderType lensType() {
-        return SCREEN;
+        return QuadOutput.FLAT;
     }
 
     @Override
@@ -252,8 +247,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         Matrix4f head = new Matrix4f(yoke).translate(0, 0.56f, 0).rotateX((float) Math.toRadians(-tilt));
         Matrix4f model = new Matrix4f(pose.last().pose());
         // The console's own brushed frame and riveted casing, so fixtures and console read as one set.
-        VertexConsumer metal = new Output(buffers, CONSOLE_FRAME);
-        VertexConsumer casing = new Output(buffers, CONSOLE_CASING);
+        VertexConsumer metal = new QuadOutput(buffers, CONSOLE_FRAME);
+        VertexConsumer casing = new QuadOutput(buffers, CONSOLE_CASING);
         box(metal, new Matrix4f(model).mul(yoke), -0.39f, 0.13f, -0.13f, -0.29f, 0.66f, 0.13f, 0x9A9CA8, light);
         box(metal, new Matrix4f(model).mul(yoke), 0.29f, 0.13f, -0.13f, 0.39f, 0.66f, 0.13f, 0x9A9CA8, light);
         box(metal, new Matrix4f(model).mul(yoke), -0.35f, 0.13f, -0.13f, 0.35f, 0.22f, 0.13f, 0x9A9CA8, light);
@@ -284,7 +279,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         if (group.mapping == LightingSettings.Mapping.PER_FIXTURE && !group.videoColors(video)) {
             color = group.colors[Math.floorMod(lamp.individualColor, group.colorCount)];
         }
-        VertexConsumer screen = new Output(buffers, SCREEN);
+        VertexConsumer screen = new QuadOutput(buffers, QuadOutput.FLAT);
         quad(screen, new Matrix4f(model).mul(head), new Vec3(-spec.lensWidth(), -spec.lensHeight(), -0.342),
                 new Vec3(spec.lensWidth(), -spec.lensHeight(), -0.342), new Vec3(spec.lensWidth(), spec.lensHeight(), -0.342),
                 new Vec3(-spec.lensWidth(), spec.lensHeight(), -0.342), strength > 0 ? color : 0x163340, 255);
@@ -307,7 +302,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
         MultiBufferSource effects = beamBuffers(level, buffers);
         VertexConsumer beam = LightingBeams.available(level) ? null
-                : effects == EFFECTS ? effects.getBuffer(LIGHT) : new Output(buffers, LIGHT);
+                : effects == EFFECTS ? effects.getBuffer(LIGHT) : new QuadOutput(buffers, LIGHT);
         if (pattern.cone()) {
             LightingIllumination.render(lamp, origin, direction, Math.toRadians(coneSpread(pattern, group.spread)) / 2,
                     group.range, strength, color, trace.intersections[SIDES], frame.rays, model, effects);
@@ -639,8 +634,8 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     static void box(VertexConsumer out, Matrix4f matrix, float x0, float y0, float z0, float x1, float y1, float z1,
                             int color, int light) {
-        if (out instanceof Output output) {
-            out = output.buffers.getBuffer(output.type);
+        if (out instanceof QuadOutput output) {
+            out = output.buffer();
         }
         Vec3 a = new Vec3(x0, y0, z0), b = new Vec3(x1, y0, z0), c = new Vec3(x1, y1, z0), d = new Vec3(x0, y1, z0);
         Vec3 e = new Vec3(x0, y0, z1), f = new Vec3(x1, y0, z1), g = new Vec3(x1, y1, z1), h = new Vec3(x0, y1, z1);
@@ -664,61 +659,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         }
     }
 
-    /**
-     * The buffer for {@code type} asked for again each quad: another type asked for between (text, another part)
-     * may have ended its batch. Everything here is drawn in whole quads, 4 vertices together.
-     */
-    public static final class Output implements VertexConsumer {
-        private final MultiBufferSource buffers;
-        private final RenderType type;
-        private VertexConsumer current;
-        private int vertices;
-
-        public Output(MultiBufferSource buffers, RenderType type) {
-            this.buffers = buffers;
-            this.type = type;
-        }
-
-        @Override
-        public VertexConsumer addVertex(float x, float y, float z) {
-            if ((vertices++ & 3) == 0) {
-                current = buffers.getBuffer(type);
-            }
-            current.addVertex(x, y, z);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setColor(int r, int g, int b, int a) {
-            current.setColor(r, g, b, a);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv(float u, float v) {
-            current.setUv(u, v);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv1(int u, int v) {
-            current.setUv1(u, v);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv2(int u, int v) {
-            current.setUv2(u, v);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setNormal(float x, float y, float z) {
-            current.setNormal(x, y, z);
-            return this;
-        }
-    }
-
     public static final class Console implements BlockEntityRenderer<LightingConsoleBlock.Entity> {
         Console(BlockEntityRendererProvider.Context context) {
         }
@@ -734,9 +674,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     .rotateY((float) Math.toRadians(180 - console.getBlockState().getValue(LightingConsoleBlock.FACING).toYRot()))
                     .scale(-1, 1, 1)
                     .translate(-0.5f, 0, -0.5f);
-            VertexConsumer metal = new Output(buffers, CONSOLE_FRAME);
-            VertexConsumer plate = new Output(buffers, CONSOLE_PLATE);
-            VertexConsumer ink = new Output(buffers, SCREEN);
+            VertexConsumer metal = new QuadOutput(buffers, CONSOLE_FRAME);
+            VertexConsumer plate = new QuadOutput(buffers, CONSOLE_PLATE);
+            VertexConsumer ink = new QuadOutput(buffers, QuadOutput.FLAT);
             var settings = console.settings;
             var selected = settings.selected();
             var hovered = LightingControls.hovered(console);

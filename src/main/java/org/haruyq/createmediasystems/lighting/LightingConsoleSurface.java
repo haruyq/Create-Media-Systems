@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.client.QuadOutput;
 import org.joml.Matrix4f;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -23,8 +24,8 @@ public final class LightingConsoleSurface {
         this.buffers = buffers;
         this.matrix = matrix;
         this.light = light;
-        metal = new LightingRenderer.Output(buffers, LightingRenderer.CONSOLE_FRAME);
-        ink = new LightingRenderer.Output(buffers, LightingRenderer.SCREEN);
+        metal = new QuadOutput(buffers, LightingRenderer.CONSOLE_FRAME);
+        ink = new QuadOutput(buffers, QuadOutput.FLAT);
     }
 
     /**

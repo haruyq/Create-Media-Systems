@@ -1,6 +1,4 @@
-package org.haruyq.createmediasystems.display;
-
-import org.haruyq.createmediasystems.client.IrisCompat;
+package org.haruyq.createmediasystems.client;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +20,8 @@ public final class ScreenLight {
     private ScreenLight() {
     }
 
-    static void register() {
+    /** Adds its listener, once, from the client's setup. */
+    public static void register() {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL && !AFTER_PACK.isEmpty()) {
                 Minecraft.getInstance().getMainRenderTarget().bindWrite(true);

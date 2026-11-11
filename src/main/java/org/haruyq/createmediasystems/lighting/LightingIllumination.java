@@ -17,7 +17,7 @@ import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Workers;
 import org.haruyq.createmediasystems.client.IrisCompat;
-import org.haruyq.createmediasystems.display.ScreenLight;
+import org.haruyq.createmediasystems.client.ScreenLight;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
@@ -39,7 +39,6 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -50,15 +49,12 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.model.data.ModelData;
 
 /**
  * A stage light's light on the block faces its beam reaches. Faces are found in the background, or in bounded
@@ -1048,7 +1044,8 @@ public final class LightingIllumination {
      * The faces around {@code center}, those of {@code previous} found again kept as they are (what the light saw of
      * them with them). The new ones are traced in the background from {@code from} under {@code sight}.
      */
-    // ponytail: off the render thread it reads the live client level, as DisplayLight's scan does; a chunk changing
+    // ponytail: off the render thread it reads the live client level, as DisplayLight's scan does (both read faces
+    // through SurfaceLight.forEachQuad); a chunk changing
     // mid-read can throw, which skips that scan (failed) and tries again next frame.
     private static Scan scan(Level level, BlockPos lamp, BlockPos center, int radius, Direction.Axis axis,
                              List<Face> previous, LightingRaycast rays, Vec3 origin, Vec3 from, Vec3 direction,
@@ -1237,38 +1234,27 @@ public final class LightingIllumination {
                 return;
             }
             BlockState state = level.getBlockState(pos);
-            if (state.getRenderShape() != RenderShape.MODEL) {
-                return;
-            }
-            var mc = Minecraft.getInstance();
-            var model = mc.getBlockRenderer().getBlockModel(state);
             Vec3 offset = Vec3.atLowerCornerOf(pos).add(state.getOffset(level, pos));
-            int index = 0;
-            for (int side = 0; side <= 6; side++) {
-                Direction direction = side == 6 ? null : Direction.from3DDataValue(side);
-                if (direction != null && !Block.shouldRenderFace(state, level, pos, direction, pos.relative(direction))) {
-                    continue;
+            int[] index = {0};
+            SurfaceLight.forEachQuad(level, pos, state, random, quad -> {
+                int[] data = quad.getVertices();
+                Face before = known.get(new Key(pos.asLong(), index[0]));
+                if (before != null && before.state == state && Arrays.equals(before.vertices, data)) {
+                    found.add(before);
+                    index[0]++;
+                    return;
                 }
-                random.setSeed(42);
-                for (BakedQuad quad : model.getQuads(state, direction, random, ModelData.EMPTY, null)) {
-                    int[] data = quad.getVertices();
-                    Face before = known.get(new Key(pos.asLong(), index));
-                    if (before != null && before.state == state && Arrays.equals(before.vertices, data)) {
-                        found.add(before);
-                        index++;
-                        continue;
-                    }
-                    int tint = quad.isTinted() ? mc.getBlockColors().getColor(state, level, pos, quad.getTintIndex()) : 0xFFFFFF;
-                    Vec3[] points = new Vec3[4];
-                    float[] uv = new float[8];
-                    SurfaceLight.read(quad, offset, points, uv);
-                    Vec3 normal = Vec3.atLowerCornerOf(quad.getDirection().getNormal());
-                    double winding = Math.signum(points[1].subtract(points[0]).cross(points[3].subtract(points[0])).dot(normal));
-                    Face face = new Face(pos.immutable(), state, index++, data, points, uv, winding, tint, lampOffset);
-                    found.add(face);
-                    created.add(face);
-                }
-            }
+                int tint = quad.isTinted()
+                        ? Minecraft.getInstance().getBlockColors().getColor(state, level, pos, quad.getTintIndex()) : 0xFFFFFF;
+                Vec3[] points = new Vec3[4];
+                float[] uv = new float[8];
+                SurfaceLight.read(quad, offset, points, uv);
+                Vec3 normal = Vec3.atLowerCornerOf(quad.getDirection().getNormal());
+                double winding = Math.signum(points[1].subtract(points[0]).cross(points[3].subtract(points[0])).dot(normal));
+                Face face = new Face(pos.immutable(), state, index[0]++, data, points, uv, winding, tint, lampOffset);
+                found.add(face);
+                created.add(face);
+            });
         }
     }
 }
