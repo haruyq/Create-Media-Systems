@@ -51,8 +51,8 @@ public final class AnalysisPackets {
     }
 
     public record State(UUID source, UUID session, int generation, UUID owner, BlockPos pos, String track,
-                        String next, int height, long millis, boolean active, int delayFrom, int delayTo,
-                        long delayStart) implements CustomPacketPayload {
+                        String next, int height, long millis, boolean active, AnalysisDelay delay)
+            implements CustomPacketPayload {
         public static final Type<State> TYPE = new Type<>(CreateMediaSystems.id("analysis_state"));
         public static final StreamCodec<ByteBuf, State> CODEC = StreamCodec.of((buf, value) -> {
             uuid(buf, value.source);
@@ -62,17 +62,11 @@ public final class AnalysisPackets {
             BlockPos.STREAM_CODEC.encode(buf, value.pos);
             StreamPackets.URL.encode(buf, value.track);
             StreamPackets.URL.encode(buf, value.next);
-            buf.writeInt(value.height).writeLong(value.millis).writeBoolean(value.active)
-                    .writeInt(value.delayFrom).writeInt(value.delayTo).writeLong(value.delayStart);
+            buf.writeInt(value.height).writeLong(value.millis).writeBoolean(value.active);
+            AnalysisDelay.CODEC.encode(buf, value.delay);
         }, buf -> new State(uuid(buf), uuid(buf), buf.readInt(), uuid(buf), BlockPos.STREAM_CODEC.decode(buf),
                 StreamPackets.URL.decode(buf), StreamPackets.URL.decode(buf), buf.readInt(), buf.readLong(), buf.readBoolean(),
-                buf.readInt(), buf.readInt(), buf.readLong()));
-
-        public State(UUID source, UUID session, int generation, UUID owner, BlockPos pos, String track,
-                     String next, int height, long millis, boolean active) {
-            this(source, session, generation, owner, pos, track, next, height, millis, active,
-                    AnalysisDelay.INITIAL.from(), AnalysisDelay.INITIAL.to(), AnalysisDelay.INITIAL.start());
-        }
+                AnalysisDelay.CODEC.decode(buf)));
 
         @Override
         public Type<State> type() {

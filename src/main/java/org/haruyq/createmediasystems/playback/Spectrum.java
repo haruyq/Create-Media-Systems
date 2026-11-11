@@ -1,17 +1,15 @@
 package org.haruyq.createmediasystems.playback;
 
-import java.util.ArrayDeque;
 import java.util.Arrays;
 
 import org.jetbrains.annotations.Nullable;
 
 /**
  * What a playback sounds like from moment to moment, for a hi-fi stack's spectrum display and level meters: how loud
- * each of {@link #BANDS} octave bands is, and each channel. VLC's audio thread hands it the samples as they are
- * decoded, a moment before they are heard; each frame keeps the time its samples are heard (VLC's clock), so a display
- * asking for now gets what is in the air now.
+ * each of {@link #BANDS} octave bands is, and each channel. A tap of the native player (see MediaTaps), handed the
+ * samples as they are decoded, a moment before they are heard.
  */
-public final class Spectrum {
+public final class Spectrum implements MediaTap {
     /** Octave bands, centred from 31.5 Hz up to 16 kHz. */
     public static final int BANDS = 10;
     private static final double LOWEST = 31.5;
@@ -29,44 +27,36 @@ public final class Spectrum {
     }
 
     /**
-     * A moment's sound, heard at {@code at} (VLC's clock, µs): each band and each channel from 0 ({@link #FLOOR_DB}
-     * or less) to 1 (full scale).
+     * A moment's sound, heard at {@code at} (the playback's clock, µs): each band and each channel from 0
+     * ({@link #FLOOR_DB} or less) to 1 (full scale).
      */
-    public record Frame(long at, float[] bands, float left, float right) {
+    public record Frame(long at, float[] bands, float left, float right) implements TimedFrames.Timed {
     }
 
-    private final ArrayDeque<Frame> frames = new ArrayDeque<>();
+    private final TimedFrames<Frame> frames = new TimedFrames<>(200);
     /** The last WINDOW samples (both channels mixed), the newest at {@code written - 1}. */
     private final double[] ring = new double[WINDOW];
     private long written;
     private int sinceFrame;
     private double leftEnergy;
     private double rightEnergy;
-    private long end;
 
-    /** {@code count} interleaved 16-bit stereo samples of {@code stereo}, the first heard at {@code pts}. */
-    synchronized void offer(byte[] stereo, int count, long pts) {
-        if (end != 0 && Math.abs(pts - end) > 50_000) {
-            clear();
-        }
-        int available = Math.min(count, stereo.length / 4);
+    @Override
+    public synchronized void sound(byte[] pcm, int count, int channels, long pts) {
+        int available = Math.min(count, pcm.length / (channels * 2));
         for (int i = 0; i < available; i++) {
-            double left = (short) (stereo[i * 4] & 0xff | stereo[i * 4 + 1] << 8) / 32768.0;
-            double right = (short) (stereo[i * 4 + 2] & 0xff | stereo[i * 4 + 3] << 8) / 32768.0;
+            double left = Pcm.sample(pcm, i, channels, 0);
+            double right = Pcm.sample(pcm, i, channels, 1);
             ring[(int) (written++ % WINDOW)] = (left + right) / 2;
             leftEnergy += left * left;
             rightEnergy += right * right;
             if (++sinceFrame == HOP) {
-                frames.addLast(new Frame(pts + (i + 1) * 1_000_000L / Pcm.RATE, bands(),
+                frames.add(new Frame(pts + (i + 1) * 1_000_000L / Pcm.RATE, bands(),
                         level(Math.sqrt(leftEnergy / HOP)), level(Math.sqrt(rightEnergy / HOP))));
-                while (frames.size() > 200) {
-                    frames.removeFirst();
-                }
                 sinceFrame = 0;
                 leftEnergy = rightEnergy = 0;
             }
         }
-        end = pts + available * 1_000_000L / Pcm.RATE;
     }
 
     /** How loud each band of the last WINDOW samples is. */
@@ -134,26 +124,17 @@ public final class Spectrum {
         }
     }
 
-    /** The frame heard at {@code at} (VLC's clock, µs); null if none is, or the last is long over. */
+    /** The frame heard at {@code at} (the playback's clock, µs); null if none is, or the last is over. */
     @Nullable
     synchronized Frame sample(long at) {
-        while (frames.size() > 1) {
-            var iterator = frames.iterator();
-            iterator.next();
-            if (iterator.next().at > at) {
-                break;
-            }
-            frames.removeFirst();
-        }
-        Frame frame = frames.peekFirst();
-        return frame == null || frame.at > at || at - frame.at > 250_000 ? null : frame;
+        return frames.at(at);
     }
 
-    synchronized void clear() {
+    @Override
+    public synchronized void clear() {
         frames.clear();
         Arrays.fill(ring, 0);
         sinceFrame = 0;
         leftEnergy = rightEnergy = 0;
-        end = 0;
     }
 }

@@ -45,27 +45,6 @@ class VlcAudioTest {
         }
     }
 
-    @Test
-    void lightingColorsExpireEvenWhenCallsKeepRequestingAnalysis() {
-        VideoFrame frame = new VideoFrame();
-        try (Memory format = new Memory(20)) {
-            format.setInt(4, 8);
-            format.setInt(8, 8);
-            assertEquals(1, frame.setup.invoke(null, format, format.share(4), format.share(8),
-                    format.share(12), format.share(16)));
-            frame.display.invoke(null, null);
-            assertNotEquals(0, frame.lastPicture);
-            assertNull(frame.lighting());
-            frame.display.invoke(null, null);
-            long last = frame.lastPicture;
-            assertNotNull(frame.lighting(last));
-            assertNotNull(frame.lighting(last + 900_000_000L));
-            assertNull(frame.lighting(last + 1_000_000_000L));
-            frame.lastPicture = last + 1_500_000_000L;
-            assertNull(frame.lighting(frame.lastPicture), "a fresh callback cannot make old analysis colors fresh");
-        }
-    }
-
     /** VLC's blocks up to {@code until} (µs); sample n's left value is n + 1, each block timed a hair off. */
     private void feedUntil(VlcAudio audio, long until) {
         while (START + (long) fed * 1_000_000 / RATE < until) {
@@ -100,7 +79,7 @@ class VlcAudioTest {
 
     @Test
     void streamsPlayEachSampleTogetherWhateverHappenedToThemBefore() {
-        VlcAudio audio = new VlcAudio();
+        VlcAudio audio = new VlcAudio(new MediaTaps(() -> 0));
         VlcAudio.Stream a = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
         VlcAudio.Stream b = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
         Map<Long, Integer> heardA = new HashMap<>();
@@ -127,7 +106,7 @@ class VlcAudioTest {
 
     @Test
     void timestampsAHairOffStillPlayAsOneRun() {
-        VlcAudio audio = new VlcAudio();
+        VlcAudio audio = new VlcAudio(new MediaTaps(() -> 0));
         VlcAudio.Stream stream = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
         Map<Long, Integer> heard = new HashMap<>();
         feedUntil(audio, START + 1_000_000);
@@ -147,7 +126,7 @@ class VlcAudioTest {
 
     private void clockDrift(long readEvery) {
         fed = 0;
-        VlcAudio audio = new VlcAudio();
+        VlcAudio audio = new VlcAudio(new MediaTaps(() -> 0));
         VlcAudio.Stream stream = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
         feedUntil(audio, START + 5_000_000);
         int previous = 0;
@@ -169,7 +148,7 @@ class VlcAudioTest {
 
     @Test
     void eightSpeakersRebuildTheirBuffersAtTheCurrentVideoTimeAfterABriefPause() {
-        VlcAudio audio = new VlcAudio();
+        VlcAudio audio = new VlcAudio(new MediaTaps(() -> 0));
         List<VlcAudio.Stream> streams = new ArrayList<>();
         for (int i = 0; i < 8; i++) {
             streams.add((VlcAudio.Stream) audio.open(i < 4 ? Streams.Channel.LEFT : Streams.Channel.RIGHT));
@@ -184,7 +163,7 @@ class VlcAudioTest {
         // Fresh taps give the reference audio; the existing taps have already handed these samples to OpenAL.
         fed = 0;
         wobble.setSeed(1);
-        VlcAudio reference = new VlcAudio();
+        VlcAudio reference = new VlcAudio(new MediaTaps(() -> 0));
         VlcAudio.Stream left = (VlcAudio.Stream) reference.open(Streams.Channel.LEFT);
         VlcAudio.Stream right = (VlcAudio.Stream) reference.open(Streams.Channel.RIGHT);
         feedUntil(reference, START + 1_000_000);
@@ -205,7 +184,7 @@ class VlcAudioTest {
 
     @Test
     void flushingAlsoDiscardsAudioKeptForResuming() {
-        VlcAudio audio = new VlcAudio();
+        VlcAudio audio = new VlcAudio(new MediaTaps(() -> 0));
         VlcAudio.Stream stream = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
         feedUntil(audio, START + 500_000);
         read(stream, START, new HashMap<>());
@@ -219,7 +198,7 @@ class VlcAudioTest {
 
     @Test
     void aTapIsDrainedOnlyOnceItHasNothingQueued() {
-        VlcAudio audio = new VlcAudio();
+        VlcAudio audio = new VlcAudio(new MediaTaps(() -> 0));
         VlcAudio.Stream tap = (VlcAudio.Stream) audio.open(Streams.Channel.LEFT);
         assertTrue(VlcAudio.drained(tap));
         tap.offer(new byte[] {1, 0, 1, 0}, 0);

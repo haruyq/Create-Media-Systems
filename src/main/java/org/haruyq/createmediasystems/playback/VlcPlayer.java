@@ -32,7 +32,9 @@ public final class VlcPlayer implements NativeAudio.Backend {
             Thread.ofPlatform().daemon().name("CMS VLC release").factory());
 
     private final ReentrantLock lock = new ReentrantLock();
-    final VlcAudio audio = new VlcAudio();
+    /** Its taps (see MediaTaps), on VLC's clock: offered its audio as heard and its pictures as shown. */
+    private final MediaTaps taps = new MediaTaps(() -> LIB.libvlc_clock());
+    final VlcAudio audio = new VlcAudio(taps);
     @Nullable
     final VideoFrame frame;
     /** Guarded by lock; null before start and once released. */
@@ -60,7 +62,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
      */
     VlcPlayer(@Nullable Streams.Video video, long requestedAt, double startSeconds) {
         this.startSeconds = startSeconds;
-        frame = video == null ? null : new VideoFrame();
+        frame = video == null ? null : new VideoFrame(taps);
         var callbacks = new CallbackThreadInitializer(true, false, "CMS VLC callback");
         Native.setCallbackThreadInitializer(audio.play, callbacks);
         Native.setCallbackThreadInitializer(audio.flush, callbacks);
@@ -91,12 +93,6 @@ public final class VlcPlayer implements NativeAudio.Backend {
     }
 
     @Override
-    @Nullable
-    public Spectrum.Frame spectrum() {
-        return audio.spectrum();
-    }
-
-    @Override
     public void equalize(Tone tone) {
         audio.equalizer.set(tone.bands(), tone.width());
     }
@@ -108,15 +104,8 @@ public final class VlcPlayer implements NativeAudio.Backend {
     }
 
     @Override
-    @Nullable
-    public LightingMedia.AudioFrame lightingAudio() {
-        return audio.lighting();
-    }
-
-    @Override
-    @Nullable
-    public LightingMedia.Colors lightingColors() {
-        return frame == null ? null : frame.lighting();
+    public MediaTaps taps() {
+        return taps;
     }
 
     @Override
@@ -229,10 +218,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
         lock.lock();
         try {
             if (player != null) {
-                audio.clearLighting();
-                if (frame != null) {
-                    frame.clearLighting();
-                }
+                forget();
                 LIB.libvlc_media_player_set_time(player, millis);
             }
         } finally {
@@ -280,10 +266,7 @@ public final class VlcPlayer implements NativeAudio.Backend {
         if (diagnostics != null) {
             diagnostics.send();
         }
-        audio.clearLighting();
-        if (frame != null) {
-            frame.clearLighting();
-        }
+        forget();
         // Stopping waits for VLC's threads, which may take a moment: never on the game's or the sound engine's.
         RELEASER.execute(() -> {
             lock.lock();
@@ -296,10 +279,18 @@ public final class VlcPlayer implements NativeAudio.Backend {
             } finally {
                 lock.unlock();
             }
-            audio.clearLighting();
+            audio.clear();
             if (frame != null) {
                 frame.close();
             }
         });
+    }
+
+    /** What it played no longer goes on (sought, let go): no media of it came lately, and its taps start over. */
+    private void forget() {
+        audio.clear();
+        if (frame != null) {
+            frame.lastPicture = 0;
+        }
     }
 }

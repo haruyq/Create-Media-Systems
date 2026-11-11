@@ -199,14 +199,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         }
     }
 
-    /** Where in {@code url} this, the API stream of what {@code source} plays, is heard now (ms); -1 if not. */
-    long position(BlockPos source, String url) {
-        PcmStream current = stream;
-        double seconds = current == null || !source.equals(spec.source()) || !url.equals(spec.track()) ? -1
-                : current.heardSeconds(System.nanoTime());
-        return seconds < 0 ? -1 : Math.round(seconds * 1000);
-    }
-
     /** Where in its track its API stream is heard now (s); -1 if nothing of it is, or it plays natively. */
     public double audibleSeconds() {
         PcmStream current = stream;
@@ -461,15 +453,17 @@ public final class StreamSound extends AbstractTickableSoundInstance {
      * One stream's read of its {@link Feed}, whose pump thread reads ahead so the sound engine thread, which calls
      * {@link #read}, only waits on the network if the API falls behind real time.
      */
-    static final class PcmStream implements CmsStream {
-        final String track;
+    static final class PcmStream implements CmsStream, MediaTaps.Relay {
+        @Nullable
+        private final String track;
         private final Feed.Reader feed;
         @Nullable
         private final BlockPos playback;
         private final Streams.Channel channel;
         /** A moving disc's: it plays to a clock that runs on while the game is paused (see CmsStream). */
         private final boolean followsClock;
-        private final LightingMedia.Audio lighting = new LightingMedia.Audio();
+        /** Its taps, offered what of it is heard as they ask (see heardUpTo), on System.nanoTime in µs. */
+        private final MediaTaps taps = new MediaTaps(() -> heardUpTo(System.nanoTime()));
         /** Where in the track what it plays is heard, from its buffers' {@link Feed.Reader#mediaSeconds}. */
         final AudibleTimeline heard = new AudibleTimeline(Pcm.RATE);
         private long analyzedPosition = -1;
@@ -488,55 +482,65 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             this.channel = channel;
             this.followsClock = followsClock;
             if (this.playback != null) {
-                LightingMedia.openRelay(this.playback, this);
+                MediaTaps.open(this.playback, this);
             }
         }
 
-        Streams.Channel channel() {
+        @Override
+        public Streams.Channel channel() {
             return channel;
         }
 
-        /** Where in the track what is heard at {@code now} is (s); -1 if nothing of it is. */
-        double heardSeconds(long now) {
+        @Override
+        @Nullable
+        public String track() {
+            return track;
+        }
+
+        @Override
+        public MediaTaps taps() {
+            return taps;
+        }
+
+        @Override
+        public double heardSeconds(long now) {
             return closed ? -1 : heard.seconds(now);
         }
 
-        @Nullable
-        LightingMedia.AudioFrame lighting() {
-            return lighting(System.nanoTime());
-        }
-
-        @Nullable
-        synchronized LightingMedia.AudioFrame lighting(long now) {
+        /**
+         * Offers its taps what of it is heard up to {@code now} (System.nanoTime), peeked from the feed without taking
+         * it (silence as a tenth of a second of it); returns {@code now} in µs.
+         */
+        synchronized long heardUpTo(long now) {
             AudibleTimeline.Heard current = closed ? null : heard.at(now);
-            if (current == null) {
-                return null;
-            }
-            if (current.seconds() < 0) {
-                lighting.clear();
+            if (current == null || current.seconds() < 0) {
+                taps.clear();
                 analyzedPosition = -1;
-                return new LightingMedia.AudioFrame(now / 1000, 0, 0, 0, 0, 0, LightingMedia.DEFAULT_BPM);
+                if (current != null) {
+                    taps.sound(new byte[Pcm.BYTES_PER_SECOND / 10], Pcm.RATE / 10, 1, now / 1000 - 100_000);
+                }
+                return now / 1000;
             }
             long top = feed.bytesAt(current.seconds());
             long position = feed.bytesAt(current.secondsAt(now));
             long from = analyzedPosition;
             if (from < 0 || position < from || position - from > Pcm.BYTES_PER_SECOND / 4) {
-                lighting.clear();
+                taps.clear();
                 from = Math.max(0, position - Pcm.BYTES_PER_SECOND / 5) & ~1L;
             }
             int length = (int) (position - from);
             if (length > 0) {
                 byte[] pcm = feed.peek(from, length);
                 if (pcm == null) {
-                    lighting.clear();
+                    taps.clear();
                     analyzedPosition = -1;
-                    return null;
+                    return now / 1000;
                 }
                 long at = current.at() + (from - top) * 1_000_000_000L / Pcm.BYTES_PER_SECOND;
-                lighting.offerMono(pcm, at / 1000);
+                taps.sound(pcm, pcm.length / 2, 1, at / 1000);
                 analyzedPosition = position;
             }
-            return lighting.sample(now / 1000);
+            return now / 1000;
         }
 
         /** Waits until the start of the track is buffered; returns early if closed or ended. */
@@ -567,7 +571,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         public synchronized long attach(int source, long deviceNow) {
             long startAt = start == null ? 0 : start.playAt(deviceNow);
             heard.attach(source, startAt);
-            lighting.clear();
+            taps.clear();
             analyzedPosition = -1;
             return startAt;
         }
@@ -620,7 +624,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             closed = true;
             heard.close();
             if (playback != null) {
-                LightingMedia.closeRelay(playback, this);
+                MediaTaps.close(playback, this);
             }
             feed.close();
         }

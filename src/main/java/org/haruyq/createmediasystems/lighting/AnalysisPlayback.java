@@ -8,8 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-import org.haruyq.createmediasystems.playback.CachedLightingAnalysis;
-import org.haruyq.createmediasystems.playback.LightingMedia;
+import org.jetbrains.annotations.Nullable;
 
 import com.mojang.logging.LogUtils;
 
@@ -23,22 +22,24 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Client side of the lighting analysis (see AnalysisCoordinator): follows each source's session, and while this
- * player is its owner, sends the signal of the media playing here, ahead from a kept copy where it can.
+ * player is its owner, sends the signal of the media playing here, ahead from a kept copy where it can. Each client
+ * tick, every console here takes its sources' signal from it (see sample).
  */
 public final class AnalysisPlayback {
     private static final Map<UUID, Playback> PLAYING = new HashMap<>();
+    /** A client tick (ms): how far on a console's motion phase is read, for how fast it runs till the next. */
+    private static final long PHASE_STEP_MILLIS = 50;
     private static ClientLevel level;
 
     private AnalysisPlayback() {
     }
 
-    private static final class Playback {
+    private static final class Playback extends AnalysisSession {
         AnalysisPackets.State state;
-        final Map<String, AnalysisTimeline> tracks = new HashMap<>();
         final Map<String, Integer> uploaded = new HashMap<>();
         final Map<String, List<AnalysisFrame>> prepared = new LinkedHashMap<>();
         final AnalysisClock sharedClock = new AnalysisClock();
-        volatile CompletableFuture<List<LightingMedia.Sample>> job;
+        volatile CompletableFuture<List<AnalysisFrame>> job;
         String jobTrack;
         long received;
         long sequence;
@@ -69,6 +70,25 @@ public final class AnalysisPlayback {
             }
         }
 
+        /** Another owner (generation): what this client sent goes, and it starts sending over. */
+        void newOwner() {
+            cancel();
+            uploaded.clear();
+            sequence = 0;
+            liveSequence = 0;
+            pending = null;
+            previous = null;
+        }
+
+        @Override
+        void restart() {
+            super.restart();
+            newOwner();
+            localAt = 0;
+            sharedClock.reset();
+            lagMillis = -1;
+        }
+
         boolean owner() {
             var player = Minecraft.getInstance().player;
             return state.active() && player != null && player.getUUID().equals(state.owner());
@@ -81,10 +101,6 @@ public final class AnalysisPlayback {
 
         long samplePosition() {
             return sharedClock.position(System.nanoTime(), position());
-        }
-
-        long delay(long position) {
-            return Math.round(new AnalysisDelay(state.delayFrom(), state.delayTo(), state.delayStart()).at(position));
         }
 
         boolean updateClock(long now) {
@@ -105,6 +121,24 @@ public final class AnalysisPlayback {
         }
     }
 
+    /** What this client keeps of a source's session, for the development probes. */
+    public record Snapshot(AnalysisPackets.State state, boolean owner, long position, long samplePosition, long delay,
+                           @Nullable AnalysisTimeline timeline, @Nullable AnalysisTimeline next, long received,
+                           @Nullable Long pendingSequence, long sentAt) {
+    }
+
+    /** Every session this client follows now. */
+    public static List<Snapshot> snapshots() {
+        List<Snapshot> snapshots = new ArrayList<>();
+        for (Playback playback : PLAYING.values()) {
+            long position = playback.samplePosition();
+            snapshots.add(new Snapshot(playback.state, playback.owner(), playback.position(), position,
+                    playback.delay(position), playback.timeline(), playback.tracks.get(playback.next), playback.received,
+                    playback.pending == null ? null : playback.pending.sequence(), playback.sentAt));
+        }
+        return snapshots;
+    }
+
     public static void register() {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clear());
@@ -123,35 +157,21 @@ public final class AnalysisPlayback {
         }
         Playback playback = PLAYING.get(state.source());
         if (playback == null) {
-            if (PLAYING.size() >= 32) {
+            if (PLAYING.size() >= AnalysisSession.MAX_SESSIONS) {
                 return;
             }
             playback = new Playback(state);
             PLAYING.put(state.source(), playback);
         } else if (!playback.state.session().equals(state.session())) {
-            playback.cancel();
-            playback.tracks.entrySet().removeIf(entry -> !entry.getValue().prepared());
-            playback.tracks.values().forEach(AnalysisTimeline::clearLive);
-            playback.uploaded.clear();
-            playback.sequence = 0;
-            playback.liveSequence = 0;
-            playback.pending = null;
-            playback.localAt = 0;
-            playback.sharedClock.reset();
-            playback.previous = null;
-            playback.lagMillis = -1;
+            playback.restart();
         } else if (playback.state.generation() != state.generation()) {
-            playback.cancel();
-            playback.uploaded.clear();
-            playback.sequence = 0;
-            playback.liveSequence = 0;
-            playback.pending = null;
-            playback.previous = null;
+            playback.newOwner();
         }
         playback.state = state;
+        playback.delay = state.delay();
         playback.received = System.nanoTime();
-        playback.tracks.keySet().removeIf(track -> !track.equals(state.track()) && !track.equals(state.next()));
-        playback.prepared.keySet().removeIf(track -> !track.equals(state.track()) && !track.equals(state.next()));
+        playback.follow(state.track(), state.next());
+        playback.prepared.keySet().removeIf(track -> !state.track().equals(track) && !state.next().equals(track));
         if (!playback.owner()) {
             playback.cancel();
         }
@@ -159,12 +179,10 @@ public final class AnalysisPlayback {
 
     public static void batch(AnalysisPackets.Batch batch) {
         Playback playback = PLAYING.get(batch.source());
-        if (playback == null || !playback.state.session().equals(batch.session())
-                || !batch.track().equals(playback.state.track()) && !batch.track().equals(playback.state.next())) {
+        if (playback == null || !playback.state.session().equals(batch.session()) || !playback.has(batch.track())) {
             return;
         }
-        boolean accepted = playback.tracks.computeIfAbsent(batch.track(), ignored -> new AnalysisTimeline())
-                .add(batch.frames(), batch.prepared());
+        boolean accepted = playback.timeline(batch.track()).add(batch.frames(), batch.prepared());
         if (accepted && !batch.prepared() && !batch.frames().isEmpty()) {
             long lag = playback.samplePosition() - batch.frames().getLast().millis();
             playback.lagMillis = lag >= 0 && lag <= AnalysisDelay.MAX_MILLIS ? (int) lag : -1;
@@ -224,8 +242,8 @@ public final class AnalysisPlayback {
             }
             boolean ready = playback.updateClock(now);
             long position = playback.position();
-            AnalysisTimeline timeline = playback.tracks.get(state.track());
-            if (now - playback.statusAt >= 1_000_000_000L) {
+            AnalysisTimeline timeline = playback.timeline();
+            if (now - playback.statusAt >= AnalysisSession.STATUS_NANOS) {
                 PacketDistributor.sendToServer(new AnalysisPackets.Status(state.source(), state.session(), ready, position,
                         now - playback.lagAt < 2_000_000_000L ? playback.lagMillis : -1, now, playback.sharedClock.upstreamMillis()));
                 playback.statusAt = now;
@@ -247,9 +265,8 @@ public final class AnalysisPlayback {
             }
             playback.liveSentAt = now;
             if (timeline == null || timeline.samplePrepared(position) == null) {
-                LightingMedia.Sample sample = LightingMedia.sample(state.pos(), state.track());
-                if (sample != null) {
-                    AnalysisFrame frame = frame(position, sample);
+                AnalysisFrame frame = LightingMedia.sample(state.pos(), state.track(), position);
+                if (frame != null) {
                     List<AnalysisFrame> prepared = playback.prepared.get(state.track());
                     double phase = prepared == null ? Double.NaN : AnalysisTimeline.phaseAt(prepared, position);
                     if (!Double.isFinite(phase)) {
@@ -269,9 +286,9 @@ public final class AnalysisPlayback {
     private static void prepare(Playback playback, long now) {
         if (playback.job != null && playback.job.isDone()) {
             try {
-                List<AnalysisFrame> frames = frames(playback.job.join());
+                List<AnalysisFrame> frames = playback.job.join();
                 if (!frames.isEmpty()) {
-                    if (playback.jobTrack.equals(playback.state.track())) {
+                    if (playback.jobTrack.equals(playback.track)) {
                         long position = playback.position();
                         frames = AnalysisTimeline.align(frames, position, phaseAt(playback, position));
                     }
@@ -288,13 +305,12 @@ public final class AnalysisPlayback {
             return;
         }
         playback.retryAt = now + 1_000_000_000L;
-        for (String track : List.of(playback.state.next(), playback.state.track())) {
+        for (String track : List.of(playback.next, playback.track)) {
             if (track.isEmpty() || playback.prepared.containsKey(track)) {
                 continue;
             }
             try {
-                var job = CachedLightingAnalysis.analyzeCached(track, playback.state.height(),
-                        AnalysisFrame.MAX_DURATION, AnalysisFrame.INTERVAL);
+                var job = CachedLightingAnalysis.analyze(track, playback.state.height());
                 if (job == null) {
                     continue;
                 }
@@ -307,32 +323,12 @@ public final class AnalysisPlayback {
         }
     }
 
-    private static AnalysisFrame frame(long millis, LightingMedia.Sample sample) {
-        return new AnalysisFrame(millis, sample.level(), sample.bass(), sample.mid(), sample.high(), sample.pulse(),
-                Math.clamp(sample.bpm(), AnalysisFrame.MIN_BPM, AnalysisFrame.MAX_BPM), sample.leftColor(),
-                sample.rightColor(), sample.audio(), sample.video());
-    }
-
-    /** Frames of {@code samples} taken every INTERVAL from the start, their motion phase run on from 0. */
-    private static List<AnalysisFrame> frames(List<LightingMedia.Sample> samples) {
-        List<AnalysisFrame> frames = new ArrayList<>(samples.size());
-        double phase = 0;
-        for (LightingMedia.Sample sample : samples) {
-            AnalysisFrame frame = frame((long) frames.size() * AnalysisFrame.INTERVAL, sample);
-            if (!frames.isEmpty()) {
-                phase += AnalysisFrame.INTERVAL / 1000.0 * frames.getLast().motionSpeed();
-            }
-            frames.add(frame.phase(phase));
-        }
-        return List.copyOf(frames);
-    }
-
     private static double phaseAt(Playback playback, long position) {
-        return AnalysisTimeline.continuePhase(playback.tracks.get(playback.state.track()), playback.previous, position);
+        return AnalysisTimeline.continuePhase(playback.timeline(), playback.previous, position);
     }
 
     private static boolean uploadPrepared(Playback playback) {
-        for (String track : List.of(playback.state.track(), playback.state.next())) {
+        for (String track : playback.both()) {
             List<AnalysisFrame> frames = playback.prepared.get(track);
             int from = playback.uploaded.getOrDefault(track, 0);
             if (frames == null || from >= frames.size()) {
@@ -352,7 +348,8 @@ public final class AnalysisPlayback {
         PacketDistributor.sendToServer(playback.pending);
     }
 
-    private static Playback find(BlockPos pos) {
+    @Nullable
+    private static Playback find(@Nullable BlockPos pos) {
         if (pos != null) {
             for (Playback playback : PLAYING.values()) {
                 if (playback.state.active() && playback.state.pos().equals(pos)) {
@@ -363,21 +360,27 @@ public final class AnalysisPlayback {
         return null;
     }
 
-    private static AnalysisFrame sample(Playback playback) {
-        AnalysisTimeline timeline = playback == null ? null : playback.tracks.get(playback.state.track());
-        long position = playback == null ? 0 : playback.samplePosition();
-        return timeline == null ? null : timeline.sample(position, playback.delay(position));
-    }
-
-    public static double apply(LightingConsoleBlock.Entity console, double fallbackSeconds) {
+    /**
+     * Gives {@code console} the signal its audio and video sources play here now, and where its media is (see
+     * LightingConsoleBlock.Playhead): once a client tick, for its lights to draw from.
+     */
+    static void sample(LightingConsoleBlock.Entity console) {
+        checkLevel();
         Playback audio = find(console.audioSource());
         Playback video = find(console.videoSource());
-        console.receive(sample(audio), sample(video), console.getLevel().getGameTime());
-        AnalysisTimeline timeline = audio == null ? null : audio.tracks.get(audio.state.track());
-        long position = audio == null ? 0 : audio.samplePosition();
-        double phase = timeline == null ? Double.NaN : timeline.phaseAt(position, audio.delay(position));
-        console.motionPhase = Double.isFinite(phase) ? phase : audio == null ? fallbackSeconds : audio.samplePosition() / 1000.0;
-        Playback clock = audio == null ? video : audio;
-        return clock == null ? fallbackSeconds : clock.samplePosition() / 1000.0;
+        long now = System.nanoTime();
+        long audioAt = audio == null ? 0 : audio.samplePosition();
+        long videoAt = video == null ? 0 : video.samplePosition();
+        console.receive(audio == null ? null : audio.sample(audioAt), video == null ? null : video.sample(videoAt),
+                console.getLevel().getGameTime());
+        double phase = audio == null ? Double.NaN : audio.phaseAt(audioAt);
+        // How fast the phase runs till the next tick: as the timeline has it a tick on.
+        double ahead = Double.isFinite(phase) ? audio.phaseAt(audioAt + PHASE_STEP_MILLIS) : Double.NaN;
+        double speed = Double.isFinite(ahead) ? Math.clamp((ahead - phase) * 1000 / PHASE_STEP_MILLIS, 0, 2) : 1;
+        if (!Double.isFinite(phase) && audio != null) {
+            phase = audioAt / 1000.0;
+        }
+        double seconds = audio != null ? audioAt / 1000.0 : video != null ? videoAt / 1000.0 : Double.NaN;
+        console.playhead = new LightingConsoleBlock.Playhead(seconds, phase, speed, now);
     }
 }

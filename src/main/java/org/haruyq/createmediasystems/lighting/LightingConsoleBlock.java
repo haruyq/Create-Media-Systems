@@ -100,8 +100,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != LightingFeature.LIGHTING_CONSOLE_ENTITY.get() ? null
-                : (l, p, s, be) -> ((Entity) be).tick();
+        // Both sides: a client samples its consoles' signal (see AnalysisPlayback#sample).
+        return type != LightingFeature.LIGHTING_CONSOLE_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
     @Override
@@ -152,6 +152,28 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
     private record Fixture(Link link, int group, String family) {
     }
 
+    /**
+     * Where a console's media is, as a client last sampled it (see AnalysisPlayback#sample): its clock (s) and its
+     * audio's motion phase, each NaN for none, as of {@code at} (System.nanoTime); drawn running on from there.
+     */
+    public record Playhead(double seconds, double phase, double phaseSpeed, long at) {
+        public static final Playhead NONE = new Playhead(Double.NaN, Double.NaN, 0, 0);
+
+        /** Its clock at {@code now} (System.nanoTime); {@code fallback} without one. */
+        public double seconds(long now, double fallback) {
+            return Double.isFinite(seconds) ? seconds + since(now) : fallback;
+        }
+
+        /** Its motion phase at {@code now}; {@code fallback} without one. */
+        public double phase(long now, double fallback) {
+            return Double.isFinite(phase) ? phase + since(now) * phaseSpeed : fallback;
+        }
+
+        private double since(long now) {
+            return Math.max(0, now - at) / 1e9;
+        }
+    }
+
     public static class Entity extends BlockEntity implements IHaveGoggleInformation {
         public final LightingSettings settings = new LightingSettings();
         /** Its fixtures, in their order: a fixture's order is its place among those of its group. */
@@ -162,18 +184,15 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         /** Other mods' settings for this console (see extras), by their mod id. */
         private final CompoundTag extras = new CompoundTag();
         public boolean formed;
-        public float audioLevel;
-        public float bass;
-        public float mid;
-        public float high;
-        public float pulse;
-        public float bpm = AnalysisFrame.DEFAULT_BPM;
-        public double motionPhase;
-        public int videoLeft = LightingSettings.DEFAULT_COLORS[0];
-        public int videoRight = LightingSettings.DEFAULT_COLORS[1];
-        public boolean hasAudio;
-        public boolean hasVideo;
-        public long signalAt = -100;
+        /** The signal its audio and video sources play, as last sampled (see receive); null for none. */
+        @Nullable
+        private AnalysisFrame audioSignal;
+        @Nullable
+        private AnalysisFrame videoSignal;
+        /** When it last had a signal (game time). */
+        private long signalAt = -100;
+        /** Where its media is, on a client (see Playhead). */
+        public Playhead playhead = Playhead.NONE;
 
         public Entity(BlockPos pos, BlockState state) {
             super(LightingFeature.LIGHTING_CONSOLE_ENTITY.get(), pos, state);
@@ -209,12 +228,12 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         public void setAudioSource(@Nullable BlockPos pos) {
             audio = linkTo(pos);
-            hasAudio = false;
+            audioSignal = null;
         }
 
         public void setVideoSource(@Nullable BlockPos pos) {
             video = linkTo(pos);
-            hasVideo = false;
+            videoSignal = null;
         }
 
         private Link linkTo(@Nullable BlockPos pos) {
@@ -293,12 +312,16 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             Link followedAudio = audio.follow(level);
             Link followedVideo = video.follow(level);
             if (!followedAudio.equals(audio)) {
-                hasAudio &= Objects.equals(followedAudio.pos(), audio.pos());
+                if (!Objects.equals(followedAudio.pos(), audio.pos())) {
+                    audioSignal = null;
+                }
                 audio = followedAudio;
                 updated = true;
             }
             if (!followedVideo.equals(video)) {
-                hasVideo &= Objects.equals(followedVideo.pos(), video.pos());
+                if (!Objects.equals(followedVideo.pos(), video.pos())) {
+                    videoSignal = null;
+                }
                 video = followedVideo;
                 updated = true;
             }
@@ -322,6 +345,12 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         }
 
         private void tick() {
+            if (level.isClientSide) {
+                if (formed && isRoot()) {
+                    AnalysisPlayback.sample(this);
+                }
+                return;
+            }
             if (level.getGameTime() % 20 == 0) {
                 refreshLinks();
                 updateStructure();
@@ -587,24 +616,41 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         /**
          * The signal its audio and video sources play now (null: none), as the analysis has it at {@code gameTime}:
-         * on the server each tick, and on each client as it draws.
+         * each tick, on the server and on each client.
          */
         public void receive(@Nullable AnalysisFrame audio, @Nullable AnalysisFrame video, long gameTime) {
-            hasAudio = audio != null && audio.audio();
-            hasVideo = video != null && video.video();
-            audioLevel = audio == null ? 0 : audio.level();
-            bass = audio == null ? 0 : audio.bass();
-            mid = audio == null ? 0 : audio.mid();
-            high = audio == null ? 0 : audio.high();
-            pulse = audio == null ? 0 : audio.pulse();
-            bpm = audio == null ? AnalysisFrame.DEFAULT_BPM : audio.bpm();
-            if (video != null) {
-                videoLeft = video.left();
-                videoRight = video.right();
-            }
-            if (hasAudio || hasVideo) {
+            audioSignal = audio;
+            videoSignal = video;
+            if (hasAudio() || hasVideo()) {
                 signalAt = gameTime;
             }
+        }
+
+        /** Whether its audio source's sound reached it when last sampled. */
+        public boolean hasAudio() {
+            return audioSignal != null && audioSignal.audio();
+        }
+
+        /** Whether its video source's picture reached it when last sampled. */
+        public boolean hasVideo() {
+            return videoSignal != null && videoSignal.video();
+        }
+
+        /** Whether it had a signal lately, as of {@code gameTime}: a console no longer sampled goes dark. */
+        public boolean fresh(long gameTime) {
+            return gameTime - signalAt < 30;
+        }
+
+        /** Its audio source's signal as of {@code gameTime}; null for none, or none lately. */
+        @Nullable
+        public AnalysisFrame audio(long gameTime) {
+            return hasAudio() && fresh(gameTime) ? audioSignal : null;
+        }
+
+        /** Its video source's signal as of {@code gameTime}; null for none, or none lately. */
+        @Nullable
+        public AnalysisFrame video(long gameTime) {
+            return hasVideo() && fresh(gameTime) ? videoSignal : null;
         }
 
         @Override

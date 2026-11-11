@@ -167,10 +167,10 @@ public final class SableLightingDemo {
         if (!verified && mediaReady && level.getGameTime() % 100 == 0) {
             for (Body body : bodies) {
                 if (body.role == 1 && level.getBlockEntity(body.ship.getPlot().getCenterBlock().offset(0, 1, 2))
-                        instanceof LightingConsoleBlock.Entity aboard && aboard.hasAudio && aboard.hasVideo && console.hasVideo) {
+                        instanceof LightingConsoleBlock.Entity aboard && aboard.hasAudio() && aboard.hasVideo() && console.hasVideo()) {
                     verified = true;
                     LogUtils.getLogger().info("Sable lighting demo ready: ships={}, groundFixtures={}, onboardFixtures={}, groundVideo={}, onboardAudio={}, onboardVideo={}",
-                            bodies.size(), console.fixtures().size(), aboard.fixtures().size(), console.hasVideo, aboard.hasAudio, aboard.hasVideo);
+                            bodies.size(), console.fixtures().size(), aboard.fixtures().size(), console.hasVideo(), aboard.hasAudio(), aboard.hasVideo());
                 }
             }
         }

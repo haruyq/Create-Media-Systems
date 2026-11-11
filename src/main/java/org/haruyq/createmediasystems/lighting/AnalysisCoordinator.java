@@ -4,16 +4,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.BlockIdentity;
+import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Streams;
+
+import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -24,6 +26,11 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+/**
+ * Server side of the lighting analysis: a session per source a console follows, whose owner (one of its listeners,
+ * see AnalysisLease) uploads the signal it plays, which the server keeps and hands every viewer (see
+ * AnalysisPlayback); and each console's signal, sampled every tick.
+ */
 public final class AnalysisCoordinator {
     private static final Map<ServerLevel, Map<UUID, Session>> LEVELS = new HashMap<>();
 
@@ -39,24 +46,21 @@ public final class AnalysisCoordinator {
         final Map<String, Long> sent = new HashMap<>();
         AnalysisPackets.Batch pending;
         long pendingAt;
-        long statusAt = System.nanoTime() / 1_000_000 - 500;
+        long statusAt = System.nanoTime() / 1_000_000 - AnalysisSession.STATUS_MIN_MILLIS;
     }
 
-    private static final class Session {
+    static final class Session extends AnalysisSession {
         final UUID source;
-        UUID session = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
         AnalysisLease lease = new AnalysisLease();
         final Map<UUID, Long> ready = new HashMap<>();
         final Map<UUID, Audience> audience = new HashMap<>();
         final Set<UUID> eligible = new HashSet<>();
-        final Map<String, AnalysisTimeline> tracks = new LinkedHashMap<>();
         final Set<BlockPos> consoles = new HashSet<>();
         BlockPos pos;
         /** The load of its source's track it follows (see Streams#loadId): a new one starts it over. */
         long load;
         UUID preferred;
-        String track = "";
-        String next = "";
         int height;
         long millis;
         long touched;
@@ -66,7 +70,6 @@ public final class AnalysisCoordinator {
         int liveTokens = 20;
         long clockAt;
         long clockMillis;
-        AnalysisDelay delay = AnalysisDelay.INITIAL;
         boolean active;
 
         Session(UUID source, BlockPos pos) {
@@ -75,9 +78,9 @@ public final class AnalysisCoordinator {
         }
 
         AnalysisPackets.State state() {
-            return new AnalysisPackets.State(source, session, lease.generation,
+            return new AnalysisPackets.State(source, id, lease.generation,
                     lease.owner == null ? AnalysisPackets.NONE : lease.owner, pos, track, next, height, position(), active,
-                    delay.from(), delay.to(), delay.start());
+                    delay);
         }
 
         long position() {
@@ -90,20 +93,47 @@ public final class AnalysisCoordinator {
             return liveTokens > 0;
         }
 
+        @Override
         void restart() {
-            session = UUID.randomUUID();
+            super.restart();
+            id = UUID.randomUUID();
             lease = new AnalysisLease();
             ready.clear();
-            tracks.entrySet().removeIf(entry -> !entry.getValue().prepared());
-            tracks.values().forEach(AnalysisTimeline::clearLive);
             audience.values().forEach(value -> {
                 value.sent.clear();
                 value.pending = null;
             });
             sentAt = -100;
             clockAt = 0;
-            delay = AnalysisDelay.INITIAL;
         }
+    }
+
+    /** What the server keeps of a source's session, for the development probes. */
+    public record Snapshot(UUID source, UUID session, String track, String next, int generation, @Nullable UUID owner,
+                           long sequence, long liveSequence, long published, int ready, long trackEnd, long nextEnd) {
+    }
+
+    /** Every session the server keeps now. */
+    public static List<Snapshot> snapshots() {
+        List<Snapshot> snapshots = new ArrayList<>();
+        for (Map<UUID, Session> sessions : LEVELS.values()) {
+            for (Session session : sessions.values()) {
+                AnalysisTimeline track = session.tracks.get(session.track);
+                AnalysisTimeline next = session.tracks.get(session.next);
+                snapshots.add(new Snapshot(session.source, session.id, session.track, session.next,
+                        session.lease.generation, session.lease.owner, session.lease.sequence,
+                        session.lease.liveSequence, session.lease.published, session.ready.size(),
+                        track == null ? -1 : track.end(), next == null ? -1 : next.end()));
+            }
+        }
+        return snapshots;
+    }
+
+    /** The session of the source {@code source} in {@code level}; null if none. */
+    @Nullable
+    static Session session(ServerLevel level, UUID source) {
+        Map<UUID, Session> sessions = LEVELS.get(level);
+        return sessions == null ? null : sessions.get(source);
     }
 
     public static void use(LightingConsoleBlock.Entity console) {
@@ -115,12 +145,11 @@ public final class AnalysisCoordinator {
         console.receive(sample(level, console.audioSource()), sample(level, console.videoSource()), level.getGameTime());
     }
 
-    private static AnalysisFrame sample(ServerLevel level, BlockPos pos) {
-        Map<UUID, Session> sessions = LEVELS.get(level);
-        Session session = sessions == null || pos == null ? null : sessions.get(BlockIdentity.of(level, pos));
-        AnalysisTimeline timeline = session == null || !session.active ? null : session.tracks.get(session.track);
-        long position = session == null ? 0 : session.position();
-        return timeline == null ? null : timeline.sample(position, Math.round(session.delay.at(position)));
+    @Nullable
+    private static AnalysisFrame sample(ServerLevel level, @Nullable BlockPos pos) {
+        UUID source = pos == null ? null : BlockIdentity.of(level, pos);
+        Session session = source == null ? null : session(level, source);
+        return session == null || !session.active ? null : session.sample(session.position());
     }
 
     private static void use(ServerLevel level, BlockPos pos, BlockPos console) {
@@ -132,7 +161,7 @@ public final class AnalysisCoordinator {
             return;
         }
         Map<UUID, Session> sessions = LEVELS.computeIfAbsent(level, ignored -> new HashMap<>());
-        if (!sessions.containsKey(id) && sessions.size() >= 32) {
+        if (!sessions.containsKey(id) && sessions.size() >= AnalysisSession.MAX_SESSIONS) {
             return;
         }
         BlockEntity source = (BlockEntity) media;
@@ -145,7 +174,7 @@ public final class AnalysisCoordinator {
         session.consoles.add(console.immutable());
         session.touched = level.getGameTime();
         session.preferred = Streams.startedBy(source);
-        Streams.Source playing = Streams.playing(media);
+        Streams.Source playing = Streams.source(level, pos);
         // Not while its track loads: its position stands at 0 then, and clients, running it on from each state they
         // are sent, would play the lights the track's first half second over and over until it starts.
         boolean active = playing != null && Streams.loaded(source);
@@ -154,11 +183,9 @@ public final class AnalysisCoordinator {
         }
         session.active = active;
         if (active) {
-            session.track = playing.url();
-            session.next = playing.video() == null ? "" : playing.video().next().orElse("");
+            session.follow(playing.url(), playing.video() == null ? "" : playing.video().next().orElse(""));
             session.height = playing.video() == null ? 0 : playing.video().maxHeight();
-            session.millis = playing.ticks() * 50;
-            session.tracks.keySet().removeIf(track -> !track.equals(session.track) && !track.equals(session.next));
+            session.millis = playing.ticks() * PlaybackClock.NANOS_PER_TICK / 1_000_000;
         }
     }
 
@@ -231,7 +258,7 @@ public final class AnalysisCoordinator {
             }
             return false;
         }
-        for (String track : List.of(session.track, session.next)) {
+        for (String track : session.both()) {
             AnalysisTimeline timeline = session.tracks.get(track);
             if (timeline == null || !timeline.prepared()) {
                 continue;
@@ -239,7 +266,7 @@ public final class AnalysisCoordinator {
             long cursor = audience.sent.getOrDefault(track, track.equals(session.track) ? Math.max(-1, session.position() - 1000) : -1);
             List<AnalysisFrame> frames = timeline.after(cursor, AnalysisPackets.BATCH_SIZE);
             if (!frames.isEmpty()) {
-                audience.pending = new AnalysisPackets.Batch(session.source, session.session, track, true, frames);
+                audience.pending = new AnalysisPackets.Batch(session.source, session.id, track, true, frames);
                 audience.pendingAt = System.nanoTime();
                 PacketDistributor.sendToPlayer(player, audience.pending);
                 return true;
@@ -259,23 +286,23 @@ public final class AnalysisCoordinator {
         }
     }
 
+    @Nullable
     private static Session session(ServerPlayer player, UUID source, UUID id) {
-        Map<UUID, Session> sessions = LEVELS.get(player.serverLevel());
-        Session session = sessions == null ? null : sessions.get(source);
-        return session != null && session.session.equals(id) && session.active ? session : null;
+        Session session = session(player.serverLevel(), source);
+        return session != null && session.id.equals(id) && session.active ? session : null;
     }
 
     public static void status(ServerPlayer player, AnalysisPackets.Status status) {
         Session session = session(player, status.source(), status.session());
         if (session == null || status.millis() < 0 || status.millis() > AnalysisFrame.MAX_MILLIS
-                || status.upstreamMillis() < 0 || status.upstreamMillis() > 2_000) {
+                || status.upstreamMillis() < 0 || status.upstreamMillis() > AnalysisDelay.MAX_MILLIS) {
             return;
         }
         UUID id = player.getUUID();
         Audience audience = session.audience.get(id);
         boolean eligible = session.eligible.contains(id);
         long now = System.nanoTime() / 1_000_000;
-        if (audience == null ? !eligible : now - audience.statusAt < 500) {
+        if (audience == null ? !eligible : now - audience.statusAt < AnalysisSession.STATUS_MIN_MILLIS) {
             return;
         }
         if (audience != null) {
@@ -292,16 +319,14 @@ public final class AnalysisCoordinator {
                 session.delay = delay;
                 session.sentAt = -100;
             }
-            AnalysisTimeline timeline = session.tracks.get(session.track);
-            if (id.equals(session.lease.owner) && timeline != null
-                    && timeline.sample(status.millis(), Math.round(session.delay.at(status.millis()))) != null) {
+            if (id.equals(session.lease.owner) && session.sample(status.millis()) != null) {
                 session.lease.published = now;
             }
         } else if (eligible) {
             session.ready.remove(id);
         }
         if (audience != null && status.clientSentNanos() != 0) {
-            PacketDistributor.sendToPlayer(player, new AnalysisPackets.Clock(session.source, session.session,
+            PacketDistributor.sendToPlayer(player, new AnalysisPackets.Clock(session.source, session.id,
                     status.clientSentNanos(), session.clockAt == 0 ? -1 : session.position()));
         }
     }
@@ -311,26 +336,26 @@ public final class AnalysisCoordinator {
         long tick = player.level().getGameTime();
         if (upload.prepared() && session != null && player.getUUID().equals(session.lease.owner)
                 && upload.generation() == session.lease.generation && upload.sequence() == session.lease.sequence) {
-            PacketDistributor.sendToPlayer(player, new AnalysisPackets.Accepted(session.source, session.session,
+            PacketDistributor.sendToPlayer(player, new AnalysisPackets.Accepted(session.source, session.id,
                     session.lease.generation, upload.sequence()));
             return;
         }
         if (session == null || !session.eligible.contains(player.getUUID())
                 || !session.lease.accepts(player.getUUID(), upload.generation(), upload.sequence(), upload.prepared())
                 || upload.prepared() && tick - session.receivedAt < 1 || upload.frames().isEmpty()
-                || !upload.track().equals(session.track) && !upload.track().equals(session.next)
+                || !session.has(upload.track())
                 || !upload.prepared() && (!upload.track().equals(session.track) || upload.frames().size() != 1
                         || !session.hasLiveToken(tick))) {
             return;
         }
-        AnalysisTimeline timeline = session.tracks.computeIfAbsent(upload.track(), ignored -> new AnalysisTimeline());
+        AnalysisTimeline timeline = session.timeline(upload.track());
         if (!(upload.prepared() ? timeline.publishPrepared(upload.frames()) : timeline.add(upload.frames(), false))) {
             return;
         }
         session.lease.accepted(upload.sequence(), upload.prepared(), System.nanoTime() / 1_000_000);
         if (upload.prepared()) {
             session.receivedAt = tick;
-            PacketDistributor.sendToPlayer(player, new AnalysisPackets.Accepted(session.source, session.session,
+            PacketDistributor.sendToPlayer(player, new AnalysisPackets.Accepted(session.source, session.id,
                     session.lease.generation, upload.sequence()));
         } else {
             session.liveTokens--;
@@ -338,7 +363,7 @@ public final class AnalysisCoordinator {
         if (!upload.prepared()) {
             for (ServerPlayer listener : player.serverLevel().players()) {
                 if (session.audience.containsKey(listener.getUUID())) {
-                    PacketDistributor.sendToPlayer(listener, new AnalysisPackets.Batch(session.source, session.session,
+                    PacketDistributor.sendToPlayer(listener, new AnalysisPackets.Batch(session.source, session.id,
                             session.track, false, upload.frames()));
                 }
             }

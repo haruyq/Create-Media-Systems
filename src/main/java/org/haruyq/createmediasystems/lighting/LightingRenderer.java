@@ -12,6 +12,7 @@ import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.Rgb;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
@@ -200,15 +201,14 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         StageLightBlock.Spec spec = lamp.spec();
         LightingSettings.Group group = console == null ? new LightingSettings.Group() : console.settings.groups[lamp.group()];
         boolean enabled = console != null && console.formed && console.settings.enabled;
-        double seconds = LightingMotion.seconds(level.getGameTime(), partialTick);
-        if (console != null) {
-            seconds = AnalysisPlayback.apply(console, seconds);
-        }
+        long now = System.nanoTime();
+        double gameSeconds = LightingMotion.seconds(level.getGameTime(), partialTick);
+        double seconds = console == null ? gameSeconds : console.playhead.seconds(now, gameSeconds);
         LightingMotion motion = MOTION.computeIfAbsent(lamp, ignored -> new LightingMotion());
         float pan = group.pan;
         float tilt = group.tilt;
-        double phase = (group.audio && console != null && console.audioSource() != null ? console.motionPhase : seconds)
-                * group.speed + lamp.order() * 0.35;
+        double phase = (group.audio && console != null && console.audioSource() != null
+                ? console.playhead.phase(now, gameSeconds) : seconds) * group.speed + lamp.order() * 0.35;
         if (group.motion == Motion.SWEEP) {
             pan += (float) Math.sin(phase) * 55;
         } else if (group.motion == Motion.CIRCLE) {
@@ -261,21 +261,23 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return;
         }
         float strength = enabled ? console.settings.master * group.brightness : 0;
-        if (group.audio && console != null && console.hasAudio && level.getGameTime() - console.signalAt < 30) {
+        AnalysisFrame audio = console == null ? null : console.audio(level.getGameTime());
+        if (group.audio && audio != null) {
             float energy = switch (group.audioBand) {
-                case BASS -> console.bass;
-                case MID -> console.mid;
-                case HIGH -> console.high;
-                case ALL -> console.audioLevel;
+                case BASS -> audio.bass();
+                case MID -> audio.mid();
+                case HIGH -> audio.high();
+                case ALL -> audio.level();
             };
             float floor = group.motion == Motion.TRACK ? spec.trackFloor() : 0.12f;
-            strength *= Mth.clamp(floor + energy * 1.5f + console.pulse * 0.35f, 0, 1);
+            strength *= Mth.clamp(floor + energy * 1.5f + audio.pulse() * 0.35f, 0, 1);
         }
         int count = console == null ? 1 : Math.max(1, console.groupSize(lamp.group()));
-        boolean video = console != null && console.hasVideo && level.getGameTime() - console.signalAt < 30;
-        int color = LightingSettings.color(group, lamp.order(), count, seconds,
-                console == null ? 0 : console.videoLeft, console == null ? 0 : console.videoRight,
-                video);
+        AnalysisFrame shown = console == null ? null : console.video(level.getGameTime());
+        boolean video = shown != null;
+        int videoLeft = shown == null ? 0 : shown.left();
+        int videoRight = shown == null ? 0 : shown.right();
+        int color = LightingSettings.color(group, lamp.order(), count, seconds, videoLeft, videoRight, video);
         if (group.mapping == LightingSettings.Mapping.PER_FIXTURE && !group.videoColors(video)) {
             color = group.colors[Math.floorMod(lamp.individualColor, group.colorCount)];
         }
@@ -312,10 +314,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                     || group.mapping == LightingSettings.Mapping.PER_FIXTURE;
             for (int i = 0; i < trace.ends.length; i++) {
                 int rayColor = fixtureColor ? color : LightingSettings.color(group, i, trace.ends.length, seconds,
-                        console.videoLeft, console.videoRight, video);
+                        videoLeft, videoRight, video);
                 if (pattern == Pattern.LASER_SHEET && i + 1 < trace.ends.length) {
                     int nextColor = fixtureColor ? color : LightingSettings.color(group, i + 1, trace.ends.length, seconds,
-                            console.videoLeft, console.videoRight, video);
+                            videoLeft, videoRight, video);
                     sheet(beam, model, origin, trace.ends[i], trace.ends[i + 1], rayColor, nextColor, strength,
                             trace.planes[i], trace.planes[i + 1], trace.middle[i]);
                 }
@@ -669,7 +671,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             if (!console.formed || console.controller() != console || IrisCompat.shadowPass()) {
                 return;
             }
-            AnalysisPlayback.apply(console, 0);
             Matrix4f matrix = new Matrix4f(pose.last().pose()).translate(0.5f, 0, 0.5f)
                     .rotateY((float) Math.toRadians(180 - console.getBlockState().getValue(LightingConsoleBlock.FACING).toYRot()))
                     .scale(-1, 1, 1)
@@ -780,7 +781,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 for (int i = 0; i < LightingSettings.COLORS; i++) {
                     Area swatch = ConsoleLayout.slot(Control.SLOT, i).area();
                     monitor(ink, matrix, 0, swatch.left() + 0.007f, swatch.left() + 0.098f, 1.71f, 1.84f,
-                            i < selected.colorCount ? selected.colors[i] : LightingSettings.mix(selected.colors[i], 0, 0.8f));
+                            i < selected.colorCount ? selected.colors[i] : Rgb.mix(selected.colors[i], 0, 0.8f));
                     if (i == settings.selectedColor) {
                         monitorBorder(ink, matrix, 0, swatch.left(), swatch.right(), swatch.bottom(), swatch.top(), 0xFFFFFF);
                     }

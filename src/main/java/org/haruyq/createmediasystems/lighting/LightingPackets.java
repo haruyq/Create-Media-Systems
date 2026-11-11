@@ -254,8 +254,8 @@ public final class LightingPackets {
         /** Value: the Source it clears. */
         SOURCES(21, "sources", Press.STEP, (s, g, i, step, fine) -> (step < 0 ? Source.AUDIO : Source.VIDEO).ordinal(),
                 view -> LightingText.message("source_state",
-                        LightingText.source(view.console().audioSource() != null, view.console().hasAudio),
-                        LightingText.source(view.console().videoSource() != null, view.console().hasVideo)),
+                        LightingText.source(view.console().audioSource() != null, view.console().hasAudio()),
+                        LightingText.source(view.console().videoSource() != null, view.console().hasVideo())),
                 (console, s, g, change, value, player) -> {
                     if (value == Source.AUDIO.ordinal()) {
                         console.setAudioSource(null);
@@ -267,9 +267,9 @@ public final class LightingPackets {
             @Override
             Component readout(View view) {
                 return LightingText.text("A ", LightingText.TEXT)
-                        .append(LightingText.source(view.console().audioSource() != null, view.console().hasAudio))
+                        .append(LightingText.source(view.console().audioSource() != null, view.console().hasAudio()))
                         .append("  V ")
-                        .append(LightingText.source(view.console().videoSource() != null, view.console().hasVideo));
+                        .append(LightingText.source(view.console().videoSource() != null, view.console().hasVideo()));
             }
         },
         /** Value: how far every group's range moves, 1 or FAST_RANGE_STEP either way. */

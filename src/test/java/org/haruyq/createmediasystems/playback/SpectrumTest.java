@@ -14,7 +14,7 @@ class SpectrumTest {
             stereo[n * 4] = (byte) value;
             stereo[n * 4 + 1] = (byte) (value >> 8);
         }
-        spectrum.offer(stereo, Pcm.RATE, 1_000_000);
+        spectrum.sound(stereo, Pcm.RATE, 2, 1_000_000);
         return spectrum.sample(1_900_000);
     }
 
@@ -57,7 +57,7 @@ class SpectrumTest {
     @Test
     void nothingIsHeardBeforeOrLongAfter() {
         Spectrum spectrum = new Spectrum();
-        spectrum.offer(new byte[Pcm.RATE * 4], Pcm.RATE, 1_000_000);
+        spectrum.sound(new byte[Pcm.RATE * 4], Pcm.RATE, 2, 1_000_000);
         assertNull(spectrum.sample(900_000));
         assertNull(spectrum.sample(3_000_000));
     }

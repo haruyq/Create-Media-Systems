@@ -294,12 +294,6 @@ public final class NativeAudio {
             return null;
         }
 
-        /** What it sounds like at this moment, after its tone (see Spectrum); null if it can't tell. */
-        @Nullable
-        default Spectrum.Frame spectrum() {
-            return null;
-        }
-
         /** Plays through {@code tone} from now on (see Equalizer). */
         default void equalize(Tone tone) {
         }
@@ -310,15 +304,9 @@ public final class NativeAudio {
             return null;
         }
 
-        /** What the stage lights follow of its sound now; null for nothing. */
+        /** Its taps, offered its sound (after its tone) and pictures as they play; null for none. */
         @Nullable
-        default LightingMedia.AudioFrame lightingAudio() {
-            return null;
-        }
-
-        /** What the stage lights follow of its pictures now; null for nothing. */
-        @Nullable
-        default LightingMedia.Colors lightingColors() {
+        default MediaTaps taps() {
             return null;
         }
 
@@ -481,7 +469,8 @@ public final class NativeAudio {
             return display != null ? display : id.source();
         }
 
-        boolean plays() {
+        /** Whether it plays here yet: loaded, and lined up with the others. */
+        public boolean plays() {
             return playing.isDone() && !playing.isCompletedExceptionally();
         }
 
@@ -522,7 +511,14 @@ public final class NativeAudio {
         /** What it sounds like here at this moment, after its tone (see Spectrum); null if it doesn't play yet. */
         @Nullable
         public Spectrum.Frame spectrum() {
-            return plays() ? owner.spectrum() : null;
+            MediaTaps taps = taps();
+            return taps == null ? null : taps.get(Spectrum.class, Spectrum::new).sample(taps.now());
+        }
+
+        /** Its taps (see MediaTaps); null for none, or while it doesn't play yet. */
+        @Nullable
+        public MediaTaps taps() {
+            return plays() ? owner.taps() : null;
         }
 
         /** It plays through {@code tone}: of what shows or plays it (see Equalizer#set). */
@@ -531,23 +527,13 @@ public final class NativeAudio {
         }
 
         /** How far into its track its player is (ms); -1 if it can't tell. */
-        long time() {
+        public long time() {
             return owner.time();
         }
 
         /** Whether it is live with its media still coming in, as of {@code now}. */
-        boolean liveAndFlowing(long now) {
+        public boolean liveAndFlowing(long now) {
             return live && owner.recentMedia(now);
-        }
-
-        @Nullable
-        LightingMedia.AudioFrame lightingAudio() {
-            return plays() ? owner.lightingAudio() : null;
-        }
-
-        @Nullable
-        LightingMedia.Colors lightingColors() {
-            return plays() ? owner.lightingColors() : null;
         }
 
         /**

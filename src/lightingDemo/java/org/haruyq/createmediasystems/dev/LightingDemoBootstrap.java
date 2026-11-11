@@ -14,6 +14,7 @@ import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
+import org.haruyq.createmediasystems.lighting.AnalysisFrame;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.LightingSettings;
 import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
@@ -92,11 +93,14 @@ public final class LightingDemoBootstrap {
             return;
         }
         if (LightingLab.console(event.getServer().overworld()) instanceof LightingConsoleBlock.Entity console
-                && console.formed && console.hasAudio && console.hasVideo) {
+                && console.formed && console.hasAudio() && console.hasVideo()) {
             verified = true;
+            long now = event.getServer().overworld().getGameTime();
+            AnalysisFrame audio = console.audio(now);
+            AnalysisFrame video = console.video(now);
             LogUtils.getLogger().info("Lighting demo ready: {} fixtures, audio={}, video={}, level={}, colors={}/{}, master={}, firstColor={}",
-                    console.fixtures().size(), console.hasAudio, console.hasVideo, console.audioLevel,
-                    Integer.toHexString(console.videoLeft), Integer.toHexString(console.videoRight),
+                    console.fixtures().size(), console.hasAudio(), console.hasVideo(), audio == null ? 0 : audio.level(),
+                    Integer.toHexString(video == null ? 0 : video.left()), Integer.toHexString(video == null ? 0 : video.right()),
                     console.settings.master, Integer.toHexString(console.settings.groups[0].colors[0]));
         }
     }
