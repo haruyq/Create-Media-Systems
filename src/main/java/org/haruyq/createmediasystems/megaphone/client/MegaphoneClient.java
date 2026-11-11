@@ -20,7 +20,6 @@ import org.haruyq.createmediasystems.megaphone.*;
 import org.haruyq.createmediasystems.playback.*;
 
 public final class MegaphoneClient {
-    /** A megaphone's music, from its horn in {@code player}'s {@code hand}, beamed where they look. */
     private record Horn(Player player,InteractionHand hand,UUID id) implements MusicEmitter {
         @Override public int cap(){return 8;}
         static Stream<Horn> near(Entity ear) {

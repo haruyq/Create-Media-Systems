@@ -61,11 +61,9 @@ public final class LauncherClient {
     private static boolean headHit,killed;
     private static float hitDamage,cameraKick;
     private static int confirmedShots,confirmedHits,confirmedHeadshots;
-    /** Optional focus provider for non-mouse input integrations; the default uses normal game focus. */
     private static java.util.function.BooleanSupplier additionalInputActive=()->false;
     /** Lets {@code active} count as input focus besides the game window's (a harness driving the client). */
     public static void additionalInput(java.util.function.BooleanSupplier active){additionalInputActive=active;}
-    /** What the local player's launcher has confirmed so far, read-only, for diagnostics. */
     public record Diagnostics(int confirmedShots,int confirmedHits,int confirmedHeadshots,float hitDamage,boolean reticleDrawn) {}
     public static Diagnostics diagnostics(){return new Diagnostics(confirmedShots,confirmedHits,confirmedHeadshots,hitDamage,LauncherHud.reticleDrawn);}
     public static float aim(float partial){return MOTION.aim(partial);}
@@ -153,7 +151,6 @@ public final class LauncherClient {
         return LauncherTimeline.sample(stack, level, partialTick);
     }
 
-    /** The gun's animation now, and the cell it shows: where on its path, its colour and glow. */
     public record CellVisual(ItemStack stack, LauncherTimeline.Frame motion, LauncherMechanics.CellPose pose, int color, float strength) {}
 
     public static CellVisual cellVisual(ItemStack gun, Level level, float partial) {
@@ -208,7 +205,6 @@ public final class LauncherClient {
         pose.translate(-.5f, -.5f, -.5f);
     }
 
-    /** The cell's light on whatever is drawn in {@link #gunSpace}. */
     private static CellLight spill(PoseStack pose, CellVisual visual, float strength) {
         var path = visual.pose();
         return new CellLight(pose.last().pose(), path.x() / 16, path.y() / 16, path.z() / 16, 18f / 16, visual.color(),
@@ -224,7 +220,6 @@ public final class LauncherClient {
         pose.mulPose(Axis.ZP.rotationDegrees(p.roll()));pose.scale(p.scale(),p.scale(),p.scale());
     }
 
-    /** The player's actual skinned support hand removes the old cell and feeds the escrowed one into the breech. */
     private static void supportHand(RenderHandEvent event) {
         var mc = Minecraft.getInstance();
         var player = mc.player;
@@ -250,7 +245,7 @@ public final class LauncherClient {
         CellLight spill = spill(pose, visual, 1.8f);
         float withdraw = 1 - motion.supportHand();
         pose.translate(-hand * withdraw * .4f, -withdraw * .3f, withdraw * .15f);
-        // Only the receiver draws the cell, at the same scale throughout. The palm supports its bottom cap.
+        // Only the receiver draws the cell, at the same scale throughout.
         pose.translate(path.x() / 16, (path.y() + LauncherMechanics.CELL_BOTTOM - .25f) / 16, path.z() / 16);
         pose.mulPose(Axis.YP.rotationDegrees(hand * 10));
         pose.scale(.85f, .85f, .85f);

@@ -13,29 +13,23 @@ import net.minecraft.world.phys.Vec3;
  * of its animated bones.
  */
 public sealed interface AttachmentAnchor {
-    /** Whether the disc struck its target's head. */
     boolean head();
     /** The dragon part the disc struck, or -1. */
     int part();
     /** The dragon bone the disc sits on, or -1. */
     int bone();
 
-    /** Where {@code local} on {@code target} is in the world, {@code partial} into the tick. */
     Vec3 position(LivingEntity target, Vec3 local, float partial);
 
-    /** Which way the local direction {@code local} on {@code target} points in the world. */
     Vec3 direction(LivingEntity target, Vec3 local, float partial);
 
-    /** Where a disc that hit {@code target} at {@code point}, flying along {@code incoming}, sits on it. */
     Placed place(LivingEntity target, Vec3 point, Vec3 incoming);
 
     /** How far from the anchor's origin, in its local units, a saved point may be. */
     float pointBound();
 
-    /** A disc's place on its target: its anchor, and its point and forward direction local to that anchor. */
     record Placed(AttachmentAnchor anchor, Vec3 point, Vec3 direction) {}
 
-    /** What a hit struck: the entity the disc attaches to, its anchor there, and whether it was a headshot. */
     record Strike(Entity target, AttachmentAnchor anchor, boolean head) {}
 
     /** The body, or the head, of a living target. Normalized offsets follow crouching and changes in body size. */

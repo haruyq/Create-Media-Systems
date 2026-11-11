@@ -18,7 +18,6 @@ import net.minecraft.client.Minecraft;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-/** Projectile is a modelled disc, rotating rapidly around its own axis. */
 public final class DiscProjectileRenderer extends EntityRenderer<DiscProjectile> {
     public DiscProjectileRenderer(EntityRendererProvider.Context context) { super(context); }
 

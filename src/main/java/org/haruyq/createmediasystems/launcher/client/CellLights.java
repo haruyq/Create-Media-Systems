@@ -23,7 +23,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 
-/** The light energy cells give: in a held launcher, in a hand, on the ground and in a charger. */
 final class CellLights implements PointLights.Source {
     @Override
     public void collect(PointLights.View view, Consumer<Light> lights) {
@@ -58,7 +57,6 @@ final class CellLights implements PointLights.Source {
         }
     }
 
-    /** The cell in a launcher, where the gun model draws it: through the first-person hand pose, or near the eye. */
     private static void launcher(PointLights.View view, Player player, ItemStack gun, Consumer<Light> lights) {
         var mc = Minecraft.getInstance();
         float partial = view.partial();

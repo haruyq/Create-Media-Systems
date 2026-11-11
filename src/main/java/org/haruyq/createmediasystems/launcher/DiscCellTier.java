@@ -36,7 +36,6 @@ public enum DiscCellTier {
 
     public int capacity() { return shots * energyPerShot; }
     public boolean optional() { return this == CHEMI; }
-    /** Whether this tier can be made here: an optional tier only when the mod its materials come from is loaded. */
     public boolean available() { return !optional() || ModList.get().isLoaded(PLANT_MOD_ID); }
     /** The tier this one is upgraded from, or null for the first. */
     public DiscCellTier previous() { return ordinal() == 0 ? null : values()[ordinal() - 1]; }
@@ -44,7 +43,6 @@ public enum DiscCellTier {
     public String itemId() { return id + "_disc_cell"; }
     public static DiscCellTier at(int level) { return values()[Math.clamp(level, 1, values().length) - 1]; }
 
-    /** The other mod's items that CHEMI is made of, each once. */
     public static List<String> plantItems() { return CHEMI.upgradeMaterials().stream().distinct().toList(); }
 
     /** Eight material slots plus the previous cell; upgrades preserve its master and stored energy. */

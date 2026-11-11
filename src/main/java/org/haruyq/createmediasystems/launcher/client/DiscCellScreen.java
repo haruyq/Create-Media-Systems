@@ -9,7 +9,6 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
-/** A single protected master slot; cells are charged on a physical injector, not with a UI cheat button. */
 public final class DiscCellScreen extends AbstractContainerScreen<DiscCellMenu> {
     public DiscCellScreen(DiscCellMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title); imageWidth = 176; imageHeight = 184; inventoryLabelY = 91;

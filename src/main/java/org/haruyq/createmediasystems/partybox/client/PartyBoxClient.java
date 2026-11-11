@@ -25,7 +25,6 @@ public final class PartyBoxClient {
     /** How loud its bass is now, as its lights pulse to it. */
     static final class Meter { volatile double value; volatile long at; void sample(double value){this.value=value;at=System.nanoTime();} }
 
-    /** A PartyBox's music, from its speaker and through its bass. */
     private record Speaker(PartyBoxEntity box, Meter meter) implements MusicEmitter {
         @Override public int cap(){return 12;}
         static Stream<Speaker> near(Entity ear) {
