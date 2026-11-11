@@ -4,11 +4,12 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.client.LauncherClient;
 
-/** The server's confirmations of a shot and a hit, for the shooter's crosshair, recoil and damage numbers. */
+/** The server's shot, hit and aim-lock updates for the shooter. */
 public final class LauncherFeedback {
     private LauncherFeedback() {}
     public record Shot(long tick) implements CustomPacketPayload {
@@ -24,11 +25,17 @@ public final class LauncherFeedback {
                 b->new Hit(b.readInt(),b.readBoolean(),b.readBoolean(),b.readFloat(),b.readFloat(),b.readBoolean(),b.readDouble(),b.readDouble(),b.readDouble()));
         @Override public Type<Hit> type(){return TYPE;}
     }
-    public record Lock(int target, int part) implements CustomPacketPayload {
-        public static final Lock NONE = new Lock(-1, -1);
+    public record Lock(int target, int part, Vec3 point) implements CustomPacketPayload {
+        public static final Lock NONE = new Lock(-1, -1, Vec3.ZERO);
         public static final Type<Lock> TYPE = new Type<>(CreateMediaSystems.id("launcher_lock"));
+        private static final StreamCodec<ByteBuf, Vec3> POINT_CODEC = StreamCodec.of((buf, point) -> {
+            buf.writeDouble(point.x);
+            buf.writeDouble(point.y);
+            buf.writeDouble(point.z);
+        }, buf -> new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble()));
         public static final StreamCodec<ByteBuf, Lock> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, Lock::target, ByteBufCodecs.VAR_INT, Lock::part, Lock::new);
+                ByteBufCodecs.VAR_INT, Lock::target, ByteBufCodecs.VAR_INT, Lock::part,
+                POINT_CODEC, Lock::point, Lock::new);
 
         @Override public Type<Lock> type() { return TYPE; }
     }

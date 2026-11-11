@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 
@@ -37,12 +38,15 @@ public final class DiscLauncherTrigger {
     }
     @SubscribeEvent public static void tick(PlayerTickEvent.Post event) {
         if(!(event.getEntity() instanceof ServerPlayer p))return;
-        LauncherAimLock.tick(p);
         var held=HELD.get(p.getUUID());if(held==null)return;
         if(p.level().getGameTime()-held.updated>6 || !p.isAlive() || p.isSpectator() || p.getMainHandItem()!=held.weapon) {
             HELD.remove(p.getUUID());return;
         }
         DiscLauncherItem.fire(p,held.yaw,held.pitch);
+    }
+    @SubscribeEvent public static void updateAimLocks(ServerTickEvent.Post event) {
+        // Sample the positions after all entities have moved, before sending the next view correction.
+        event.getServer().getPlayerList().getPlayers().forEach(LauncherAimLock::tick);
     }
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event){HELD.remove(event.getEntity().getUUID());}
     public static void register(PayloadRegistrar r){r.playToServer(Input.TYPE,Input.CODEC,(p,c)->input((ServerPlayer)c.player(),p));}

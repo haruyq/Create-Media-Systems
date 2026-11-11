@@ -26,10 +26,12 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
@@ -49,6 +51,8 @@ import org.lwjgl.glfw.GLFW;
 
 /** Holds only client-side render hooks. Common/server classes never load client code. */
 public final class LauncherClient {
+    private static final float MAX_AIM_TURN_PER_TICK = 12;
+
     private LauncherClient() {}
     public static final ModConfigSpec.EnumValue<LauncherDamageDisplay.Mode> DAMAGE_NUMBERS = ClientConfig.BUILDER
             .comment("Weapon damage numbers: STACKING combines recent hits on the same target, FLOATING shows individual hits, BOTH shows both, OFF hides numbers.")
@@ -59,6 +63,7 @@ public final class LauncherClient {
     private static final LauncherGunMotion MOTION=new LauncherGunMotion();
     private static final LauncherDamageDisplay DAMAGE=new LauncherDamageDisplay();
     private static LauncherFeedback.Lock lock = LauncherFeedback.Lock.NONE;
+    private static Vec3 viewAimPoint;
     public static LauncherDamageDisplay damageDisplay(){return DAMAGE;}
     private static boolean triggerDown;
     private static Object currentPlayer;
@@ -86,6 +91,26 @@ public final class LauncherClient {
             return dragon.getSubEntities()[lock.part()];
         }
         return target;
+    }
+
+    static Vec3 lockedPoint(Minecraft mc) {
+        return lockedPart(mc) == null ? null : viewAimPoint;
+    }
+
+    private static void steerView(LocalPlayer player, Vec3 point) {
+        Vec3 offset = point.subtract(player.getEyePosition());
+        if (offset.lengthSqr() < 1e-8) return;
+        float wantedYaw = (float) Math.toDegrees(Math.atan2(-offset.x, offset.z));
+        float wantedPitch = (float) -Math.toDegrees(Math.atan2(offset.y, offset.horizontalDistance()));
+        float yaw = Mth.approachDegrees(player.getYRot(), wantedYaw, MAX_AIM_TURN_PER_TICK);
+        float pitch = Mth.approach(player.getXRot(), wantedPitch, MAX_AIM_TURN_PER_TICK);
+        player.setYRot(yaw);
+        player.setYHeadRot(yaw);
+        player.setXRot(pitch);
+        // Keep the rendered view and the next trigger packet on the same rotation.
+        player.yRotO = yaw;
+        player.yHeadRotO = yaw;
+        player.xRotO = pitch;
     }
     private static final KeyMapping RELOAD_KEY = new KeyMapping(
             "key.create_media_systems.disc_launcher_reload",
@@ -125,7 +150,9 @@ public final class LauncherClient {
     public static void shot(LauncherFeedback.Shot shot) {
         var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
         lastShot=shot.tick();confirmedShots++;MOTION.shot();
-        float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
+        if (lockedPoint(mc) == null) {
+            float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
+        }
     }
 
     /** This player's shot hit: the hit marker, damage numbers and sound. */
@@ -139,7 +166,10 @@ public final class LauncherClient {
     }
 
     /** The server locked, or released, this player's aim-module target. */
-    public static void lock(LauncherFeedback.Lock feedback) { lock = feedback; }
+    public static void lock(LauncherFeedback.Lock feedback) {
+        if (lock.target() != feedback.target() || lock.part() != feedback.part()) viewAimPoint = null;
+        lock = feedback;
+    }
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(RELOAD_KEY);
@@ -160,7 +190,12 @@ public final class LauncherClient {
             if(wantsAim)player.setSprinting(false);
         }
         MOTION.tick(wantsAim);
-        if(player!=null && cameraKick>.0001f) {
+        if (!wantsAim) lock = LauncherFeedback.Lock.NONE;
+        viewAimPoint = wantsAim && lockedPart(mc) != null ? lock.point() : null;
+        if (viewAimPoint != null) {
+            steerView(player, viewAimPoint);
+            cameraKick = 0;
+        } else if(player!=null && cameraKick>.0001f) {
             float returned=cameraKick*.30f;cameraKick-=returned;player.setXRot(Math.min(90,player.getXRot()+returned));
         }
         boolean fire=active && mc.options.keyAttack.isDown();

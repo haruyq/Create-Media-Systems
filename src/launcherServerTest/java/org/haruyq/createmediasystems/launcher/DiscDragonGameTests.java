@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import net.minecraft.commands.arguments.EntityAnchorArgument.Anchor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.*;
 import net.minecraft.nbt.CompoundTag;
@@ -47,9 +48,23 @@ public final class DiscDragonGameTests {
         launcher.set(LauncherFeature.LAUNCHER_AIM_MODULE.get(), true);
         player.getInventory().setItem(0, launcher);
         player.startUsingItem(InteractionHand.MAIN_HAND);
-        h.assertTrue(DiscLauncherItem.fire(player, 0, 0), "The launcher fires with its module mounted");
-        var assisted = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
-        var manual = DiscProjectile.forShot(player, original, 0, new Vec3(0, 0, 1), true);
+        var lock = LauncherAimLock.tick(player);
+        h.assertTrue(lock.target() == dragon.getId() && lock.part() == 0 && lock.point().x > head.getX() + 6,
+                "The lock predicts the movement of the actual head collider");
+
+        var unsteered = h.makeMockPlayer(GameType.SURVIVAL);
+        unsteered.setPos(player.position());
+        unsteered.getInventory().setItem(0, launcher.copy());
+        unsteered.startUsingItem(InteractionHand.MAIN_HAND);
+        h.assertTrue(LauncherAimLock.tick(unsteered).target() == dragon.getId(), "The comparison launcher also has a lock");
+        h.assertTrue(DiscLauncherItem.fire(unsteered, 0, 0), "The trigger fires from the current view angle");
+        var manual = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
+        h.assertTrue(manual.getDeltaMovement().normalize().distanceTo(new Vec3(0, 0, 1)) < 1e-7,
+                "A lock by itself cannot secretly turn the shot away from the camera");
+
+        player.lookAt(Anchor.EYES, lock.point());
+        h.assertTrue(DiscLauncherItem.fire(player, player.getYRot(), player.getXRot()), "The steered view fires");
+        var assisted = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2), d -> d != manual).getFirst();
 
         for (int tick = 0; tick < 8; tick++) {
             head.setPos(head.position().add(motion));
@@ -59,6 +74,7 @@ public final class DiscDragonGameTests {
         h.assertTrue(!manual.embedded(), "An uncorrected shot misses the dragon head after it crosses the eye line");
         h.assertTrue(assisted.attachmentTarget() == dragon && assisted.attachedToHead() && dragon.getHealth() == 176,
                 "The leading shot reaches the actual head eight flight ticks later and deals head damage");
+        manual.discard();
         assisted.discard();
         dragon.discard();
         h.succeed();

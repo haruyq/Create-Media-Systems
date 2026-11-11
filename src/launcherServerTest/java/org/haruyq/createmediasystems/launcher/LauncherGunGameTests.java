@@ -4,6 +4,7 @@ import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import com.simibubi.create.AllItems;
 import com.simibubi.create.content.kinetics.crafter.MechanicalCraftingRecipe;
+import net.minecraft.commands.arguments.EntityAnchorArgument.Anchor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -77,10 +78,14 @@ public final class LauncherGunGameTests {
         var launcher = gun();
         player.getInventory().setItem(0, launcher);
         player.startUsingItem(InteractionHand.MAIN_HAND);
-        h.assertTrue(LauncherAimLock.direction(player, launcher, forward).equals(forward),
-                "The bare launcher leaves the near miss uncorrected");
+        h.assertTrue(LauncherAimLock.tick(player).equals(LauncherFeedback.Lock.NONE),
+                "A bare launcher cannot acquire a lock");
         launcher.set(LauncherFeature.LAUNCHER_AIM_MODULE.get(), true);
-        h.assertTrue(DiscLauncherItem.fire(player, 0, 0), "The aimed trigger fires");
+        var lock = LauncherAimLock.tick(player);
+        h.assertTrue(lock.target() == target.getId() && lock.point().distanceTo(DiscBallistics.hitBoxes(target).getFirst().getCenter()) < 1e-7,
+                "A visible near miss locks onto the torso hitbox");
+        player.lookAt(Anchor.EYES, lock.point());
+        h.assertTrue(DiscLauncherItem.fire(player, player.getYRot(), player.getXRot()), "The aimed trigger fires");
         var fired = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
         Vec3 assisted = fired.getDeltaMovement().normalize();
         h.assertTrue(assisted.dot(forward) >= Math.cos(Math.toRadians(6)) - 1e-6,
@@ -89,10 +94,15 @@ public final class LauncherGunGameTests {
         h.assertTrue(fired.attachmentTarget() == target, "The assisted shot hits and attaches to the target");
         fired.discard();
 
+        player.stopUsingItem();
+        LauncherAimLock.tick(player);
+        player.startUsingItem(InteractionHand.MAIN_HAND);
+        Vec3 headCenter = DiscHitZones.headBox(target).orElseThrow().getCenter();
+        player.lookAt(Anchor.EYES, headCenter);
+        var headLock = LauncherAimLock.tick(player);
+        h.assertTrue(headLock.target() == target.getId() && headLock.point().distanceTo(headCenter) < 1e-7,
+                "Aiming at the head locks onto the head hitbox");
         var disc = new ItemStack(Items.MUSIC_DISC_CAT);
-        Vec3 headAim = target.getEyePosition().subtract(eye).normalize();
-        h.assertTrue(LauncherAimLock.direction(player, launcher, headAim).distanceTo(headAim) < 1e-7,
-                "An aimed headshot keeps its exact direction");
         var hipfire = DiscProjectile.forShot(player, disc, 0, forward, false);
         Vec3 hipfireEnd = eye.add(hipfire.getDeltaMovement().normalize().scale(32));
         h.assertTrue(DiscBallistics.trace(hipfire, eye, hipfireEnd, e -> e == target).getType() == HitResult.Type.MISS,
@@ -100,9 +110,10 @@ public final class LauncherGunGameTests {
 
         BlockPos cover = BlockPos.containing(eye.add(.4, 0, 8));
         level.setBlockAndUpdate(cover, Blocks.STONE.defaultBlockState());
-        h.assertTrue(LauncherAimLock.direction(player, launcher, forward).distanceTo(forward) < 1e-7,
-                "Cover blocks aim assistance");
+        level.setBlockAndUpdate(cover.above(), Blocks.STONE.defaultBlockState());
+        h.assertTrue(LauncherAimLock.tick(player).equals(LauncherFeedback.Lock.NONE), "Cover drops the lock");
         level.removeBlock(cover, false);
+        level.removeBlock(cover.above(), false);
         target.discard();
         h.succeed();
     }
@@ -122,25 +133,22 @@ public final class LauncherGunGameTests {
         first.setPos(base.add(1, 0, 17));
         level.getChunkAt(first.blockPosition());
         level.addFreshEntity(first);
-        Vec3 eye = player.getEyePosition();
-        LauncherAimLock.direction(player, launcher, new Vec3(0, 0, 1));
+        h.assertTrue(LauncherAimLock.tick(player).target() == first.getId(), "The first golem is acquired");
 
         var second = EntityType.IRON_GOLEM.create(level);
         second.setNoAi(true);
         second.setPos(base.add(-3, 0, 16));
         level.getChunkAt(second.blockPosition());
         level.addFreshEntity(second);
-        Vec3 towardSecond = second.getBoundingBox().getCenter().subtract(eye).normalize();
-        Vec3 retained = LauncherAimLock.direction(player, launcher, towardSecond);
-        var retainedHit = DiscBallistics.trace(player, eye, eye.add(retained.scale(30)), e -> e == first || e == second);
-        h.assertTrue(retainedHit instanceof EntityHitResult hit && hit.getEntity() == first,
+        player.lookAt(Anchor.EYES, DiscBallistics.hitBoxes(second).getFirst().getCenter());
+        h.assertTrue(LauncherAimLock.tick(player).target() == first.getId(),
                 "The lock keeps tracking the first golem while a second crosses the reticle");
 
         player.stopUsingItem();
         LauncherAimLock.tick(player);
         player.startUsingItem(InteractionHand.MAIN_HAND);
-        Vec3 reacquired = LauncherAimLock.direction(player, launcher, towardSecond);
-        h.assertTrue(reacquired.distanceTo(towardSecond) < 1e-7, "Lowering the launcher lets the player pick a new target");
+        h.assertTrue(LauncherAimLock.tick(player).target() == second.getId(),
+                "Lowering the launcher lets the player pick a new target");
         first.discard();
         second.discard();
         h.succeed();

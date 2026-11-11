@@ -10,6 +10,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -45,6 +46,11 @@ public final class DiscLauncherItem extends Item {
         player.startUsingItem(hand);
         player.setSprinting(false);
         return InteractionResultHolder.consume(stack);
+    }
+
+    @Override
+    public void releaseUsing(ItemStack stack, Level level, LivingEntity user, int remaining) {
+        if (!level.isClientSide && user instanceof Player player) LauncherAimLock.clear(player);
     }
 
     @Override public net.minecraft.world.item.UseAnim getUseAnimation(ItemStack stack){return net.minecraft.world.item.UseAnim.NONE;}
@@ -89,9 +95,8 @@ public final class DiscLauncherItem extends Item {
         ItemStack disc = LauncherMagazine.pop(stack);
         if (disc.isEmpty()) return false;
         boolean aimed = aiming(player, stack);
-        Vec3 forward = Vec3.directionFromRotation(pitch, yaw);
-        Vec3 direction = aimed ? LauncherAimLock.direction(player, stack, forward) : forward;
-        DiscProjectile projectile = DiscProjectile.forShot(player, disc, startSeconds, direction, aimed);
+        DiscProjectile projectile = DiscProjectile.forShot(player, disc, startSeconds,
+                Vec3.directionFromRotation(pitch, yaw), aimed);
         projectile.setCellTier(tier);
         if (!level.addFreshEntity(projectile)) {
             LauncherMagazine.setCell(stack, before);
