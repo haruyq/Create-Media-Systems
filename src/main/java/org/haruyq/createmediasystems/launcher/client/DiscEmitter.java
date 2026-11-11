@@ -58,7 +58,6 @@ record DiscEmitter(DiscProjectile disc) implements MusicEmitter {
         return disc.position();
     }
 
-    /** Flying, its own motion; stuck in a target, the target's; stuck in a block, none. */
     @Override
     @Nullable
     public Vec3 velocity() {

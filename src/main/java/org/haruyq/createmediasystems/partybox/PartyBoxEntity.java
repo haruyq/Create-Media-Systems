@@ -111,7 +111,6 @@ public final class PartyBoxEntity extends Entity implements Portable {
         tickPower();if(!playing())return;
         PlaybackClock clock = clock(); clock.pause(level().getGameTime()); keep(clock);
     }
-    /** Any listener's client within 128 blocks tells its track's length. */
     @Override public boolean takesLengthFrom(ServerPlayer player) { return player.distanceToSqr(this) < 128 * 128; }
     @Override public void learnLength(double seconds) {
         PlaybackClock clock = clock(); clock.learn(seconds); keep(clock);
@@ -203,7 +202,6 @@ public final class PartyBoxEntity extends Entity implements Portable {
         // A blocked trolley releases instead of teleporting through a wall or stretching the player's arm.
         if (player != null && player.distanceToSqr(this) > 6.25) entityData.set(PULLER, Optional.empty());
     }
-    /** Pays its battery for the music played since it last settled, and stops at the end of its track. */
     private void tickPower() {
         PlaybackClock clock = clock();
         if (!clock.running()) { drain.settle(clock, level().getGameTime(), energy(), 0); return; }

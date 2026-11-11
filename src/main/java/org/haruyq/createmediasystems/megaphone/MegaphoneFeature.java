@@ -18,7 +18,6 @@ import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** Megaphones, white and black: held, they play their disc through a horn on their own battery. */
 public final class MegaphoneFeature implements Feature {
     public static final Supplier<DataComponentType<CompoundTag>> MEGAPHONE_STATE = COMPONENTS.registerComponentType(
             "megaphone_state", b -> b.persistent(CompoundTag.CODEC).networkSynchronized(ByteBufCodecs.COMPOUND_TAG));

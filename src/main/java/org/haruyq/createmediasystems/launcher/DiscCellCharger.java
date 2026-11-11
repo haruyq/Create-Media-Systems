@@ -17,13 +17,10 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.items.ItemStackHandler;
 
-/** One owned inventory; rotation and FE both charge the real cell, including its persistent master. */
 public final class DiscCellCharger extends KineticBlockEntity {
-    /** The slowest shaft that charges, and the stress it takes. */
     public static final int MIN_RPM = 16, STRESS = 8;
     /** FE a tick per RPM, and the most FE a tick. */
     public static final int FE_PER_RPM = 8, MAX_FE_PER_TICK = 2048;
-    /** How long it shows as charging after FE last came in by cable. */
     private static final int CABLE_ACTIVE_TICKS = 8;
     private long externallyChargedAt = Long.MIN_VALUE;
     public final ItemStackHandler inventory = new ItemStackHandler(1) {

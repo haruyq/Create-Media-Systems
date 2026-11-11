@@ -23,7 +23,6 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** The PartyBox: a speaker on a trolley, running on a battery pack. */
 public final class PartyBoxFeature implements Feature {
     public static final Supplier<DataComponentType<CompoundTag>> PARTYBOX_STATE = COMPONENTS.registerComponentType(
             "partybox_state", b -> b.persistent(CompoundTag.CODEC).networkSynchronized(ByteBufCodecs.COMPOUND_TAG));
