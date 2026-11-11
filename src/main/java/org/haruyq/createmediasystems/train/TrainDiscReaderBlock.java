@@ -2,7 +2,10 @@ package org.haruyq.createmediasystems.train;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.PercentSetting;
+
+import org.jetbrains.annotations.Nullable;
 
 import com.simibubi.create.foundation.block.IBE;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -13,7 +16,6 @@ import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollVa
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -42,14 +44,9 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         return PercentSetting.saved(data, PercentSetting.DEFAULT_TAG) / 100f;
     }
 
-    /** Takes the held announcement schedule if empty, else hands the stored one back. Returns the new content. */
-    static ItemStack swap(Player player, InteractionHand hand, ItemStack stored) {
-        if (!stored.isEmpty()) {
-            player.getInventory().placeItemBackInInventory(stored);
-            return ItemStack.EMPTY;
-        }
-        ItemStack held = player.getItemInHand(hand);
-        return held.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get()) ? held.split(1) : ItemStack.EMPTY;
+    /** Holds one announcement schedule; any right-click on it full gives it back. Also on a train (see Interaction). */
+    static ItemSlot slot() {
+        return new ItemSlot(ITEM_TAG, stack -> stack.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get()), true);
     }
 
     @Override
@@ -58,34 +55,19 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         if (stack.is(Tags.Items.TOOLS_WRENCH)) {
             return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION; // missed the volume box: don't eject
         }
-        if (!stack.is(TrainFeature.ANNOUNCEMENT_SCHEDULE.get())) {
-            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-        }
-        interact(level, pos, player, hand);
-        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useItemOn(stack, level, pos, player, hand);
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
-        interact(level, pos, player, InteractionHand.MAIN_HAND);
-        return InteractionResult.sidedSuccess(level.isClientSide);
-    }
-
-    private static void interact(Level level, BlockPos pos, Player player, InteractionHand hand) {
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity be) {
-            be.item = swap(player, hand, be.item);
-            be.setChanged();
-        }
+        return ItemSlot.useWithoutItem(level, pos, player);
     }
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // Create removes the block entity before assembling a train, so this only fires on real removal; Sable
-        // assembling a ship is kept from dropping it by data/sable/tags/block/silent_assembly_removal.json.
-        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity be) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), be.item);
-        }
+        // Create removes the block entity before assembling a train, so this only fires on real removal.
+        ItemSlot.onRemove(state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
@@ -99,8 +81,8 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         return TrainFeature.TRAIN_DISC_READER_ENTITY.get();
     }
 
-    public static class Entity extends SmartBlockEntity {
-        private ItemStack item = ItemStack.EMPTY;
+    public static class Entity extends SmartBlockEntity implements ItemSlot.Holder {
+        private final ItemSlot item = slot();
         private ScrollValueBehaviour volume;
 
         public Entity(BlockPos pos, BlockState state) {
@@ -115,17 +97,26 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
         }
 
         @Override
+        public ItemSlot slot() {
+            return item;
+        }
+
+        @Override
+        public void insert(ItemStack stack, @Nullable Player by) {
+            item.set(stack);
+            setChanged();
+        }
+
+        @Override
         protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.write(tag, registries, clientPacket);
-            if (!item.isEmpty()) {
-                tag.put(ITEM_TAG, item.save(registries));
-            }
+            item.save(tag, registries);
         }
 
         @Override
         protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.read(tag, registries, clientPacket);
-            item = ItemStack.parseOptional(registries, tag.getCompound(ITEM_TAG));
+            item.load(tag, registries);
         }
     }
 }

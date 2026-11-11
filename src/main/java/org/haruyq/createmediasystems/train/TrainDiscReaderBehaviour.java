@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
 
@@ -346,13 +347,10 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             }
             // Same tag object as the contraption's stored block entity data, so it survives disassembly.
             CompoundTag data = actor.right.blockEntityData;
-            ItemStack stored = ItemStack.parseOptional(player.registryAccess(), data.getCompound(TrainDiscReaderBlock.ITEM_TAG));
-            ItemStack next = TrainDiscReaderBlock.swap(player, hand, stored);
-            if (next.isEmpty()) {
-                data.remove(TrainDiscReaderBlock.ITEM_TAG);
-            } else {
-                data.put(TrainDiscReaderBlock.ITEM_TAG, next.save(player.registryAccess()));
-            }
+            ItemSlot slot = TrainDiscReaderBlock.slot();
+            slot.load(data, player.registryAccess());
+            slot.set(slot.exchange(player, hand, slot.get()));
+            slot.save(data, player.registryAccess());
             return true;
         }
     }

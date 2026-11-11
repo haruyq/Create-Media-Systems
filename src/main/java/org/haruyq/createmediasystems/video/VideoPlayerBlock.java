@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.video;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.PercentSetting;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.stream.DiscDrive;
@@ -35,7 +36,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -85,31 +85,18 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!MediaItem.fits(stack, DiscKind.Slot.PICTURE)) {
-            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-        }
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && videoPlayer.cd.isEmpty()) {
-            videoPlayer.insert(stack.split(1), player);
-        }
-        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useItemOn(stack, level, pos, player, hand);
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && !videoPlayer.cd.isEmpty()) {
-            player.getInventory().placeItemBackInInventory(videoPlayer.cd);
-            videoPlayer.insert(ItemStack.EMPTY, player);
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useWithoutItem(level, pos, player);
     }
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // Sable assembling a ship removes it too: data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
-        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity videoPlayer) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), videoPlayer.cd);
-        }
+        ItemSlot.onRemove(state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
@@ -129,9 +116,9 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
-            DiscDrive.Fed, DiscTransport.Deck {
+            DiscDrive.Fed, DiscTransport.Deck, ItemSlot.Holder {
         private static final DiscTransport.Keys KEYS = new DiscTransport.Keys("Index", "Playing", "Paused", "From", "Ticks");
-        private ItemStack cd = ItemStack.EMPTY;
+        private final ItemSlot cd = new ItemSlot("Cd", stack -> MediaItem.fits(stack, DiscKind.Slot.PICTURE));
         private final DiscTransport transport = new DiscTransport(this, false, new PlaybackClock());
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
@@ -163,7 +150,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         public List<String> playlist() {
             DiscDrive drive = drive();
-            return drive != null ? List.of(drive.link()) : MediaItem.linksOf(cd);
+            return drive != null ? List.of(drive.link()) : MediaItem.linksOf(cd.get());
         }
 
         @Override
@@ -218,13 +205,19 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Nullable
         public Streams.Source nowPlaying() {
             DiscDrive drive = drive();
-            DiscKind kind = drive != null ? drive.ready() : MediaItem.kindOf(cd);
+            DiscKind kind = drive != null ? drive.ready() : MediaItem.kindOf(cd.get());
             return kind == null ? null : transport.source(worldPosition, kind);
         }
 
+        @Override
+        public ItemSlot slot() {
+            return cd;
+        }
+
         /** A new disc put in by {@code by} plays its first video; with none, the disc of a drive beside it does. */
+        @Override
         public void insert(ItemStack stack, @Nullable Player by) {
-            cd = stack;
+            cd.set(stack);
             transport.insert(by);
         }
 
@@ -336,9 +329,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.write(tag, registries, clientPacket);
-            if (!cd.isEmpty()) {
-                tag.put("Cd", cd.save(registries));
-            }
+            cd.save(tag, registries);
             transport.save(tag, KEYS);
             if (clientPacket) {
                 downloads.write(tag);
@@ -348,7 +339,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.read(tag, registries, clientPacket);
-            cd = ItemStack.parseOptional(registries, tag.getCompound("Cd"));
+            cd.load(tag, registries);
             transport.load(tag, KEYS);
             if (clientPacket) {
                 downloads.read(tag);

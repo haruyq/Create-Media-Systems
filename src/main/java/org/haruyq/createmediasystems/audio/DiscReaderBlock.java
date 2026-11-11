@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.audio;
 
+import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
@@ -12,7 +13,6 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -39,31 +39,18 @@ public class DiscReaderBlock extends Block implements EntityBlock {
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!MediaItem.fits(stack, DiscKind.Slot.JUKEBOX)) {
-            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-        }
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity reader && reader.disc.isEmpty()) {
-            reader.insert(stack.split(1), player);
-        }
-        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useItemOn(stack, level, pos, player, hand);
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity reader && !reader.disc.isEmpty()) {
-            player.getInventory().placeItemBackInInventory(reader.disc);
-            reader.insert(ItemStack.EMPTY, player);
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return ItemSlot.useWithoutItem(level, pos, player);
     }
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // Sable assembling a ship removes it too: data/sable/tags/block/silent_assembly_removal.json keeps that from dropping it.
-        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof Entity reader) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), reader.disc);
-        }
+        ItemSlot.onRemove(state, level, pos, newState);
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
@@ -88,8 +75,8 @@ public class DiscReaderBlock extends Block implements EntityBlock {
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    public static class Entity extends BlockEntity implements MediaSource, DiscDrive.Fed {
-        private ItemStack disc = ItemStack.EMPTY;
+    public static class Entity extends BlockEntity implements MediaSource, DiscDrive.Fed, ItemSlot.Holder {
+        private final ItemSlot disc = new ItemSlot("Disc", stack -> MediaItem.fits(stack, DiscKind.Slot.JUKEBOX));
         /** How far into its disc's track it is; it runs while it plays. */
         private final PlaybackClock clock = new PlaybackClock();
         /** Whether it had a redstone signal, so only a change starts or stops it. */
@@ -110,7 +97,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         @Nullable
         private String url() {
             if (!disc.isEmpty()) {
-                return MediaItem.url(disc);
+                return MediaItem.url(disc.get());
             }
             DiscDrive drive = DiscDrive.feeding(level, worldPosition, this);
             return drive == null ? null : drive.link();
@@ -130,9 +117,15 @@ public class DiscReaderBlock extends Block implements EntityBlock {
             }
         }
 
+        @Override
+        public ItemSlot slot() {
+            return disc;
+        }
+
         /** A new disc (or none, but a drive's CD) starts from the beginning; speakers notice the restart on their next check. */
+        @Override
         public void insert(ItemStack stack, @Nullable Player by) {
-            disc = stack;
+            disc.set(stack);
             if (url() != null) {
                 play(by);
             } else {
@@ -181,9 +174,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         @Override
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
-            if (!disc.isEmpty()) {
-                tag.put("Disc", disc.save(registries));
-            }
+            disc.save(tag, registries);
             tag.putLong("Ticks", clock.position());
             tag.putBoolean("Playing", clock.running());
             tag.putBoolean("Powered", powered);
@@ -192,7 +183,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         @Override
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
-            disc = ItemStack.parseOptional(registries, tag.getCompound("Disc"));
+            disc.load(tag, registries);
             clock.load(tag.getLong("Ticks"), tag.getBoolean("Playing"));
             powered = tag.getBoolean("Powered");
         }
