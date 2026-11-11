@@ -69,7 +69,7 @@ public final class EqualizerFaders implements BlockEntityRenderer<EqualizerBlock
             if (level != null) {
                 NativeAudio.equalize(source -> level.getBlockEntity(source) instanceof HifiStackBlock.Entity stack
                         ? stack.tone()
-                        : level.getBlockEntity(source) instanceof VideoPlayerBlock.Entity
+                        : level.getBlockState(source).is(CreateMediaSystems.VIDEO_PLAYER.get())
                         ? new Tone(EqualizerBlock.bands(level, source), 1) : Tone.FLAT);
             }
         });

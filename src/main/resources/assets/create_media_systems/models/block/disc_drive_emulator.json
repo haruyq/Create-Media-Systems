@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "create_media_systems:block/disc_drive_emulator_top",
+    "front": "create_media_systems:block/disc_drive_emulator_front",
+    "side": "create_media_systems:block/disc_drive_emulator_side"
+  }
+}

@@ -82,7 +82,7 @@ public class EqualizerBlock extends HorizontalDirectionalBlock implements Entity
 
     private static boolean touchesPlayer(BlockGetter level, BlockPos pos) {
         return Arrays.stream(Direction.values())
-                .anyMatch(side -> level.getBlockEntity(pos.relative(side)) instanceof VideoPlayerBlock.Entity);
+                .anyMatch(side -> level.getBlockState(pos.relative(side)).is(CreateMediaSystems.VIDEO_PLAYER.get()));
     }
 
     /** Whether the equalizer at {@code pos} is a second one: touching one that touches a Blu-ray player. */

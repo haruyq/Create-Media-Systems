@@ -159,6 +159,13 @@ public class CreateMediaSystems {
             SOUNDS.register("disc_latch", () -> SoundEvent.createVariableRangeEvent(id("disc_latch")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_INSERT_SOUND =
             SOUNDS.register("disc_insert", () -> SoundEvent.createVariableRangeEvent(id("disc_insert")));
+    /** A disc drive emulator's: its disc turning (a loop), its tray, and its head finding the disc's start. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SPIN =
+            SOUNDS.register("drive_spin", () -> SoundEvent.createVariableRangeEvent(id("drive_spin")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_TRAY =
+            SOUNDS.register("drive_tray", () -> SoundEvent.createVariableRangeEvent(id("drive_tray")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SEEK =
+            SOUNDS.register("drive_seek", () -> SoundEvent.createVariableRangeEvent(id("drive_seek")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_CHARGE_SOUND =
             SOUNDS.register("disc_charge", () -> SoundEvent.createVariableRangeEvent(id("disc_charge")));
 
@@ -301,12 +308,12 @@ public class CreateMediaSystems {
     public static final DeferredItem<?> VIDEO_PLAYER_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_player", VIDEO_PLAYER);
     public static final Supplier<BlockEntityType<VideoPlayerBlock.Entity>> VIDEO_PLAYER_ENTITY = BLOCK_ENTITIES.register(
             "blu_ray_player", () -> BlockEntityType.Builder.of(VideoPlayerBlock.Entity::new, VIDEO_PLAYER.get()).build(null));
-    /** A Blu-ray player for the disc in its player's real drive. */
-    public static final DeferredBlock<DriveEmulatorBlock> DRIVE_EMULATOR = BLOCKS.register("blu_ray_drive_emulator",
+    /** The disc drive of its player's real computer, beside the Blu-ray player or disc reader that plays its disc. */
+    public static final DeferredBlock<DriveEmulatorBlock> DRIVE_EMULATOR = BLOCKS.register("disc_drive_emulator",
             () -> new DriveEmulatorBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
-    public static final DeferredItem<?> DRIVE_EMULATOR_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_drive_emulator", DRIVE_EMULATOR);
+    public static final DeferredItem<?> DRIVE_EMULATOR_ITEM = ITEMS.registerSimpleBlockItem("disc_drive_emulator", DRIVE_EMULATOR);
     public static final Supplier<BlockEntityType<DriveEmulatorBlock.Entity>> DRIVE_EMULATOR_ENTITY = BLOCK_ENTITIES.register(
-            "blu_ray_drive_emulator", () -> BlockEntityType.Builder.of(DriveEmulatorBlock.Entity::new, DRIVE_EMULATOR.get()).build(null));
+            "disc_drive_emulator", () -> BlockEntityType.Builder.of(DriveEmulatorBlock.Entity::new, DRIVE_EMULATOR.get()).build(null));
     public static final DeferredItem<RemoteItem> REMOTE = ITEMS.register("remote",
             () -> new RemoteItem(new Item.Properties().stacksTo(1)));
     /** Display quill: links displays to a Blu-ray player and sets their size (client-side UI only). */

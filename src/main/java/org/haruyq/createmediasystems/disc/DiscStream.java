@@ -196,7 +196,7 @@ public final class DiscStream implements AutoCloseable {
                 work.addFirst(known.work);
             }
             // A DVD's segment again would restart its pass (see encode), so it goes as it is.
-            if (!lowerForPeer || source == null || !source.bluray() || !known.ready.isDone()
+            if (!lowerForPeer || source == null || !source.segmented() || !known.ready.isDone()
                     || known.quality.kbps() <= quality.kbps()) {
                 return known.ready;
             }
@@ -224,7 +224,7 @@ public final class DiscStream implements AutoCloseable {
                     }
                     long started = System.nanoTime();
                     // A DVD pass starting (see encode) seeks first: seconds that say nothing of how fast this encodes.
-                    boolean starts = !source.bluray() && (run == null || !run.continues(index, quality, codec));
+                    boolean starts = !source.segmented() && (run == null || !run.continues(index, quality, codec));
                     try {
                         bytes = encode(index, quality);
                     } catch (IOException failed) {
@@ -233,17 +233,20 @@ public final class DiscStream implements AutoCloseable {
                         }
                         codec = "libx264";
                         status.accept("Hardware encoding failed; using libx264 for this disc");
-                        starts = !source.bluray();
+                        starts = !source.segmented();
                         bytes = encode(index, quality);
                     }
                     if (!starts) {
                         adaptive.encoded(System.nanoTime() - started, available);
                     }
                     DiscRun current = run;
-                    DiscSource.Quality used = source.bluray() || current == null ? quality : current.quality;
-                    lastQuality = used.height() + "p" + used.fps() + " " + used.kbps() + " kbps";
+                    DiscSource.Quality used = source.segmented() || current == null ? quality : current.quality;
+                    // A CD has no picture to say the quality of.
+                    boolean sound = source.cd() != null;
+                    lastQuality = sound ? "192 kbps" : used.height() + "p" + used.fps() + " " + used.kbps() + " kbps";
                     lastEncoded = index;
-                    status.accept("Disc segment " + index + ": " + used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps");
+                    status.accept("Disc segment " + index + ": " + (sound ? lastQuality
+                            : used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps"));
                 }
                 synchronized (this) {
                     if (closed) {
@@ -278,7 +281,7 @@ public final class DiscStream implements AutoCloseable {
 
     /** On the encoder thread. A DVD's next segment comes from its running pass (see DiscSource#run). */
     private byte[] encode(int index, DiscSource.Quality quality) throws IOException {
-        if (source.bluray()) {
+        if (source.segmented()) {
             return source.encode(index, quality, codec);
         }
         DiscRun current = run;

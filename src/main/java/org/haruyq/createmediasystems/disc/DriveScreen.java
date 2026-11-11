@@ -4,6 +4,7 @@ import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.annul
 import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.box;
 import static org.haruyq.createmediasystems.megaphone.client.MegaphoneMesh.quad;
 
+import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
 
@@ -26,9 +27,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
 /**
- * A drive emulator's drive, in the middle of the screen: an external Blu-ray drive whose tray is open with no disc
- * and closes on the one put in the real drive (see DriveClient). What it shows is what this client has of the
- * emulator, so everyone who opens it sees the drive of whoever uses it.
+ * A drive emulator's drive, in the middle of the screen: an external disc drive whose tray is open with no disc and
+ * closes on the one in the real drive (see DriveClient), its lamp flickering as the disc is read. What it shows is
+ * what this client has of the emulator, so everyone who opens it sees the drive of whoever uses it.
  */
 public final class DriveScreen extends Screen {
     /** How long (seconds) the disc takes to be put on the tray and the tray to close on it, or the other way. */
@@ -37,7 +38,7 @@ public final class DriveScreen extends Screen {
     private static final float DISC_SHARE = .45f;
     /** How steeply (degrees) the disc is held as it comes to the tray, its front up. */
     private static final float DISC_TILT = 25;
-
+    private static final int LAMP_OFF = 0x26302B, LAMP_ON = 0x4BE37A, LAMP_FAILED = 0xFF5A3C;
     /** Plain white, for the mesh's own colours: the drive it is drawn from is whiter than any shared material. */
     private static final RenderType SOLID = RenderType.entityCutoutNoCull(
             ResourceLocation.withDefaultNamespace("textures/misc/white.png"));
@@ -52,7 +53,7 @@ public final class DriveScreen extends Screen {
     }
 
     private DriveScreen(BlockPos pos) {
-        super(Component.translatable("block.create_media_systems.blu_ray_drive_emulator"));
+        super(CreateMediaSystems.DRIVE_EMULATOR.get().getName());
         this.pos = pos;
     }
 
@@ -90,6 +91,20 @@ public final class DriveScreen extends Screen {
         }
     }
 
+    /**
+     * The access lamp: off with no disc and while one lies still, blinking evenly as it is read in, and flickering
+     * as a real one does while it is played, which reads it in bursts.
+     */
+    private static int lamp(DriveEmulatorBlock.Entity emulator) {
+        long now = System.currentTimeMillis();
+        return switch (emulator.drive()) {
+            case OPEN -> LAMP_OFF;
+            case FAILED -> LAMP_FAILED;
+            case READING, DOWNLOADING -> now / 90 % 2 == 0 ? LAMP_ON : LAMP_OFF;
+            case READY -> emulator.spinning() && (Long.hashCode(now / 70 * 0x9E3779B97F4A7C15L) & 7) < 5 ? LAMP_ON : LAMP_OFF;
+        };
+    }
+
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         eject.visible = DriveClient.ejectable(pos);
@@ -102,12 +117,6 @@ public final class DriveScreen extends Screen {
         float target = drive == Drive.OPEN ? 0 : 1;
         closed = Float.isNaN(closed) ? target
                 : Mth.approach(closed, target, minecraft.getTimer().getRealtimeDeltaTicks() / 20 / MOVE_SECONDS);
-        int led = switch (drive) {
-            case OPEN -> 0x26302B;
-            case READING, DOWNLOADING -> System.currentTimeMillis() / 150 % 2 == 0 ? 0x4BE37A : 0x26302B;
-            case READY -> 0x4BE37A;
-            case FAILED -> 0xFF5A3C;
-        };
         float size = size();
         PoseStack pose = graphics.pose();
         pose.pushPose();
@@ -116,7 +125,7 @@ public final class DriveScreen extends Screen {
         // Seen from above its front left, like the drive it is drawn from.
         pose.mulPose(Axis.XP.rotationDegrees(28));
         pose.mulPose(Axis.YP.rotationDegrees(-32));
-        drive(pose, graphics.bufferSource().getBuffer(SOLID), closed, emulator.dvd(), led);
+        drive(pose, graphics.bufferSource().getBuffer(SOLID), closed, emulator.disc(), lamp(emulator));
         graphics.flush();
         pose.popPose();
 
@@ -125,10 +134,10 @@ public final class DriveScreen extends Screen {
         graphics.drawCenteredString(font, emulator.status(), width / 2, y, 0xFFFFFF);
         if (drive == Drive.OPEN) {
             graphics.drawCenteredString(font, Component.translatable("create_media_systems.drive.hint."
-                    + DriveClient.hint(pos)).withStyle(ChatFormatting.GRAY), width / 2, y + 12, 0xFFFFFF);
+                    + DriveClient.hint(emulator)).withStyle(ChatFormatting.GRAY), width / 2, y + 12, 0xFFFFFF);
             return;
         }
-        graphics.drawCenteredString(font, Component.translatable("create_media_systems.drive.disc", emulator.disc())
+        graphics.drawCenteredString(font, Component.translatable("create_media_systems.drive.disc", emulator.discName())
                 .withStyle(ChatFormatting.GOLD), width / 2, y + 12, 0xFFFFFF);
         graphics.drawCenteredString(font, drive == Drive.FAILED
                 ? Component.literal(font.plainSubstrByWidth(emulator.error(), width - 40)).withStyle(ChatFormatting.RED)
@@ -139,9 +148,9 @@ public final class DriveScreen extends Screen {
     /**
      * The drive, a unit wide and deep, its front towards +z: a white shell with waves pressed into all of its top, a
      * black tray out of its front by how far it is from {@code closed}, a disc put on that as it starts to close, the
-     * light and button on the tray's front, and its cable out of the back.
+     * lamp and button on the tray's front, and its cable out of the back.
      */
-    private static void drive(PoseStack p, VertexConsumer v, float closed, boolean dvd, int led) {
+    private static void drive(PoseStack p, VertexConsumer v, float closed, DriveEmulatorBlock.Disc disc, int lamp) {
         int light = LightTexture.FULL_BRIGHT;
         float travel = Mth.clamp((closed - DISC_SHARE) / (1 - DISC_SHARE), 0, 1);
         float out = .62f * (1 - travel * travel * (3 - 2 * travel));
@@ -159,7 +168,7 @@ public final class DriveScreen extends Screen {
         box(p, v, -.48f, .018f, .499f, .48f, .078f, .502f, 0x0C0D10, light);
         box(p, v, -.45f, .03f, -.42f + out, .45f, .05f, .5f + out, 0x1B1D21, light);
         box(p, v, -.48f, .018f, .5f + out, .48f, .078f, .52f + out, 0x24262B, light);
-        box(p, v, .2f, .04f, .52f + out, .23f, .056f, .523f + out, led, light);
+        box(p, v, .2f, .04f, .52f + out, .23f, .056f, .523f + out, lamp, light);
         box(p, v, .3f, .036f, .52f + out, .38f, .06f, .524f + out, 0x3A3D44, light);
         p.pushPose();
         p.translate(0, .0505f, out);
@@ -177,9 +186,7 @@ public final class DriveScreen extends Screen {
             p.mulPose(Axis.XP.rotationDegrees(-DISC_TILT * left * Mth.sqrt(left)));
             p.translate(0, 0, .43f);
             p.mulPose(Axis.XP.rotationDegrees(-90));
-            annulus(p, v, 0, .43f, .15f, dvd ? 0xCFC7B4 : 0x2B63C9, light, 1);
-            annulus(p, v, 0, .15f, .11f, dvd ? 0xE9E4D6 : 0x9CC7F2, light, 1);
-            annulus(p, v, 0, .11f, .055f, 0xDDE6EE, light, 1);
+            disc(p, v, disc, light);
             p.popPose();
         }
         // The cable: a plug in the back, and a lead curving away over the table.
@@ -190,6 +197,32 @@ public final class DriveScreen extends Screen {
             quad(p, v, x - .018f, .03f, z, xx - .018f, .03f, zz, xx + .018f, .03f, zz, x + .018f, .03f, z,
                     0, 1, 0, 0xE9E9E6, light);
         }
+    }
+
+    /**
+     * A disc, label up, around its clear hub: a Blu-ray's deep blue, a DVD's violet-tinted silver, or a CD's plain
+     * silver, which shows the colours of its sheen in rings.
+     */
+    private static void disc(PoseStack p, VertexConsumer v, DriveEmulatorBlock.Disc disc, int light) {
+        switch (disc) {
+            case BLU_RAY -> {
+                annulus(p, v, 0, .43f, .15f, 0x2B63C9, light, 1);
+                annulus(p, v, 0, .15f, .11f, 0x9CC7F2, light, 1);
+            }
+            case DVD -> {
+                annulus(p, v, 0, .43f, .40f, 0xD9CFEA, light, 1);
+                annulus(p, v, 0, .40f, .15f, 0xB49BD8, light, 1);
+                annulus(p, v, 0, .15f, .11f, 0xE6DEF3, light, 1);
+            }
+            case CD -> {
+                annulus(p, v, 0, .43f, .36f, 0xC6E3EC, light, 1);
+                annulus(p, v, 0, .36f, .29f, 0xD6D2EE, light, 1);
+                annulus(p, v, 0, .29f, .22f, 0xF0D4DF, light, 1);
+                annulus(p, v, 0, .22f, .15f, 0xF1EBC8, light, 1);
+                annulus(p, v, 0, .15f, .11f, 0xECEEF0, light, 1);
+            }
+        }
+        annulus(p, v, 0, .11f, .055f, 0xDDE6EE, light, 1);
     }
 
     @Override

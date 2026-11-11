@@ -55,6 +55,7 @@ import net.minecraft.world.phys.BlockHitResult;
  * Plays a disc's playlist for its linked displays and speakers, one video after another, and stops after the last. A
  * remote steps through it (see RemoteItem); its volume (on top) and how brightly its displays light their surroundings
  * (in front) are set like any Create value, by holding right-click on it with a wrench. Right-click with a disc to put it in, with an empty hand to take it out.
+ * With no disc of its own, the DVD or Blu-ray in a disc drive emulator beside it is its disc (see DriveEmulatorBlock).
  */
 public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable {
     private static final MapCodec<VideoPlayerBlock> CODEC = simpleCodec(VideoPlayerBlock::new);
@@ -136,7 +137,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
     }
 
-    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable {
+    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
+            DriveEmulatorBlock.Fed {
         private ItemStack cd = ItemStack.EMPTY;
         /** The playlist entry playing (or paused, or stopped at). */
         private int index;
@@ -157,12 +159,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private int finished;
 
         public Entity(BlockPos pos, BlockState state) {
-            this(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
-        }
-
-        /** As another block's entity, which plays a disc of its own making (see DriveEmulatorBlock). */
-        protected Entity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
-            super(type, pos, state);
+            super(CreateMediaSystems.VIDEO_PLAYER_ENTITY.get(), pos, state);
         }
 
         @Override
@@ -177,9 +174,24 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             behaviours.add(lighting);
         }
 
+        /** The drive whose disc it plays: one beside it with a DVD or Blu-ray ready, while it has no disc of its own. */
+        @Nullable
+        private DriveEmulatorBlock.Entity drive() {
+            return cd.isEmpty() ? DriveEmulatorBlock.feeding(level, worldPosition, false) : null;
+        }
+
         @Override
         public List<String> playlist() {
-            return cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+            DriveEmulatorBlock.Entity drive = drive();
+            return drive != null ? List.of(drive.link()) : cd.getOrDefault(CreateMediaSystems.PLAYLIST.get(), List.of());
+        }
+
+        /** Plays the disc of the drive beside it from the top, or stops with it, unless it has its own. */
+        @Override
+        public void driveChanged(@Nullable Player by) {
+            if (cd.isEmpty()) {
+                insert(ItemStack.EMPTY, by);
+            }
         }
 
         @Override
@@ -202,18 +214,22 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         @Nullable
         public Streams.Source nowPlaying() {
+            if (!playing || paused) {
+                return null;
+            }
             List<String> playlist = playlist();
-            return playing && !paused && index < playlist.size()
-                    ? new Streams.Source(playlist.get(index), ticks, new Streams.Video(
-                            worldPosition, ((VideoDiscItem) cd.getItem()).maxHeight,
+            DriveEmulatorBlock.Entity drive = drive();
+            return index < playlist.size()
+                    ? new Streams.Source(playlist.get(index), ticks, new Streams.Video(worldPosition,
+                            drive != null ? drive.disc().maxHeight : ((VideoDiscItem) cd.getItem()).maxHeight,
                             index + 1 < playlist.size() ? Optional.of(playlist.get(index + 1)) : Optional.empty()))
                     : null;
         }
 
-        /** A new disc (or none) put in by {@code by} plays its first video. */
+        /** A new disc put in by {@code by} plays its first video; with none, the disc of a drive beside it does. */
         public void insert(ItemStack stack, @Nullable Player by) {
             cd = stack;
-            if (stack.isEmpty()) {
+            if (playlist().isEmpty()) {
                 playing = false;
                 changed();
             } else {
@@ -315,7 +331,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         /** Saved, and sent to clients for remotes and goggles. */
-        protected void changed() {
+        private void changed() {
             setChanged();
             if (level != null && !level.isClientSide) {
                 sendData();
@@ -338,7 +354,20 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
-            describeDisc(tooltip);
+            List<String> playlist = playlist();
+            tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
+                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
+            DriveEmulatorBlock.Entity beside = cd.isEmpty() ? DriveEmulatorBlock.beside(level, worldPosition) : null;
+            if (beside != null) {
+                beside.describe(tooltip);
+                tooltip.add(Component.empty());
+            } else if (!playlist.isEmpty()) {
+                tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
+                        Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                tooltip.add(Component.empty());
+            }
             if (playing && !paused && level != null && level.isClientSide) {
                 NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
                 if (progress != null) {
@@ -363,25 +392,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.lighting_value",
                     value(lighting.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
             return true;
-        }
-
-        /** Its state as goggles colour it: gray empty, red stopped, yellow paused, green playing. */
-        protected Component coloredState() {
-            return state().copy().withStyle(playlist().isEmpty() ? ChatFormatting.GRAY
-                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
-        }
-
-        /** What goggles say of its disc: its state, and the entry and link it plays. */
-        protected void describeDisc(List<Component> tooltip) {
-            List<String> playlist = playlist();
-            tooltip.add(Component.literal("     ").append(coloredState()));
-            if (!playlist.isEmpty()) {
-                tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
-                        Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
-                tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
-                        .withStyle(ChatFormatting.DARK_GRAY));
-                tooltip.add(Component.empty());
-            }
         }
 
         /** A value in a goggle line, set apart from its gray label. */

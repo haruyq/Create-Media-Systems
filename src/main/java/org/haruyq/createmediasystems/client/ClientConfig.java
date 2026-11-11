@@ -50,7 +50,7 @@ public final class ClientConfig {
             .comment("FFprobe for disc titles. The default 'ffprobe' or an empty value uses the managed download. For a custom FFmpeg, set the FFprobe path from the same installation.")
             .define("discFfprobePath", "ffprobe");
     public static final ModConfigSpec.ConfigValue<String> DISC_DRIVE = BUILDER
-            .comment("The real drive a Blu-ray drive emulator shows, like 'E:/'; a folder holding BDMV or VIDEO_TS works too. Empty takes the first optical drive of this computer with a disc in it.")
+            .comment("The real drive a disc drive emulator shows, like 'E:/'; a folder holding BDMV, VIDEO_TS or a CD image (.bin) works too. Empty takes the first optical drive of this computer with a disc in it.")
             .define("discDrive", "");
     private static final ModConfigSpec SPEC = BUILDER.build();
 

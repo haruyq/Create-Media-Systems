@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.audio;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -85,7 +86,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    public static class Entity extends BlockEntity implements MediaSource {
+    public static class Entity extends BlockEntity implements MediaSource, DriveEmulatorBlock.Fed {
         private ItemStack disc = ItemStack.EMPTY;
         private long ticks;
         private boolean playing;
@@ -99,15 +100,33 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         @Override
         @Nullable
         public Streams.Source nowPlaying() {
-            String url = disc.get(CreateMediaSystems.URL.get());
-            return playing && url != null ? new Streams.Source(url, ticks, null) : null;
+            String url = playing ? url() : null;
+            return url != null ? new Streams.Source(url, ticks, null) : null;
         }
 
-        /** A new disc (or none) starts from the beginning; speakers notice the restart on their next check. */
+        /** Its disc's link, or with no disc that of the audio CD in a disc drive emulator beside it (see DriveEmulatorBlock). */
+        @Nullable
+        private String url() {
+            if (!disc.isEmpty()) {
+                return disc.get(CreateMediaSystems.URL.get());
+            }
+            DriveEmulatorBlock.Entity drive = DriveEmulatorBlock.feeding(level, worldPosition, true);
+            return drive == null ? null : drive.link();
+        }
+
+        /** Plays the CD of the drive beside it from the beginning, or stops with it, unless it has a disc of its own. */
+        @Override
+        public void driveChanged(@Nullable Player by) {
+            if (disc.isEmpty()) {
+                insert(ItemStack.EMPTY, by);
+            }
+        }
+
+        /** A new disc (or none, but a drive's CD) starts from the beginning; speakers notice the restart on their next check. */
         public void insert(ItemStack stack, @Nullable Player by) {
             disc = stack;
             ticks = 0;
-            playing = !stack.isEmpty();
+            playing = url() != null;
             Streams.loading(this, by);
             // A signal already on doesn't count as turning on later.
             powered = level != null && level.hasNeighborSignal(worldPosition);
@@ -120,7 +139,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
                 return;
             }
             powered = on;
-            if (on && !playing && !disc.isEmpty()) {
+            if (on && !playing && url() != null) {
                 ticks = 0;
                 playing = true;
                 Streams.loading(this, null);

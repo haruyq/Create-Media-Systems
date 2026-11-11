@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "create_media_systems:blu_ray_drive_emulator"
+          "name": "create_media_systems:disc_drive_emulator"
         }
       ],
       "conditions": [
