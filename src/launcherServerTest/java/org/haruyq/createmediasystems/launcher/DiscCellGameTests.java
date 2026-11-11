@@ -332,11 +332,10 @@ public final class DiscCellGameTests {
 
     @GameTest(template="empty", timeoutTicks=40)
     public static void legacyReloadLightExpiresWithoutLeavingABlockBehind(GameTestHelper h) {
-        var player = h.makeMockPlayer(GameType.SURVIVAL);
         BlockPos feet = h.absolutePos(new BlockPos(1, 1, 1));
-        player.setPos(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
-        h.getLevel().setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
-        ReloadGlowBlock.illuminate(player);
+        // As an old save left it: the block, and the scheduled tick that was to remove it.
+        h.getLevel().setBlockAndUpdate(feet.above(), LauncherFeature.RELOAD_GLOW.get().defaultBlockState());
+        h.getLevel().scheduleTick(feet.above(), LauncherFeature.RELOAD_GLOW.get(), 8);
         h.assertTrue(h.getLevel().getBlockState(feet.above()).is(LauncherFeature.RELOAD_GLOW.get()), "Legacy saves may still contain the old white light block");
         h.runAfterDelay(12, () -> {
             h.assertTrue(h.getLevel().getBlockState(feet.above()).isAir(), "The temporary light cannot remain after reloading stops");
