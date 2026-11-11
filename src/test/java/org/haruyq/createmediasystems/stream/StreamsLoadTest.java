@@ -15,9 +15,9 @@ import net.minecraft.core.RegistryAccess;
 class StreamsLoadTest {
     @Test
     void aPhysicalDiscWaitsForDirectConnectionsAndBuffering() {
-        String url = new org.haruyq.createmediasystems.disc.DiscUrl(java.util.UUID.randomUUID(), java.util.UUID.randomUUID()).toString();
-        assertEquals(Streams.MAX_LOAD_TICKS, Streams.barrierTicks(url));
-        assertEquals(Streams.BARRIER_TICKS, Streams.barrierTicks("https://example.com/video.mp4"));
+        String url = new DiscUrl(java.util.UUID.randomUUID(), java.util.UUID.randomUUID()).toString();
+        assertEquals(Streams.MAX_LOAD_TICKS, MediaKind.barrierTicks(url));
+        assertEquals(Streams.BARRIER_TICKS, MediaKind.barrierTicks("https://example.com/video.mp4"));
     }
 
     @Test

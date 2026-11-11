@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 import org.haruyq.createmediasystems.video.VideoFeature;
 
 import net.minecraft.commands.CommandSourceStack;
@@ -22,7 +23,7 @@ public class ServerConfigGameTests {
         String original = Files.readString(file);
         try {
             server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config allowedHosts add Example.ORG");
-            helper.assertTrue(ServerConfig.isAllowed("https://www.example.org/a"), "added host is allowed");
+            helper.assertTrue(UrlPolicy.isAllowed("https://www.example.org/a"), "added host is allowed");
             server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config remoteRange 99");
             server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config apiUrl ftp://nope");
             helper.assertTrue(VideoFeature.REMOTE_RANGE.get() == 99, "remoteRange set");
@@ -35,7 +36,7 @@ public class ServerConfigGameTests {
             helper.assertTrue(VideoFeature.REMOTE_RANGE.get() == 7, "reload reads the file");
 
             server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config allowedHosts remove example.org");
-            helper.assertFalse(ServerConfig.isAllowed("https://www.example.org/a"), "removed host is rejected");
+            helper.assertFalse(UrlPolicy.isAllowed("https://www.example.org/a"), "removed host is rejected");
         } finally {
             Files.writeString(file, original);
             server.getCommands().performPrefixedCommand(source, CreateMediaSystems.COMMAND + " config reload");

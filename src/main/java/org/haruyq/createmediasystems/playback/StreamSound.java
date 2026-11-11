@@ -20,10 +20,10 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 import javax.sound.sampled.AudioFormat;
 
-import org.haruyq.createmediasystems.stream.StreamFeature;
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.client.Reports;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -357,7 +357,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
             IOException failed = opened.failure();
             if (failed != null) {
                 LogUtils.getLogger().warn("Could not stream {}", urlAt.apply(0), failed);
-                reportFailure(UrlPolicy.reason(failed));
+                reportFailure(ApiHttp.reason(failed));
                 started.accept(0);
             } else {
                 // Joining mid-way (start > 0): others are already listening, so land where they are now, not where
@@ -397,7 +397,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                     .timeout(Duration.ofMillis(Streams.MAX_LOAD_TICKS * 50)).build(), HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() != 200) {
                 try (InputStream body = response.body()) {
-                    throw new IOException(UrlPolicy.errorDetail(response.statusCode(),
+                    throw new IOException(ApiHttp.errorDetail(response.statusCode(),
                             new String(body.readNBytes(4000), StandardCharsets.UTF_8)));
                 }
             }

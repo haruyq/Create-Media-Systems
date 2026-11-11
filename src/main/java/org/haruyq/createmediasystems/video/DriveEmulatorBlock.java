@@ -6,11 +6,11 @@ import java.util.Locale;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.disc.DriveClient;
 import org.haruyq.createmediasystems.disc.DriveScreen;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -384,8 +384,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 return;
             }
             if (next == Drive.READY) {
-                DiscUrl url = DiscUrl.parse(text);
-                if (url == null || !url.owner().equals(player.getUUID())) {
+                if (MediaKind.of(text) != MediaKind.DISC || !MediaKind.writableBy(text, player.getUUID())) {
                     return;
                 }
             }

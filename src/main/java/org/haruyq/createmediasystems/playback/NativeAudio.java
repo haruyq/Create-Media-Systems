@@ -15,6 +15,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.sound.sampled.AudioFormat;
 
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -56,11 +57,7 @@ public final class NativeAudio {
      * ponytail: a connection that stalls longer than that on every seek keeps seeking every cooldown; back off if
      * that is ever seen.
      */
-    private static final long SEEK_DRIFT_MILLIS = 3000;
-    private static final long SEEK_COOLDOWN_NANOS = 10_000_000_000L;
-    // Moving discs rejoin independently after unloading; loading stalls must not leave one listener seconds behind.
-    private static final long DISC_SEEK_DRIFT_MILLIS = 1000;
-    private static final long DISC_SEEK_COOLDOWN_NANOS = 3_000_000_000L;
+    private static final Hold TRACK_HOLD = new Hold(3000, 10_000_000_000L);
     /** The last moments of a track aren't checked: VLC's time stops at its end. */
     private static final long END_MARGIN_MILLIS = 2000;
     /** The player each track's latest playback plays on, per Blu-ray player showing it; guarded by itself. */
@@ -80,8 +77,24 @@ public final class NativeAudio {
         }
     }
 
-    /** A moving CD has an explicit identity and a server-owned playback clock. */
-    record DiscClock(UUID id, DoubleSupplier seconds) {}
+    /** How far a playing track may drift off where it should be before it is sought there, at most once a cooldown. */
+    private record Hold(long driftMillis, long cooldownNanos) {
+    }
+
+    /**
+     * A moving disc's playback (see StreamSound#setDiscPlayback): its own identity, not the URL or a time tolerance,
+     * and a server-owned clock its player opens at (see Backend#start) and is held to, closer than a track held to
+     * where the server said it started: each listener rejoins a moving disc on its own after unloading, and a loading
+     * stall must not leave one seconds behind.
+     */
+    record DiscClock(UUID id, DoubleSupplier seconds) {
+        private static final Hold HOLD = new Hold(1000, 3_000_000_000L);
+
+        /** Where its track is now (ms). */
+        long millis() {
+            return Math.max(0, Math.round(seconds.getAsDouble() * 1000));
+        }
+    }
 
     /**
      * {@code playback} is what plays it on the server, and {@code load} which load of its track (see
@@ -102,7 +115,7 @@ public final class NativeAudio {
         if (Vlc.MISSING != null) {
             throw new IOException(Vlc.MISSING);
         }
-        return retrying(() -> open(() -> new VlcPlayer(video, requestedAt, startSeconds, disc == null ? null : disc.seconds()), source, playback, load,
+        return retrying(() -> open(() -> new VlcPlayer(video, requestedAt, startSeconds), source, playback, load,
                 video == null ? null : video.player(), startSeconds, requestedAt, cancelled, channel, go, loaded, disc),
                 cancelled, RETRY_MILLIS);
     }
@@ -357,11 +370,12 @@ public final class NativeAudio {
     interface Backend {
         AudioStream tap(Streams.Channel channel) throws IOException;
 
-        /** Fails with a reason safe to show the player. */
-        void start(URI source) throws IOException;
-
-        /** The backend supplied the CD's clock as an input start time before it opened. */
-        default boolean startsAtPosition() { return false; }
+        /**
+         * Opens {@code source}, paused once open; at where {@code opensAt} says (s, asked as it opens) when its
+         * playback has a clock of its own (a moving disc's), else at the top, to be sought where the server says.
+         * Fails with a reason safe to show the player.
+         */
+        void start(URI source, @Nullable DoubleSupplier opensAt) throws IOException;
 
         Status status();
 
@@ -406,7 +420,7 @@ public final class NativeAudio {
             // Install the callback before starting: VLC never briefly plays on the PC's default audio device.
             stream = new Owned(shared, owner.tap(channel));
             shared.tapped();
-            owner.start(shared.key.source());
+            owner.start(shared.key.source(), shared.disc == null ? null : shared.disc.seconds());
             long deadline = System.nanoTime() + OPEN_TIMEOUT_NANOS;
             Status state;
             while (!(state = owner.status()).ready()) {
@@ -438,7 +452,8 @@ public final class NativeAudio {
             // Paused until the server says to play, and from where: the top once every listener has a fresh track
             // loaded, so a slower download doesn't leave one behind; at once, from where it is, for one already
             // playing (see Streams#started). A live stream has no place in it to agree on.
-            long goDeadline = System.nanoTime() + Streams.barrierTicks(shared.key.source().toString()) * 50_000_000L + 5_000_000_000L;
+            long goDeadline = System.nanoTime() + MediaKind.barrierTicks(shared.key.source().toString()) * 50_000_000L
+                    + 5_000_000_000L;
             while (go != null && !state.live() && !go.isDone() && System.nanoTime() < goDeadline) {
                 checkCancelled(cancelled);
                 sleep();
@@ -447,10 +462,11 @@ public final class NativeAudio {
             Go told = go == null ? null : go.getNow(null);
             // Without the server's word (an announcement, or it never came): where the server was when it sent the
             // stream, plus the time it took to load here.
-            long target = shared.disc != null ? Math.max(0, Math.round(shared.disc.seconds().getAsDouble() * 1e9))
+            // A moving disc's player opened where its clock was, and plays on from there (see Backend#start).
+            long target = shared.disc != null ? shared.disc.millis() * 1_000_000
                     : told != null ? told.position(now)
                     : startSeconds > 0 ? Math.round(startSeconds * 1e9) + Math.max(0, now - requestedAt) : 0;
-            if (vod && target >= SYNC_TOLERANCE_NANOS && !owner.startsAtPosition()) {
+            if (vod && target >= SYNC_TOLERANCE_NANOS && shared.disc == null) {
                 owner.seek(target / 1_000_000);
             }
             owner.resume();
@@ -503,6 +519,8 @@ public final class NativeAudio {
         final Backend owner;
         @Nullable
         final DiscClock disc;
+        /** How closely it is held to where it should be (see correct). */
+        final Hold held;
         /** What its video's playback took (see Diagnostics); null for a record's. */
         @Nullable
         final Diagnostics diagnostics;
@@ -525,6 +543,7 @@ public final class NativeAudio {
             this.load = load;
             this.owner = owner;
             this.disc = disc;
+            held = disc == null ? TRACK_HOLD : DiscClock.HOLD;
             this.origin = origin;
             diagnostics = owner instanceof VlcPlayer player ? player.diagnostics : null;
         }
@@ -563,7 +582,7 @@ public final class NativeAudio {
         /**
          * Every {@link #CHECK_NANOS}, from any of its streams' reads: how far its player is off where the track should
          * be by now ({@link #origin}, set where the server said as it started). Stalling to download (a slow
-         * connection) leaves it behind: past {@link #SEEK_DRIFT_MILLIS}, it seeks to where it should be. Measured
+         * connection) leaves it behind: past its {@link #held} drift, it seeks to where it should be. Measured
          * by this computer's clock, never the server's, whose count falls behind whenever it runs below 20 TPS: every
          * client started where the server said, and clocks keep pace with each other.
          */
@@ -576,8 +595,7 @@ public final class NativeAudio {
                 nextCheck = now + CHECK_NANOS;
             }
             long at = owner.time();
-            long expected = disc == null ? (now - origin) / 1_000_000
-                    : Math.max(0, Math.round(disc.seconds().getAsDouble() * 1000));
+            long expected = disc == null ? (now - origin) / 1_000_000 : disc.millis();
             double length = owner.seconds();
             if (diagnostics != null && now - diagnostics.playing >= Diagnostics.REPORT_AFTER_NANOS) {
                 diagnostics.send();
@@ -585,9 +603,7 @@ public final class NativeAudio {
             if (live || !seekable || at < 0 || length > 0 && expected > length * 1000 - END_MARGIN_MILLIS) {
                 return;
             }
-            long tolerance = disc == null ? SEEK_DRIFT_MILLIS : DISC_SEEK_DRIFT_MILLIS;
-            long cooldown = disc == null ? SEEK_COOLDOWN_NANOS : DISC_SEEK_COOLDOWN_NANOS;
-            boolean seek = Math.abs(expected - at) >= tolerance && now - seekedAt >= cooldown;
+            boolean seek = Math.abs(expected - at) >= held.driftMillis() && now - seekedAt >= held.cooldownNanos();
             if (diagnostics != null) {
                 diagnostics.drift(expected - at, seek);
             }

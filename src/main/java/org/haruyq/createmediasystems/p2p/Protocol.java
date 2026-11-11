@@ -7,7 +7,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import org.haruyq.createmediasystems.stream.UrlPolicy;
+import org.haruyq.createmediasystems.ApiHttp;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -22,8 +22,11 @@ public final class Protocol {
     public static final int VERSION = 1;
     /** Most a connection is taken to carry, in bit/s: 100 Gbps. */
     public static final long MAX_BPS = 100_000_000_000L;
-    public static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9_-]{8,128}");
-    private static final Pattern TOKEN = Pattern.compile("[\\x21-\\x7e]{16,512}");
+    /** Longest session id, token, list of STUN servers and STUN URL a ticket holds (see Ticket). */
+    public static final int MAX_SESSION_ID = 128, MAX_TOKEN = 512, MAX_STUN_URLS = 16, MAX_STUN_URL = 256;
+    public static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9_-]{8," + MAX_SESSION_ID + "}");
+    /** A secret the API takes: a ticket's token, and the server's own (see P2p). */
+    public static final Pattern TOKEN = Pattern.compile("[\\x21-\\x7e]{16," + MAX_TOKEN + "}");
 
     private Protocol() {
     }
@@ -39,7 +42,7 @@ public final class Protocol {
                 || base.getRawFragment() != null || !(scheme.equals("https") || scheme.equals("http") && loopback(base.getHost()))) {
             throw new IllegalArgumentException("P2P needs an https:// API URL (or http:// to this computer)");
         }
-        String url = UrlPolicy.api(base.toString(), path);
+        String url = ApiHttp.api(base.toString(), path);
         return URI.create(websocket ? (scheme.equals("https") ? "wss" : "ws") + url.substring(scheme.length()) : url);
     }
 
@@ -50,8 +53,8 @@ public final class Protocol {
     /** A peer's own ticket to the API's signaling (see README). */
     public record Ticket(String sessionId, UUID peerId, UUID hostId, boolean host, String token, List<String> stunUrls) {
         public Ticket {
-            if (!SESSION_ID.matcher(sessionId).matches() || !TOKEN.matcher(token).matches() || stunUrls.size() > 16
-                    || stunUrls.stream().anyMatch(u -> u.length() > 256 || !u.toLowerCase(Locale.ROOT).startsWith("stun:"))) {
+            if (!SESSION_ID.matcher(sessionId).matches() || !TOKEN.matcher(token).matches() || stunUrls.size() > MAX_STUN_URLS
+                    || stunUrls.stream().anyMatch(u -> u.length() > MAX_STUN_URL || !u.toLowerCase(Locale.ROOT).startsWith("stun:"))) {
                 throw new IllegalArgumentException("Not a valid P2P ticket");
             }
             stunUrls = List.copyOf(stunUrls);

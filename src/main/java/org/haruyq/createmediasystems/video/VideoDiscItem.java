@@ -3,11 +3,11 @@ package org.haruyq.createmediasystems.video;
 import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.StreamPackets;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
@@ -107,9 +107,8 @@ public class VideoDiscItem extends Item implements MediaItem {
         List<String> playlist = urls.stream().map(String::trim).filter(url -> !url.isEmpty())
                 .limit(disc.kind.entries).toList();
         for (int i = 0; i < playlist.size(); i++) {
-            var physical = DiscUrl.parse(playlist.get(i));
-            if (!ServerConfig.isAllowed(playlist.get(i)) || physical != null && !physical.owner().equals(player.getUUID())
-                    && !disc.links(held).contains(playlist.get(i))) {
+            String url = playlist.get(i);
+            if (!UrlPolicy.isAllowed(url) || !MediaKind.writableBy(url, player.getUUID()) && !disc.links(held).contains(url)) {
                 player.displayClientMessage(Component.translatable(disc.kind.hasPicture() ? "create_media_systems.disc.rejected"
                         : "create_media_systems.disc.rejected_track", i + 1)
                         .withStyle(ChatFormatting.RED), true);

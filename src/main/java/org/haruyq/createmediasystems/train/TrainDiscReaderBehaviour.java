@@ -10,8 +10,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -103,7 +103,7 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         }
         // Loading doesn't count as playing (see Streams#played): riders boarding meanwhile start from the top too.
         long ticks = context.data.getBoolean("Loading") ? 0 : now - context.data.getLong("PlayingSince");
-        if (!ServerConfig.isAllowed(url) || (Streams.duration(url) > 0 ? Streams.endedAt(url, ticks)
+        if (!UrlPolicy.isAllowed(url) || (Streams.duration(url) > 0 ? Streams.endedAt(url, ticks)
                 : ticks > UNKNOWN_LENGTH_RELAY_TICKS)) {
             context.data.remove("Playing");
             LISTENERS.remove(context);

@@ -10,10 +10,10 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientFiles;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 
@@ -140,7 +140,7 @@ public final class P2pClient {
      * refused one (cooldown, no such room) keeps it.
      */
     static int request(P2p.Action action, String host) {
-        if (host.length() > 16) {
+        if (host.length() > P2p.MAX_HOST_NAME) {
             say(Component.translatable("create_media_systems.p2p.no_room", host), true);
             return 0;
         }
@@ -229,7 +229,7 @@ public final class P2pClient {
                     opened.close();
                 }
             } else if (error != null) {
-                say(Component.translatable("create_media_systems.p2p.natives_failed", UrlPolicy.reason(error)), true);
+                say(Component.translatable("create_media_systems.p2p.natives_failed", ApiHttp.reason(error)), true);
                 ended(request);
             } else if (opened.state() == Transport.State.CLOSED) {
                 ended(request);
@@ -282,7 +282,7 @@ public final class P2pClient {
                 : connection.getOnlinePlayers().stream().map(p -> p.getProfile().getName()).toList();
     }
 
-    private static String mbps(long bps) {
+    static String mbps(long bps) {
         return String.format(Locale.ROOT, "%.1f", bps / 1e6);
     }
 

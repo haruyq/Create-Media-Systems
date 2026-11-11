@@ -20,6 +20,7 @@ import org.haruyq.createmediasystems.megaphone.*;
 import org.haruyq.createmediasystems.playback.*;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 public final class MegaphoneClient {
     public record Emitter(Player player,InteractionHand hand,UUID id,int revision) {
@@ -73,7 +74,7 @@ public final class MegaphoneClient {
             var id=MegaphoneData.id(item);if(id.isEmpty() || PLAYING.containsKey(id.get()) || PLAYING.size()>=8)continue;
             var source=new Emitter(player,hand,id.get(),MegaphoneData.revision(item));if(!source.audible())continue;
             var disc=MegaphoneData.disc(item,mc.level);String url=MediaItem.url(disc);
-            if(url!=null && ServerConfig.isAllowed(url)) {
+            if(url!=null && UrlPolicy.isAllowed(url)) {
                 double start=source.seconds();
                 var sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
                         source::position,null,source::present,source::audible,source::gain,null,Streams.Channel.MIX,length->{});

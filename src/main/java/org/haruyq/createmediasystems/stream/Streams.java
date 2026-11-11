@@ -21,9 +21,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.disc.DiscUrl;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -232,12 +232,12 @@ public final class Streams {
     public static Source source(Level level, BlockPos pos) {
         Source source = level.isLoaded(pos) && level.getBlockEntity(pos) instanceof MediaSource media
                 ? playing(media) : null;
-        if (source == null || !ServerConfig.isAllowed(source.url())) {
+        if (source == null || !UrlPolicy.isAllowed(source.url())) {
             return null;
         }
         // Clients fetch the next video ahead: it has to pass the same allow-list as the one playing.
         Video video = source.video();
-        return video == null || video.next().map(ServerConfig::isAllowed).orElse(true) ? source
+        return video == null || video.next().map(UrlPolicy::isAllowed).orElse(true) ? source
                 : new Source(source.url(), source.ticks(), new Video(video.player(), video.maxHeight(), Optional.empty()));
     }
 
@@ -268,11 +268,7 @@ public final class Streams {
         Load previous = LOADS.get(key(source));
         Source playing = source instanceof MediaSource media ? media.nowPlaying() : null;
         LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy,
-                barrierTicks(playing == null ? "" : playing.url()), Math.max(0, offset), unattended));
-    }
-
-    public static long barrierTicks(String url) {
-        return DiscUrl.parse(url) == null ? BARRIER_TICKS : MAX_LOAD_TICKS;
+                MediaKind.barrierTicks(playing == null ? null : playing.url()), Math.max(0, offset), unattended));
     }
 
     /** Which load of its track {@code source} plays (see Load#id); 0 for one never loaded since the server started. */
@@ -554,24 +550,19 @@ public final class Streams {
      * played, so a disc can be refused before it is written. Also fills the duration cache.
      */
     public static CompletableFuture<TrackInfo> info(String url) {
-        if (DiscUrl.parse(url) != null) {
-            return CompletableFuture.completedFuture(new TrackInfo(null, "DVD / Blu-ray"));
-        }
-        URI uri;
-        try {
-            uri = URI.create(url.trim());
-        } catch (IllegalArgumentException invalid) {
+        MediaKind kind = MediaKind.of(url);
+        if (kind == null) {
             return CompletableFuture.failedFuture(new IOException("Not a link"));
         }
-        if (UrlPolicy.isRtsp(uri)) {
-            DURATIONS.put(url, UNKNOWN);
-            return CompletableFuture.completedFuture(new TrackInfo(null, "RTSP live"));
+        if (kind.title != null) {
+            return CompletableFuture.completedFuture(new TrackInfo(null, kind.title));
         }
-        return HTTP.sendAsync(HttpRequest.newBuilder(URI.create(UrlPolicy.endpoint(ServerConfig.API_URL.get(), "info", ProviderUrls.canonical(uri).toString())))
+        URI uri = URI.create(url.trim());
+        return HTTP.sendAsync(HttpRequest.newBuilder(URI.create(ApiHttp.endpoint(ServerConfig.API_URL.get(), "info", ProviderUrls.canonical(uri).toString())))
                         .timeout(Duration.ofSeconds(60)).build(), HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() != 200) {
-                        throw new CompletionException(new Refused(UrlPolicy.errorDetail(response.statusCode(), response.body())));
+                        throw new CompletionException(new Refused(ApiHttp.errorDetail(response.statusCode(), response.body())));
                     }
                     JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
                     TrackInfo info = new TrackInfo(optional(body, "duration", JsonElement::getAsDouble),

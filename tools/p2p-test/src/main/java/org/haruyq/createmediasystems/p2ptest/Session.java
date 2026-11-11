@@ -18,9 +18,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.p2p.Protocol;
 import org.haruyq.createmediasystems.p2p.Transport;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.google.gson.JsonObject;
 
@@ -103,7 +103,7 @@ final class Session {
                     try {
                         opened(self, response, error);
                     } catch (RuntimeException | LinkageError e) {
-                        fail("P2P を始められません: " + UrlPolicy.reason(e));
+                        fail("P2P を始められません: " + ApiHttp.reason(e));
                     }
                 });
     }
@@ -119,10 +119,10 @@ final class Session {
 
     private void opened(UUID self, HttpResponse<String> response, Throwable error) {
         if (error != null) {
-            fail("APIに接続できません（" + UrlPolicy.reason(error) + "）。API URLと、APIが動いているかを確認してください。");
+            fail("APIに接続できません（" + ApiHttp.reason(error) + "）。API URLと、APIが動いているかを確認してください。");
             return;
         }
-        String detail = UrlPolicy.errorDetail(response.statusCode(), response.body());
+        String detail = ApiHttp.errorDetail(response.statusCode(), response.body());
         switch (response.statusCode()) {
             case 200 -> {
             }
@@ -226,7 +226,7 @@ final class Session {
             sent.addAndGet(payload.length);
             frames.incrementAndGet();
         } catch (IOException | RuntimeException e) {
-            report("フレームを送れませんでした: " + UrlPolicy.reason(e));
+            report("フレームを送れませんでした: " + ApiHttp.reason(e));
         }
     }
 
@@ -240,7 +240,7 @@ final class Session {
                 return Frames.fit(robot.createScreenCapture(device.getDefaultConfiguration().getBounds()));
             } catch (AWTException | RuntimeException e) {
                 screen = null;
-                report("画面を取り込めないので、テストパターンを送ります: " + UrlPolicy.reason(e));
+                report("画面を取り込めないので、テストパターンを送ります: " + ApiHttp.reason(e));
             }
         }
         return Frames.pattern(sequence);

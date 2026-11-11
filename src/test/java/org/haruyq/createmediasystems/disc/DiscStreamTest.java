@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
+import org.haruyq.createmediasystems.p2p.P2pOverlay;
+import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.junit.jupiter.api.Test;
 
 class DiscStreamTest {
@@ -73,5 +76,26 @@ class DiscStreamTest {
         assertTrue(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0xb0}));
         assertFalse(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0x80}));
         assertFalse(DiscSource.scrambled(new byte[]{0, 0, 1}));
+    }
+
+    @Test
+    void aViewerSeesTheSegmentItWaitsForInTheP2pOverlay() {
+        long s = 1_000_000_000L, now = 100 * s;
+        var stats = new DiscStream.Stats(false, 38, now - 5 * s, 37, 4 * 1024 * 1024, 520_000_000, 1, "Disc transfer timed out",
+                null, -1, null);
+        List<P2pOverlay.Line> lines = stats.lines(false, now);
+        assertEquals(List.of(
+                "Disc: waiting for segment 38 for 5.00 s",
+                "Last segment 37: 4.0 MB in 0.52 s (64.5 Mbps)",
+                "Failed requests: 1, last: Disc transfer timed out"), lines.stream().map(P2pOverlay.Line::text).toList());
+        assertEquals(0xFFFF5555, lines.getFirst().color(), "past a segment's length the wait shows red");
+        assertTrue(stats.lines(true, now).isEmpty(), "a viewer's stream shows nothing to a host");
+    }
+
+    @Test
+    void aHostSeesItsEncoderInTheP2pOverlay() {
+        var stats = new DiscStream.Stats(true, 0, 0, -1, 0, 0, 0, null, "h264_nvenc", 12, "1080p60 8000 kbps");
+        assertEquals(List.of("Disc: h264_nvenc, segment 12 at 1080p60 8000 kbps"),
+                stats.lines(true, 0).stream().map(P2pOverlay.Line::text).toList());
     }
 }

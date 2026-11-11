@@ -1,8 +1,12 @@
-package org.haruyq.createmediasystems.disc;
+package org.haruyq.createmediasystems.stream;
 
 import java.net.URI;
 import java.util.UUID;
 
+/**
+ * The link of a disc a player shares from their own drive or a disc image ({@code cms-disc://<owner>/<source>}, see
+ * MediaKind#DISC): who hosts it, and which of their reads it is.
+ */
 public record DiscUrl(UUID owner, UUID source) {
     public static DiscUrl parse(String value) {
         try {

@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.display;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -103,7 +102,7 @@ public class ImageViewerBlock extends DisplayBlock {
             return;
         }
         String url = payload.url().trim();
-        if (!url.isEmpty() && !ServerConfig.isAllowed(url)) {
+        if (!url.isEmpty() && !UrlPolicy.isAllowed(url)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected").withStyle(ChatFormatting.RED), true);
             return;
         }

@@ -3,15 +3,15 @@ package org.haruyq.createmediasystems.partybox.client;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.launcher.DopplerMath;
 import org.haruyq.createmediasystems.partybox.*;
+import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import org.haruyq.createmediasystems.playback.ClientStreams;
-import org.haruyq.createmediasystems.playback.StreamSound;
 import org.haruyq.createmediasystems.playback.PlaybackSync;
+import org.haruyq.createmediasystems.playback.StreamSound;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.world.item.ItemStack;
@@ -80,7 +80,7 @@ public final class PartyBoxClient {
         for(var box:mc.level.getEntitiesOfClass(PartyBoxEntity.class,mc.player.getBoundingBox().inflate(PartyBoxSpecs.HEAR_RANGE))) {
             if(!audible(box)||PLAYING.containsKey(box.getUUID())||PLAYING.size()>=12)continue;
             String url=MediaItem.url(box.disc()); int revision=box.revision();Meter meter=new Meter();
-            if(url!=null && ServerConfig.isAllowed(url)) {
+            if(url!=null && UrlPolicy.isAllowed(url)) {
                 double start=box.seconds();
                 StreamSound sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
                         box::soundPosition,null,()->!box.isRemoved()&&box.playing()&&box.revision()==revision,()->audible(box),()->gain(box),null,Streams.Channel.MIX,

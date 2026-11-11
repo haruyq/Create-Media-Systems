@@ -54,10 +54,10 @@ public interface MediaItem {
         return stack.getItem() instanceof MediaItem && url(stack) == null;
     }
 
-    /** Whether this server and its clients may play {@code stack}'s link (see ServerConfig#isAllowed); one with none may. */
+    /** Whether this server and its clients may play {@code stack}'s link (see UrlPolicy#isAllowed); one with none may. */
     static boolean allowed(ItemStack stack) {
         String url = url(stack);
-        return url == null || ServerConfig.isAllowed(url);
+        return url == null || UrlPolicy.isAllowed(url);
     }
 
     /** The jukebox song a portable player plays from {@code stack}: none for a media item, which plays its link. */

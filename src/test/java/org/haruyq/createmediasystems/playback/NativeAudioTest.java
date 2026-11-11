@@ -44,7 +44,8 @@ class NativeAudioTest {
         Streams.Channel channel;
         boolean failStart;
         boolean failTap;
-        boolean inputPosition;
+        /** Where it was asked to open (ms), from its playback's own clock; -1 for the top. */
+        long opened = -1;
         volatile long positionMillis = -1;
 
         @Override public AudioStream tap(Streams.Channel channel) throws IOException {
@@ -52,14 +53,14 @@ class NativeAudioTest {
             if (failTap) throw new IOException("no tap");
             return tapped;
         }
-        @Override public void start(URI uri) {
+        @Override public void start(URI uri, java.util.function.DoubleSupplier opensAt) {
             actions.add("start");
+            if (opensAt != null) opened = Math.round(opensAt.getAsDouble() * 1000);
             if (failStart) throw new IllegalArgumentException("secret signed URL");
         }
         @Override public NativeAudio.Status status() { return state; }
         @Override public void seek(long millis) { actions.add("seek"); sought = millis; }
         @Override public void resume() { actions.add("resume"); }
-        @Override public boolean startsAtPosition() { return inputPosition; }
         @Override public long time() { return positionMillis; }
         @Override public void release() { releases.incrementAndGet(); }
     }
@@ -88,8 +89,8 @@ class NativeAudioTest {
                 () -> false, Streams.Channel.MIX, null, s -> {}, a)) {
             try (AudioStream two = NativeAudio.open(() -> second, SOURCE, null, 0, null, 0, asked,
                     () -> false, Streams.Channel.MIX, null, s -> {}, b)) {
-                assertEquals(27500, first.sought, "CD A follows its own server position");
-                assertEquals(1250, second.sought, "CD B must not tap A even when fired in the same tick");
+                assertEquals(27500, first.opened, "CD A follows its own server position");
+                assertEquals(1250, second.opened, "CD B must not tap A even when fired in the same tick");
                 assertEquals(1, first.actions.stream().filter("start"::equals).count());
                 assertEquals(1, second.actions.stream().filter("start"::equals).count());
             }
@@ -109,7 +110,7 @@ class NativeAudioTest {
              AudioStream rejoined = NativeAudio.open(() -> fail("same CD must share its own decoder"),
                      SOURCE, null, 0, null, 8, asked + 20_000_000_000L,
                      () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
-            assertEquals(8000, player.sought);
+            assertEquals(8000, player.opened);
             assertEquals(1, player.actions.stream().filter("start"::equals).count());
         }
         assertEquals(1, player.releases.get());
@@ -118,7 +119,6 @@ class NativeAudioTest {
     @Test
     void anInputOpenedAtTheServerPositionIsNotSoughtAgainWhilePaused() throws Exception {
         Player player = new Player();
-        player.inputPosition = true;
         var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 45.0);
         try (AudioStream ignored = NativeAudio.open(() -> player, SOURCE, null, 0, null, 45,
                 System.nanoTime(), () -> false, Streams.Channel.MIX, null, s -> {}, disc)) {
@@ -130,7 +130,6 @@ class NativeAudioTest {
     @Test
     void aDiscThatStalledWhileOpeningCatchesUpToItsOwnServerClock() throws Exception {
         Player player = new Player();
-        player.inputPosition = true;
         player.positionMillis = 8500;
         var disc = new NativeAudio.DiscClock(java.util.UUID.randomUUID(), () -> 10.0);
         try (AudioStream stream = NativeAudio.open(() -> player, SOURCE, null, 0, null, 10,

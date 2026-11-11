@@ -2,8 +2,8 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
@@ -89,14 +89,14 @@ public class CustomDiscItem extends Item implements MediaItem {
         if (!player.getMainHandItem().is(AudioFeature.CUSTOM_DISC.get())) {
             return;
         }
-        if (!ServerConfig.isAllowed(url)) {
+        if (!UrlPolicy.isAllowed(url)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected").withStyle(ChatFormatting.RED), true);
             return;
         }
         player.displayClientMessage(Component.translatable("create_media_systems.url.checking"), true);
         Streams.info(url).whenComplete((info, error) -> player.server.execute(() -> {
             if (error != null) {
-                player.displayClientMessage(Component.translatable("create_media_systems.url.not_found", UrlPolicy.reason(error))
+                player.displayClientMessage(Component.translatable("create_media_systems.url.not_found", ApiHttp.reason(error))
                         .withStyle(ChatFormatting.RED), false);
                 return;
             }

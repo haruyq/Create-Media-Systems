@@ -2,6 +2,8 @@ package org.haruyq.createmediasystems.playback;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -9,9 +11,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
-import org.haruyq.createmediasystems.disc.DiscUrl;
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -21,33 +24,49 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.Util;
 
 /**
- * What a player opens for a source URL: supported pages resolved to their origin media by this client (see
- * NativeMediaResolver), pages the API's extension plays through the API's relay, and anything else as it is.
+ * What a player opens for a source URL, by its kind (see MediaKind): a web page resolved to its origin media by this
+ * client (see NativeMediaResolver), one the API's extension plays through the API's relay, a media file as it is;
+ * an RTSP stream as it is, over TCP with little buffering; and any other kind through the opener its feature gives
+ * (a shared disc's, see DiscClient).
  */
-final class MediaSources {
+public final class MediaSources {
     /** How long before a video ends the next is resolved (see resolveAhead): well inside a resolution's lifetime. */
     static final double RESOLVE_AHEAD_SECONDS = NativeMediaResolver.CACHE_NANOS / 3 / 1e9;
     /** What was resolved ahead (URL and height) and when (System.nanoTime), dropped as the resolution expires. */
     private static final Map<String, Long> RESOLVED_AHEAD = new ConcurrentHashMap<>();
+    /** How the kinds this package doesn't open itself are opened; set as the client starts. */
+    private static final Map<MediaKind, Opener> OPENERS = new EnumMap<>(MediaKind.class);
 
     private MediaSources() {
     }
 
-    /** Whether {@code url} is one the server allows that goes through the resolver (and so may be kept). */
-    private static boolean resolvable(String url, URI uri) {
-        return DiscUrl.parse(url) == null && ServerConfig.isAllowed(url) && asIs(uri) == null;
+    /** How a feature's kind of link opens on this client: what the player plays for it from {@code startSeconds} in. */
+    public interface Opener {
+        /** Fails with a reason safe to show the player. */
+        Opened open(URI source, double startSeconds) throws IOException;
     }
 
-    /** What a player opens for {@code uri} without the resolver (RTSP, an extension's page, a media file); else null. */
+    /** What an Opener gives the player: the media, its length in seconds (0 if VLC is to tell) and VLC options for it. */
+    public record Opened(URI media, double duration, List<String> options) {
+    }
+
+    /** {@code kind}'s links open through {@code opener} (as the client starts). */
+    public static synchronized void opens(MediaKind kind, Opener opener) {
+        OPENERS.put(kind, opener);
+    }
+
+    /** Whether {@code url} is one the server allows that goes through the resolver (and so may be kept). */
+    private static boolean resolvable(String url, URI uri) {
+        return MediaKind.of(url) == MediaKind.WEB && UrlPolicy.isAllowed(url) && asIs(uri) == null;
+    }
+
+    /** What a player opens for the web link {@code uri} without the resolver (an extension's page, a media file); else null. */
     @Nullable
     private static NativeMediaResolver.Prepared asIs(URI uri) {
-        if (UrlPolicy.isRtsp(uri)) {
-            return new NativeMediaResolver.Prepared(uri, true);
-        }
         if (ExtensionUrls.matches(uri)) {
             // The extension's relay is one continuous shared HLS stream, even for an on-demand program. Each opening
             // gets its own /video session, which the API ties a live player to.
-            return NativeMediaResolver.Prepared.relay(URI.create(UrlPolicy.endpoint(ServerConfig.API_URL.get(), "video",
+            return NativeMediaResolver.Prepared.relay(URI.create(ApiHttp.endpoint(ServerConfig.API_URL.get(), "video",
                     uri.toString()) + "&session=" + UUID.randomUUID()));
         }
         return directMedia(uri) ? new NativeMediaResolver.Prepared(uri, false) : null;
@@ -66,14 +85,35 @@ final class MediaSources {
     }
 
     /**
-     * What a player opens for {@code uri}. Without {@code video} (a record), a resolvable page plays as its kept
-     * audio if this computer has it (see AudioCache), else resolved now for its audio alone, which then starts to
-     * be kept. Fails with a reason safe to show (it leaves out the URLs).
+     * What a player opens for {@code uri}, {@code startSeconds} into it. Without {@code video} (a record), a
+     * resolvable page plays as its kept audio if this computer has it (see AudioCache), else resolved now for its
+     * audio alone, which then starts to be kept. Fails with a reason safe to show (it leaves out the URLs).
      */
-    static NativeMediaResolver.Prepared resolve(URI uri, boolean video, int maxHeight) throws IOException {
-        if (!ServerConfig.isAllowed(uri.toString())) {
+    static NativeMediaResolver.Prepared resolve(URI uri, boolean video, int maxHeight, double startSeconds)
+            throws IOException {
+        String url = uri.toString();
+        MediaKind kind = MediaKind.of(url);
+        if (kind == null || !UrlPolicy.isAllowed(url)) {
             throw new IOException("This playback URL is not allowed by the server");
         }
+        return switch (kind) {
+            case WEB -> web(uri, video, maxHeight);
+            case RTSP -> NativeMediaResolver.Prepared.rtsp(uri);
+            default -> {
+                Opener opener;
+                synchronized (MediaSources.class) {
+                    opener = OPENERS.get(kind);
+                }
+                if (opener == null) {
+                    throw new IOException("This client can't play this kind of link");
+                }
+                Opened opened = opener.open(uri, startSeconds);
+                yield NativeMediaResolver.Prepared.of(opened.media(), false, null, opened.duration(), opened.options());
+            }
+        };
+    }
+
+    private static NativeMediaResolver.Prepared web(URI uri, boolean video, int maxHeight) throws IOException {
         NativeMediaResolver.Prepared asIs = asIs(uri);
         if (asIs != null) {
             return asIs;

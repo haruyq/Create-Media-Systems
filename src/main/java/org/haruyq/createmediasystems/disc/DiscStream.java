@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
+import org.haruyq.createmediasystems.p2p.P2pOverlay;
 import org.haruyq.createmediasystems.p2p.Transport;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -87,6 +88,40 @@ public final class DiscStream implements AutoCloseable {
      */
     public record Stats(boolean host, int waiting, long waitingSince, int last, long lastBytes, long lastNanos,
                         int failures, String error, String encoder, int encoded, String quality) {
+        /** What the P2P overlay shows of it, as host or viewer, as of {@code now}: nothing on the other side. */
+        public List<P2pOverlay.Line> lines(boolean hosting, long now) {
+            List<P2pOverlay.Line> lines = new ArrayList<>();
+            if (hosting) {
+                if (host && encoder != null) {
+                    lines.add(new P2pOverlay.Line("Disc: " + encoder + (encoded < 0 ? ""
+                            : ", segment " + encoded + " at " + quality), P2pOverlay.GRAY));
+                }
+                return lines;
+            }
+            if (host) {
+                return lines;
+            }
+            if (waitingSince != 0) {
+                long waited = now - waitingSince;
+                // A segment plays for SEGMENT_SECONDS: waiting longer than that, playback has to stall.
+                int color = waited > DiscSource.SEGMENT_SECONDS * P2pOverlay.SECOND ? P2pOverlay.RED
+                        : waited > P2pOverlay.SECOND * 2 ? P2pOverlay.YELLOW : P2pOverlay.WHITE;
+                lines.add(new P2pOverlay.Line("Disc: waiting for " + (waiting < 0 ? "the length" : "segment " + waiting)
+                        + " for " + P2pOverlay.seconds(waited), color));
+            } else {
+                lines.add(new P2pOverlay.Line("Disc: idle", P2pOverlay.GRAY));
+            }
+            if (last >= 0) {
+                lines.add(new P2pOverlay.Line("Last segment " + last + ": " + P2pOverlay.bytes(lastBytes) + " in "
+                        + P2pOverlay.seconds(lastNanos) + " (" + P2pOverlay.mbps((long) (lastBytes * 8e9 / Math.max(1, lastNanos)))
+                        + ")", P2pOverlay.WHITE));
+            }
+            if (failures > 0) {
+                lines.add(new P2pOverlay.Line("Failed requests: " + failures + (error == null ? "" : ", last: " + error),
+                        P2pOverlay.RED));
+            }
+            return lines;
+        }
     }
 
     public Stats stats() {

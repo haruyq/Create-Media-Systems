@@ -1,14 +1,10 @@
 package org.haruyq.createmediasystems;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import org.haruyq.createmediasystems.disc.DiscUrl;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.file.FileNotFoundAction;
@@ -47,7 +43,7 @@ public final class ServerConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
     public static final ModConfigSpec.ConfigValue<String> API_URL = BUILDER
             .comment("Base URL of the audio API (endpoints in API.md). Clients stream from it; the server asks it for track lengths.")
-            .define("apiUrl", "http://127.0.0.1:8000");
+            .define("apiUrl", "http://127.0.0.1:8000", o -> o instanceof String base && ApiHttp.isBase(base));
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ALLOWED_HOSTS = BUILDER
             .comment("Hosts (and their subdomains) a disc, announcement or image viewer may link to.")
             .defineListAllowEmpty("allowedHosts",
@@ -95,12 +91,6 @@ public final class ServerConfig {
         });
     }
 
-    /** Every stream a server hands to clients passes this check, whoever wrote the URL. */
-    public static boolean isAllowed(String url) {
-        return url != null && (DiscUrl.parse(url) != null
-                || UrlPolicy.isAllowed(url, ALLOWED_HOSTS.get()));
-    }
-
     private static void registerCommand(RegisterCommandsEvent event) {
         LiteralArgumentBuilder<CommandSourceStack> config = Commands.literal("config")
                 .then(Commands.literal("reload").executes(c -> reload(c.getSource())))
@@ -129,7 +119,7 @@ public final class ServerConfig {
                 .requires(source -> source.hasPermission(2)).then(config));
     }
 
-    /** Every change, by command or by editing the file, reaches the clients that stream with it. */
+    /** A change made by editing the file reaches the clients that stream with it, as one by command does (see saved). */
     private static void onReload(ModConfigEvent.Reloading event) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (event.getConfig().getSpec() == spec && server != null) {
@@ -156,13 +146,7 @@ public final class ServerConfig {
 
     private static int setApiUrl(CommandContext<CommandSourceStack> context) {
         String url = StringArgumentType.getString(context, "url").trim();
-        try {
-            URI uri = new URI(url);
-            if (uri.getHost() == null || !("http".equalsIgnoreCase(uri.getScheme())
-                    || "https".equalsIgnoreCase(uri.getScheme()))) {
-                throw new IllegalArgumentException();
-            }
-        } catch (Exception e) {
+        if (!ApiHttp.isBase(url)) {
             context.getSource().sendFailure(Component.translatable("create_media_systems.command.config.api_url.invalid", url));
             return 0;
         }
@@ -179,7 +163,7 @@ public final class ServerConfig {
             return 0;
         }
         ALLOWED_HOSTS.set(hosts);
-        spec.save();
+        saved();
         context.getSource().sendSuccess(() -> Component.translatable("create_media_systems.command.config.host." + result, host), true);
         return 1;
     }
@@ -187,7 +171,7 @@ public final class ServerConfig {
     private static <T> int set(CommandContext<CommandSourceStack> context, ModConfigSpec.ConfigValue<T> value,
             String key, T newValue) {
         value.set(newValue);
-        spec.save();
+        saved();
         context.getSource().sendSuccess(() -> Component.translatable("create_media_systems.command.config.set", key, String.valueOf(newValue)), true);
         return 1;
     }
@@ -205,6 +189,12 @@ public final class ServerConfig {
         file().getLoadedConfig().config().putAll(fresh);
         spec.afterReload();
         return true;
+    }
+
+    /** A command changed a value: written to the file, and sent to the clients now rather than when the file is seen to change. */
+    private static void saved() {
+        spec.save();
+        sync();
     }
 
     private static void sync() {

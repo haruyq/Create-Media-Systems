@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.DoubleFunction;
 
-import org.haruyq.createmediasystems.stream.StreamFeature;
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
@@ -14,9 +14,9 @@ import org.haruyq.createmediasystems.mixin.ChannelAccessor;
 import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
 import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL;
@@ -362,7 +362,7 @@ public final class ClientStreams {
 
     /** The API's stream of {@code url} from {@code startSeconds} in, plus the offset asked for. */
     public static DoubleFunction<String> apiStream(String url, double startSeconds, Streams.Channel channel) {
-        return offset -> UrlPolicy.streamUrl(ServerConfig.API_URL.get(), url, startSeconds + offset, channel.api);
+        return offset -> ApiHttp.streamUrl(ServerConfig.API_URL.get(), url, startSeconds + offset, channel.api);
     }
 
     public static void retune(StreamPackets.RetuneAtBlock payload) {

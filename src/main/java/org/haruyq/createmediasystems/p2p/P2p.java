@@ -13,11 +13,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
@@ -46,7 +45,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * here. The secret is CMS_P2P_SERVER_TOKEN, else the server config's p2pServerToken, which players never receive.
  */
 public final class P2p {
-    private static final Pattern TOKEN = Pattern.compile("[\\x21-\\x7e]{16,512}");
+    /** Longest name of a host to join: a player's. */
+    static final int MAX_HOST_NAME = 16;
     private static final String TOKEN_ENV = "CMS_P2P_SERVER_TOKEN";
     private static final long COOLDOWN_MS = 3000;
     // Never follows redirects, so the secret goes to the configured API only. HTTP/1.1: uvicorn refuses h2c upgrades.
@@ -169,7 +169,7 @@ public final class P2p {
         boolean live = room == null || ROOMS.get(room.host()) == room;
         String reason = null;
         if (ticket == null) {
-            reason = error != null ? UrlPolicy.reason(error) : UrlPolicy.errorDetail(answer.status(), answer.body());
+            reason = error != null ? ApiHttp.reason(error) : ApiHttp.errorDetail(answer.status(), answer.body());
             LogUtils.getLogger().warn("Could not get a P2P ticket for {}: {}", player.id(), reason);
             if (room != null && answer != null && answer.status() == 404) {
                 close(room);
@@ -267,7 +267,7 @@ public final class P2p {
         return api.call("DELETE", path, null).whenComplete((answer, error) -> {
             if (error != null || answer.status() / 100 != 2 && answer.status() != 404) {
                 LogUtils.getLogger().warn("Could not revoke a P2P session or peer: {}",
-                        error != null ? UrlPolicy.reason(error) : answer.status());
+                        error != null ? ApiHttp.reason(error) : answer.status());
             }
         });
     }
@@ -291,7 +291,7 @@ public final class P2p {
         try {
             calls.get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
-            LogUtils.getLogger().warn("Could not revoke every P2P session before stopping: {}", UrlPolicy.reason(e));
+            LogUtils.getLogger().warn("Could not revoke every P2P session before stopping: {}", ApiHttp.reason(e));
         }
     }
 
@@ -321,7 +321,7 @@ public final class P2p {
         if (secret == null || secret.isBlank()) {
             secret = P2pFeature.SERVER_TOKEN.get();
         }
-        return TOKEN.matcher(secret.strip()).matches() ? secret.strip() : null;
+        return Protocol.TOKEN.matcher(secret.strip()).matches() ? secret.strip() : null;
     }
 
     private static void notice(ServerPlayer player, Component message) {
@@ -341,7 +341,7 @@ public final class P2p {
         static final StreamCodec<ByteBuf, Request> CODEC = StreamCodec.composite(
                 ByteBufCodecs.idMapper(i -> Action.values()[Math.floorMod(i, Action.values().length)], Action::ordinal), Request::action,
                 ByteBufCodecs.VAR_INT, Request::id,
-                ByteBufCodecs.stringUtf8(16), Request::host,
+                ByteBufCodecs.stringUtf8(MAX_HOST_NAME), Request::host,
                 Request::new);
 
         @Override
@@ -354,12 +354,13 @@ public final class P2p {
     public record Ticket(Protocol.Ticket ticket, int request) implements CustomPacketPayload {
         public static final Type<Ticket> TYPE = new Type<>(CreateMediaSystems.id("p2p_ticket"));
         static final StreamCodec<ByteBuf, Ticket> CODEC = NeoForgeStreamCodecs.composite(
-                ByteBufCodecs.stringUtf8(128), t -> t.ticket().sessionId(),
+                ByteBufCodecs.stringUtf8(Protocol.MAX_SESSION_ID), t -> t.ticket().sessionId(),
                 UUIDUtil.STREAM_CODEC, t -> t.ticket().peerId(),
                 UUIDUtil.STREAM_CODEC, t -> t.ticket().hostId(),
                 ByteBufCodecs.BOOL, t -> t.ticket().host(),
-                ByteBufCodecs.stringUtf8(512), t -> t.ticket().token(),
-                ByteBufCodecs.stringUtf8(256).apply(ByteBufCodecs.list(16)), t -> t.ticket().stunUrls(),
+                ByteBufCodecs.stringUtf8(Protocol.MAX_TOKEN), t -> t.ticket().token(),
+                ByteBufCodecs.stringUtf8(Protocol.MAX_STUN_URL).apply(ByteBufCodecs.list(Protocol.MAX_STUN_URLS)),
+                t -> t.ticket().stunUrls(),
                 ByteBufCodecs.VAR_INT, Ticket::request,
                 (sessionId, peerId, hostId, host, token, stunUrls, request) ->
                         new Ticket(new Protocol.Ticket(sessionId, peerId, hostId, host, token, stunUrls), request));

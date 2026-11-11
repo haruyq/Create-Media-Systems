@@ -11,7 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.playback.Tone;
 import org.haruyq.createmediasystems.stream.DiscKind;
@@ -20,6 +19,7 @@ import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
@@ -1014,7 +1014,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 return;
             }
             url = url.trim();
-            if (!url.isEmpty() && !ServerConfig.isAllowed(url)) {
+            if (!url.isEmpty() && !UrlPolicy.isAllowed(url)) {
                 player.displayClientMessage(Component.translatable("create_media_systems.url.rejected")
                         .withStyle(ChatFormatting.RED), true);
                 return;

@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -56,7 +56,7 @@ final class ExtensionUrls {
         if ((now.api().equals(base) && System.nanoTime() - now.at() < REFRESH_NANOS) || !FETCHING.compareAndSet(false, true)) {
             return;
         }
-        HttpRequest request = HttpRequest.newBuilder(URI.create(UrlPolicy.api(base, "extension/patterns")))
+        HttpRequest request = HttpRequest.newBuilder(URI.create(ApiHttp.api(base, "extension/patterns")))
                 .timeout(Duration.ofSeconds(10)).header("Accept", "application/json").build();
         NativeMediaResolver.HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString()).whenComplete((reply, error) -> {
             // An API without an extension (or too old to have this endpoint) plays nothing through one. One that

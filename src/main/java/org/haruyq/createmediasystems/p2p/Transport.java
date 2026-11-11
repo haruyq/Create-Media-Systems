@@ -34,7 +34,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.haruyq.createmediasystems.stream.UrlPolicy;
+import org.haruyq.createmediasystems.ApiHttp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -158,7 +158,7 @@ public final class Transport implements AutoCloseable {
                 .connectTimeout(Duration.ofSeconds(10)).buildAsync(uri, socket)
                 .whenComplete((ws, error) -> {
                     if (error != null) {
-                        transport.fail("Could not reach the API's signaling: " + UrlPolicy.reason(error));
+                        transport.fail("Could not reach the API's signaling: " + ApiHttp.reason(error));
                     }
                 });
         return transport;
@@ -729,7 +729,7 @@ public final class Transport implements AutoCloseable {
                 task.run();
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.warn("Direct P2P failed", e);
-                shutDown("Direct P2P failed: " + UrlPolicy.reason(e));
+                shutDown("Direct P2P failed: " + ApiHttp.reason(e));
             }
         }
     }
@@ -1055,7 +1055,7 @@ public final class Transport implements AutoCloseable {
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            transport.fail("Signaling failed: " + UrlPolicy.reason(error));
+            transport.fail("Signaling failed: " + ApiHttp.reason(error));
         }
 
         synchronized void send(String text) {

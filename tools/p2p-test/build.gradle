@@ -18,7 +18,7 @@ def sharedSources = tasks.register('sharedSources', Sync) {
     from('../../src/main/java') {
         include 'org/haruyq/createmediasystems/p2p/Transport.java', 'org/haruyq/createmediasystems/p2p/LinkRate.java',
                 'org/haruyq/createmediasystems/p2p/Protocol.java',
-                'org/haruyq/createmediasystems/stream/UrlPolicy.java'
+                'org/haruyq/createmediasystems/ApiHttp.java'
     }
     into layout.buildDirectory.dir('generated/shared')
 }

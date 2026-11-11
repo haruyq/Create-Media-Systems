@@ -8,15 +8,15 @@ import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 import org.haruyq.createmediasystems.launcher.DopplerMath;
 import org.haruyq.createmediasystems.playback.ClientStreams;
-import org.haruyq.createmediasystems.playback.StreamSound;
 import org.haruyq.createmediasystems.playback.PlaybackSync;
+import org.haruyq.createmediasystems.playback.StreamSound;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.sounds.SoundSource;
@@ -103,7 +103,7 @@ public final class DiscAudioClient {
     private static Playing start(Minecraft mc, DiscProjectile disc) {
         ItemStack item = disc.getItem();
         String url = MediaItem.url(item);
-        if (url != null && ServerConfig.isAllowed(url)) {
+        if (url != null && UrlPolicy.isAllowed(url)) {
             // Do not synthesize any alternate Doppler sound. This StreamSound
             // fetches the disc's track, follows the entity and pitch-shifts ITS PCM.
             double start=disc.elapsedMusicSeconds();

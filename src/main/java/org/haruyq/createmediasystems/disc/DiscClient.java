@@ -12,7 +12,11 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.p2p.P2pClient;
+import org.haruyq.createmediasystems.p2p.P2pOverlay;
 import org.haruyq.createmediasystems.p2p.Transport;
+import org.haruyq.createmediasystems.playback.MediaSources;
+import org.haruyq.createmediasystems.stream.DiscUrl;
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.video.VideoDiscItem;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -41,6 +45,8 @@ public final class DiscClient {
 
     public static void register(IEventBus modBus) {
         DriveClient.register();
+        MediaSources.opens(MediaKind.DISC, DiscClient::open);
+        P2pOverlay.add(DiscClient::overlay);
         NeoForge.EVENT_BUS.addListener(DiscClient::commands);
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clear());
         P2pClient.changed(DiscClient::changed);
@@ -207,15 +213,21 @@ public final class DiscClient {
         return request;
     }
 
-    public record Prepared(URI uri, double duration) {}
-
-    /** The disc stream's {@link DiscStream#stats}, for the P2P debug overlay; null if none. */
-    public static DiscStream.Stats stats() {
+    /** What the P2P debug overlay shows of the disc stream (see DiscStream#stats); nothing without one. */
+    private static List<P2pOverlay.Line> overlay(boolean hosting, long now) {
         DiscStream current = stream;
-        return current == null ? null : current.stats();
+        return current == null ? List.of() : current.stats().lines(hosting, now);
     }
 
-    public static Prepared prepare(DiscUrl url, double startSeconds) throws IOException {
+    /**
+     * A shared disc's stream on this computer, from {@code startSeconds} in: joins its host's P2P session (or, as the
+     * host, plays the one it shares) and serves its segments here as HLS, which VLC buffers 2 s of.
+     */
+    private static MediaSources.Opened open(URI link, double startSeconds) throws IOException {
+        DiscUrl url = DiscUrl.parse(link.toString());
+        if (url == null) {
+            throw new IOException("Not a disc's link");
+        }
         int request = generation;
         var mc = Minecraft.getInstance();
         CompletableFuture<Boolean> joined = new CompletableFuture<>();
@@ -248,7 +260,7 @@ public final class DiscClient {
                 stream = current;
             }
         }
-        return new Prepared(current.prepare(startSeconds), current.duration());
+        return new MediaSources.Opened(current.prepare(startSeconds), current.duration(), List.of(":network-caching=2000"));
     }
 
     private static Transport connection(UUID owner) throws IOException {

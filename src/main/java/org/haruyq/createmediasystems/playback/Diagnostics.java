@@ -19,12 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.stream.PlaylistView;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.stream.UrlPolicy;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -245,7 +245,7 @@ final class Diagnostics {
 
     private static void post(JsonObject report) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(UrlPolicy.api(ServerConfig.API_URL.get(), "diagnostics")))
+            HttpRequest request = HttpRequest.newBuilder(URI.create(ApiHttp.api(ServerConfig.API_URL.get(), "diagnostics")))
                     .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(report.toString())).build();
             int status = NativeMediaResolver.HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();

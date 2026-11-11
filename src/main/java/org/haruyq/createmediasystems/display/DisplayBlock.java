@@ -4,11 +4,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.lighting.LightingScreens;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
+import org.haruyq.createmediasystems.lighting.LightingScreens;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
@@ -342,7 +342,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
             CompoundTag tag = saveCustomOnly(registries);
             // Every client fetches the image itself: a link the server no longer allows reaches none of them.
-            if (!ServerConfig.isAllowed(image)) {
+            if (!UrlPolicy.isAllowed(image)) {
                 tag.remove("Image");
             }
             return tag;
