@@ -16,6 +16,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 /** Rechargeable-cell launcher with an independently animated breech and support hand. */
 public final class DiscLauncherItem extends Item {
@@ -68,21 +69,24 @@ public final class DiscLauncherItem extends Item {
             player.displayClientMessage(Component.translatable("cell.create_media_systems.empty"), true);
             return false;
         }
-        String url = DiscPlayback.mediaUrl(DiscCellItem.master(before));
+        ItemStack master = DiscCellItem.master(before);
+        String url = DiscPlayback.mediaUrl(master);
         if (url != null && !ServerConfig.isAllowed(url)) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true);
+            return false;
+        }
+        int startSeconds = DiscCellItem.startSeconds(before);
+        if (!DiscPlayback.canStartAt(level, master, startSeconds)) {
+            player.displayClientMessage(Component.translatable("cell.create_media_systems.start_past_end"), true);
             return false;
         }
         DiscCellTier tier = LauncherMagazine.tier(stack);
         ItemStack disc = LauncherMagazine.pop(stack);
         if (disc.isEmpty()) return false;
-        DiscProjectile projectile = new DiscProjectile(level, player, disc);
+        boolean aimed = player.isUsingItem() && player.getUseItem().is(stack.getItem());
+        DiscProjectile projectile = DiscProjectile.forShot(player, disc, startSeconds,
+                Vec3.directionFromRotation(pitch, yaw), aimed);
         projectile.setCellTier(tier);
-        projectile.setPos(player.getEyePosition());
-        var direction=net.minecraft.world.phys.Vec3.directionFromRotation(pitch,yaw);
-        boolean aimed=player.isUsingItem() && player.getUseItem().is(stack.getItem());
-        // Eye-line origin and no inherited strafe velocity: the reticle is the shot's actual direction.
-        projectile.shoot(direction.x,direction.y,direction.z,5.2f,aimed?0f:.15f);
         if (!level.addFreshEntity(projectile)) {
             LauncherMagazine.setCell(stack, before);
             return false;

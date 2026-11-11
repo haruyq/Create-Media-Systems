@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -268,6 +269,47 @@ public final class DiscCellGameTests {
         menu.quickMoveStack(player, 0);
         h.assertTrue(DiscCellItem.master(cell).isEmpty() && player.getInventory().countItem(CreateMediaSystems.CUSTOM_DISC.get()) == 1,
                 "Extracting the original removes it from the cell exactly once");
+        h.succeed();
+    }
+
+    @GameTest(template="empty")
+    public static void cellStartTimeSurvivesSaveAndStartsAnIndependentProjection(GameTestHelper h) {
+        var level = h.getLevel();
+        var player = h.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(Vec3.atCenterOf(h.absolutePos(new BlockPos(1, 3, 1))));
+        var original = new ItemStack(Items.MUSIC_DISC_CAT);
+        var originalPlayback = DiscPlayback.prepare(level, original).at(400);
+        original.set(CreateMediaSystems.DISC_PLAYBACK.get(), originalPlayback);
+        var cell = new ItemStack(CreateMediaSystems.COPPER_DISC_CELL.get());
+        DiscCellItem.setMaster(cell, original);
+        DiscCellItem.setEnergy(cell, 2000);
+        player.getInventory().setItem(40, cell);
+        var menu = new DiscCellMenu(1, player.getInventory(), 40);
+
+        h.assertTrue(menu.clickMenuButton(player, 90) && menu.startSeconds() == 90,
+                "The held cell accepts a valid start time");
+        h.assertTrue(!menu.clickMenuButton(player, -1) && !menu.clickMenuButton(player, 86401)
+                && !menu.clickMenuButton(player, 3600) && DiscCellItem.startSeconds(cell) == 90,
+                "Invalid values and times beyond the track leave the saved setting intact");
+        var saved = ItemStack.parse(level.registryAccess(), cell.save(level.registryAccess())).orElseThrow();
+        var upgraded = DiscCellItem.upgrade(saved, DiscCellTier.BRASS);
+        h.assertTrue(DiscCellItem.startSeconds(saved) == 90 && DiscCellItem.startSeconds(upgraded) == 90,
+                "Saving and upgrading retain the cell's setting");
+
+        var launcher = new ItemStack(CreateMediaSystems.DISC_LAUNCHER.get());
+        LauncherMagazine.setCell(launcher, saved);
+        player.getInventory().setItem(0, launcher);
+        h.assertTrue(DiscLauncherItem.fire(player, 0, 0), "A cell with a saved start time can fire");
+        var disc = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
+        h.assertTrue(disc.playbackPositionTicks() == 1800
+                && !disc.getItem().get(CreateMediaSystems.DISC_PLAYBACK.get()).id().equals(originalPlayback.id()),
+                "The projection has a new identity and starts at 1:30");
+        h.assertTrue(ItemStack.matches(DiscCellItem.master(LauncherMagazine.cell(launcher)), original),
+                "Firing keeps the original disc and its own playback state");
+        disc.discard();
+        menu.getSlot(0).set(new ItemStack(Items.MUSIC_DISC_13));
+        h.assertTrue(menu.startSeconds() == 0 && DiscCellItem.startSeconds(cell) == 0,
+                "Replacing the track resets both the saved and displayed start time");
         h.succeed();
     }
 

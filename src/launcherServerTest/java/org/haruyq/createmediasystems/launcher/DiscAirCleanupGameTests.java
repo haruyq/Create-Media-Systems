@@ -50,6 +50,41 @@ public final class DiscAirCleanupGameTests {
         h.getLevel().removeBlock(block,false);restored.tickPlayback();
         h.assertTrue(restored.isRemoved(),"Breaking the supporting block removes the emitter without leaving a floating disc");h.succeed();
     }
+
+    @GameTest(template="empty")
+    public static void aWallDiscExpiresAtOneMinuteAcrossSaveAndReload(GameTestHelper h) {
+        var level = h.getLevel();
+        var disc = flying(h);
+        BlockPos wall = BlockPos.containing(disc.position());
+        level.setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
+        Vec3 contact = Vec3.atLowerCornerOf(wall).add(.5, .5, 0);
+        disc.setPos(contact.add(0, 0, -1));
+        disc.tick();
+        h.assertTrue(disc.embedded() && disc.position().distanceTo(contact) < 1e-7,
+                "The flying disc embeds at the surface of the wall");
+        var saved = new CompoundTag();
+        disc.save(saved);
+        h.assertTrue(saved.getLong("CmsDiscEmbeddedAt") == level.getGameTime(),
+                "The attachment clock starts at impact");
+        saved.remove("UUID");
+        saved.putLong("CmsDiscEmbeddedAt", level.getGameTime() - 1199);
+        saved.putLong("CmsDiscMusicStart", level.getGameTime() - 1800);
+        var restored = flying(h);
+        restored.load(saved);
+        h.assertTrue(restored.tickPlayback() && level.addFreshEntity(restored),
+                "At 1199 ticks a saved wall disc still plays");
+
+        h.runAfterDelay(1, () -> {
+            var late = flying(h);
+            late.load(saved);
+            h.assertTrue(!level.addFreshEntity(late), "At 1200 ticks a saved wall disc cannot respawn");
+        });
+        h.runAfterDelay(2, () -> {
+            h.assertTrue(restored.isRemoved(), "The loaded wall disc expires while its track still has time left");
+            level.removeBlock(wall, false);
+            h.succeed();
+        });
+    }
     @GameTest(template="empty")
     public static void nonLivingImpactsAndDiscardedTargetsCannotLeaveAnEmitter(GameTestHelper h) {
         var d=flying(h);var boat=EntityType.BOAT.create(h.getLevel());boat.setPos(d.position());

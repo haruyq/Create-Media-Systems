@@ -207,6 +207,9 @@ public class CreateMediaSystems {
             "cell_master", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
     public static final Supplier<DataComponentType<Integer>> CELL_ENERGY = COMPONENTS.registerComponentType(
             "cell_energy", b -> b.persistent(Codec.INT).networkSynchronized(ByteBufCodecs.VAR_INT));
+    public static final Supplier<DataComponentType<Integer>> CELL_START_SECONDS = COMPONENTS.registerComponentType(
+            "cell_start_seconds", b -> b.persistent(Codec.intRange(0, DiscCellItem.MAX_START_SECONDS))
+                    .networkSynchronized(ByteBufCodecs.VAR_INT));
     public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_CELL = COMPONENTS.registerComponentType(
             "launcher_cell", b -> b.persistent(ItemContainerContents.CODEC).networkSynchronized(ItemContainerContents.STREAM_CODEC));
     public static final Supplier<DataComponentType<ItemContainerContents>> LAUNCHER_PENDING_CELL = COMPONENTS.registerComponentType(
@@ -459,7 +462,7 @@ public class CreateMediaSystems {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("17");
+        var registrar = event.registrar("18");
         ServerConfig.registerPayloads(registrar);
         StreamPackets.registerPayloads(registrar);
         TrainDiscReaderBehaviour.registerPayloads(registrar);

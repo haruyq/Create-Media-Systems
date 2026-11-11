@@ -22,7 +22,9 @@ public final class DiscProjectileLifecycle {
 
     @SubscribeEvent
     public static void joined(EntityJoinLevelEvent event) {
-        if (!event.getLevel().isClientSide && event.getEntity() instanceof DiscProjectile disc) LOADED.add(disc);
+        if (event.getLevel().isClientSide || !(event.getEntity() instanceof DiscProjectile disc)) return;
+        if (disc.blockAttachmentExpired()) event.setCanceled(true);
+        else LOADED.add(disc);
     }
 
     @SubscribeEvent
@@ -33,9 +35,9 @@ public final class DiscProjectileLifecycle {
     @SubscribeEvent
     public static void tick(ServerTickEvent.Post event) {
         // Removing a recovered entity emits EntityLeaveLevelEvent, so iterate a snapshot.
-        boolean checkExpiry=event.getServer().getTickCount()%20==0;
+        boolean checkPlayback = event.getServer().getTickCount() % 20 == 0;
         for (DiscProjectile disc : List.copyOf(LOADED)) {
-            if(disc.attached())disc.tickLoaded();else if(checkExpiry)disc.tickPlayback();
+            disc.tickLoaded(checkPlayback);
         }
     }
 

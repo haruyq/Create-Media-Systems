@@ -45,6 +45,57 @@ public final class LauncherGunGameTests {
         h.assertTrue(!DiscLauncherItem.fire(p,0,0) && LauncherMagazine.count(gun)==23,"Duplicate requests cannot exceed server cadence");
         h.assertTrue(!DiscLauncherItem.fire(p,Float.NaN,0),"Invalid look data cannot fire");d.discard();h.succeed();
     }
+
+    @GameTest(template="empty")
+    public static void aimAssistCorrectsAVisibleNearMissWithoutTurningThroughCover(GameTestHelper h) {
+        var level = h.getLevel();
+        var player = h.makeMockPlayer(GameType.SURVIVAL);
+        Vec3 base = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 12, 1)));
+        player.setPos(base);
+        var target = EntityType.IRON_GOLEM.create(level);
+        target.setNoAi(true);
+        target.setNoGravity(true);
+        target.setPos(base.add(.92, 0, 16));
+        level.getChunkAt(target.blockPosition());
+        level.addFreshEntity(target);
+
+        Vec3 forward = new Vec3(0, 0, 1);
+        Vec3 eye = player.getEyePosition();
+        var manual = shot(h, player);
+        manual.setPos(eye);
+        h.assertTrue(DiscBallistics.trace(manual, eye, eye.add(forward.scale(32)), e -> e == target).getType()
+                == HitResult.Type.MISS, "The original reticle ray misses the target");
+
+        player.getInventory().setItem(0, gun());
+        player.startUsingItem(InteractionHand.MAIN_HAND);
+        h.assertTrue(DiscLauncherItem.fire(player, 0, 0), "The aimed trigger fires");
+        var fired = level.getEntitiesOfClass(DiscProjectile.class, player.getBoundingBox().inflate(2)).getFirst();
+        Vec3 assisted = fired.getDeltaMovement().normalize();
+        h.assertTrue(assisted.dot(forward) >= Math.cos(Math.toRadians(4)) - 1e-6,
+                "The trigger nudges the projectile within the assist cone");
+        for (int tick = 0; tick < 8 && !fired.embedded(); tick++) fired.tick();
+        h.assertTrue(fired.attachmentTarget() == target, "The assisted shot hits and attaches to the target");
+        fired.discard();
+
+        var disc = new ItemStack(Items.MUSIC_DISC_CAT);
+        Vec3 headAim = target.getEyePosition().subtract(eye).normalize();
+        var headshot = DiscProjectile.forShot(player, disc, 0, headAim, true);
+        h.assertTrue(headshot.getDeltaMovement().normalize().distanceTo(headAim) < 1e-7,
+                "An aimed headshot keeps its exact direction");
+        var hipfire = DiscProjectile.forShot(player, disc, 0, forward, false);
+        Vec3 hipfireEnd = eye.add(hipfire.getDeltaMovement().normalize().scale(32));
+        h.assertTrue(DiscBallistics.trace(hipfire, eye, hipfireEnd, e -> e == target).getType() == HitResult.Type.MISS,
+                "Hip fire leaves the near miss uncorrected");
+
+        BlockPos cover = BlockPos.containing(eye.add(.4, 0, 8));
+        level.setBlockAndUpdate(cover, Blocks.STONE.defaultBlockState());
+        var covered = DiscProjectile.forShot(player, disc, 0, forward, true);
+        h.assertTrue(covered.getDeltaMovement().normalize().distanceTo(forward) < 1e-7,
+                "Cover blocks aim assistance");
+        level.removeBlock(cover, false);
+        target.discard();
+        h.succeed();
+    }
     @GameTest(template="empty")
     public static void everyRapidBodyHitDealsFullDamageWithoutChangingOtherWeaponsInvulnerability(GameTestHelper h) {
         var p=h.makeMockPlayer(GameType.SURVIVAL);var target=new IronGolem(EntityType.IRON_GOLEM,h.getLevel());

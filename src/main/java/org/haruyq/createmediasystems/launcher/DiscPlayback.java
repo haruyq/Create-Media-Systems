@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.stream.Streams;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -34,6 +36,19 @@ public record DiscPlayback(UUID id, String source, long positionTicks) {
 
     public DiscPlayback at(long ticks) {
         return new DiscPlayback(id, source, ticks);
+    }
+
+    static double duration(Level level, ItemStack disc) {
+        String url = mediaUrl(disc);
+        if (url != null) return ServerConfig.isAllowed(url) ? Streams.duration(url) : -1;
+        return JukeboxSong.fromStack(level.registryAccess(), disc)
+                .map(song -> (double) song.value().lengthInSeconds()).orElse(-1.0);
+    }
+
+    static boolean canStartAt(Level level, ItemStack disc, int seconds) {
+        if (seconds == 0) return true;
+        double duration = duration(level, disc);
+        return duration <= 0 || seconds < duration;
     }
 
     /** Changing the media starts that CD's new track at zero, keeping its physical identity. */

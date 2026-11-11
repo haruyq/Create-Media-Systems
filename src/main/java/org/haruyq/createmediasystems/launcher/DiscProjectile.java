@@ -1,7 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.stream.Streams;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
@@ -13,9 +12,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.EnderDragonPart;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.BlockHitResult;
@@ -38,6 +37,7 @@ import org.joml.Vector3f;
 public final class DiscProjectile extends ThrowableItemProjectile {
     private static final int UNKNOWN_LIFETIME_TICKS = 20 * 180;
     private static final int MAX_FLIGHT_TICKS = 20 * 5;
+    private static final int BLOCK_ATTACHMENT_TICKS = 20 * 60;
     private static final EntityDataAccessor<Boolean> EMBEDDED =
             SynchedEntityData.defineId(DiscProjectile.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Long> MUSIC_START_TICK =
@@ -71,14 +71,27 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     }
 
     public DiscProjectile(Level level, LivingEntity owner, ItemStack disc) {
+        this(level, owner, disc, DiscPlayback.prepare(level, disc));
+    }
+
+    private DiscProjectile(Level level, LivingEntity owner, ItemStack disc, DiscPlayback playback) {
         super(CreateMediaSystems.DISC_PROJECTILE.get(), owner, level);
         ItemStack original = disc.copyWithCount(1);
-        DiscPlayback playback = DiscPlayback.prepare(level, original);
         original.set(CreateMediaSystems.DISC_PLAYBACK.get(), playback);
         setItem(original);
         setNoGravity(true);
         spawnedAtTick = level.getGameTime();
         entityData.set(MUSIC_START_TICK, spawnedAtTick - playback.positionTicks());
+    }
+
+    static DiscProjectile forShot(Player shooter, ItemStack disc, int startSeconds, Vec3 forward, boolean aimed) {
+        Level level = shooter.level();
+        DiscPlayback playback = DiscPlayback.prepare(level, disc).at(startSeconds * 20L);
+        DiscProjectile projectile = new DiscProjectile(level, shooter, disc, playback);
+        projectile.setPos(shooter.getEyePosition());
+        Vec3 direction = aimed ? DiscBallistics.assistAim(projectile, shooter, forward, projectile::canHitEntity) : forward;
+        projectile.shoot(direction.x, direction.y, direction.z, 5.2f, aimed ? 0f : .15f);
+        return projectile;
     }
 
     @Override
@@ -113,6 +126,10 @@ public final class DiscProjectile extends ThrowableItemProjectile {
 
     public boolean embedded() {
         return entityData.get(EMBEDDED);
+    }
+
+    boolean blockAttachmentExpired() {
+        return embedded() && !attached() && embeddedAtTick <= level().getGameTime() - BLOCK_ATTACHMENT_TICKS;
     }
 
     public boolean attached(){return entityData.get(ATTACHED_TO).isPresent();}
@@ -195,9 +212,15 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         Vec3 step=next.subtract(position());setPos(next);setDeltaMovement(step.lengthSqr()>4?Vec3.ZERO:step);return true;
     }
 
-    /** Follow even if the old chunk stopped receiving entity ticks as the target moved away. */
-    void tickLoaded() {
-        if(tickPlayback() && attached())followAttachment();
+    /** Loaded discs can outlive the simulation ticks for their chunk. */
+    void tickLoaded(boolean checkPlayback) {
+        if (attached()) {
+            if (tickPlayback()) followAttachment();
+        } else if (checkPlayback) {
+            tickPlayback();
+        } else if (blockAttachmentExpired()) {
+            discard();
+        }
     }
     /** Client entity order must not leave attached blades a tick behind an animated target. */
     public void refreshAttachedPose(){if(level().isClientSide && attached() && !isRemoved())followAttachment();}
@@ -227,6 +250,10 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     boolean tickPlayback() {
         if (isRemoved()) return false;
         if (!level().isClientSide) {
+            if (blockAttachmentExpired()) {
+                discard();
+                return false;
+            }
             if (!getItem().has(CreateMediaSystems.DISC_PLAYBACK.get())) {
                 ItemStack original = getItem().copyWithCount(1);
                 original.set(CreateMediaSystems.DISC_PLAYBACK.get(), DiscPlayback.prepare(level(), original));
@@ -247,7 +274,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             }
             if (durationSeconds < 0 && level().getGameTime() >= nextDurationCheckTick) {
                 nextDurationCheckTick = level().getGameTime() + 20;
-                updateDuration();
+                durationSeconds = DiscPlayback.duration(level(), getItem());
             }
             boolean ended = durationSeconds > 0 && elapsedMusicSeconds() >= durationSeconds;
             if (ended || durationSeconds <= 0 && level().getGameTime() - spawnedAtTick >= UNKNOWN_LIFETIME_TICKS) {
@@ -256,14 +283,6 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             }
         }
         return true;
-    }
-
-    private void updateDuration() {
-        String url = DiscPlayback.mediaUrl(getItem());
-        durationSeconds = url == null
-                ? JukeboxSong.fromStack(level().registryAccess(), getItem())
-                        .map(song -> (double) song.value().lengthInSeconds()).orElse(-1.0)
-                : Streams.duration(url);
     }
 
     @Override
@@ -373,7 +392,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         super.readAdditionalSaveData(tag);
         entityData.set(EMBEDDED, tag.getBoolean("CmsDiscEmbedded"));
         entityData.set(MUSIC_START_TICK, tag.contains("CmsDiscMusicStart") ? tag.getLong("CmsDiscMusicStart") : Long.MIN_VALUE);
-        embeddedAtTick = tag.getLong("CmsDiscEmbeddedAt");
+        embeddedAtTick = tag.contains("CmsDiscEmbeddedAt") ? tag.getLong("CmsDiscEmbeddedAt") : level().getGameTime();
         spawnedAtTick = tag.contains("CmsDiscSpawnedAt") ? tag.getLong("CmsDiscSpawnedAt")
                 : entityData.get(MUSIC_START_TICK);
         durationSeconds = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;
