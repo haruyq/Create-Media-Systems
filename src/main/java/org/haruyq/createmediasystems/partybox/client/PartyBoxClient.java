@@ -86,7 +86,7 @@ public final class PartyBoxClient {
                 StreamSound sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
                         box::soundPosition,null,()->!box.isRemoved()&&box.playing()&&box.revision()==revision,()->audible(box),()->gain(box),null,Streams.Channel.MIX,
                         length->mc.execute(()->{if(mc.getConnection()!=null && box.revision()==revision && Double.isFinite(length) && length>0)
-                            PacketDistributor.sendToServer(new PartyBoxAction(box.getId(),7,(int)Math.ceil(length),revision));}));
+                            PacketDistributor.sendToServer(new PartyBoxAction(box.getId(),PartyBoxAction.Kind.LENGTH,(int)Math.ceil(length),revision));}));
                 sound.setDiscPlayback(box.getUUID(),box::seconds);sound.setDynamicPitch(()->pitchAt(box));
                 sound.setBassMode(box::bass);sound.setPcmMeter(meter::sample);
                 ClientStreams.play(box.getUUID(),sound);PLAYING.put(box.getUUID(),new Playing(box,revision,true,null,ticks,meter));

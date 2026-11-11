@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.megaphone;
 
+import org.haruyq.createmediasystems.HeldItemMenu;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -17,8 +18,7 @@ public final class MegaphoneItem extends Item {
         var item=player.getItemInHand(hand);
         if(player instanceof ServerPlayer server) {
             if(player.isShiftKeyDown())MegaphoneData.play(item,level,!MegaphoneData.playing(item));
-            else {int slot=hand==InteractionHand.MAIN_HAND?player.getInventory().selected:40;
-                server.openMenu(new SimpleMenuProvider((id,inventory,p)->new MegaphoneMenu(id,inventory,slot),item.getHoverName()),buf->buf.writeVarInt(slot));}
+            else HeldItemMenu.open(server,hand,MegaphoneMenu::new);
         }
         return InteractionResultHolder.sidedSuccess(item,level.isClientSide);
     }

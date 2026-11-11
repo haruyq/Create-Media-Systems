@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.HeldItemMenu;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.List;
 
@@ -12,7 +13,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -71,11 +71,7 @@ public final class DiscCellItem extends Item implements ChargeableItem {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
-        if (player instanceof ServerPlayer server) {
-            int slot = hand == InteractionHand.MAIN_HAND ? player.getInventory().selected : 40;
-            server.openMenu(new SimpleMenuProvider((id, inventory, owner) -> new DiscCellMenu(id, inventory, slot),
-                    held.getHoverName()), buf -> buf.writeVarInt(slot));
-        }
+        if (player instanceof ServerPlayer server) HeldItemMenu.open(server, hand, DiscCellMenu::new);
         return InteractionResultHolder.sidedSuccess(held, level.isClientSide);
     }
 

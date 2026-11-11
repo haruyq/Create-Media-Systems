@@ -74,7 +74,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("partybox-action ")){
                     String[] bits=action.split(" ");var target=mc.level.getEntity(Integer.parseInt(bits[1]));
                     if(target instanceof org.haruyq.createmediasystems.partybox.PartyBoxEntity box)
-                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),Integer.parseInt(bits[2]),Integer.parseInt(bits[3]),box.revision()));
+                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(new org.haruyq.createmediasystems.partybox.PartyBoxAction(box.getId(),org.haruyq.createmediasystems.partybox.PartyBoxAction.Kind.byId(Integer.parseInt(bits[2])),Integer.parseInt(bits[3]),box.revision()));
                 }
                 if(action.equals("launcher-reload")) net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                         org.haruyq.createmediasystems.launcher.DiscLauncherReloadPacket.INSTANCE);
@@ -83,7 +83,7 @@ public final class LauncherDebugClient {
                 if(action.startsWith("launcher-aim ")){aimHeld=action.substring(13).equals("1");mc.options.keyUse.setDown(aimHeld);}
                 if(action.equals("megaphone-open") && mc.player!=null && mc.gameMode!=null)mc.gameMode.useItem(mc.player,InteractionHand.MAIN_HAND);
                 if(action.startsWith("megaphone-action ") && mc.player!=null){var bits=action.split(" ");net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                    new org.haruyq.createmediasystems.megaphone.MegaphoneAction(mc.player.containerMenu.containerId,Integer.parseInt(bits[1]),Integer.parseInt(bits[2])));}
+                    new org.haruyq.createmediasystems.megaphone.MegaphoneAction(mc.player.containerMenu.containerId,org.haruyq.createmediasystems.megaphone.MegaphoneAction.Kind.byId(Integer.parseInt(bits[1])),Integer.parseInt(bits[2])));}
                 if(action.startsWith("input-capture ")) {
                     boolean capture=action.substring(14).equals("1");
                     if(capture && !inputCapture){savedPauseOnLostFocus=mc.options.pauseOnLostFocus;mc.options.pauseOnLostFocus=false;}
