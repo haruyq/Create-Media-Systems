@@ -4,6 +4,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.client.LauncherClient;
 import org.haruyq.createmediasystems.audio.RangeQuillHandler;
 import org.haruyq.createmediasystems.disc.DiscClient;
+import org.haruyq.createmediasystems.disc.DriveClient;
 import org.haruyq.createmediasystems.display.DisplayRenderer;
 import org.haruyq.createmediasystems.hifi.HifiControls;
 import org.haruyq.createmediasystems.hifi.HifiRenderer;
@@ -44,5 +45,6 @@ public class CreateMediaSystemsClient {
         P2pClient.register();
         P2pOverlay.register(modBus);
         DiscClient.register();
+        DriveClient.register();
     }
 }

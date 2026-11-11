@@ -65,5 +65,32 @@
     "sounds": [
       "create_media_systems:disc_headshot"
     ]
+  },
+  "drive_spin": {
+    "subtitle": "subtitles.create_media_systems.drive_spin",
+    "sounds": [
+      {
+        "name": "create_media_systems:drive_spin",
+        "attenuation_distance": 10
+      }
+    ]
+  },
+  "drive_tray": {
+    "subtitle": "subtitles.create_media_systems.drive_tray",
+    "sounds": [
+      {
+        "name": "create_media_systems:drive_tray",
+        "attenuation_distance": 12
+      }
+    ]
+  },
+  "drive_seek": {
+    "subtitle": "subtitles.create_media_systems.drive_seek",
+    "sounds": [
+      {
+        "name": "create_media_systems:drive_seek",
+        "attenuation_distance": 10
+      }
+    ]
   }
 }

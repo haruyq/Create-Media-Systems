@@ -52,6 +52,7 @@ import org.haruyq.createmediasystems.train.TrainDiscReaderBlock;
 import org.haruyq.createmediasystems.train.TrainSignalReceiverBlock;
 import org.haruyq.createmediasystems.train.TrainSignals;
 import org.haruyq.createmediasystems.train.TrainSpeakerBlock;
+import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.EqualizerBlock;
 import org.haruyq.createmediasystems.video.RemoteItem;
 import org.haruyq.createmediasystems.video.VideoDiscItem;
@@ -158,6 +159,13 @@ public class CreateMediaSystems {
             SOUNDS.register("disc_latch", () -> SoundEvent.createVariableRangeEvent(id("disc_latch")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_INSERT_SOUND =
             SOUNDS.register("disc_insert", () -> SoundEvent.createVariableRangeEvent(id("disc_insert")));
+    /** A disc drive emulator's: its disc turning (a loop), its tray, and its head finding the disc's start. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SPIN =
+            SOUNDS.register("drive_spin", () -> SoundEvent.createVariableRangeEvent(id("drive_spin")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_TRAY =
+            SOUNDS.register("drive_tray", () -> SoundEvent.createVariableRangeEvent(id("drive_tray")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SEEK =
+            SOUNDS.register("drive_seek", () -> SoundEvent.createVariableRangeEvent(id("drive_seek")));
     public static final DeferredHolder<SoundEvent, SoundEvent> DISC_CHARGE_SOUND =
             SOUNDS.register("disc_charge", () -> SoundEvent.createVariableRangeEvent(id("disc_charge")));
 
@@ -300,6 +308,12 @@ public class CreateMediaSystems {
     public static final DeferredItem<?> VIDEO_PLAYER_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_player", VIDEO_PLAYER);
     public static final Supplier<BlockEntityType<VideoPlayerBlock.Entity>> VIDEO_PLAYER_ENTITY = BLOCK_ENTITIES.register(
             "blu_ray_player", () -> BlockEntityType.Builder.of(VideoPlayerBlock.Entity::new, VIDEO_PLAYER.get()).build(null));
+    /** The disc drive of its player's real computer, beside the Blu-ray player or disc reader that plays its disc. */
+    public static final DeferredBlock<DriveEmulatorBlock> DRIVE_EMULATOR = BLOCKS.register("disc_drive_emulator",
+            () -> new DriveEmulatorBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
+    public static final DeferredItem<?> DRIVE_EMULATOR_ITEM = ITEMS.registerSimpleBlockItem("disc_drive_emulator", DRIVE_EMULATOR);
+    public static final Supplier<BlockEntityType<DriveEmulatorBlock.Entity>> DRIVE_EMULATOR_ENTITY = BLOCK_ENTITIES.register(
+            "disc_drive_emulator", () -> BlockEntityType.Builder.of(DriveEmulatorBlock.Entity::new, DRIVE_EMULATOR.get()).build(null));
     public static final DeferredItem<RemoteItem> REMOTE = ITEMS.register("remote",
             () -> new RemoteItem(new Item.Properties().stacksTo(1)));
     /** Display quill: links displays to a Blu-ray player and sets their size (client-side UI only). */
@@ -443,7 +457,7 @@ public class CreateMediaSystems {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("16");
+        var registrar = event.registrar("17");
         ServerConfig.registerPayloads(registrar);
         StreamPackets.registerPayloads(registrar);
         TrainDiscReaderBehaviour.registerPayloads(registrar);
@@ -458,6 +472,7 @@ public class CreateMediaSystems {
         CustomDiscItem.registerPayloads(registrar);
         VideoDiscItem.registerPayloads(registrar);
         RemoteItem.registerPayloads(registrar);
+        DriveEmulatorBlock.registerPayloads(registrar);
         EqualizerBlock.registerPayloads(registrar);
         HifiStackBlock.registerPayloads(registrar);
         DisplayQuill.registerPayloads(registrar);

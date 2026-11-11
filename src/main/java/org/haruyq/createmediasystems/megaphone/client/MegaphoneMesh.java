@@ -69,16 +69,16 @@ public final class MegaphoneMesh {
         }
     }
     private static void disk(PoseStack p,VertexConsumer v,float z,float r,int color,int light){annulus(p,v,z,r,0,color,light,-1);}
-    private static void annulus(PoseStack p,VertexConsumer v,float z,float r,float inner,int color,int light,int facing){
+    public static void annulus(PoseStack p,VertexConsumer v,float z,float r,float inner,int color,int light,int facing){
         for(int i=0;i<48;i++){double a=i*Math.PI/24,b=(i+1)*Math.PI/24;float c=(float)Math.cos(a),s=(float)Math.sin(a),cc=(float)Math.cos(b),ss=(float)Math.sin(b);
             quad(p,v,r*c,r*s,z,r*cc,r*ss,z,inner*cc,inner*ss,z,inner*c,inner*s,z,0,0,facing,color,light);}
     }
-    private static void box(PoseStack p,VertexConsumer v,float x,float y,float z,float xx,float yy,float zz,int c,int l){
+    public static void box(PoseStack p,VertexConsumer v,float x,float y,float z,float xx,float yy,float zz,int c,int l){
         quad(p,v,x,y,z,xx,y,z,xx,yy,z,x,yy,z,0,0,-1,c,l);quad(p,v,x,y,zz,x,yy,zz,xx,yy,zz,xx,y,zz,0,0,1,c,l);
         quad(p,v,x,y,z,x,yy,z,x,yy,zz,x,y,zz,-1,0,0,c,l);quad(p,v,xx,y,z,xx,y,zz,xx,yy,zz,xx,yy,z,1,0,0,c,l);
         quad(p,v,x,yy,z,xx,yy,z,xx,yy,zz,x,yy,zz,0,1,0,c,l);quad(p,v,x,y,z,x,y,zz,xx,y,zz,xx,y,z,0,-1,0,c,l);
     }
-    private static void quad(PoseStack p,VertexConsumer v,float x,float y,float z,float a,float b,float c,float d,float e,float f,float g,float h,float i,float nx,float ny,float nz,int color,int light){
+    public static void quad(PoseStack p,VertexConsumer v,float x,float y,float z,float a,float b,float c,float d,float e,float f,float g,float h,float i,float nx,float ny,float nz,int color,int light){
         float ux=a-x,uy=b-y,uz=c-z,vx=d-x,vy=e-y,vz=f-z,wx=g-x,wy=h-y,wz=i-z;
         float orientation=((uy*vz-uz*vy)+(vy*wz-vz*wy))*nx+((uz*vx-ux*vz)+(vz*wx-vx*wz))*ny+((ux*vy-uy*vx)+(vx*wy-vy*wx))*nz;
         vertex(p,v,x,y,z,nx,ny,nz,color,light);

@@ -13,8 +13,12 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.gson.JsonParser;
 
+/**
+ * A disc as FFmpeg reads it for sharing: a Blu-ray's playlist, a DVD's title, or (with {@code cd}) an audio CD from
+ * its first track to its last.
+ */
 public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration,
-                         BlurayPlaylist playlist, Access access) implements AutoCloseable {
+                         BlurayPlaylist playlist, Access access, CdAudio cd) implements AutoCloseable {
     public static final int SEGMENT_SECONDS = 4;
     public static final int MAX_SEGMENT_BYTES = 8 * 1024 * 1024;
     public static final double MAX_DURATION = 12 * 60 * 60;
@@ -41,6 +45,11 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         this(ffmpeg, root, bluray, title, duration, playlist, null);
     }
 
+    public DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration, BlurayPlaylist playlist,
+                      Access access) {
+        this(ffmpeg, root, bluray, title, duration, playlist, access, null);
+    }
+
     public static DiscSource open(String ffmpeg, String ffprobe, Path path, int title) throws IOException {
         return open(ffmpeg, ffprobe, path, title, null);
     }
@@ -62,7 +71,16 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         }
         boolean bluray = Files.isRegularFile(root.resolve("BDMV/index.bdmv"));
         if (!bluray && !Files.isRegularFile(root.resolve("VIDEO_TS/VIDEO_TS.IFO"))) {
-            throw new IOException("Select a DVD drive or a folder containing VIDEO_TS or BDMV");
+            CdAudio cd = access == null ? CdAudio.open(root) : null;
+            if (cd == null) {
+                throw new IOException("Select a disc drive or a folder containing VIDEO_TS, BDMV or a CD image");
+            }
+            double duration = (double) cd.sectors() / 75;
+            if (duration <= 0 || duration > MAX_DURATION) {
+                cd.close();
+                throw new IOException("This CD has no usable length");
+            }
+            return new DiscSource(ffmpeg, root, false, -1, duration, null, null, cd);
         }
         if (title < -1 || title > (bluray ? 99999 : 99)) {
             throw new IOException("The DVD title or Blu-ray playlist number is out of range");
@@ -137,6 +155,15 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     @Override
     public void close() {
         if (access != null) access.close();
+        if (cd != null) cd.close();
+    }
+
+    /**
+     * Whether each segment is encoded apart, to be asked for in any order and at any quality: a Blu-ray's and a
+     * CD's. A DVD's come from one pass (see run).
+     */
+    public boolean segmented() {
+        return bluray || cd != null;
     }
 
     public int segments() {
@@ -169,6 +196,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     }
 
     public String encoder() {
+        if (cd != null) {
+            return "ac3";
+        }
         for (String encoder : List.of("h264_nvenc", "h264_qsv", "h264_amf")) {
             try {
                 run(List.of(ffmpeg, "-v", "error", "-nostdin", "-f", "lavfi", "-i", "color=s=1920x1080:r=60",
@@ -185,9 +215,40 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
 
     public byte[] encode(int segment, Quality quality, String encoder) throws IOException {
         double seconds = seconds(segment);
+        if (cd != null) {
+            return encodeCd(segment, seconds);
+        }
         return run(command(segment, seconds, quality, encoder, false),
                 playlist == null ? new byte[0] : playlist.concat(root, segment * SEGMENT_SECONDS, seconds, SEGMENT_SECONDS, access),
                 MAX_SEGMENT_BYTES, 30, access);
+    }
+
+    /**
+     * A CD's segment: its samples piped to FFmpeg with half a second before them and a little after, which the
+     * resampler runs through before the cut, so segments encoded apart meet sample for sample. Half a second is a
+     * whole number of samples at both rates, and in step between them (147 in for 160 out).
+     */
+    private byte[] encodeCd(int segment, double seconds) throws IOException {
+        long start = (long) segment * SEGMENT_SECONDS * CdAudio.RATE;
+        long from = Math.max(0, start - CdAudio.RATE / 2);
+        long to = Math.min(cd.sectors() * CdAudio.SECTOR_SAMPLES, start + Math.round(seconds * CdAudio.RATE) + CdAudio.RATE / 10);
+        long sector = from / CdAudio.SECTOR_SAMPLES;
+        byte[] read = cd.read(sector, (int) ((to + CdAudio.SECTOR_SAMPLES - 1) / CdAudio.SECTOR_SAMPLES - sector));
+        byte[] samples = java.util.Arrays.copyOfRange(read, (int) (from - sector * CdAudio.SECTOR_SAMPLES) * 4,
+                (int) (to - sector * CdAudio.SECTOR_SAMPLES) * 4);
+        List<String> command = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-v", "error", "-f", "s16le",
+                "-ar", Integer.toString(CdAudio.RATE), "-ac", "2", "-i", "pipe:0",
+                "-af", "aresample=48000,atrim=start_sample=" + (start - from) * 160 / 147 + ",asetpts=PTS-STARTPTS,apad,atrim=duration="
+                        + seconds + ",asetpts=PTS+256/48000/TB"));
+        command.addAll(audioTs(segment));
+        return run(command, samples, MAX_SEGMENT_BYTES, 30, null);
+    }
+
+    /** A segment's sound and container: AC-3, whose frames divide four seconds exactly, in MPEG-TS at its place in the disc. */
+    private static List<String> audioTs(int segment) {
+        return List.of("-c:a", "ac3", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                "-mpegts_flags", "+resend_headers+initial_discontinuity", "-muxdelay", "0", "-muxpreload", "0",
+                "-output_ts_offset", Integer.toString(segment * SEGMENT_SECONDS), "-f", "mpegts", "pipe:1");
     }
 
     /**
@@ -231,11 +292,8 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         // AC-3 frames divide four seconds exactly. Compensate its 256-sample encoder delay to keep audio at zero.
         command.addAll(List.of("-af", (bluray ? "aselect=concatdec_select," : "")
                         + "asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0,"
-                        + (continuous ? "" : "apad,atrim=duration=" + seconds + ",") + "asetpts=PTS+256/48000/TB", "-c:a", "ac3",
-                "-b:a", "192k", "-ar", "48000", "-ac", "2", "-mpegts_flags", "+resend_headers+initial_discontinuity",
-                "-muxdelay", "0", "-muxpreload", "0",
-                "-output_ts_offset", Integer.toString(segment * SEGMENT_SECONDS),
-                "-f", "mpegts", "pipe:1"));
+                        + (continuous ? "" : "apad,atrim=duration=" + seconds + ",") + "asetpts=PTS+256/48000/TB"));
+        command.addAll(audioTs(segment));
         return command;
     }
 
