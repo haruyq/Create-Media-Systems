@@ -40,7 +40,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -51,7 +50,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.Tags;
-import net.neoforged.neoforge.event.level.ChunkEvent;
 
 /**
  * A playing display lights the room in front of it as a cinema screen does: an area light the size of the screen, its
@@ -316,13 +314,8 @@ public final class DisplayLight {
         NeoForge.EVENT_BUS.addListener(DisplayLight::stage);
         WorldEvents.onBlocksChanged(DisplayLight::blocksChanged);
         WorldEvents.onChunkLoaded(DisplayLight::chunkChanged);
+        WorldEvents.onChunkUnloaded(DisplayLight::chunkChanged);
         WorldEvents.onFrameEnded(DisplayLight::frameEnded);
-        NeoForge.EVENT_BUS.addListener((ChunkEvent.Unload event) -> {
-            if (event.getLevel().isClientSide()) {
-                ChunkPos pos = event.getChunk().getPos();
-                chunkChanged(pos.x, pos.z);
-            }
-        });
     }
 
     private static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
@@ -397,7 +390,7 @@ public final class DisplayLight {
         lit.video = video;
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
         Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
-        if (level != Minecraft.getInstance().level || !ScreenLight.afterPack(() -> lit.draw(0, modelView, projection))) {
+        if (!WorldEvents.isClientWorld(level) || !ScreenLight.afterPack(() -> lit.draw(0, modelView, projection))) {
             lit.draw(0, modelView, projection);
         }
         if (lit.specular && lit.current != null && lit.current.buffers[1] != null) {

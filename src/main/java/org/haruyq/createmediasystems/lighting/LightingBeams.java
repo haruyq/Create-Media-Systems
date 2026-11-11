@@ -77,7 +77,7 @@ public final class LightingBeams {
      * loaded (it can fail to load, under some shader packs). If not, draw beams in LightingRenderer.beamBuffers.
      */
     public static boolean available(Level level) {
-        return program != 0 && level == Minecraft.getInstance().level;
+        return program != 0 && WorldEvents.isClientWorld(level);
     }
 
     /**
