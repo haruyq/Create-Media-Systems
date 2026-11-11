@@ -5,12 +5,12 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.partybox.*;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import org.haruyq.createmediasystems.playback.DopplerMath;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import org.haruyq.createmediasystems.playback.MusicEmitter;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.entity.Entity;
@@ -33,7 +33,7 @@ public final class PartyBoxClient {
         @Override public UUID id(){return box.getUUID();}
         @Override public int revision(){return box.revision();}
         @Override public ItemStack media(){return box.disc();}
-        @Override public boolean present(){return !box.isRemoved() && box.level()==Minecraft.getInstance().level && box.playing();}
+        @Override public boolean present(){return !box.isRemoved() && WorldEvents.isClientWorld(box.level()) && box.playing();}
         @Override public Vec3 position(){return box.soundPosition();}
         /** Its steps after client interpolation; none in its first ticks, while it may still jump into place. */
         @Override public Vec3 velocity(){return box.tickCount<2?null:DopplerMath.step(box);}

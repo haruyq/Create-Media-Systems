@@ -623,7 +623,7 @@ public final class LightingIllumination {
         }
         beam.moving = moving;
         // Still, and with the lamp and all it may light inside the grid around the camera: traced on the GPU.
-        boolean gpu = !moving && level == Minecraft.getInstance().level
+        boolean gpu = !moving && WorldEvents.isClientWorld(level)
                 && LightingOcclusion.covers(new AABB(from, hit.point()).inflate(radius + SCAN_MARGIN + 1));
         if (gpu != beam.gpu) {
             beam.gpu = gpu;
@@ -638,7 +638,7 @@ public final class LightingIllumination {
         }
         // Nothing it lights is in view: its faces wait as they are (no scan, no trace, nothing drawn) till it is. Its
         // sight still moves on above, so what changed meanwhile is traced again once it's back.
-        if (level == Minecraft.getInstance().level && !inView(hit.point(), radius + SCAN_MARGIN)) {
+        if (WorldEvents.isClientWorld(level) && !inView(hit.point(), radius + SCAN_MARGIN)) {
             return;
         }
         if (beam.scanning != null && beam.scanning.isDone()) {
@@ -791,7 +791,7 @@ public final class LightingIllumination {
         beam.drawStrength = strength;
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
         Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
-        if (level == Minecraft.getInstance().level) {
+        if (WorldEvents.isClientWorld(level)) {
             Runnable draw = () -> beam.draw(modelView, projection);
             if (!ScreenLight.afterPack(draw)) {
                 SURFACES.add(draw);

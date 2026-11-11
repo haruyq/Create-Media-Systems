@@ -72,15 +72,13 @@ public final class LightingText {
                 .append(": ").append(value.copy());
     }
 
+    /** The message under {@code create_media_systems.lighting.}{@code key}, in plain text colour. */
     public static MutableComponent message(String key, Object... args) {
-        int color = switch (key) {
-            case "preset_saved", "preset_loaded", "picked", "linked", "source_linked", "following" -> ON;
-            case "unlinked", "link_removed" -> OFF;
-            case "preset_choose_slot", "preset_save_help", "preset_start_help", "pick_first", "too_far", "full", "assembly",
-                    "other_family" -> WARNING;
-            case "preset_cancelled", "preset_empty_help", "link_help", "track_help", "controls" -> MUTED;
-            default -> TEXT;
-        };
+        return message(TEXT, key, args);
+    }
+
+    /** The message under {@code create_media_systems.lighting.}{@code key}, in {@code color} (ON, OFF, WARNING, MUTED). */
+    public static MutableComponent message(int color, String key, Object... args) {
         return Component.translatable("create_media_systems.lighting." + key, args).withColor(color);
     }
 }

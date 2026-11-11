@@ -18,7 +18,6 @@ import org.joml.Matrix4d;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
@@ -98,7 +97,7 @@ public final class LightingRaycast {
     }
 
     private static Scene scene(Level level, boolean render, Function<SubLevelAccess, Pose3dc> poseOf) {
-        boolean shared = render && level.isClientSide && level == Minecraft.getInstance().level;
+        boolean shared = render && level.isClientSide && WorldEvents.isClientWorld(level);
         long frame = shared ? WorldEvents.frame() : -1;
         if (shared && renderScene != null && renderScene.level == level && renderScene.frame == frame) {
             return renderScene;

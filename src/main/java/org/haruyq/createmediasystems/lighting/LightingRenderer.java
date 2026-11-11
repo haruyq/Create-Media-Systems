@@ -172,7 +172,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
      * the stage lights' beams and lit faces, after block entities; elsewhere (a Ponder scene), {@code buffers}.
      */
     public static MultiBufferSource beamBuffers(Level level, MultiBufferSource buffers) {
-        return level == Minecraft.getInstance().level ? EFFECTS : buffers;
+        return WorldEvents.isClientWorld(level) ? EFFECTS : buffers;
     }
 
     /** Additive, unlit, position and colour: a stage light's beams. */
@@ -291,7 +291,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         Trace trace = TRACES.computeIfAbsent(lamp, ignored -> new Trace());
         // A beam out of view (as last traced) is traced again only every few frames, often enough to see it swing
         // back into view; meanwhile neither it nor its light is drawn, nor its light's faces looked at.
-        if (level == Minecraft.getInstance().level && !trace.inView(frame)
+        if (WorldEvents.isClientWorld(level) && !trace.inView(frame)
                 && Math.floorMod(WorldEvents.frame() + lamp.getBlockPos().hashCode(), OFF_SCREEN_FRAMES) != 0) {
             return;
         }
@@ -336,7 +336,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
     @Override
     public int getViewDistance() {
-        return LightingSettings.MAX_RANGE + 32;
+        return LightingSettings.VIEW_DISTANCE;
     }
 
     @Override
@@ -440,7 +440,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             boolean moving = SableCompat.containing(frame.lamp.getLevel(), frame.lamp.getBlockPos()) != null
                     || frame.rays.hasSubLevels(new AABB(world, world).inflate(range * scale));
             // Off the world (a Ponder scene), or with sub-levels that move under it, every frame.
-            boolean still = now - traced <= 1 && frame.lamp.getLevel() == Minecraft.getInstance().level
+            boolean still = now - traced <= 1 && WorldEvents.isClientWorld(frame.lamp.getLevel())
                     && !moving && !lastMoving && !LightingIllumination.blocksChanged()
                     && pattern == lastPattern && range == lastRange && spread == lastSpread
                     && frame.origin.equals(lastOrigin) && forward.equals(lastForward) && right.equals(lastRight);

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.launcher.client;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.launcher.*;
+import org.haruyq.createmediasystems.launcher.mixin.GameRendererAccessor;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -152,7 +153,7 @@ public final class LauncherHud {
         var camera=mc.gameRenderer.getMainCamera();var at=camera.getPosition();
         var v=new org.joml.Vector3f((float)(x-at.x),(float)(y-at.y),(float)(z-at.z));
         v.rotate(new org.joml.Quaternionf(camera.rotation()).conjugate());
-        double fov=((org.haruyq.createmediasystems.mixin.GameRendererAccessor)mc.gameRenderer).cms$fieldOfView(camera,partial,true);
+        double fov=((GameRendererAccessor)mc.gameRenderer).cms$fieldOfView(camera,partial,true);
         var clip=mc.gameRenderer.getProjectionMatrix(fov).transform(new org.joml.Vector4f(v,1));
         if(clip.w<=.05f)return null;
         float px=(clip.x/clip.w+1)*.5f*g.guiWidth(),py=(1-clip.y/clip.w)*.5f*g.guiHeight();

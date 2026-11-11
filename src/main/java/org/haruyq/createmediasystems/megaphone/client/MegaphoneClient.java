@@ -1,10 +1,10 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
 import java.util.*;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.InteractionHand;
@@ -32,7 +32,7 @@ public final class MegaphoneClient {
         ItemStack item(){return player.getItemInHand(hand);}
         @Override public int revision(){return MegaphoneData.revision(item());}
         @Override public ItemStack media(){return MegaphoneData.disc(item(),player.level());}
-        @Override public boolean present(){return !player.isRemoved() && player.level()==Minecraft.getInstance().level
+        @Override public boolean present(){return !player.isRemoved() && WorldEvents.isClientWorld(player.level())
                 && item().getItem() instanceof MegaphoneItem && MegaphoneData.id(item()).filter(id::equals).isPresent() && MegaphoneData.playing(item());}
         @Override public Vec3 position(){return player.getEyePosition().add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
         @Override public Vec3 velocity(){return DopplerMath.step(player);}

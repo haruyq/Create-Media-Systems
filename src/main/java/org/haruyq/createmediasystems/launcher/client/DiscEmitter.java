@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.launcher.client;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 import org.haruyq.createmediasystems.playback.DopplerMath;
@@ -10,7 +11,6 @@ import org.haruyq.createmediasystems.playback.MusicEmitter;
 
 import org.jetbrains.annotations.Nullable;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -50,7 +50,7 @@ record DiscEmitter(DiscProjectile disc) implements MusicEmitter {
     /** Stuck in a target that isn't tracked here, it is silent (its clock runs on). */
     @Override
     public boolean present() {
-        return !disc.isRemoved() && disc.level() == Minecraft.getInstance().level && disc.soundEnabled();
+        return !disc.isRemoved() && WorldEvents.isClientWorld(disc.level()) && disc.soundEnabled();
     }
 
     @Override

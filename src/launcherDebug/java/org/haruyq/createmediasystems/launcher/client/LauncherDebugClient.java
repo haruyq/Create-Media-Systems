@@ -3,12 +3,12 @@ package org.haruyq.createmediasystems.launcher.client;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import java.nio.file.*;
-import java.lang.reflect.Field;
 import java.util.*;
 import com.google.gson.Gson;
 import com.mojang.logging.LogUtils;
 import org.haruyq.createmediasystems.launcher.DiscProjectile;
 import org.haruyq.createmediasystems.launcher.LauncherMagazine;
+import org.haruyq.createmediasystems.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.playback.mixin.*;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import net.minecraft.client.Minecraft;
@@ -182,7 +182,7 @@ public final class LauncherDebugClient {
             row.put("damageMode",LauncherClient.DAMAGE_NUMBERS.get().name());
             var damage=LauncherClient.damageDisplay().latest();
             if(damage!=null){row.put("damageTarget",damage.target());row.put("healthDamage",damage.health());row.put("shieldDamage",damage.shield());row.put("shieldBroken",damage.shieldBroken());}
-            var pose=LauncherGunPose.sample(LauncherClient.frame(mc.player.getMainHandItem(),mc.level,1),1,LauncherClient.aim(1),LauncherClient.kick(1),0);
+            var pose=LauncherGunPose.sample(LauncherTimeline.sample(mc.player.getMainHandItem(),mc.level,1),1,LauncherClient.aim(1),LauncherClient.kick(1),0);
             row.put("weaponPose",java.util.Map.of("x",pose.x(),"y",pose.y(),"z",pose.z(),"pitch",pose.pitch(),"yaw",pose.yaw(),"scale",pose.scale()));
             var targets=new ArrayList<Map<String,Object>>();
             for(var target:mc.level.entitiesForRendering())if(target instanceof net.minecraft.world.entity.LivingEntity living && target.hasCustomName() && target.getCustomName().getString().startsWith("CMS BALLISTICS"))

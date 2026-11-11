@@ -235,7 +235,7 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
             LightingConsoleBlock.Entity owner = controller();
             tooltip.add(fixtureName().copy().withColor(LightingText.TEXT));
-            tooltip.add(console.pos() == null ? LightingText.message("unlinked")
+            tooltip.add(console.pos() == null ? LightingText.message(LightingText.OFF, "unlinked")
                     : LightingText.group(owner == null ? null : owner.settings, group()));
             tooltip.add(LightingText.message("fixture", LightingText.number(order() + 1), LightingText.number(individualColor + 1)));
             return true;

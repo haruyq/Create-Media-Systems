@@ -101,22 +101,26 @@ public final class LauncherClient {
             if(event.getPlayer()==Minecraft.getInstance().player && event.getPlayer().getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))
                 event.setNewFovModifier(event.getNewFovModifier()*(1-.18f*aim(1)));
         });
-        LauncherFeedback.shotListener=shot->{
-            var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
-            lastShot=shot.tick();confirmedShots++;MOTION.shot();
-            float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
-        };
-        LauncherFeedback.hitListener=hit->{
-            hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();hitDamage=hit.damage();
-            DAMAGE.hit(new LauncherDamageDisplay.Entry(hit.target(),hit.health(),hit.shield(),hit.headshot(),hit.killed(),hit.shieldBroken(),hit.x(),hit.y(),hit.z(),hitAt/1_000_000_000.0));
-            confirmedHits++;if(headHit)confirmedHeadshots++;
-            var mc=Minecraft.getInstance();
-            mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                    net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
-        };
         LauncherHud.register(modBus);
         PointLights.add(new CellLights());
         EmitterAudioManager.add(DiscEmitter::near);
+    }
+
+    /** The server fired this player's launcher: recoil once per shot. */
+    public static void shot(LauncherFeedback.Shot shot) {
+        var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
+        lastShot=shot.tick();confirmedShots++;MOTION.shot();
+        float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
+    }
+
+    /** This player's shot hit: the hit marker, damage numbers and sound. */
+    public static void hit(LauncherFeedback.Hit hit) {
+        hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();hitDamage=hit.damage();
+        DAMAGE.hit(new LauncherDamageDisplay.Entry(hit.target(),hit.health(),hit.shield(),hit.headshot(),hit.killed(),hit.shieldBroken(),hit.x(),hit.y(),hit.z(),hitAt/1_000_000_000.0));
+        confirmedHits++;if(headHit)confirmedHeadshots++;
+        var mc=Minecraft.getInstance();
+        mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
     }
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
@@ -158,10 +162,6 @@ public final class LauncherClient {
                 && (event.isAttack() || event.isUseItem())) {event.setCanceled(true);event.setSwingHand(false);}
     }
 
-    public static LauncherTimeline.Frame frame(ItemStack stack, Level level, float partialTick) {
-        return LauncherTimeline.sample(stack, level, partialTick);
-    }
-
     public record CellVisual(ItemStack stack, LauncherTimeline.Frame motion, LauncherMechanics.CellPose pose, int color, float strength) {}
 
     public static CellVisual cellVisual(ItemStack gun, Level level, float partial) {
@@ -194,7 +194,7 @@ public final class LauncherClient {
             @Override
             public boolean applyForgeHandTransform(PoseStack pose, LocalPlayer player, HumanoidArm arm,
                                                     ItemStack held, float partial, float equip, float swing) {
-                weaponPose(pose, frame(held, player.level(), partial), arm == HumanoidArm.RIGHT ? 1f : -1f, equip, bob(player, partial));
+                weaponPose(pose, LauncherTimeline.sample(held, player.level(), partial), arm == HumanoidArm.RIGHT ? 1f : -1f, equip, bob(player, partial));
                 return true;
             }
         }, LauncherFeature.DISC_LAUNCHER.get());
