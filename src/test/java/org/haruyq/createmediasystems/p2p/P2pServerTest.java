@@ -75,6 +75,31 @@ class P2pServerTest {
         List<CustomPacketPayload> other = new ArrayList<>();
         P2p.request(player(UUID.randomUUID(), other), new P2p.Request(P2p.Action.JOIN, 1, "Viewer"), VIEWER);
         assertInstanceOf(P2p.Notice.class, other.getFirst(), "a viewer hosts no room");
+        assertEquals(1, ((P2p.Notice) other.getFirst()).request(), "told which request it was");
+    }
+
+    @Test
+    void aHostJoinsAnothersRoomAndKeepsItsOwn() {
+        host(1, "session_one_0000");
+        P2p.request(player(VIEWER, viewer), new P2p.Request(P2p.Action.HOST, 1, ""), null);
+        answer(calls.size() - 1, 200, ticket("host", VIEWER, "session_two_0000").replace("\"host_id\":\"" + HOST, "\"host_id\":\"" + VIEWER));
+        // Each sharing a disc, each watches the other's.
+        join(2);
+        assertEquals(List.of("POST p2p/sessions/session_one_0000/peers"), pending(), "its own room is not closed for it");
+        answer(calls.size() - 1, 200, ticket("viewer", VIEWER, "session_one_0000"));
+        P2p.request(player(HOST, host), new P2p.Request(P2p.Action.JOIN, 2, "Viewer"), VIEWER);
+        assertEquals(List.of("POST p2p/sessions/session_two_0000/peers"), pending());
+        answer(calls.size() - 1, 200, ticket("viewer", HOST, "session_two_0000").replace("\"host_id\":\"" + HOST, "\"host_id\":\"" + VIEWER));
+        assertEquals(List.of(1, 2), viewer.stream().map(t -> ((P2p.Ticket) t).request()).toList());
+        assertEquals(List.of(1, 2), host.stream().map(t -> ((P2p.Ticket) t).request()).toList());
+        // Leaving the room it joined is that seat alone; its own room goes with its host's request.
+        P2p.leave(VIEWER, 2);
+        assertEquals(List.of("DELETE p2p/sessions/session_one_0000/peers/" + VIEWER), pending());
+        answer(calls.size() - 1, 204, "");
+        P2p.leave(VIEWER, 1);
+        assertEquals(List.of("DELETE p2p/sessions/session_two_0000"), pending());
+        P2p.logout(HOST);
+        assertTrue(pending().contains("DELETE p2p/sessions/session_one_0000"), "logging out ends every seat");
     }
 
     @Test

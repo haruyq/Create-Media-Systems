@@ -3,7 +3,9 @@ package org.haruyq.createmediasystems.p2p;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
@@ -17,7 +19,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 
 /**
- * {@code /cms p2p debug}: text in the top-left corner on this client's P2P session, mostly its connection to the host:
+ * {@code /cms p2p debug}: text in the top-left corner on each of this client's P2P sessions, mostly its connection to the host:
  * the route, round trip, measured rate and what is coming in, then what each feature sending over it adds (see
  * Section), such as the disc segment it waits for. As host, a line per viewer. While shown, it pings each peer once a second, quietly. Hidden with the HUD and under the F3 screen.
  */
@@ -27,15 +29,21 @@ public final class P2pOverlay {
     private static final List<Section> SECTIONS = new CopyOnWriteArrayList<>();
     /** Game thread only. */
     private static boolean shown;
-    private static long lastPing, windowAt, windowBytes;
-    private static double receivingBps;
+    private static long lastPing;
+    /** What each session took in as of its last look, and the rate since the one before. */
+    private static final Map<Transport, Window> WINDOWS = new WeakHashMap<>();
+
+    private static final class Window {
+        long at, bytes;
+        double bps;
+    }
 
     public record Line(String text, int color) {
     }
 
-    /** What a feature that sends over the session shows below its lines, as host or viewer, as of {@code now}. */
+    /** What a feature that sends over the sessions shows below their lines, as of {@code now}. */
     public interface Section {
-        List<Line> lines(boolean hosting, long now);
+        List<Line> lines(long now);
     }
 
     private P2pOverlay() {
@@ -54,7 +62,7 @@ public final class P2pOverlay {
     /** Shows or hides it; whether it is shown now. */
     static boolean toggle() {
         shown = !shown;
-        windowAt = 0;
+        WINDOWS.clear();
         return shown;
     }
 
@@ -63,24 +71,30 @@ public final class P2pOverlay {
         if (!shown || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) {
             return;
         }
-        Transport transport = P2pClient.current();
+        List<Transport> sessions = P2pClient.sessions();
         long now = System.nanoTime();
-        if (transport != null && now - lastPing >= SECOND) {
-            lastPing = now;
-            transport.measure();
-            long received = transport.received();
-            if (windowAt != 0) {
-                receivingBps = (received - windowBytes) * 8e9 / (now - windowAt);
+        boolean look = now - lastPing >= SECOND;
+        List<Line> lines = new ArrayList<>();
+        for (Transport transport : sessions) {
+            Window window = WINDOWS.computeIfAbsent(transport, t -> new Window());
+            if (look) {
+                lastPing = now;
+                transport.measure();
+                long received = transport.received();
+                if (window.at != 0) {
+                    window.bps = (received - window.bytes) * 8e9 / (now - window.at);
+                }
+                window.at = now;
+                window.bytes = received;
             }
-            windowAt = now;
-            windowBytes = received;
+            lines.addAll(lines(transport.state(), transport.host(), transport.hostId(), transport.received(), transport.links(),
+                    window.bps, now, P2pOverlay::name));
         }
-        List<Line> lines = transport == null ? List.of(new Line("CMS P2P: not in a session", GRAY))
-                : lines(transport.state(), transport.host(), transport.hostId(), transport.received(), transport.links(),
-                        receivingBps, now, P2pOverlay::name);
-        if (transport != null) {
+        if (sessions.isEmpty()) {
+            lines.add(new Line("CMS P2P: not in a session", GRAY));
+        } else {
             for (Section section : SECTIONS) {
-                lines.addAll(section.lines(transport.host(), now));
+                lines.addAll(section.lines(now));
             }
         }
         int width = 0;

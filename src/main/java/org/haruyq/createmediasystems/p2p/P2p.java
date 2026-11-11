@@ -43,6 +43,9 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * API, with a secret only it and the API know, for a ticket for that player alone, and sends it to them. Peers then
  * signal through the API and send data to each other directly (see Transport): nothing of theirs passes through
  * here. The secret is CMS_P2P_SERVER_TOKEN, else the server config's p2pServerToken, which players never receive.
+ * <p>
+ * A player hosts one room and may sit in any number of others at once: two players each sharing a disc watch each
+ * other's. One seat a player closed their own room to join another's, which dropped everyone watching theirs.
  */
 public final class P2p {
     /** Longest name of a host to join: a player's. */
@@ -54,9 +57,9 @@ public final class P2p {
             .connectTimeout(Duration.ofSeconds(10)).build();
 
     private static final Object LOCK = new Object();
-    /** Under LOCK. Rooms by host, and each player's latest request, with the room it got them once answered. */
+    /** Under LOCK. Rooms by host, and each player's latest request for each seat, with the room it got them once answered. */
     private static final Map<UUID, Room> ROOMS = new HashMap<>();
-    private static final Map<UUID, Member> MEMBERS = new HashMap<>();
+    private static final Map<Seat, Member> MEMBERS = new HashMap<>();
     /**
      * Under LOCK. Each player's API calls, one after another, each with the cleanup of its answer: a DELETE for what
      * they left never lands on what a later POST got them, nor a POST on a seat that is still being deleted.
@@ -64,14 +67,21 @@ public final class P2p {
     private static final Map<UUID, CompletableFuture<?>> CALLS = new HashMap<>();
     private static boolean stopping;
     /** Server thread only. */
-    private static final Map<UUID, Long> LAST_REQUEST = new HashMap<>();
+    private static final Map<Seat, Long> LAST_REQUEST = new HashMap<>();
     /** The API: {@link #http} but in tests. */
     static Api api = P2p::http;
 
     private record Room(String id, UUID host) {
     }
 
-    /** A player's request {@code id} (as their client numbered it), and the room it got them once the API answered. */
+    /** {@code player}'s place in {@code host}'s room: their own, which they host, or another's. */
+    private record Seat(UUID player, UUID host) {
+        boolean hosts() {
+            return player.equals(host);
+        }
+    }
+
+    /** A player's request {@code id} for a seat (as their client numbered it), and the room it got them once the API answered. */
     private static final class Member {
         final int request;
         Room room;
@@ -98,7 +108,7 @@ public final class P2p {
     public static void register() {
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             logout(event.getEntity().getUUID());
-            LAST_REQUEST.remove(event.getEntity().getUUID());
+            LAST_REQUEST.keySet().removeIf(seat -> seat.player().equals(event.getEntity().getUUID()));
         });
         NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent event) -> start());
         NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) -> stop());
@@ -108,7 +118,8 @@ public final class P2p {
         registrar.playToServer(Request.TYPE, Request.CODEC,
                 (payload, context) -> request((ServerPlayer) context.player(), payload));
         registrar.playToClient(Ticket.TYPE, Ticket.CODEC, (payload, context) -> P2pClient.ticket(payload));
-        registrar.playToClient(Notice.TYPE, Notice.CODEC, (payload, context) -> P2pClient.notice(payload.message()));
+        registrar.playToClient(Notice.TYPE, Notice.CODEC,
+                (payload, context) -> P2pClient.notice(payload.message(), payload.request()));
     }
 
     private static void request(ServerPlayer player, Request request) {
@@ -117,42 +128,49 @@ public final class P2p {
             leave(id, request.id());
             return;
         }
-        long now = System.currentTimeMillis();
-        if (now - LAST_REQUEST.getOrDefault(id, 0L) < COOLDOWN_MS) {
-            notice(player, Component.translatable("create_media_systems.p2p.cooldown"));
-            return;
-        }
-        LAST_REQUEST.put(id, now);
-        if (secret() == null) {
-            notice(player, Component.translatable("create_media_systems.p2p.disabled"));
-            return;
-        }
         ServerPlayer host = request.action() == Action.JOIN ? player.server.getPlayerList().getPlayerByName(request.host()) : null;
         if (request.action() == Action.JOIN && host == null) {
-            notice(player, Component.translatable("create_media_systems.p2p.no_room", request.host()));
+            notice(player, request, Component.translatable("create_media_systems.p2p.no_room", request.host()));
+            return;
+        }
+        // Each seat by itself: a player near two discs asks for both rooms at once.
+        Seat seat = new Seat(id, host == null ? id : host.getUUID());
+        long now = System.currentTimeMillis();
+        if (now - LAST_REQUEST.getOrDefault(seat, 0L) < COOLDOWN_MS) {
+            notice(player, request, Component.translatable("create_media_systems.p2p.cooldown"));
+            return;
+        }
+        LAST_REQUEST.put(seat, now);
+        if (secret() == null) {
+            notice(player, request, Component.translatable("create_media_systems.p2p.disabled"));
             return;
         }
         request(new Player(id, player::hasDisconnected, payload -> player.server.execute(
                 () -> PacketDistributor.sendToPlayer(player, payload))), request, host == null ? null : host.getUUID());
     }
 
-    /** Asks the API for {@code player}'s ticket to host, or to join {@code host}'s room, in place of what they had. */
+    /**
+     * Asks the API for {@code player}'s ticket to host, or to join {@code host}'s room, in place of the seat they had
+     * there: their seats in other rooms stay.
+     */
     static void request(Player player, Request request, UUID host) {
         synchronized (LOCK) {
             Room room = host == null ? null : ROOMS.get(host);
             if (stopping || host != null && (room == null || host.equals(player.id()))) {
-                player.send().accept(new Notice(Component.translatable("create_media_systems.p2p.no_room", request.host())));
+                player.send().accept(new Notice(Component.translatable("create_media_systems.p2p.no_room", request.host()),
+                        request.id()));
                 return;
             }
-            end(player.id());
+            Seat seat = new Seat(player.id(), host == null ? player.id() : host);
+            end(seat);
             Member member = new Member(request.id());
-            MEMBERS.put(player.id(), member);
+            MEMBERS.put(seat, member);
             JsonObject body = new JsonObject();
             body.addProperty(room == null ? "host_id" : "peer_id", player.id().toString());
             String path = room == null ? "p2p/sessions" : "p2p/sessions/" + room.id() + "/peers";
             then(player.id(), () -> api.call("POST", path, body).handle((answer, error) -> {
                 synchronized (LOCK) {
-                    return answered(player, member, room, answer, error);
+                    return answered(player, seat, member, room, answer, error);
                 }
             }).thenCompose(cleanup -> cleanup));
         }
@@ -162,10 +180,11 @@ public final class P2p {
      * Under LOCK. Gives {@code player} the ticket the API answered for {@code member} (their request to host, or to
      * join {@code room}) if that request still stands, else revokes it; done when the returned future is.
      */
-    private static CompletableFuture<?> answered(Player player, Member member, Room room, Answer answer, Throwable error) {
+    private static CompletableFuture<?> answered(Player player, Seat seat, Member member, Room room, Answer answer,
+                                                 Throwable error) {
         Protocol.Ticket ticket = error == null ? ticketFrom(answer, player.id(), room) : null;
         // Still what the player waits for, and whether the room they asked to join still is.
-        boolean wanted = MEMBERS.get(player.id()) == member && !player.gone().getAsBoolean() && !stopping;
+        boolean wanted = MEMBERS.get(seat) == member && !player.gone().getAsBoolean() && !stopping;
         boolean live = room == null || ROOMS.get(room.host()) == room;
         String reason = null;
         if (ticket == null) {
@@ -176,10 +195,10 @@ public final class P2p {
             }
         }
         if (wanted && (ticket == null || !live)) {
-            MEMBERS.remove(player.id(), member);
+            MEMBERS.remove(seat, member);
             player.send().accept(new Notice(ticket == null
                     ? Component.translatable("create_media_systems.p2p.api_failed", reason)
-                    : Component.translatable("create_media_systems.p2p.host_left")));
+                    : Component.translatable("create_media_systems.p2p.host_left"), member.request));
         }
         if (ticket == null) {
             return CompletableFuture.completedFuture(null);
@@ -213,33 +232,39 @@ public final class P2p {
         }
     }
 
-    /** Ends {@code player}'s request {@code request}, unless a later one replaced it. */
+    /** Ends {@code player}'s request {@code request}, unless a later one for its seat replaced it. */
     static void leave(UUID player, int request) {
         synchronized (LOCK) {
-            Member member = MEMBERS.get(player);
-            if (member != null && member.request == request) {
-                end(player);
+            for (Seat seat : List.copyOf(MEMBERS.keySet())) {
+                Member member = MEMBERS.get(seat);
+                if (seat.player().equals(player) && member != null && member.request == request) {
+                    end(seat);
+                }
             }
         }
     }
 
     static void logout(UUID player) {
         synchronized (LOCK) {
-            end(player);
+            for (Seat seat : List.copyOf(MEMBERS.keySet())) {
+                if (seat.player().equals(player)) {
+                    end(seat);
+                }
+            }
         }
     }
 
-    /** Under LOCK. Takes {@code player} out of their room, or drops their pending request; a host's room closes. */
-    private static void end(UUID player) {
-        Member member = MEMBERS.remove(player);
+    /** Under LOCK. Takes a player out of {@code seat}'s room, or drops their pending request for it; a host's room closes. */
+    private static void end(Seat seat) {
+        Member member = MEMBERS.remove(seat);
         if (member == null || member.room == null) {
             return;
         }
         Room room = member.room;
-        if (room.host().equals(player)) {
+        if (seat.hosts()) {
             close(room);
         } else {
-            then(player, () -> delete("p2p/sessions/" + room.id() + "/peers/" + player));
+            then(seat.player(), () -> delete("p2p/sessions/" + room.id() + "/peers/" + seat.player()));
         }
     }
 
@@ -324,8 +349,8 @@ public final class P2p {
         return Protocol.TOKEN.matcher(secret.strip()).matches() ? secret.strip() : null;
     }
 
-    private static void notice(ServerPlayer player, Component message) {
-        PacketDistributor.sendToPlayer(player, new Notice(message));
+    private static void notice(ServerPlayer player, Request request, Component message) {
+        PacketDistributor.sendToPlayer(player, new Notice(message, request.id()));
     }
 
     public enum Action {
@@ -371,11 +396,13 @@ public final class P2p {
         }
     }
 
-    /** Server → client: why a request failed. */
-    public record Notice(Component message) implements CustomPacketPayload {
+    /** Server → client: why their request {@code request} failed. */
+    public record Notice(Component message, int request) implements CustomPacketPayload {
         public static final Type<Notice> TYPE = new Type<>(CreateMediaSystems.id("p2p_notice"));
-        static final StreamCodec<RegistryFriendlyByteBuf, Notice> CODEC =
-                ComponentSerialization.TRUSTED_STREAM_CODEC.map(Notice::new, Notice::message);
+        static final StreamCodec<RegistryFriendlyByteBuf, Notice> CODEC = StreamCodec.composite(
+                ComponentSerialization.TRUSTED_STREAM_CODEC, Notice::message,
+                ByteBufCodecs.VAR_INT, Notice::request,
+                Notice::new);
 
         @Override
         public Type<Notice> type() {
