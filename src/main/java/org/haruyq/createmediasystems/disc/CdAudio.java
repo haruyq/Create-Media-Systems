@@ -52,7 +52,6 @@ public interface CdAudio extends AutoCloseable {
         }
     }
 
-    /** The audio CD at {@code root} (see find); null if it has none. */
     @Nullable
     static CdAudio open(Path root) throws IOException {
         Path found = find(root);

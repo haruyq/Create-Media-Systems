@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.FittingSlot;
 import org.haruyq.createmediasystems.HeldItemMenu;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
@@ -43,10 +44,7 @@ public final class DiscCellMenu extends HeldItemMenu {
                 inventory.setChanged();
             }
         });
-        addSlot(new Slot(master, 0, 80, 45) {
-            @Override public boolean mayPlace(ItemStack stack) { return MediaItem.fits(stack, DiscKind.Slot.PORTABLE); }
-            @Override public int getMaxStackSize() { return 1; }
-        });
+        addSlot(new FittingSlot(master, 0, 80, 45, stack -> MediaItem.fits(stack, DiscKind.Slot.PORTABLE)));
         addPlayerSlots(8, 134);
     }
 
@@ -83,7 +81,7 @@ public final class DiscCellMenu extends HeldItemMenu {
         if (index == 0) {
             if (!moveItemStackTo(stack, 1, slots.size(), true)) return ItemStack.EMPTY;
         } else {
-            if (!MediaItem.fits(stack, DiscKind.Slot.PORTABLE) || !moveItemStackTo(stack, 0, 1, false)) return ItemStack.EMPTY;
+            if (!moveItemStackTo(stack, 0, 1, false)) return ItemStack.EMPTY;
         }
         if (stack.isEmpty()) slot.setByPlayer(ItemStack.EMPTY); else slot.setChanged();
         slot.onTake(player, stack);

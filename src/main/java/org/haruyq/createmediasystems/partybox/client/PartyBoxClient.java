@@ -5,13 +5,12 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.partybox.*;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
-import org.haruyq.createmediasystems.playback.BassAudioStream;
 import org.haruyq.createmediasystems.playback.DopplerMath;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import org.haruyq.createmediasystems.playback.MusicEmitter;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.entity.Entity;
@@ -25,7 +24,6 @@ public final class PartyBoxClient {
     /** How loud its bass is now, as its lights pulse to it. */
     static final class Meter { volatile double value; volatile long at; void sample(double value){this.value=value;at=System.nanoTime();} }
 
-    /** A PartyBox's music, from its speaker and through its bass. */
     private record Speaker(PartyBoxEntity box, Meter meter) implements MusicEmitter {
         @Override public int cap(){return 12;}
         static Stream<Speaker> near(Entity ear) {
@@ -35,7 +33,7 @@ public final class PartyBoxClient {
         @Override public UUID id(){return box.getUUID();}
         @Override public int revision(){return box.revision();}
         @Override public ItemStack media(){return box.disc();}
-        @Override public boolean present(){return !box.isRemoved() && box.level()==Minecraft.getInstance().level && box.playing();}
+        @Override public boolean present(){return !box.isRemoved() && WorldEvents.isClientWorld(box.level()) && box.playing();}
         @Override public Vec3 position(){return box.soundPosition();}
         /** Its steps after client interpolation; none in its first ticks, while it may still jump into place. */
         @Override public Vec3 velocity(){return box.tickCount<2?null:DopplerMath.step(box);}
@@ -50,11 +48,19 @@ public final class PartyBoxClient {
         if(!(EmitterAudioManager.playing(box.getUUID()) instanceof Speaker speaker))return 0;
         var meter=speaker.meter;return (float)(meter.value*Math.exp(-Math.max(0,System.nanoTime()-meter.at)/250000000.0));
     }
-    public static boolean pulling(net.minecraft.world.entity.player.Player player) {
+    private static boolean pulling(net.minecraft.world.entity.player.Player player) {
         return player.level().getEntitiesOfClass(PartyBoxEntity.class,player.getBoundingBox().inflate(4))
                 .stream().anyMatch(box->box.puller().filter(player.getUUID()::equals).isPresent());
     }
+    /** The main arm reaching back to the party box this player pulls. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,net.minecraft.world.entity.player.Player player,float yaw,float pitch) {
+        if(!pulling(player))return;
+        boolean right=player.getMainArm()==net.minecraft.world.entity.HumanoidArm.RIGHT;
+        var arm=right?model.rightArm:model.leftArm;
+        arm.xRot=.78f;arm.yRot=right?-.22f:.22f;arm.zRot=right?-.28f:.28f;
+    }
     public static void register(IEventBus bus) {
+        org.haruyq.createmediasystems.client.ArmPoses.add(PartyBoxClient::poseArms);
         bus.addListener((EntityRenderersEvent.RegisterRenderers event)->event.registerEntityRenderer(PartyBoxFeature.PARTYBOX_ENTITY.get(),PartyBoxRenderer::new));
         bus.addListener((RegisterMenuScreensEvent event)->event.register(PartyBoxFeature.PARTYBOX_MENU.get(),PartyBoxScreen::new));
         bus.addListener((RegisterClientExtensionsEvent event)->event.registerItem(new IClientItemExtensions() {

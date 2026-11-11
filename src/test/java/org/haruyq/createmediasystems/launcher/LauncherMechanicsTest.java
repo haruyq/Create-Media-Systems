@@ -26,9 +26,20 @@ class LauncherMechanicsTest {
                 assertEquals(1, motion.latch(), 1e-6);
             }
             if (age >= LauncherTimeline.HAND_OUT.end()) assertEquals(0, motion.supportHand());
-            if (age > 63) assertEquals(LauncherMechanics.DOCK_Y, cell.y(), 1e-6);
+            if (age > LauncherTimeline.LATCH_CLOSES.start()) assertEquals(LauncherMechanics.DOCK_Y, cell.y(), 1e-6);
         }
         var outside = LauncherMechanics.cellPose(31, LauncherTimeline.sample(31, -1));
         assertTrue(outside.y() + LauncherMechanics.CELL_TOP < LauncherMechanics.DOOR_Y - .65f);
+    }
+
+    @Test void reloadFullyOpensBeforeFeedingAndClosesBeforeTheShotIsUnlocked() {
+        var open = LauncherTimeline.sample(LauncherTimeline.OLD_CELL_OUT.end(), -1);
+        assertEquals(1, open.latch(), 1e-6); assertEquals(1, open.tray(), 1e-6);
+        assertEquals(1, open.cellOut(), 1e-6); assertEquals(0, open.disc(), 1e-6);
+        assertTrue(open.glow() > .5f);
+        var fed = LauncherTimeline.sample(LauncherTimeline.NEW_CELL_IN.end(), -1);
+        assertEquals(1, fed.disc(), 1e-6); assertEquals(1, fed.latch(), 1e-6);
+        var done = LauncherTimeline.sample(LauncherTimeline.RELOAD_TICKS, -1);
+        assertEquals(0, done.latch()); assertEquals(0, done.glow()); assertEquals(0, done.supportHand());
     }
 }

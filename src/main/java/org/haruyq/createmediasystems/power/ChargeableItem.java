@@ -11,13 +11,11 @@ public interface ChargeableItem {
     /** The most FE one of these holds. */
     int capacity();
 
-    /** The FE {@code stack} holds; 0 for any other item. */
     static int energy(ItemStack stack) {
         return stack.getItem() instanceof ChargeableItem item
                 ? Math.clamp(stack.getOrDefault(PowerFeature.ENERGY.get(), 0), 0, item.capacity()) : 0;
     }
 
-    /** Sets the FE {@code stack} holds, within its capacity; does nothing to any other item. */
     static void setEnergy(ItemStack stack, int energy) {
         if (stack.getItem() instanceof ChargeableItem item) {
             stack.set(PowerFeature.ENERGY.get(), Math.clamp(energy, 0, item.capacity()));
@@ -29,7 +27,6 @@ public interface ChargeableItem {
         return stack.getItem() instanceof ChargeableItem item ? (float) energy(stack) / item.capacity() : 0;
     }
 
-    /** The width of an item bar showing {@code stack}'s charge. */
     static int barWidth(ItemStack stack) {
         return Math.round(13f * charge(stack));
     }

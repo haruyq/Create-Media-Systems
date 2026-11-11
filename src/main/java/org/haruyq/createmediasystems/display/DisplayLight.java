@@ -26,6 +26,7 @@ import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.Workers;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -39,7 +40,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -50,7 +50,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.Tags;
-import net.neoforged.neoforge.event.level.ChunkEvent;
 
 /**
  * A playing display lights the room in front of it as a cinema screen does: an area light the size of the screen, its
@@ -85,7 +84,6 @@ public final class DisplayLight {
     private static CompletableFuture<Void> scanning = CompletableFuture.completedFuture(null);
     private static final Map<Block, float[]> MATERIALS = new ConcurrentHashMap<>();
     private static final float[] MATTE_MATERIAL = {1, 0.04f};
-    private static int frame;
     private static volatile boolean warned;
 
     static final class Refresh {
@@ -120,7 +118,6 @@ public final class DisplayLight {
         }
     }
 
-    /** A display's faces, last found, in vertex buffers; a background look for the next ones; and its light. */
     private static final class Lit {
         final Refresh refresh = new Refresh();
         Bounds bounds;
@@ -135,7 +132,7 @@ public final class DisplayLight {
         private Surface current;
         @Nullable
         private Surface pending;
-        int drawn;
+        long drawn;
         /** As drawn this frame. */
         final Matrix4f toScreen = new Matrix4f();
         final Vector3f camera = new Vector3f();
@@ -194,7 +191,8 @@ public final class DisplayLight {
             if (closed || shader == null) {
                 return;
             }
-            if (part == 0 && pending != null && pending.shadows.advance(frame, pending.buffers, pending.counts)) {
+            if (part == 0 && pending != null
+                    && pending.shadows.advance(WorldEvents.frame(), pending.buffers, pending.counts)) {
                 if (current != null) {
                     current.close();
                 }
@@ -314,15 +312,13 @@ public final class DisplayLight {
 
     static void register() {
         NeoForge.EVENT_BUS.addListener(DisplayLight::stage);
-        NeoForge.EVENT_BUS.addListener((ChunkEvent.Unload event) -> {
-            if (event.getLevel().isClientSide()) {
-                ChunkPos pos = event.getChunk().getPos();
-                chunkChanged(pos.x, pos.z);
-            }
-        });
+        WorldEvents.onBlocksChanged(DisplayLight::blocksChanged);
+        WorldEvents.onChunkLoaded(DisplayLight::chunkChanged);
+        WorldEvents.onChunkUnloaded(DisplayLight::chunkChanged);
+        WorldEvents.onFrameEnded(DisplayLight::frameEnded);
     }
 
-    public static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+    private static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         for (Lit lit : LIT.values()) {
             if (lit.bounds != null && lit.bounds.intersects(minX, minY, minZ, maxX, maxY, maxZ)) {
                 lit.refresh.invalidate();
@@ -330,7 +326,7 @@ public final class DisplayLight {
         }
     }
 
-    public static void chunkChanged(int x, int z) {
+    private static void chunkChanged(int x, int z) {
         blocksChanged(x << 4, Integer.MIN_VALUE, z << 4, (x << 4) + 15, Integer.MAX_VALUE, (z << 4) + 15);
     }
 
@@ -348,6 +344,7 @@ public final class DisplayLight {
         float range = range(width, height);
         long now = level.getGameTime();
         Lit lit = LIT.computeIfAbsent(display, d -> new Lit());
+        long frame = WorldEvents.frame();
         if (!display.getBlockPos().equals(lit.at) || lit.width != width || lit.height != height || lit.facing != display.facing()
                 || frame - lit.drawn > 1) {
             lit.at = display.getBlockPos().immutable();
@@ -393,7 +390,7 @@ public final class DisplayLight {
         lit.video = video;
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
         Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
-        if (level != Minecraft.getInstance().level || !ScreenLight.afterPack(() -> lit.draw(0, modelView, projection))) {
+        if (!WorldEvents.isClientWorld(level) || !ScreenLight.afterPack(() -> lit.draw(0, modelView, projection))) {
             lit.draw(0, modelView, projection);
         }
         if (lit.specular && lit.current != null && lit.current.buffers[1] != null) {
@@ -403,22 +400,23 @@ public final class DisplayLight {
 
     /**
      * Water is drawn after block entities, see-through over what's beneath it: a reflection on it drawn with them
-     * would be mostly covered. (With Fabulous graphics, water still covers it some.) And the buffers of displays no
-     * longer drawn are freed.
+     * would be mostly covered. (With Fabulous graphics, water still covers it some.)
      */
     private static void stage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             WATER.forEach(Runnable::run);
             WATER.clear();
-        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
-            WATER.clear();
-            frame++;
-            for (Iterator<Map.Entry<DisplayBlock.Entity, Lit>> it = LIT.entrySet().iterator(); it.hasNext(); ) {
-                Map.Entry<DisplayBlock.Entity, Lit> entry = it.next();
-                if (entry.getKey().isRemoved() || frame - entry.getValue().drawn > FORGET_FRAMES) {
-                    entry.getValue().close();
-                    it.remove();
-                }
+        }
+    }
+
+    private static void frameEnded() {
+        WATER.clear();
+        long frame = WorldEvents.frame();
+        for (Iterator<Map.Entry<DisplayBlock.Entity, Lit>> it = LIT.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<DisplayBlock.Entity, Lit> entry = it.next();
+            if (entry.getKey().isRemoved() || frame - entry.getValue().drawn > FORGET_FRAMES) {
+                entry.getValue().close();
+                it.remove();
             }
         }
     }
@@ -462,7 +460,6 @@ public final class DisplayLight {
                     continue;
                 }
                 for (int cy = SectionPos.blockToSectionCoord(minY); cy <= SectionPos.blockToSectionCoord(maxY); cy++) {
-                    // Most of a room is air: whole sections of it are skipped.
                     if (chunk.getSection(chunk.getSectionIndexFromSectionY(cy)).hasOnlyAir()) {
                         continue;
                     }

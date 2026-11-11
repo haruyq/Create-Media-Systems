@@ -47,7 +47,6 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         LauncherTimeline.Frame motion = visual.motion();
         int color = visual.color();
         // One pass: acquiring a second unfixed render type would invalidate the first BufferBuilder.
-        // Core vertices supply full-bright light; receiver vertices receive a tier-colored point light.
         VertexConsumer luminous = buffers.getBuffer(Mesh.solid());
         pose.pushPose();
         pose.scale(1 / 16f, 1 / 16f, 1 / 16f);
@@ -66,7 +65,6 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
             box(pose, mesh, x0, 9.2f, 8.3f, x1, 14.8f, 8.8f, METAL, light, overlay);
             box(pose, mesh, x0, 9.2f, 14.9f, x1, 14.8f, 15.4f, METAL, light, overlay);
         }
-        // The grip is behind the well; it no longer occupies the cell's insertion path.
         box(pose, mesh, 6, .4f, LauncherMechanics.GRIP_FRONT, 10, 8.4f, 18.5f, WOOD, light, overlay);
         box(pose, mesh, 5.5f, .2f, 16, 10.5f, 1.1f, 18.7f, BRASS, light, overlay);
         box(pose, mesh, 5.3f, 3, 14.9f, 10.7f, 3.7f, 16.1f, DARK, light, overlay);
@@ -170,7 +168,6 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         pose.popPose();
     }
 
-    /** A distinct physical capacitor cartridge; emitted light is separate from its machined guard frame. */
     public static void cell(PoseStack pose, VertexConsumer mesh, VertexConsumer luminous, float x, float y, float z,
                             int color, float charge, int light, int overlay) {
         pose.pushPose();
@@ -207,7 +204,6 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         pose.popPose();
     }
 
-    /** A thin, twelve-sided model to look like a spinning optical disc rather than a cube. */
     public static void disc(PoseStack pose, VertexConsumer out, float cx, float cy, float cz,
                             float radius, int light, int overlay) {
         pose.pushPose();pose.translate(cx,cy,cz);
@@ -230,7 +226,6 @@ public final class LauncherRenderer extends BlockEntityWithoutLevelRenderer {
         vertex(p,v,cx,cy,cz,u+cx/radius*half,w+cz/radius*half,0xFFFFFF,0,ny,0,light,overlay);
         vertex(p,v,dx,dy,dz,u+dx/radius*half,w+dz/radius*half,0xFFFFFF,0,ny,0,light,overlay);
     }
-    /** Emission is an outer rim, not a second overlapping copy of the entire disc. */
     public static void discGlowRing(PoseStack p,VertexConsumer v,int light,int overlay){
         for(int i=0;i<32;i++){
             double a=i*2*Math.PI/32,b=(i+1)*2*Math.PI/32;float c=(float)Math.cos(a),s=(float)Math.sin(a),cc=(float)Math.cos(b),ss=(float)Math.sin(b);

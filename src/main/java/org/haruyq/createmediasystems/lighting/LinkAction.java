@@ -108,17 +108,17 @@ public record LinkAction(Kind kind, @Nullable LightingConsoleBlock.Entity consol
         BlockPos pos = target == null ? null : target.getBlockPos();
         return switch (kind) {
             case NOTHING -> null;
-            case ASSEMBLY -> LightingText.message("assembly");
+            case ASSEMBLY -> LightingText.message(LightingText.WARNING, "assembly");
             case PICK -> console != picked ? LightingText.message("hint_console")
                     : LightingText.message("hint_picked", groupName(), LightingText.number(console.fixtures().size()));
-            case PICK_FIRST -> LightingText.message("pick_first");
-            case TOO_FAR -> LightingText.message("too_far");
-            case UNLINK -> console == null ? LightingText.message("unlinked")
+            case PICK_FIRST -> LightingText.message(LightingText.WARNING, "pick_first");
+            case TOO_FAR -> LightingText.message(LightingText.WARNING, "too_far");
+            case UNLINK -> console == null ? LightingText.message(LightingText.OFF, "unlinked")
                     : LightingText.message("hint_unlink", LightingText.group(console.settings, console.group(pos)),
                             LightingText.number(console.order(pos) + 1));
             case LINK -> LightingText.message("hint_link", groupName());
             case OTHER_FAMILY -> otherFamily();
-            case FULL -> LightingText.message("full");
+            case FULL -> LightingText.message(LightingText.WARNING, "full");
             case SOURCE -> LightingText.message(target instanceof VideoSource ? "hint_video" : "hint_audio");
         };
     }
@@ -134,19 +134,19 @@ public record LinkAction(Kind kind, @Nullable LightingConsoleBlock.Entity consol
                 player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), link.pos()));
                 player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), link.id());
                 console.refreshLinks();
-                say(player, LightingText.message("picked", groupName()));
+                say(player, LightingText.message(LightingText.ON, "picked", groupName()));
             }
             case UNLINK -> {
                 ((StageLightBlock.Entity) target).unlink();
-                say(player, LightingText.message("link_removed"));
+                say(player, LightingText.message(LightingText.OFF, "link_removed"));
             }
             case LINK -> {
                 BlockPos pos = target.getBlockPos();
                 if (console.bind((StageLightBlock.Entity) target, group)) {
-                    say(player, LightingText.message("linked", LightingText.group(console.settings, console.group(pos)),
+                    say(player, LightingText.message(LightingText.ON, "linked", LightingText.group(console.settings, console.group(pos)),
                             LightingText.number(console.order(pos) + 1)));
                 } else {
-                    say(player, LightingText.message("full"));
+                    say(player, LightingText.message(LightingText.WARNING, "full"));
                 }
             }
             case SOURCE -> {
@@ -158,7 +158,7 @@ public record LinkAction(Kind kind, @Nullable LightingConsoleBlock.Entity consol
                     console.setAudioSource(target.getBlockPos());
                 }
                 console.changed();
-                say(player, LightingText.message("source_linked"));
+                say(player, LightingText.message(LightingText.ON, "source_linked"));
             }
             case OTHER_FAMILY -> say(player, otherFamily());
             default -> say(player, hint());
@@ -171,7 +171,7 @@ public record LinkAction(Kind kind, @Nullable LightingConsoleBlock.Entity consol
     }
 
     private Component otherFamily() {
-        return LightingText.message("other_family", LightingText.group(console.settings, group),
+        return LightingText.message(LightingText.WARNING, "other_family", LightingText.group(console.settings, group),
                 StageLightBlock.familyName(console.family(group)));
     }
 

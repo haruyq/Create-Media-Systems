@@ -13,9 +13,7 @@ import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.p2p.Transport;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.DiscUrl;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Drive;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -79,7 +77,6 @@ public final class DriveClient {
     /** The disc in the real drive as last looked; null until it has been, for this emulator. */
     @Nullable
     private static volatile Optional<Disc> found;
-    /** Whether there was a drive to look at. */
     private static volatile boolean drive;
     /** When the real drive was last seen making a disc out. The looking thread's. */
     private static long settling = System.nanoTime() - SETTLE_NANOS;
@@ -262,7 +259,7 @@ public final class DriveClient {
 
     /** Tells the emulator how each viewer's direct connection does (see DriveEmulatorBlock.Viewer), asking each for its round trip. */
     private static void viewers() {
-        Transport transport = P2pClient.current();
+        Transport transport = P2pClient.session(Minecraft.getInstance().player.getUUID());
         if (transport == null || !transport.host()) {
             return;
         }
@@ -413,7 +410,7 @@ public final class DriveClient {
         private float speed;
 
         Spin(BlockPos pos) {
-            super(VideoFeature.DRIVE_SPIN.get(), SoundSource.BLOCKS, SoundInstance.createUnseededRandom());
+            super(DiscFeature.DRIVE_SPIN.get(), SoundSource.BLOCKS, SoundInstance.createUnseededRandom());
             this.pos = pos;
             looping = true;
             delay = 0;

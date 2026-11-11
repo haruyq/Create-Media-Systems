@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.haruyq.createmediasystems.playback.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "ChannelAccessor",
+    "ChannelMixin",
+    "LibraryMixin",
+    "SoundEngineAccessor",
+    "SoundEngineMixin",
+    "SoundManagerAccessor"
+  ]
+}

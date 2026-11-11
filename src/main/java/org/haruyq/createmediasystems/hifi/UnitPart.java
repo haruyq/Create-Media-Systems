@@ -27,9 +27,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * One unit's own state in a hi-fi stack (see Unit): how it is set, what it holds and plays, its line in the goggles,
- * and its controls once it works. A stack keeps one of each unit, on it or not (a unit taken off keeps its settings,
- * as its item carries none), and saves them all in its own tag, under the keys they always had.
+ * One unit's own state in a hi-fi stack. A stack keeps one of each unit, on it or not (a unit taken off keeps its
+ * settings, as its item carries none), and saves them all in its own tag, under the keys they always had.
  */
 abstract class UnitPart {
     final HifiStackBlock.Entity stack;
@@ -66,7 +65,6 @@ abstract class UnitPart {
         return Component.translatable("create_media_systems.hifi.goggles." + key, args);
     }
 
-    /** {@code tag}'s knob value at {@code key}, unless this client turns {@code knob} now (then as it is). */
     int knob(CompoundTag tag, String key, Control knob, int now) {
         return stack.turning() == knob ? now : Mth.clamp(tag.getInt(key), 0, 100);
     }
@@ -79,7 +77,6 @@ abstract class UnitPart {
     record Playing(HifiStackBlock.Input input, int deck, String url, int run) {
     }
 
-    /** A unit the amplifier plays: a tuner, a disc player, a cassette deck. */
     abstract static class Source extends UnitPart {
         Source(HifiStackBlock.Entity stack) {
             super(stack);
@@ -89,7 +86,6 @@ abstract class UnitPart {
         @Nullable
         abstract Playing playing();
 
-        /** The clock of what {@code playing} plays. */
         abstract PlaybackClock clock(Playing playing);
 
         /** Every clock it has: they all run on, heard or not. */
@@ -103,13 +99,11 @@ abstract class UnitPart {
         /** A client tick: it counts on between the server's words, standing what {@code waits} on its listeners. */
         abstract void clientTick(long now, @Nullable Playing waits);
 
-        /** Whether {@code waits} (what is heard and still loads) is {@code deck} of this, which then stands. */
         boolean waits(@Nullable Playing waits, HifiStackBlock.Input input, int deck) {
             return waits != null && waits.input() == input && waits.deck() == deck;
         }
     }
 
-    /** The amplifier: on or off, which input it plays, how loud, and its bass, wide and direct buttons. */
     static final class Amplifier extends UnitPart {
         boolean power;
         /** Ticks left of WARM_UP; server only. */
@@ -126,7 +120,6 @@ abstract class UnitPart {
             super(stack);
         }
 
-        /** The power switch: on, its protection relay waits WARM_UP before the speakers play. */
         void switchPower() {
             power = !power;
             warming = power ? HifiStackBlock.WARM_UP : 0;
@@ -204,7 +197,6 @@ abstract class UnitPart {
         }
     }
 
-    /** The graphic equalizer: its preset, at its effect level. */
     static final class Equalizer extends UnitPart {
         /** The middle of each of its seven bands (Hz); each reaches {@link #BAND_REACH} either way. */
         static final float[] BAND_CENTRES = {63, 160, 400, 1000, 2500, 6300, 16000};
@@ -270,7 +262,6 @@ abstract class UnitPart {
         }
     }
 
-    /** The tuner: a link for each of its stations, and the one tuned in, whose clock runs while it is. */
     static final class Tuner extends Source {
         static final int STATIONS = 6;
 
@@ -288,7 +279,6 @@ abstract class UnitPart {
             return stations[index];
         }
 
-        /** Station {@code index} plays {@code url} (empty: nothing), tuned in from its top. */
         void set(int index, String url) {
             stations[index] = url;
             tune(index);
@@ -363,7 +353,6 @@ abstract class UnitPart {
         }
     }
 
-    /** The disc player: its disc on its tray, the tray in or out, and its transport (a CD player's buttons). */
     static final class DiscPlayer extends Source implements DiscTransport.Deck, PlaylistView {
         private static final DiscTransport.Keys KEYS =
                 new DiscTransport.Keys("Track", "DiscPlaying", "DiscPaused", "DiscTicks");
@@ -379,7 +368,6 @@ abstract class UnitPart {
             super(stack);
         }
 
-        /** The links of its disc. */
         @Override
         public List<String> playlist() {
             return MediaItem.linksOf(disc);
@@ -395,13 +383,11 @@ abstract class UnitPart {
             stack.changed();
         }
 
-        /** The tray closes on its disc, which plays from its first track. */
         void close(@Nullable ServerPlayer by) {
             trayOpen = false;
             transport.insert(by);
         }
 
-        /** A remote's buttons; with the tray out, PLAY closes it first. */
         void control(Remotable.Action action, int value, @Nullable Player by, long now) {
             if (action == Remotable.Action.PLAY_PAUSE && trayOpen) {
                 trayOpen = false;
@@ -504,7 +490,6 @@ abstract class UnitPart {
         }
     }
 
-    /** The double cassette deck: a tape in each deck, what each deck does, and where each tape is. */
     static final class CassetteDeck extends Source {
         /** How many times faster than it plays a deck winds its tape. */
         static final int WIND = 30;
@@ -592,7 +577,6 @@ abstract class UnitPart {
             return false;
         }
 
-        /** Takes the tape out of {@code deck}, which remembers where it was stopped. */
         private ItemStack eject(int deck) {
             ItemStack tape = tapes[deck];
             tape.set(HifiFeature.TAPE_POSITION.get(), new TapePosition(tracks[deck], (int) clocks[deck].position()));
@@ -610,7 +594,6 @@ abstract class UnitPart {
                 case PLAY_1, PLAY_2 -> {
                     if (tracks[deck] < tracks(deck).size()) {
                         move(deck, HifiStackBlock.Motion.PLAY);
-                        // One tape at a time: the amplifier has one tape input.
                         if (motions[1 - deck] == HifiStackBlock.Motion.PLAY) {
                             move(1 - deck, HifiStackBlock.Motion.STOP);
                         }
@@ -630,7 +613,6 @@ abstract class UnitPart {
             }
         }
 
-        /** {@code deck} goes to {@code motion}: its tape's clock runs while it plays. */
         private void move(int deck, HifiStackBlock.Motion motion) {
             motions[deck] = motion;
             if (motion == HifiStackBlock.Motion.PLAY) {

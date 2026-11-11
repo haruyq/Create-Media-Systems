@@ -14,10 +14,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.haruyq.createmediasystems.mixin.ChannelAccessor;
-import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
-import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
+import org.haruyq.createmediasystems.playback.mixin.ChannelAccessor;
+import org.haruyq.createmediasystems.playback.mixin.SoundEngineAccessor;
+import org.haruyq.createmediasystems.playback.mixin.SoundManagerAccessor;
 import org.haruyq.createmediasystems.playback.ClientStreams;
+import org.haruyq.createmediasystems.playback.StreamSound;
 import org.lwjgl.openal.AL10;
 
 import com.mojang.logging.LogUtils;
@@ -112,17 +113,11 @@ public final class SpeakerStressClient {
         var engine = ((SoundManagerAccessor) mc.getSoundManager()).create_media_systems$soundEngine();
         Map<SoundInstance, ChannelAccess.ChannelHandle> channels =
                 ((SoundEngineAccessor) engine).create_media_systems$instanceToChannel();
-        Map<?, ?> playing = (Map<?, ?>) staticField(ClientStreams.class, "PLAYING");
-        Map<?, ?> groups = (Map<?, ?>) staticField(ClientStreams.class, "GROUPS");
         List<Seen> seen = new ArrayList<>();
-        for (var entry : groups.entrySet()) {
-            Object side = entry.getKey();
-            Object group = entry.getValue();
-            BlockPos source = (BlockPos) call(side, "source");
-            String name = SpeakerStressServer.name(source) + "/" + call(side, "channel");
-            Object sound = playing.get(side);
-            boolean active = sound != null && mc.getSoundManager().isActive((SoundInstance) sound);
-            boolean waiting = sound != null && (boolean) call(sound, "waitingForChannel");
+        for (ClientStreams.SideView side : ClientStreams.sides()) {
+            String name = SpeakerStressServer.name(side.source()) + "/" + side.channel();
+            SoundInstance sound = side.sound();
+            boolean active = sound != null && mc.getSoundManager().isActive(sound);
             int al = 0;
             ChannelAccess.ChannelHandle handle = sound == null ? null : channels.get(sound);
             if (handle != null) {
@@ -130,17 +125,13 @@ public final class SpeakerStressClient {
                 al = channel == null ? 0 : ((ChannelAccessor) channel).create_media_systems$source();
             }
             double[] heard = heard(sound);
-            seen.add(new Seen(name, ((Map<?, ?>) field(group, "emitters")).size(), (boolean) field(group, "present"),
-                    (boolean) field(group, "nearby"), (double) field(group, "gain"), sound != null, active, waiting,
-                    al, (long) heard[0], heard[1], heard[2], heard[3], (int) heard[4]));
+            seen.add(new Seen(name, side.emitters(), side.present(), side.nearby(), side.gain(), sound != null, active,
+                    side.waitingForChannel(), al, (long) heard[0], heard[1], heard[2], heard[3], (int) heard[4]));
         }
-        int orphans = 0;
-        for (Object key : playing.keySet()) {
-            orphans += groups.containsKey(key) ? 0 : 1;
-        }
+        int orphans = (int) ClientStreams.orphans();
         int streamsActive = 0;
         for (SoundInstance sound : channels.keySet()) {
-            streamsActive += sound.getLocation().getPath().equals("stream") ? 1 : 0;
+            streamsActive += sound instanceof StreamSound ? 1 : 0;
         }
         int orphanStreams = orphans;
         int engineStreams = streamsActive;
@@ -292,12 +283,6 @@ public final class SpeakerStressClient {
         return power / ((double) samples.length * samples.length / 4);
     }
 
-    private static Object staticField(Class<?> type, String name) throws ReflectiveOperationException {
-        Field field = type.getDeclaredField(name);
-        field.setAccessible(true);
-        return field.get(null);
-    }
-
     private static Object field(Object target, String name) throws ReflectiveOperationException {
         for (Class<?> type = target.getClass(); type != null; type = type.getSuperclass()) {
             try {
@@ -305,7 +290,6 @@ public final class SpeakerStressClient {
                 field.setAccessible(true);
                 return field.get(target);
             } catch (NoSuchFieldException ignored) {
-                // look in the superclass
             }
         }
         throw new NoSuchFieldException(target.getClass().getName() + "." + name);

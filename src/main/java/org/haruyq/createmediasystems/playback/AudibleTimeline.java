@@ -60,7 +60,6 @@ final class AudibleTimeline {
                 AL10.alGetSourcef(source, AL10.AL_PITCH));
     }
 
-    /** A buffer heard from {@code at}; see {@link Heard}. */
     synchronized void note(long at, double seconds, int frames, float pitch) {
         queued.addLast(new Heard(at, seconds, frames, pitch, rate));
         while (queued.size() > KEPT) {

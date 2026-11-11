@@ -147,7 +147,6 @@ final class LauncherRecipeScreen extends Screen {
         }
     }
     @Override public void render(GuiGraphics g,int mouseX,int mouseY,float partial) {
-        // Coordinates are physical pixels after compensating for the user's GUI scale.
         g.pose().pushPose();double factor=minecraft.getWindow().getGuiScale();g.pose().scale((float)(1/factor),(float)(1/factor),1);
         int sw=minecraft.getWindow().getWidth(),sh=minecraft.getWindow().getHeight();
         g.fill(0,0,sw,sh,0xFF0A1119);

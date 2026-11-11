@@ -26,7 +26,6 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
 
-/** Outputs redstone 15 to every side while a train is over any train detector on its channel. Empty hand: set the channel. */
 public class TrainSignalReceiverBlock extends Block implements EntityBlock {
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
 

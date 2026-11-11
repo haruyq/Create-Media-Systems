@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Another mod's page of the lighting console (client side), for its family of fixtures
@@ -98,6 +99,6 @@ public interface LightingConsolePage {
         LightingPackets.Change change = new LightingPackets.Change(console.getBlockPos(), group, control, index,
                 value, other);
         LightingPackets.apply(console, change, Minecraft.getInstance().player);
-        net.neoforged.neoforge.network.PacketDistributor.sendToServer(change);
+        PacketDistributor.sendToServer(change);
     }
 }

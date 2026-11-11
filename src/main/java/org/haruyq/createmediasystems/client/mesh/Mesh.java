@@ -17,7 +17,6 @@ import net.minecraft.resources.ResourceLocation;
  * in the winding that faces it, whichever way round they were listed.
  */
 public final class Mesh {
-    /** The atlas every mesh here draws on. */
     public static final ResourceLocation ATLAS = CreateMediaSystems.id("textures/item/disc_launcher_materials.png");
     /** Packed light for a part that glows by itself. */
     public static final int FULL_BRIGHT = 0xF000F0;
@@ -32,7 +31,6 @@ public final class Mesh {
 
         public float u() { return (ordinal() % 4) * .25f; }
         public float v() { return (ordinal() / 4) * .25f; }
-        /** The grey a tile's vertices are shaded with: dark metal a little darker. */
         int shade() { return this == DARK ? 220 : 255; }
     }
 
@@ -52,7 +50,6 @@ public final class Mesh {
                 + ((ux * vy - uy * vx) + (vx * wy - vy * wx)) * nz < 0;
     }
 
-    /** A flat quad of one colour. */
     public static void quad(PoseStack p, VertexConsumer v, float ax, float ay, float az, float bx, float by, float bz,
             float cx, float cy, float cz, float dx, float dy, float dz, float nx, float ny, float nz, int color, int light) {
         vertex(p, v, ax, ay, az, PLAIN_U, PLAIN_V, color, nx, ny, nz, light, OverlayTexture.NO_OVERLAY);
@@ -119,7 +116,6 @@ public final class Mesh {
         }
     }
 
-    /** {@link #ring} of one colour. */
     public static void ring(PoseStack p, VertexConsumer v, float x, float y, float z, float outer, float inner, int segments,
             float facing, int color, int light) {
         ring(p, v, x, y, z, outer, inner, segments, facing, angle -> color, light);

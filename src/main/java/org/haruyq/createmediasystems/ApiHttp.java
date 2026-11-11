@@ -15,7 +15,6 @@ public final class ApiHttp {
     private ApiHttp() {
     }
 
-    /** Whether {@code base} may be the API's base URL (see ServerConfig#API_URL): an http(s) URL with a host. */
     public static boolean isBase(String base) {
         try {
             URI uri = new URI(base);
@@ -26,7 +25,6 @@ public final class ApiHttp {
         }
     }
 
-    /** {@code {apiBase}/{path}}, however many slashes the configured base ends with. */
     public static String api(String apiBase, String path) {
         return apiBase.replaceAll("/+$", "") + "/" + path;
     }

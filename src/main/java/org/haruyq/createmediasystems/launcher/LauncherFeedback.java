@@ -1,19 +1,16 @@
 package org.haruyq.createmediasystems.launcher;
 
-import java.util.function.Consumer;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.launcher.client.LauncherClient;
 
-/** Server confirmations only. Client callbacks are installed by the client entry point. */
+/** The server's confirmations of a shot and a hit, for the shooter's crosshair, recoil and damage numbers. */
 public final class LauncherFeedback {
     private LauncherFeedback() {}
-    public static Consumer<Shot> shotListener = ignored -> {};
-    public static Consumer<Hit> hitListener = ignored -> {};
-    public static Consumer<Lock> lockListener = ignored -> {};
     public record Shot(long tick) implements CustomPacketPayload {
         public static final Type<Shot> TYPE=new Type<>(CreateMediaSystems.id("launcher_shot"));
         public static final StreamCodec<ByteBuf,Shot> CODEC=StreamCodec.of((b,p)->b.writeLong(p.tick),b->new Shot(b.readLong()));
@@ -37,8 +34,8 @@ public final class LauncherFeedback {
     }
 
     public static void register(PayloadRegistrar r) {
-        r.playToClient(Shot.TYPE,Shot.CODEC,(p,c)->shotListener.accept(p));
-        r.playToClient(Hit.TYPE,Hit.CODEC,(p,c)->hitListener.accept(p));
-        r.playToClient(Lock.TYPE,Lock.CODEC,(p,c)->lockListener.accept(p));
+        r.playToClient(Shot.TYPE,Shot.CODEC,(p,c)->LauncherClient.shot(p));
+        r.playToClient(Hit.TYPE,Hit.CODEC,(p,c)->LauncherClient.hit(p));
+        r.playToClient(Lock.TYPE,Lock.CODEC,(p,c)->LauncherClient.lock(p));
     }
 }

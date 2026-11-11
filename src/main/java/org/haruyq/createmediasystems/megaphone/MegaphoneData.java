@@ -52,7 +52,6 @@ public final class MegaphoneData {
     }
     /** Its battery has paid up to {@code now}: a tick settled it while it played, and standing costs nothing. */
     private static void settled(CompoundTag t,long now){new PlaybackClock.Drain(now,t.getDouble(OWED)).save(t,OWED);}
-    /** Pays its battery for the music played since it last settled, and stops at the end of its track. */
     public static void tick(ItemStack item,Level level) {
         if(level.isClientSide)return;
         var t=state(item).copy();boolean dirty=false;long now=level.getGameTime();

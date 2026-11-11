@@ -4,6 +4,7 @@ import static org.haruyq.createmediasystems.client.PonderScenes.plate;
 import static org.haruyq.createmediasystems.client.PonderScenes.say;
 
 import org.haruyq.createmediasystems.client.ClientFeature;
+import org.haruyq.createmediasystems.disc.DiscFeature;
 
 import com.simibubi.create.AllItems;
 import com.simibubi.create.Create;
@@ -22,7 +23,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 
-/** The Blu-ray player on this client: its equalizers' faders, and the Blu-ray player and equalizer scenes. */
 public final class VideoClient implements ClientFeature {
     @Override
     public void register(IEventBus modBus) {
@@ -31,7 +31,7 @@ public final class VideoClient implements ClientFeature {
 
     @Override
     public void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
-        helper.forComponents(VideoFeature.VIDEO_PLAYER.getId(), VideoFeature.DVD.getId(), VideoFeature.BLU_RAY.getId(), VideoFeature.REMOTE.getId())
+        helper.forComponents(VideoFeature.VIDEO_PLAYER.getId(), DiscFeature.DVD.getId(), DiscFeature.BLU_RAY.getId(), VideoFeature.REMOTE.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), VideoClient::bluRayPlayer);
         helper.forComponents(VideoFeature.EQUALIZER.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), VideoClient::equalizer);
@@ -51,9 +51,9 @@ public final class VideoClient implements ClientFeature {
 
         BlockPos player = util.grid().at(2, 1, 2);
         Vec3 inAir = util.vector().of(2.5, 3, 2.5);
-        scene.overlay().showControls(inAir, Pointing.DOWN, 50).rightClick().withItem(new ItemStack(VideoFeature.DVD.get()));
+        scene.overlay().showControls(inAir, Pointing.DOWN, 50).rightClick().withItem(new ItemStack(DiscFeature.DVD.get()));
         say(scene, 110, inAir, "Use a DVD or a Blu-ray in the air to write its playlist, one video link per row. The server checks every link before writing them.");
-        scene.overlay().showControls(inAir, Pointing.DOWN, 50).rightClick().withItem(new ItemStack(VideoFeature.BLU_RAY.get()));
+        scene.overlay().showControls(inAir, Pointing.DOWN, 50).rightClick().withItem(new ItemStack(DiscFeature.BLU_RAY.get()));
         say(scene, 110, inAir, "A DVD holds 16 videos played at up to 480p, and a Blu-ray 64 at up to 1080p. Neither plays in a jukebox.");
 
         scene.world().setBlock(player, VideoFeature.VIDEO_PLAYER.get().defaultBlockState()
@@ -61,7 +61,7 @@ public final class VideoClient implements ClientFeature {
         scene.world().showSection(util.select().position(player), Direction.DOWN);
         scene.idle(15);
         scene.overlay().showControls(util.vector().topOf(player), Pointing.DOWN, 40).rightClick()
-                .withItem(new ItemStack(VideoFeature.BLU_RAY.get()));
+                .withItem(new ItemStack(DiscFeature.BLU_RAY.get()));
         say(scene, 110, util.vector().topOf(player), PonderPalette.GREEN, "Right-click a Blu-ray Player with either disc to play its videos one after another; it stops after the last. Right-click with an empty hand to take the disc out.");
 
         scene.overlay().showControls(util.vector().topOf(player), Pointing.DOWN, 50).rightClick()

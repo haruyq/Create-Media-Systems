@@ -33,7 +33,6 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** Custom discs, jukeboxes, disc readers and speakers, the range quill, and note blocks' copper trumpets. */
 public final class AudioFeature implements Feature {
     public static final DeferredHolder<SoundEvent, SoundEvent> NOTE_BLOCK_TRUMPET =
             SOUNDS.register("block.note_block.trumpet", SoundEvent::createVariableRangeEvent);
@@ -54,16 +53,14 @@ public final class AudioFeature implements Feature {
 
     public static final DeferredItem<CustomDiscItem> CUSTOM_DISC = ITEMS.register("custom_disc",
             () -> new CustomDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE).jukeboxPlayable(CUSTOM_SONG)));
-    /** Range quill: selects a vanilla jukebox's playback area and sets its volume (client-side UI only). */
     public static final DeferredItem<Item> RANGE_QUILL = ITEMS.register("range_quill",
             () -> new Item(new Item.Properties().stacksTo(1)));
-    /** A jukebox's range and volume, as the range quill set them (see RangeQuill). */
     public static final Supplier<AttachmentType<EmitterRange>> JUKEBOX_SETTINGS = ATTACHMENTS.register(
             "jukebox_settings", () -> AttachmentType.builder(() -> EmitterRange.DEFAULT)
                     .serialize(RangeQuill.JUKEBOX_SERIALIZER).build());
     /**
-     * Where a jukebox's custom disc is in its track (see Jukeboxes). Not saved: its song player keeps that, and the clock
-     * takes it up from there.
+     * Where a jukebox's custom disc is in its track. Not saved: its song player keeps that, and the clock takes it
+     * up from there.
      */
     public static final Supplier<AttachmentType<PlaybackClock>> JUKEBOX_CLOCK = ATTACHMENTS.register(
             "jukebox_clock", () -> AttachmentType.builder(() -> new PlaybackClock()).build());

@@ -108,7 +108,6 @@ final class Images {
         return picture;
     }
 
-    /** Lets go of pictures nothing showed for a while, and of failed ones, to be tried again. */
     private static void sweep() {
         long now = Util.getMillis();
         PICTURES.values().removeIf(picture -> {

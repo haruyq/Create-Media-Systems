@@ -47,7 +47,6 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** The disc launcher, the discs it fires, its energy cells and their charger. */
 public final class LauncherFeature implements Feature {
     /** The disc launcher stores original individual discs, not lossy item identifiers. */
     public static final Supplier<DataComponentType<DiscPlayback>> DISC_PLAYBACK =
@@ -133,7 +132,6 @@ public final class LauncherFeature implements Feature {
         NeoForge.EVENT_BUS.register(DiscProjectileLifecycle.class);
     }
 
-    /** A cell made of another mod's material is listed only when that mod is there. */
     private static void hideUnavailableCells(BuildCreativeModeTabContentsEvent event) {
         for (DiscCellTier tier : DiscCellTier.values()) {
             if (!tier.available()) {

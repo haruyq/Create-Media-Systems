@@ -28,11 +28,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * The range quill's save panel, the same one Create's schematic and quill uses to name a schematic: a volume
- * scroll (plus a channel choice for speakers), a status line saying what saving does, and discard / reset / save
- * buttons. Used for jukeboxes (reset returns the range to the default radius) and speakers (reset unlinks them).
- */
+/** The range quill's save panel, the same one Create's schematic and quill uses to name a schematic. */
 final class RangeQuillScreen extends AbstractSimiScreen {
     /** Called with (volume 0..1, reset pressed, chosen option or 0). */
     interface Save {
@@ -42,7 +38,6 @@ final class RangeQuillScreen extends AbstractSimiScreen {
     private final AllGuiTextures background = AllGuiTextures.SCHEMATIC_PROMPT;
     private final ItemStack icon;
     private final int initialVolume;
-    /** Choices shown beside the volume (a speaker's channel), or null for none. */
     @Nullable
     private final List<Component> options;
     private final int initialOption;
@@ -160,7 +155,6 @@ final class RangeQuillScreen extends AbstractSimiScreen {
                 .render(graphics);
     }
 
-    /** What saving will do to a jukebox's range. */
     private static Component rangeStatus() {
         BoundingBox selection = RangeQuillHandler.selection();
         if (selection != null) {

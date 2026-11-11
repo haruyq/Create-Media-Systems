@@ -26,6 +26,7 @@ import com.mojang.logging.LogUtils;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
@@ -44,12 +45,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * reader's announcements, one music emitter's; different slots play at the same time.
  */
 public final class ClientStreams {
-    /** The slots a stream plays on now. */
     private static final Set<Slot> PLAYING = new LinkedHashSet<>();
     /** Live range per emitter block; RetuneAtBlock updates it without restarting the audio. */
     private static final Map<BlockPos, EmitterRange> RANGES = new HashMap<>();
     private static final Map<Side, Group> GROUPS = new HashMap<>();
-    /** The side each emitter block playing here plays. */
     private static final Map<BlockPos, Side> SIDES = new HashMap<>();
 
     /**
@@ -83,7 +82,6 @@ public final class ClientStreams {
             this.side = side;
         }
 
-        /** Plays {@code next} here, instead of what played. */
         public void play(StreamSound next) {
             var sounds = Minecraft.getInstance().getSoundManager();
             StreamSound previous = sound;
@@ -101,7 +99,6 @@ public final class ClientStreams {
             return sound != null;
         }
 
-        /** Stops its stream and lets go of its download. */
         public void stop() {
             StreamSound current = sound;
             sound = null;
@@ -305,6 +302,28 @@ public final class ClientStreams {
     }
 
     private ClientStreams() {
+    }
+
+    /**
+     * One source's side playing here, for dev probes: its emitters, how they are heard together as of this tick, and
+     * its stream (null while none plays), and whether that waits for a channel.
+     */
+    public record SideView(BlockPos source, Streams.Channel channel, int emitters, boolean present, boolean nearby,
+                           double gain, @Nullable SoundInstance sound, boolean waitingForChannel) {
+    }
+
+    public static List<SideView> sides() {
+        return GROUPS.entrySet().stream().map(entry -> {
+            Group group = entry.getValue();
+            StreamSound sound = group.slot.sound;
+            return new SideView(entry.getKey().source(), entry.getKey().channel(), group.emitters.size(),
+                    group.present, group.nearby, group.gain, sound, sound != null && sound.waitingForChannel());
+        }).toList();
+    }
+
+    /** How many streams play for a side no emitter here plays any more (none, unless one leaked). */
+    public static long orphans() {
+        return PLAYING.stream().filter(slot -> slot.side != null && !GROUPS.containsKey(slot.side)).count();
     }
 
     public static void register(IEventBus modBus) {

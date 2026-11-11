@@ -25,7 +25,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 
-/** Audio on this client: the range quill, and the custom disc, jukebox, speaker and disc reader scenes. */
 public final class AudioClient implements ClientFeature {
     @Override
     public void register(IEventBus modBus) {

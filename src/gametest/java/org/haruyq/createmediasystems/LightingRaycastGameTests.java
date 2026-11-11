@@ -76,6 +76,7 @@ public final class LightingRaycastGameTests {
                         "hit differs on ray " + i + ": " + from + " to " + to);
             }
         }
+        targets.forEach(target -> level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState()));
         helper.succeed();
     }
 

@@ -55,11 +55,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
  * On a train: plays the stored announcement schedule through the train's {@link TrainSpeakerBlock}s, each heard only
- * in its own carriage (the client picks the speaker). Each tick it works out where the train
- * is on its trip (see {@link AnnounceCondition.Trip}) and starts announcements as they come due, each once per
- * trip. The reader is a source like any other (see Reader), and the train's speakers its emitter, whose audience is
- * whoever is aboard: whoever boards while one plays (seated or standing) gets it from where it is now, and whoever
- * gets off stops hearing it.
+ * in its own carriage (the client picks the speaker). Whoever boards while one plays (seated or standing) gets it
+ * from where it is now, and whoever gets off stops hearing it.
  */
 public class TrainDiscReaderBehaviour implements MovementBehaviour {
     @Override
@@ -113,7 +110,6 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         @Nullable
         private Schedule schedule;
 
-        /** {@code context}'s reader, taken up from its data where it was saved. */
         static Reader of(MovementContext context, long now) {
             if (context.temporaryData instanceof Reader reader) {
                 return reader;
@@ -140,14 +136,12 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             return url != null && clock.running() ? new Streams.Source(url, clock.position(), null) : null;
         }
 
-        /** {@code url} plays from its top, cutting off what played, once those aboard have it loaded. */
         void play(String url, long now) {
             this.url = url;
             clock.start(0);
             Streams.loading(this, null, clock, now);
         }
 
-        /** Its clock counts on, and stops at the announcement's end (or once the server no longer allows it). */
         void tick(MovementContext context, long now) {
             if (url == null) {
                 return;
@@ -164,7 +158,6 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             context.data.putLong("PlayingSince", now - clock.position(now));
         }
 
-        /** The stored announcement schedule, parsed once per change of the stored item (not every tick). */
         @Nullable
         Schedule schedule(ServerLevel level, MovementContext context) {
             if (context.blockEntityData == null) {
@@ -199,7 +192,7 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
             state.remove("Fired");
         }
         if (!seen || schedule == null || heading.isEmpty() && !arrived) {
-            return null; // nothing due while standing at a station
+            return null;
         }
 
         double speed = Math.abs(train.speed); // blocks per tick

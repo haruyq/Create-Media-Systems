@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.client.Workers;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
@@ -54,7 +55,6 @@ final class LightingOcclusion {
     private static final Map<BlockState, Byte> BITS = new ConcurrentHashMap<>();
 
     private static int texture;
-    private static Level level;
     /** The uploaded grid's lowest corner; null while there is none. */
     private static BlockPos origin;
     private static CompletableFuture<Built> building;
@@ -68,14 +68,17 @@ final class LightingOcclusion {
     private LightingOcclusion() {
     }
 
-    /** Once a frame on the render thread: builds the grid around the camera anew when it has moved off, mends it. */
-    static void update() {
+    static void register() {
+        WorldEvents.onSectionChanged((x, y, z) -> changed.add(SectionPos.asLong(x, y, z)));
+        WorldEvents.onChunkLoaded(LightingOcclusion::chunkLoaded);
+        WorldEvents.onLevelChanged(LightingOcclusion::forget);
+        WorldEvents.onFrameEnded(LightingOcclusion::update);
+    }
+
+    /** Once a frame: builds the grid around the camera anew when it has moved off, mends it. */
+    private static void update() {
         Minecraft minecraft = Minecraft.getInstance();
         Level current = minecraft.level;
-        if (current != level) {
-            forget();
-            level = current;
-        }
         if (current == null) {
             return;
         }
@@ -104,17 +107,13 @@ final class LightingOcclusion {
         if (origin != null && !changed.isEmpty()) {
             int mended = 0;
             for (var it = changed.iterator(); it.hasNext() && mended < MENDS_PER_FRAME; mended++) {
-                mend(it.nextLong());
+                mend(current, it.nextLong());
                 it.remove();
             }
         }
     }
 
-    static void sectionChanged(int x, int y, int z) {
-        changed.add(SectionPos.asLong(x, y, z));
-    }
-
-    static void chunkChanged(int x, int z) {
+    private static void chunkLoaded(int x, int z) {
         if (origin == null) {
             return;
         }
@@ -242,8 +241,7 @@ final class LightingOcclusion {
         origin = built.origin;
     }
 
-    /** Section {@code key} read again into the grid, if it is in it. */
-    private static void mend(long key) {
+    private static void mend(Level level, long key) {
         SectionPos at = SectionPos.of(key);
         int gx = at.minBlockX() - origin.getX(), gy = at.minBlockY() - origin.getY(), gz = at.minBlockZ() - origin.getZ();
         if (gx < 0 || gy < 0 || gz < 0 || gx >= SIZE || gy >= SIZE || gz >= SIZE) {
@@ -270,7 +268,7 @@ final class LightingOcclusion {
         GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
     }
 
-    static void forget() {
+    private static void forget() {
         if (building != null) {
             // Not cancelled: a build already reading finishes regardless, and its memory is freed then.
             building.thenAccept(built -> {

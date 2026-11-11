@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.partybox;
 
+import org.haruyq.createmediasystems.FittingSlot;
 import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
@@ -18,14 +19,8 @@ public final class PartyBoxMenu extends AbstractContainerMenu {
     public PartyBoxMenu(int id, Inventory player, PartyBoxEntity box) {
         super(PartyBoxFeature.PARTYBOX_MENU.get(), id); this.box=box;
         var storage = box == null ? new net.minecraft.world.SimpleContainer(2) : box.inventory;
-        addSlot(new Slot(storage, 0, 25, 58) {
-            @Override public boolean mayPlace(ItemStack item) { return MediaItem.fits(item, DiscKind.Slot.PORTABLE); }
-            @Override public int getMaxStackSize() { return 1; }
-        });
-        addSlot(new Slot(storage, 1, 25, 109) {
-            @Override public boolean mayPlace(ItemStack item) { return item.getItem() instanceof BatteryItem; }
-            @Override public int getMaxStackSize() { return 1; }
-        });
+        addSlot(new FittingSlot(storage, 0, 25, 58, item -> MediaItem.fits(item, DiscKind.Slot.PORTABLE)));
+        addSlot(new FittingSlot(storage, 1, 25, 109, BatteryItem::fits));
         for(int row=0;row<3;row++) for(int col=0;col<9;col++) addSlot(new Slot(player,9+row*9+col,116+col*18,152+row*18));
         for(int col=0;col<9;col++) addSlot(new Slot(player,col,116+col*18,210));
     }
@@ -38,9 +33,7 @@ public final class PartyBoxMenu extends AbstractContainerMenu {
         if(index<0 || index>=slots.size()) return ItemStack.EMPTY;
         Slot slot=slots.get(index); if(!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack stack=slot.getItem(), before=stack.copy();
-        boolean moved = index<2 ? moveItemStackTo(stack,2,slots.size(),true)
-                : stack.getItem() instanceof BatteryItem ? moveItemStackTo(stack,1,2,false)
-                : MediaItem.fits(stack, DiscKind.Slot.PORTABLE) && moveItemStackTo(stack,0,1,false);
+        boolean moved = index<2 ? moveItemStackTo(stack,2,slots.size(),true) : moveItemStackTo(stack,0,2,false);
         if(!moved) return ItemStack.EMPTY;
         if(stack.isEmpty()) slot.setByPlayer(ItemStack.EMPTY); else slot.setChanged();
         slot.onTake(player,stack); return before;

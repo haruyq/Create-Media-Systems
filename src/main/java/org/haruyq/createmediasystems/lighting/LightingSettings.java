@@ -13,6 +13,8 @@ public final class LightingSettings {
     public static final int GROUPS = 6;
     public static final int COLORS = 8;
     public static final int MAX_RANGE = 300;
+    /** How far from a fixture its light is drawn: its longest beam, and a margin. */
+    public static final int VIEW_DISTANCE = MAX_RANGE + 32;
     /** Saved settings a console keeps for its groups to recall. */
     public static final int PRESETS = 6;
     /** How far a held Shift moves a range at once, against 1 without. */
@@ -277,7 +279,6 @@ public final class LightingSettings {
             normalize();
         }
 
-        /** Brings every setting within what it can be (see LightingSettings#normalize). */
         public void normalize() {
             for (int i = 0; i < COLORS; i++) {
                 colors[i] &= 0xFFFFFF;
@@ -328,7 +329,6 @@ public final class LightingSettings {
         normalize();
     }
 
-    /** The group that is selected. */
     public Group selected() {
         return groups[selectedGroup];
     }

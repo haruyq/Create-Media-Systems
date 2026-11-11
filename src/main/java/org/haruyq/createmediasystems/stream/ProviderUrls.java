@@ -15,7 +15,6 @@ public final class ProviderUrls {
 
     private ProviderUrls() {}
 
-    /** Whether {@code uri} is on YouTube (youtube.com, any of its subdomains, or youtu.be). */
     public static boolean youtube(URI uri) {
         String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
         return host.equals("youtube.com") || host.endsWith(".youtube.com") || host.equals("youtu.be");

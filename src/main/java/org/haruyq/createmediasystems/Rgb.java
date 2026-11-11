@@ -5,7 +5,6 @@ public final class Rgb {
     private Rgb() {
     }
 
-    /** {@code a} taken {@code amount} (0 to 1, clamped) of the way to {@code b}, channel by channel. */
     public static int mix(int a, int b, float amount) {
         float t = Math.clamp(amount, 0, 1);
         return channel(a >> 16, b >> 16, t) << 16 | channel(a >> 8, b >> 8, t) << 8 | channel(a, b, t);

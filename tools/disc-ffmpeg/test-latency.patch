@@ -1,0 +1,26 @@
+--- a/src/device.c
++++ b/src/device.c
+@@ -652,6 +652,11 @@
+  *****************************************************************************/
+ static int libc_read ( dvdcss_t dvdcss, void *p_buffer, int i_blocks )
+ {
++    const char *delay = getenv("CMS_TEST_IO_MS");
++    if (delay) {
++        fprintf(stderr, "CMS_TEST_IO %d\n", i_blocks);
++        Sleep(atoi(delay));
++    }
+     off_t i_size, i_ret, i_ret_blocks;
+ 
+     i_size = (off_t)i_blocks * (off_t)DVDCSS_BLOCK_SIZE;
+@@ -730,6 +735,11 @@
+ #if defined( _WIN32 )
+ static int win2k_read ( dvdcss_t dvdcss, void *p_buffer, int i_blocks )
+ {
++    const char *delay = getenv("CMS_TEST_IO_MS");
++    if (delay) {
++        fprintf(stderr, "CMS_TEST_IO %d\n", i_blocks);
++        Sleep(atoi(delay));
++    }
+     DWORD i_bytes;
+ 
+     if( !ReadFile( (HANDLE) dvdcss->i_fd, p_buffer,

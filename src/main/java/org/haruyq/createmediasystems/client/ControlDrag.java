@@ -46,7 +46,6 @@ public final class ControlDrag {
 
     /** A control held: how it follows the look, and what it does once let go. */
     public interface Held {
-        /** The block it is on. */
         BlockPos pos();
 
         /** A tick held, the crosshair as {@code look} (see ControlDrag#look). */
@@ -80,12 +79,10 @@ public final class ControlDrag {
         USES.add(use);
     }
 
-    /** {@code control} is held from now: right-click took it. */
     public static void hold(Held control) {
         held = control;
     }
 
-    /** The control held now; null for none. */
     @Nullable
     public static Held held() {
         return held;

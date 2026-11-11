@@ -138,7 +138,6 @@ public final class PartyBoxMesh {
     private static void ring(PoseStack p,VertexConsumer v,float x,float y,float z,float outer,float inner,int color,int light) {
         Mesh.ring(p,v,x,y,z,outer,inner,64,-1,color,light);
     }
-    /** A light ring whose brightness chases round it with {@code time}. */
     private static void ring(PoseStack p,VertexConsumer v,float x,float y,float z,float outer,float inner,int color,int light,float time,float strength) {
         Mesh.ring(p,v,x,y,z,outer,inner,64,-1,a->{
             float k=strength*(.45f+.55f*(float)Math.pow(.5+.5*Math.sin(a*2-time*2),2));

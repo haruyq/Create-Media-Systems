@@ -7,7 +7,7 @@ import net.minecraft.client.sounds.AudioStream;
 
 /**
  * Audio of CMS's own. The channel playing it starts it when it asks (see {@link #attach}, DeviceClock) and StreamPump
- * refills it between ticks; see mixin/ChannelMixin, which recognizes it by this type.
+ * refills it between ticks; see playback/mixin/ChannelMixin, which recognizes it by this type.
  */
 public interface CmsStream extends AudioStream {
     /**

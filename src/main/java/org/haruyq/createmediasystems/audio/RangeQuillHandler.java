@@ -37,21 +37,15 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * The range quill's controls, mirroring Create's schematic and quill: right-click a jukebox (or disc reader) to
- * pick it as the source, then right-click two corners (Ctrl targets the air, Ctrl+scroll pushes the highlighted
- * face), right-click again to set the volume and save; Shift+right-click discards the selection. Right-clicking
- * the picked jukebox with no selection opens the same screen to change only the volume or reset the range.
- * The selection is made in the picked source's block space, so a range for a jukebox on a moving structure (see
- * SableCompat) is picked and drawn where the structure is now.
- * Right-clicking a speaker opens its screen: volume, and a link to the picked source. Adapted from Create's
- * {@code SchematicAndQuillHandler} (MIT).
+ * The range quill's controls, mirroring Create's schematic and quill. The selection is made in the picked source's
+ * block space, so a range for a jukebox on a moving Sable structure is picked and drawn where the structure is now.
+ * Adapted from Create's {@code SchematicAndQuillHandler} (MIT).
  */
 public final class RangeQuillHandler {
     private static final Object SELECTION_OUTLINE = new Object();
     private static final Object SOURCE_OUTLINE = new Object();
     private static final Object CURRENT_RANGE_OUTLINE = new Object();
 
-    /** The picked jukebox or disc reader: range settings apply to it, speakers get linked to it. */
     private static BlockPos source;
     /** The picked jukebox's saved settings, as last reported by the server; null until then, or for a reader. */
     private static EmitterRange current;
@@ -97,7 +91,6 @@ public final class RangeQuillHandler {
         return firstPos == null || secondPos == null ? null : BoundingBox.fromCorners(firstPos, secondPos);
     }
 
-    /** Saves {@code volume} with the selected range, the current range if none is selected, or the default. */
     static void save(float volume, boolean resetRange) {
         if (source == null) {
             return;

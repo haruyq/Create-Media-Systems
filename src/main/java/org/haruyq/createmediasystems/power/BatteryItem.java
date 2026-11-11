@@ -10,6 +10,9 @@ public final class BatteryItem extends Item implements ChargeableItem {
 
     public BatteryItem(Properties properties) { super(properties.stacksTo(1)); }
 
+    /** Whether a portable speaker's battery slot takes {@code stack}: a battery, never another chargeable item. */
+    public static boolean fits(ItemStack stack) { return stack.getItem() instanceof BatteryItem; }
+
     @Override public int capacity() { return CAPACITY; }
     @Override public boolean isBarVisible(ItemStack stack) { return true; }
     @Override public int getBarWidth(ItemStack stack) { return ChargeableItem.barWidth(stack); }

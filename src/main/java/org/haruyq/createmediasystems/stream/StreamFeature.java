@@ -14,7 +14,6 @@ import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
-/** Streams to every device: the sound they play through, a source's id, and the stream and portable payloads. */
 public final class StreamFeature implements Feature {
     /** Placeholder event: every stream plays through it, the audio itself comes from {@code getStream}. */
     public static final DeferredHolder<SoundEvent, SoundEvent> STREAM =

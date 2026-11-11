@@ -14,10 +14,9 @@ import net.minecraft.core.RegistryAccess;
 
 class StreamsLoadTest {
     @Test
-    void aPhysicalDiscWaitsForDirectConnectionsAndBuffering() {
+    void aPhysicalDiscWaitsLongerForItsListenersThanAWebVideo() {
         String url = new DiscUrl(java.util.UUID.randomUUID(), java.util.UUID.randomUUID()).toString();
-        assertEquals(Streams.MAX_LOAD_TICKS, MediaKind.barrierTicks(url));
-        assertEquals(Streams.BARRIER_TICKS, MediaKind.barrierTicks("https://example.com/video.mp4"));
+        assertTrue(MediaKind.barrierTicks(url) > MediaKind.barrierTicks("https://example.com/video.mp4"));
     }
 
     @Test
@@ -80,6 +79,24 @@ class StreamsLoadTest {
     }
 
     @Test
+    void aTrackTakenUpWhereItWasLeftCountsOnFromThere() {
+        DiscReaderBlock.Entity source = reader();
+        PlaybackClock clock = PlaybackClock.unattended();
+        clock.start(600);
+        Streams.loading(source, null, clock, 0);
+        Streams.tick(source, clock, 1);
+        assertEquals(600, clock.position(), "its emitters haven't had their turn yet");
+        // Nobody is there to load it: it doesn't wait for them.
+        tick(source, clock, 2, 2 * Streams.RELAY_TICKS);
+        assertEquals(600, clock.position());
+        tick(source, clock, 2 * Streams.RELAY_TICKS + 1, 2 * Streams.RELAY_TICKS + 50);
+        assertEquals(650, clock.position());
+        PlaybackClock waits = started(source, 600);
+        tick(source, waits, 1, 2 * Streams.RELAY_TICKS + 50);
+        assertEquals(600, waits.position(), "one that waits for someone to come");
+    }
+
+    @Test
     void aListenersLengthEndsATrackTheApiCouldNotTell() {
         Streams.Source playing = new Streams.Source("https://example.com/listener-length", 0, null);
         Streams.learnDuration(playing, 0);
@@ -92,8 +109,13 @@ class StreamsLoadTest {
 
     /** {@code source} starts its track from the top at game time 0, for its listeners to load. */
     private static PlaybackClock started(DiscReaderBlock.Entity source) {
+        return started(source, 0);
+    }
+
+    /** {@code source} starts its track {@code from} ticks in at game time 0, for its listeners to load. */
+    private static PlaybackClock started(DiscReaderBlock.Entity source, long from) {
         PlaybackClock clock = new PlaybackClock();
-        clock.start(0);
+        clock.start(from);
         Streams.loading(source, null, clock, 0);
         return clock;
     }

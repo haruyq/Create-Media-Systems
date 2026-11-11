@@ -106,12 +106,15 @@ class AnalysisTimelineTest {
         AnalysisTimeline timeline = new AnalysisTimeline();
         timeline.add(List.of(frame(67_200, 0).phase(35.033855)), false);
         AnalysisFrame previous = frame(67_819, 0).phase(35.409673);
-        assertEquals(35.296355, timeline.phaseAt(67_950), 1e-6);
-        assertEquals(35.455523, AnalysisTimeline.continuePhase(timeline, previous, 67_950), 1e-6);
-        assertEquals(35.296355, AnalysisTimeline.continuePhase(timeline, null, 67_950), 1e-6);
+        double runOn = timeline.phaseAt(67_950) - timeline.phaseAt(previous.millis());
+        assertTrue(runOn > 0);
+        assertEquals(previous.motionPhase() + runOn, AnalysisTimeline.continuePhase(timeline, previous, 67_950), 1e-6,
+                "it runs on from the frame it showed last, not from the older echo");
+        assertEquals(timeline.phaseAt(67_950), AnalysisTimeline.continuePhase(timeline, null, 67_950), 1e-6);
 
         timeline.add(List.of(frame(67_900, 0).phase(35.44)), true);
-        assertEquals(35.4575, AnalysisTimeline.continuePhase(timeline, previous, 67_950), 1e-6);
+        assertEquals(timeline.phaseAt(67_950), AnalysisTimeline.continuePhase(timeline, previous, 67_950), 1e-6,
+                "a frame newer than the one it showed wins");
     }
 
     @Test

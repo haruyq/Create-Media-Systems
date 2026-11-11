@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.client.ArmPoses;
 import org.haruyq.createmediasystems.client.PointLights;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.client.mesh.CellLight;
@@ -65,11 +66,9 @@ public final class LauncherClient {
     private static boolean headHit,killed;
     private static float hitDamage,cameraKick;
     private static int confirmedShots,confirmedHits,confirmedHeadshots;
-    /** Optional focus provider for non-mouse input integrations; the default uses normal game focus. */
     private static java.util.function.BooleanSupplier additionalInputActive=()->false;
     /** Lets {@code active} count as input focus besides the game window's (a harness driving the client). */
     public static void additionalInput(java.util.function.BooleanSupplier active){additionalInputActive=active;}
-    /** What the local player's launcher has confirmed so far, read-only, for diagnostics. */
     public record Diagnostics(int confirmedShots,int confirmedHits,int confirmedHeadshots,float hitDamage,boolean reticleDrawn) {}
     public static Diagnostics diagnostics(){return new Diagnostics(confirmedShots,confirmedHits,confirmedHeadshots,hitDamage,LauncherHud.reticleDrawn);}
     public static float aim(float partial){return MOTION.aim(partial);}
@@ -95,7 +94,17 @@ public final class LauncherClient {
             GLFW.GLFW_KEY_R,
             "key.categories.create_media_systems");
 
+    /** Both arms up to a launcher in the main hand: the trigger hand at the grip, the other one under the barrel. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,net.minecraft.world.entity.player.Player p,float yaw,float pitch) {
+        if(!p.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))return;
+        boolean right=p.getMainArm()==HumanoidArm.RIGHT,reloading=LauncherMagazine.reloading(p.getMainHandItem());
+        var trigger=right?model.rightArm:model.leftArm;var support=right?model.leftArm:model.rightArm;
+        trigger.xRot=-1.42f+model.head.xRot;trigger.yRot=model.head.yRot+(right?-.12f:.12f);trigger.zRot=0;
+        support.xRot=(reloading?-.85f:-1.40f)+model.head.xRot;support.yRot=model.head.yRot+(right?.42f:-.42f);support.zRot=right?-.10f:.10f;
+    }
+
     public static void register(IEventBus modBus) {
+        ArmPoses.add(LauncherClient::poseArms);
         modBus.addListener(LauncherClient::registerExtensions);
         modBus.addListener(LauncherClient::registerRenderers);
         modBus.addListener(LauncherClient::registerKeys);
@@ -107,24 +116,30 @@ public final class LauncherClient {
             if(event.getPlayer()==Minecraft.getInstance().player && event.getPlayer().getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))
                 event.setNewFovModifier(event.getNewFovModifier()*(1-.18f*aim(1)));
         });
-        LauncherFeedback.shotListener=shot->{
-            var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
-            lastShot=shot.tick();confirmedShots++;MOTION.shot();
-            float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
-        };
-        LauncherFeedback.hitListener=hit->{
-            hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();hitDamage=hit.damage();
-            DAMAGE.hit(new LauncherDamageDisplay.Entry(hit.target(),hit.health(),hit.shield(),hit.headshot(),hit.killed(),hit.shieldBroken(),hit.x(),hit.y(),hit.z(),hitAt/1_000_000_000.0));
-            confirmedHits++;if(headHit)confirmedHeadshots++;
-            var mc=Minecraft.getInstance();
-            mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                    net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
-        };
-        LauncherFeedback.lockListener = feedback -> lock = feedback;
         LauncherHud.register(modBus);
         PointLights.add(new CellLights());
         EmitterAudioManager.add(DiscEmitter::near);
     }
+
+    /** The server fired this player's launcher: recoil once per shot. */
+    public static void shot(LauncherFeedback.Shot shot) {
+        var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
+        lastShot=shot.tick();confirmedShots++;MOTION.shot();
+        float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
+    }
+
+    /** This player's shot hit: the hit marker, damage numbers and sound. */
+    public static void hit(LauncherFeedback.Hit hit) {
+        hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();hitDamage=hit.damage();
+        DAMAGE.hit(new LauncherDamageDisplay.Entry(hit.target(),hit.health(),hit.shield(),hit.headshot(),hit.killed(),hit.shieldBroken(),hit.x(),hit.y(),hit.z(),hitAt/1_000_000_000.0));
+        confirmedHits++;if(headHit)confirmedHeadshots++;
+        var mc=Minecraft.getInstance();
+        mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
+    }
+
+    /** The server locked, or released, this player's aim-module target. */
+    public static void lock(LauncherFeedback.Lock feedback) { lock = feedback; }
 
     private static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(RELOAD_KEY);
@@ -165,11 +180,6 @@ public final class LauncherClient {
                 && (event.isAttack() || event.isUseItem())) {event.setCanceled(true);event.setSwingHand(false);}
     }
 
-    public static LauncherTimeline.Frame frame(ItemStack stack, Level level, float partialTick) {
-        return LauncherTimeline.sample(stack, level, partialTick);
-    }
-
-    /** The gun's animation now, and the cell it shows: where on its path, its colour and glow. */
     public record CellVisual(ItemStack stack, LauncherTimeline.Frame motion, LauncherMechanics.CellPose pose, int color, float strength) {}
 
     public static CellVisual cellVisual(ItemStack gun, Level level, float partial) {
@@ -202,7 +212,7 @@ public final class LauncherClient {
             @Override
             public boolean applyForgeHandTransform(PoseStack pose, LocalPlayer player, HumanoidArm arm,
                                                     ItemStack held, float partial, float equip, float swing) {
-                weaponPose(pose, frame(held, player.level(), partial), arm == HumanoidArm.RIGHT ? 1f : -1f, equip, bob(player, partial));
+                weaponPose(pose, LauncherTimeline.sample(held, player.level(), partial), arm == HumanoidArm.RIGHT ? 1f : -1f, equip, bob(player, partial));
                 return true;
             }
         }, LauncherFeature.DISC_LAUNCHER.get());
@@ -224,7 +234,6 @@ public final class LauncherClient {
         pose.translate(-.5f, -.5f, -.5f);
     }
 
-    /** The cell's light on whatever is drawn in {@link #gunSpace}. */
     private static CellLight spill(PoseStack pose, CellVisual visual, float strength) {
         var path = visual.pose();
         return new CellLight(pose.last().pose(), path.x() / 16, path.y() / 16, path.z() / 16, 18f / 16, visual.color(),
@@ -240,7 +249,6 @@ public final class LauncherClient {
         pose.mulPose(Axis.ZP.rotationDegrees(p.roll()));pose.scale(p.scale(),p.scale(),p.scale());
     }
 
-    /** The player's actual skinned support hand removes the old cell and feeds the escrowed one into the breech. */
     private static void supportHand(RenderHandEvent event) {
         var mc = Minecraft.getInstance();
         var player = mc.player;
@@ -266,7 +274,7 @@ public final class LauncherClient {
         CellLight spill = spill(pose, visual, 1.8f);
         float withdraw = 1 - motion.supportHand();
         pose.translate(-hand * withdraw * .4f, -withdraw * .3f, withdraw * .15f);
-        // Only the receiver draws the cell, at the same scale throughout. The palm supports its bottom cap.
+        // Only the receiver draws the cell, at the same scale throughout.
         pose.translate(path.x() / 16, (path.y() + LauncherMechanics.CELL_BOTTOM - .25f) / 16, path.z() / 16);
         pose.mulPose(Axis.YP.rotationDegrees(hand * 10));
         pose.scale(.85f, .85f, .85f);

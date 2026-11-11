@@ -50,14 +50,14 @@ final class DisplayShadows implements AutoCloseable {
 
     static final class Budget {
         private final int limit;
-        private int frame = -1;
+        private long frame = -1;
         private int remaining;
 
         Budget(int limit) {
             this.limit = limit;
         }
 
-        int take(int frame, int vertices, int rays) {
+        int take(long frame, int vertices, int rays) {
             if (this.frame != frame) {
                 this.frame = frame;
                 remaining = limit;
@@ -157,7 +157,7 @@ final class DisplayShadows implements AutoCloseable {
         return visibility.getColorTextureId();
     }
 
-    boolean advance(int frame, VertexBuffer[] buffers, int[] counts) {
+    boolean advance(long frame, VertexBuffer[] buffers, int[] counts) {
         int total = counts[0] + counts[1];
         if (shaded == total) {
             releaseVoxels();

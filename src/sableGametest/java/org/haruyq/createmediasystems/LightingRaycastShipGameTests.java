@@ -44,15 +44,11 @@ public final class LightingRaycastShipGameTests {
         level.setBlockAndUpdate(origin, state);
         ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
+        remove(ship);
         BlockPos plot = ship.getPlot().getCenterBlock();
         helper.assertTrue(level.getBlockState(plot).is(state.getBlock()), "display was not assembled onto the ship");
-        if (level.getBlockEntity(plot) instanceof DisplayBlock.Entity entity) {
-            entity.resize(64, 16, DisplayBlock.Ratio.WIDE);
-        } else {
-            helper.assertTrue(false, "assembled display block entity was not loaded");
-            remove(ship);
-            return;
-        }
+        helper.assertTrue(level.getBlockEntity(plot) instanceof DisplayBlock.Entity, "assembled display block entity was not loaded");
+        ((DisplayBlock.Entity) level.getBlockEntity(plot)).resize(64, 16, DisplayBlock.Ratio.WIDE);
         ship.logicalPose().scale().set(1.8, 0.7, 1.4);
         ship.logicalPose().orientation().rotationY(0.55).rotateX(0.18);
         update(ship);
@@ -70,7 +66,6 @@ public final class LightingRaycastShipGameTests {
             helper.assertTrue(Math.abs(hit.normal().dot(tangentRight)) < 1e-5
                             && Math.abs(hit.normal().dot(tangentUp)) < 1e-5,
                     "display normal must be perpendicular to the transformed panel");
-            remove(ship);
             helper.succeed();
         });
     }

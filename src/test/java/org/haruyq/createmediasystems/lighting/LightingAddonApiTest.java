@@ -3,21 +3,19 @@ package org.haruyq.createmediasystems.lighting;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+
 import org.junit.jupiter.api.Test;
+
+import com.google.gson.JsonParser;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.world.phys.Vec3;
 
 class LightingAddonApiTest {
-    @Test
-    void fadesAreTheBeamShadersModes() {
-        // stage_beam.vsh reads a strip's mode as 0 (cone), 1 (sheet), 2 (ray).
-        assertEquals(0, LightingBeams.Fade.CONE.ordinal());
-        assertEquals(1, LightingBeams.Fade.SHEET.ordinal());
-        assertEquals(2, LightingBeams.Fade.SOLID.ordinal());
-    }
-
     @Test
     void aClipKeepsItsSourcesSide() {
         Vec3 source = new Vec3(0, 10, 0);
@@ -29,10 +27,15 @@ class LightingAddonApiTest {
     }
 
     @Test
-    void familiesAreNamedForPlayers() {
+    void familiesAreNamedForPlayers() throws IOException {
         String key = ((TranslatableContents) StageLightBlock.familyName(StageLightBlock.Entity.DEFAULT_FAMILY)
                 .getContents()).getKey();
-        assertEquals("create_media_systems.lighting.family", key);
+        for (String language : new String[] {"en_us", "ja_jp"}) {
+            try (var in = LightingAddonApiTest.class.getResourceAsStream("/assets/create_media_systems/lang/" + language + ".json")) {
+                assertTrue(JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject().has(key),
+                        language + " names the mod's own family");
+            }
+        }
         assertEquals("some_mod", StageLightBlock.familyName("some_mod").getString());
         StageLightBlock.nameFamily("some_mod", Component.literal("Some lamps"));
         assertEquals("Some lamps", StageLightBlock.familyName("some_mod").getString());

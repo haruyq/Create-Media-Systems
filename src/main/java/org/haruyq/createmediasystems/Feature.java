@@ -12,7 +12,6 @@ public interface Feature {
     default void register(IEventBus modBus) {
     }
 
-    /** Registers the payloads it sends, either way. */
     default void registerPayloads(PayloadRegistrar registrar) {
     }
 }

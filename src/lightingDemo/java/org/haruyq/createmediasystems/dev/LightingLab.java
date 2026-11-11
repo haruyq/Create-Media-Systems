@@ -41,18 +41,15 @@ public final class LightingLab {
         return Path.of("media", MEDIA);
     }
 
-    /** Whether {@code server} runs the lab's world. */
     public static boolean runs(MinecraftServer server) {
         return server.getWorldData().getLevelName().equals(LEVEL_NAME);
     }
 
-    /** The lab's console in {@code level}, if it is there. */
     @Nullable
     public static LightingConsoleBlock.Entity console(Level level) {
         return level.getBlockEntity(CONSOLE) instanceof LightingConsoleBlock.Entity console ? console : null;
     }
 
-    /** Builds a console at {@code origin} facing {@code facing} and forms it at once. */
     public static LightingConsoleBlock.Entity buildConsole(Level level, BlockPos origin, Direction facing) {
         ConsoleLayout.place(level, origin, facing, Block.UPDATE_ALL);
         LightingConsoleBlock.Entity console = (LightingConsoleBlock.Entity) level.getBlockEntity(origin);

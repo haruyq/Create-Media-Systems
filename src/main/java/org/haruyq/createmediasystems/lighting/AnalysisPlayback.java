@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.logging.LogUtils;
@@ -16,7 +17,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -29,7 +29,10 @@ public final class AnalysisPlayback {
     private static final Map<UUID, Playback> PLAYING = new HashMap<>();
     /** A client tick (ms): how far on a console's motion phase is read, for how fast it runs till the next. */
     private static final long PHASE_STEP_MILLIS = 50;
-    private static ClientLevel level;
+    /** A prepared upload the server has not accepted is sent again after this long (ns). */
+    private static final long RESEND_NANOS = 500_000_000L;
+    /** A track whose kept copy could not be analysed is tried again after this long (ns). */
+    private static final long RETRY_NANOS = 60_000_000_000L;
 
     private AnalysisPlayback() {
     }
@@ -127,7 +130,6 @@ public final class AnalysisPlayback {
                            @Nullable Long pendingSequence, long sentAt) {
     }
 
-    /** Every session this client follows now. */
     public static List<Snapshot> snapshots() {
         List<Snapshot> snapshots = new ArrayList<>();
         for (Playback playback : PLAYING.values()) {
@@ -141,18 +143,16 @@ public final class AnalysisPlayback {
 
     public static void register() {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clear());
+        WorldEvents.onLevelChanged(AnalysisPlayback::clear);
     }
 
     private static void clear() {
         PLAYING.values().forEach(Playback::cancel);
         PLAYING.clear();
-        level = null;
     }
 
     public static void state(AnalysisPackets.State state) {
-        checkLevel();
-        if (level == null || state.millis() < 0 || state.millis() > AnalysisFrame.MAX_MILLIS) {
+        if (Minecraft.getInstance().level == null || state.millis() < 0 || state.millis() > AnalysisFrame.MAX_MILLIS) {
             return;
         }
         Playback playback = PLAYING.get(state.source());
@@ -214,22 +214,14 @@ public final class AnalysisPlayback {
         }
     }
 
-    private static void checkLevel() {
-        ClientLevel current = Minecraft.getInstance().level;
-        if (level != current) {
-            clear();
-            level = current;
-        }
-    }
-
     private static void tick() {
-        checkLevel();
+        ClientLevel level = Minecraft.getInstance().level;
         if (level == null || Minecraft.getInstance().player == null) {
             return;
         }
         long now = System.nanoTime();
         PLAYING.values().removeIf(playback -> {
-            if (now - playback.received > 5_000_000_000L) {
+            if (now - playback.received > AnalysisSession.FORGET_NANOS) {
                 playback.cancel();
                 return true;
             }
@@ -253,14 +245,14 @@ public final class AnalysisPlayback {
             }
             prepare(playback, now);
             if (playback.pending != null) {
-                if (now - playback.sentAt >= 500_000_000L) {
+                if (now - playback.sentAt >= RESEND_NANOS) {
                     PacketDistributor.sendToServer(playback.pending);
                     playback.sentAt = now;
                 }
             } else if (now - playback.sentAt >= 100_000_000L && level.getGameTime() % 4 < 2 && uploadPrepared(playback)) {
                 playback.sentAt = now;
             }
-            if (now - playback.liveSentAt < 100_000_000L) {
+            if (now - playback.liveSentAt < AnalysisSession.LIVE_NANOS) {
                 continue;
             }
             playback.liveSentAt = now;
@@ -296,8 +288,7 @@ public final class AnalysisPlayback {
                     LogUtils.getLogger().info("Prepared lighting analysis: {} frames", frames.size());
                 }
             } catch (RuntimeException failed) {
-                playback.retryAt = now + 60_000_000_000L;
-                LogUtils.getLogger().debug("Cached lighting analysis unavailable", failed);
+                unavailable(playback, now, failed);
             }
             playback.job = null;
         }
@@ -318,9 +309,14 @@ public final class AnalysisPlayback {
                 playback.job = job;
                 return;
             } catch (RuntimeException failed) {
-                playback.retryAt = now + 60_000_000_000L;
+                unavailable(playback, now, failed);
             }
         }
+    }
+
+    private static void unavailable(Playback playback, long now, RuntimeException failed) {
+        playback.retryAt = now + RETRY_NANOS;
+        LogUtils.getLogger().debug("Cached lighting analysis unavailable", failed);
     }
 
     private static double phaseAt(Playback playback, long position) {
@@ -365,7 +361,6 @@ public final class AnalysisPlayback {
      * LightingConsoleBlock.Playhead): once a client tick, for its lights to draw from.
      */
     static void sample(LightingConsoleBlock.Entity console) {
-        checkLevel();
         Playback audio = find(console.audioSource());
         Playback video = find(console.videoSource());
         long now = System.nanoTime();

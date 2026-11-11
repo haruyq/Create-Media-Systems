@@ -17,7 +17,6 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-/** Rechargeable-cell launcher with an independently animated breech and support hand. */
 public final class DiscLauncherItem extends Item {
     public static final int FIRE_INTERVAL_TICKS = 4;
 

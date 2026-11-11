@@ -31,7 +31,7 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Train detector: placed onto a track like Create's Train Observer (right-click the track first). While a train is
  * over it, its channel is on for every {@link TrainSignalReceiverBlock} with that channel, at any distance and even
- * with this block's chunk unloaded (see {@link TrainSignals}). Empty hand: set the channel.
+ * with this block's chunk unloaded (see {@link TrainSignals}).
  */
 public class TrainDetectorBlock extends Block implements IBE<TrainDetectorBlock.Entity>, IWrenchable {
     public TrainDetectorBlock(Properties properties) {

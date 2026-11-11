@@ -10,7 +10,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.*;
 
-/** A hollow flared horn, central phase plug, rear amplifier housing, trigger grip and wrist strap. */
 public final class MegaphoneMesh {
     private MegaphoneMesh(){}
     public static void draw(PoseStack p,MultiBufferSource buffers,int light,boolean black,boolean on) {
@@ -51,7 +50,6 @@ public final class MegaphoneMesh {
             font.drawInBatch("SBL  30W",-font.width("SBL  30W")/2f,0,black?0xFFDDDFDE:0xFF3B3C3C,false,p.last().pose(),buffers,Font.DisplayMode.NORMAL,0,light);p.popPose();
         }
     }
-    /** A continuous closed shell: the rubber lip joins the lining along its full circumference. */
     static void horn(PoseStack p,VertexConsumer v,int shell,int inner,int light) {
         frustum(p,v,-.295f,.168f,-.085f,.063f,shell,light,false);
         frustum(p,v,-.322f,.176f,-.295f,.176f,0x101319,light,false);

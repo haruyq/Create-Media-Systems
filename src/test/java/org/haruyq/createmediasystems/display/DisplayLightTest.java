@@ -11,16 +11,18 @@ class DisplayLightTest {
     @Test
     void shadowSamplesCoverBothDimensionsAtEveryRayBudget() {
         var screen = new DisplayBlock.Screen(Vec3.ZERO, new Vec3(1, 0, 0), new Vec3(0, 0, 1));
-        for (int rays = 2; rays <= 24; rays++) {
-            var targets = DisplayLight.shadeTargets(screen, 12, 8, 800_000 / rays);
-            assertEquals(rays, targets.length);
+        java.util.Set<Integer> counts = new java.util.HashSet<>();
+        for (int points = 1; points <= 4_000_000; points *= 2) {
+            var targets = DisplayLight.shadeTargets(screen, 12, 8, points);
+            int rays = targets.length;
+            counts.add(rays);
             boolean[] columns = new boolean[rays];
             boolean[] rows = new boolean[rays];
             double x = 0, y = 0;
             for (var target : targets) {
                 assertTrue(target.x > 0 && target.x < 12);
                 assertTrue(target.y > 0 && target.y < 8);
-                assertEquals(0.05, target.z, 1e-6);
+                assertTrue(target.z > 0 && target.z < 0.5, "just in front of the screen");
                 int column = (int) (target.x / 12 * rays);
                 int row = (int) (target.y / 8 * rays);
                 assertFalse(columns[column]);
@@ -32,8 +34,9 @@ class DisplayLightTest {
             }
             assertEquals(6, x / rays, 1e-6);
             assertEquals(4, y / rays, 1e-6);
-            assertArrayEquals(targets, DisplayLight.shadeTargets(screen, 12, 8, 800_000 / rays));
+            assertArrayEquals(targets, DisplayLight.shadeTargets(screen, 12, 8, points));
         }
+        assertTrue(counts.size() > 3, "the room's density changes how many: " + counts);
     }
 
     @Test
@@ -63,11 +66,11 @@ class DisplayLightTest {
         var refresh = new DisplayLight.Refresh();
         assertTrue(refresh.begin(0));
         refresh.invalidate();
-        assertFalse(refresh.begin(20));
+        assertFalse(refresh.begin(1_000), "one scan at a time");
         refresh.finish(true);
-        assertTrue(refresh.begin(20));
+        long next = nextScan(refresh, 1_000);
         refresh.finish(true);
-        assertFalse(refresh.begin(40));
+        assertEquals(-1, nextScan(refresh, next), "and nothing more once it is seen");
     }
 
     @Test
@@ -75,12 +78,21 @@ class DisplayLightTest {
         var refresh = new DisplayLight.Refresh();
         assertTrue(refresh.begin(100));
         refresh.finish(false);
-        for (long tick = 100; tick < 120; tick++) {
-            assertFalse(refresh.begin(tick));
-        }
-        assertTrue(refresh.begin(120));
+        assertFalse(refresh.begin(101), "not on the next frame");
+        long retried = nextScan(refresh, 101);
+        assertTrue(retried > 101, "but later");
         refresh.finish(false);
-        assertTrue(refresh.begin(0));
+        assertTrue(refresh.begin(0), "a world whose time went back starts over");
+    }
+
+    /** The first tick after {@code from}, within ten minutes, on which a scan begins; -1 if none does. */
+    private static long nextScan(DisplayLight.Refresh refresh, long from) {
+        for (long tick = from; tick < from + 12_000; tick++) {
+            if (refresh.begin(tick)) {
+                return tick;
+            }
+        }
+        return -1;
     }
 
     @Test

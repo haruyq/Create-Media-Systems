@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -91,7 +92,6 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     private record Overdraw(ResourceLocation texture, Vector3f[] corners) {
     }
 
-    /** Everything that draws and sets up displays and image viewers on this computer. */
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(DisplayFeature.DISPLAY_ENTITY.get(), DisplayRenderer::new));
@@ -183,7 +183,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
 
     /** Where {@code display} draws: {@link #PICTURES} in the world, as drawn from the player's eyes. */
     static MultiBufferSource pictures(ScreenEntity display, MultiBufferSource buffers) {
-        if (display.getLevel() != Minecraft.getInstance().level || IrisCompat.shadowPass()) {
+        if (!WorldEvents.isClientWorld(display.getLevel()) || IrisCompat.shadowPass()) {
             return buffers;
         }
         picturesPending = true;
@@ -239,7 +239,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         quad(out, matrix, screen, at[0], at[1], at[2], at[3], lift, texture);
         // The pack grades it as it does the world, shifting its colours (Complementary's eyes turn purple pink): drawn
         // again as it is once the pack is done, while what the pack drew still blooms and reflects around it.
-        if (IrisCompat.shaderPackInUse() && !IrisCompat.shadowPass() && display.getLevel() == Minecraft.getInstance().level) {
+        if (IrisCompat.shaderPackInUse() && !IrisCompat.shadowPass() && WorldEvents.isClientWorld(display.getLevel())) {
             OVERDRAW.add(new Overdraw(texture, new Vector3f[] {
                     corner(matrix, screen.at(at[0], at[1], lift)), corner(matrix, screen.at(at[2], at[1], lift)),
                     corner(matrix, screen.at(at[2], at[3], lift)), corner(matrix, screen.at(at[0], at[3], lift))}));
@@ -343,7 +343,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     private static void shine(DisplayBlock.Entity display, float brightness) {
         Level level = display.getLevel();
         // Not in Ponder's scenes: their worlds have no light to change.
-        if (level != Minecraft.getInstance().level || level.getGameTime() % 4 != 0) {
+        if (!WorldEvents.isClientWorld(level) || level.getGameTime() % 4 != 0) {
             return;
         }
         AuxiliaryLightManager lights = level.getAuxLightManager(display.getBlockPos());
@@ -358,7 +358,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
      */
     private static boolean seen(DisplayBlock.Entity display, AABB box) {
         Level level = display.getLevel();
-        if (level != Minecraft.getInstance().level) {
+        if (!WorldEvents.isClientWorld(level)) {
             return true;
         }
         return Minecraft.getInstance().levelRenderer.getFrustum().isVisible(SableCompat.toWorld(level, box).inflate(1));

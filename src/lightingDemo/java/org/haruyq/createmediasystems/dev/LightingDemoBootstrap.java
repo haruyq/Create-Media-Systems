@@ -7,9 +7,9 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
+import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
@@ -172,15 +172,15 @@ public final class LightingDemoBootstrap {
         place(level, "create_media_systems:speaker", speakerPos, Direction.SOUTH);
         place(level, "create_media_systems:display", displayPos, Direction.SOUTH);
         if (level.getBlockEntity(playerPos) instanceof VideoPlayerBlock.Entity player) {
-            ItemStack disc = new ItemStack(VideoFeature.BLU_RAY.get());
+            ItemStack disc = new ItemStack(DiscFeature.BLU_RAY.get());
             if (LightingLab.SABLE) {
-                disc.set(VideoFeature.PLAYLIST.get(), Collections.nCopies(60, mediaUrl));
+                disc.set(DiscFeature.PLAYLIST.get(), Collections.nCopies(60, mediaUrl));
             } else {
                 String next = mediaUrl + "?next=1";
                 if (!LightingLab.NETWORK) {
                     LightingDemoCache.seedNext(next, LightingLab.media(), DiscKind.BLU_RAY.pictureHeight);
                 }
-                disc.set(VideoFeature.PLAYLIST.get(), List.of(mediaUrl, next));
+                disc.set(DiscFeature.PLAYLIST.get(), List.of(mediaUrl, next));
             }
             player.insert(disc, null);
             console.setVideoSource(playerPos);

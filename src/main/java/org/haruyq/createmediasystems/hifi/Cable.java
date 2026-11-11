@@ -13,7 +13,6 @@ public enum Cable {
     DECK(Unit.CASSETTE_DECK, 0xD9B93A),
     LINE(Unit.DISC_PLAYER, 0x3A3A3E);
 
-    /** The unit it joins to the amplifier. */
     public final Unit unit;
     /** Its plugs' colour (RGB). */
     public final int color;
