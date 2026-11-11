@@ -133,10 +133,16 @@ public final class DriveClient {
                 : ejected ? "ejected" : "insert";
     }
 
-    /** The screen's button: takes the disc out of the emulator, though not out of the real drive, or puts it back. */
+    /**
+     * The screen's button: takes the disc out of the emulator and, as the real drive's own button does, out of that;
+     * or puts back one still in it, which a folder's is.
+     */
     static void eject() {
         if (loaded != null) {
+            Path root = loaded;
             unload(true);
+            // Off the game thread: a drive stops its disc before it lets go of it.
+            Thread.ofVirtual().start(() -> open(root));
         } else {
             ejected = false;
         }
@@ -369,7 +375,37 @@ public final class DriveClient {
 
     /** What a drive answers when asked whether it is ready; UNKNOWN for a folder, or a drive that cannot be asked. */
     private static final int UNKNOWN = 0, READY = 1, BECOMING_READY = 2, NO_DISC = 3;
-    private static final int IOCTL_SCSI_PASS_THROUGH = 0x4D004, SENSE_AT = 56;
+    private static final int IOCTL_SCSI_PASS_THROUGH = 0x4D004, SENSE_AT = 56, IOCTL_STORAGE_EJECT_MEDIA = 0x2D4808;
+
+    /** The optical drive at {@code root}, to ask or tell it something; null for a folder, or a drive that cannot be. */
+    @Nullable
+    private static WinNT.HANDLE device(Path root) {
+        if (!Platform.isWindows() || root.getFileName() != null
+                || Kernel32.INSTANCE.GetDriveType(root.toString()) != WinBase.DRIVE_CDROM) {
+            return null;
+        }
+        WinNT.HANDLE handle = Kernel32.INSTANCE.CreateFile("\\\\.\\" + root.toString().substring(0, 2),
+                WinNT.GENERIC_READ | WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_READ | WinNT.FILE_SHARE_WRITE, null,
+                WinNT.OPEN_EXISTING, 0, null);
+        return WinBase.INVALID_HANDLE_VALUE.equals(handle) ? null : handle;
+    }
+
+    /** Opens the tray of the real drive at {@code root}; a folder's disc stays where it is. */
+    private static void open(Path root) {
+        try {
+            WinNT.HANDLE handle = device(root);
+            if (handle != null) {
+                try {
+                    Kernel32.INSTANCE.DeviceIoControl(handle, IOCTL_STORAGE_EJECT_MEDIA, null, 0, null, 0,
+                            new IntByReference(), null);
+                } finally {
+                    Kernel32.INSTANCE.CloseHandle(handle);
+                }
+            }
+        } catch (RuntimeException | LinkageError unknown) {
+            // No drive it can tell.
+        }
+    }
 
     /**
      * Whether the optical drive at {@code root} is ready, has closed on a disc it still makes out, or has none: its
@@ -378,14 +414,8 @@ public final class DriveClient {
      */
     private static int sense(Path root) {
         try {
-            if (!Platform.isWindows() || root.getFileName() != null
-                    || Kernel32.INSTANCE.GetDriveType(root.toString()) != WinBase.DRIVE_CDROM) {
-                return UNKNOWN;
-            }
-            WinNT.HANDLE handle = Kernel32.INSTANCE.CreateFile("\\\\.\\" + root.toString().substring(0, 2),
-                    WinNT.GENERIC_READ | WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_READ | WinNT.FILE_SHARE_WRITE, null,
-                    WinNT.OPEN_EXISTING, 0, null);
-            if (WinBase.INVALID_HANDLE_VALUE.equals(handle)) {
+            WinNT.HANDLE handle = device(root);
+            if (handle == null) {
                 return UNKNOWN;
             }
             try {
