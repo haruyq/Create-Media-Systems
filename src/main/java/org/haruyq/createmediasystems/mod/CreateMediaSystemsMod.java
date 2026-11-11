@@ -29,7 +29,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 
-/** The mod: its features, and the creative tab that lists them. */
 @Mod(CreateMediaSystems.MOD_ID)
 public final class CreateMediaSystemsMod {
     /** Making each loads its registry entries. */
@@ -37,7 +36,6 @@ public final class CreateMediaSystemsMod {
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature());
 
-    /** Every CMS item: those of {@link #tabOrder} in its order, then any other in registration order. */
     private static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
             .icon(() -> new ItemStack(AudioFeature.CUSTOM_DISC.get()))
@@ -53,7 +51,6 @@ public final class CreateMediaSystemsMod {
         CreateMediaSystems.register(modBus, container, FEATURES);
     }
 
-    /** The order the creative tab lists items in. */
     private static List<Supplier<? extends Item>> tabOrder() {
         List<Supplier<? extends Item>> order = new ArrayList<>(List.of(
                 MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,

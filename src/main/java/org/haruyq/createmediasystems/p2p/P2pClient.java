@@ -224,7 +224,6 @@ public final class P2pClient {
         };
         CompletableFuture.supplyAsync(() -> open.open(origin, ticket.ticket(), listener)).whenComplete((opened, error) -> game.execute(() -> {
             if (session != request) {
-                // Left, logged out or replaced while it opened.
                 if (opened != null) {
                     opened.close();
                 }
@@ -265,7 +264,6 @@ public final class P2pClient {
         }
     }
 
-    /** {@code message} with the players' UUIDs in it as their names. */
     private static String named(String message) {
         ClientPacketListener connection = Minecraft.getInstance() == null ? null : Minecraft.getInstance().getConnection();
         if (connection != null) {

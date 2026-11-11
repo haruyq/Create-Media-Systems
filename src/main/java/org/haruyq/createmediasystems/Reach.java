@@ -8,9 +8,7 @@ import net.minecraft.world.item.Item;
 
 /** How far a player reaches the blocks they work, checked by the server and aimed at by the client alike. */
 public final class Reach {
-    /** What a hand works directly: an equalizer's faders, an image viewer's link, a channel. */
     public static final double HAND = 8;
-    /** What a quill picks and sets up from afar. */
     public static final double QUILL = 75;
 
     private Reach() {

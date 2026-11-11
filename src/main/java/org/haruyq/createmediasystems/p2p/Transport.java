@@ -278,7 +278,6 @@ public final class Transport implements AutoCloseable {
         return backlog;
     }
 
-    /** Bytes of payloads received. */
     public long received() {
         return received;
     }
@@ -298,7 +297,6 @@ public final class Transport implements AutoCloseable {
                 l.openedAt)).toList();
     }
 
-    /** Peers with an open DataChannel. */
     public synchronized List<UUID> connected() {
         return links.values().stream().filter(l -> l.open).map(l -> l.peer).toList();
     }
@@ -384,7 +382,6 @@ public final class Transport implements AutoCloseable {
         post(() -> shutDown(reason));
     }
 
-    /** One message from the API's signaling. */
     void signal(String text) {
         post(() -> {
             JsonObject message;
@@ -500,10 +497,6 @@ public final class Transport implements AutoCloseable {
         });
     }
 
-    /**
-     * Sends a new viewer its probe, else what its pace allows of its queue, and gives up on peers that took too long
-     * to connect.
-     */
     private void tick() {
         long now = System.nanoTime();
         long most = 0;
@@ -544,10 +537,6 @@ public final class Transport implements AutoCloseable {
         }
     }
 
-    /**
-     * Sends {@code link} what is left of its probe: frames for {@link #PROBE_NANOS}, as fast as the connection takes
-     * them, then the end. Whether the probe is done with, so the link sends its queue.
-     */
     private boolean probe(Link link, long now) {
         if (link.probeEnded) {
             return true;
@@ -571,7 +560,6 @@ public final class Transport implements AutoCloseable {
         return frame;
     }
 
-    /** A frame from {@code link}'s peer. */
     private void receive(Link link, byte[] frame) {
         if (frame.length == 0) {
             return;
@@ -693,7 +681,6 @@ public final class Transport implements AutoCloseable {
         listener.status(reason != null ? reason : "Left the P2P session.");
     }
 
-    /** Releases a native resource, logging what it throws so that the ones after it are released too. */
     private static void release(Runnable step) {
         try {
             step.run();
@@ -718,7 +705,6 @@ public final class Transport implements AutoCloseable {
                 }
             });
         } catch (RejectedExecutionException e) {
-            // Closed.
             after.run();
         }
     }
@@ -747,7 +733,6 @@ public final class Transport implements AutoCloseable {
         return peer.equals(ticket.hostId()) ? "the host" : "viewer " + peer;
     }
 
-    /** The connection to one peer. */
     final class Link {
         final UUID peer;
         final RTCPeerConnection pc;
@@ -932,7 +917,6 @@ public final class Transport implements AutoCloseable {
             });
         }
 
-        /** Sets the offer or answer just created as this side's, then signals it. */
         CreateSessionDescriptionObserver created(String type) {
             return new CreateSessionDescriptionObserver() {
                 @Override

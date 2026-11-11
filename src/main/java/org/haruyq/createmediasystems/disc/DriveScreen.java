@@ -57,7 +57,6 @@ public final class DriveScreen extends Screen {
         this.pos = pos;
     }
 
-    /** Whether the screen now open is that of the emulator at {@code pos}. */
     static boolean shows(BlockPos pos) {
         return Minecraft.getInstance().screen instanceof DriveScreen screen && screen.pos.equals(pos);
     }

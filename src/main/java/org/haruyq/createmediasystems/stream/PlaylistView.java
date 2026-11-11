@@ -18,7 +18,6 @@ public interface PlaylistView {
         return Math.min(index(), playlist().size() - 1);
     }
 
-    /** "Track N/M" for the entry it is at; for an empty playlist, track 0/0. */
     default MutableComponent track() {
         return Component.translatable("create_media_systems.video_player.track", shownIndex() + 1, playlist().size());
     }
