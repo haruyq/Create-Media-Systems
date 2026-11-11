@@ -19,8 +19,7 @@ public final class MegaphoneItem extends Item implements Portable.Held {
     @Override public InteractionResultHolder<ItemStack> use(Level level,Player player,InteractionHand hand) {
         var item=player.getItemInHand(hand);
         if(player instanceof ServerPlayer server) {
-            if(player.isShiftKeyDown())MegaphoneData.play(item,level,!MegaphoneData.playing(item));
-            else HeldItemMenu.open(server,hand,MegaphoneMenu::new);
+            HeldItemMenu.open(server,hand,MegaphoneMenu::new);
         }
         return InteractionResultHolder.sidedSuccess(item,level.isClientSide);
     }

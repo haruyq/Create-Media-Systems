@@ -18,6 +18,8 @@ import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import org.haruyq.createmediasystems.megaphone.*;
 import org.haruyq.createmediasystems.playback.*;
+import org.haruyq.createmediasystems.stream.MediaKind;
+import org.haruyq.createmediasystems.stream.PortablePlaylist;
 
 public final class MegaphoneClient {
     private record Horn(Player player,InteractionHand hand,UUID id) implements MusicEmitter {
@@ -32,6 +34,7 @@ public final class MegaphoneClient {
         ItemStack item(){return player.getItemInHand(hand);}
         @Override public int revision(){return MegaphoneData.revision(item());}
         @Override public ItemStack media(){return MegaphoneData.disc(item(),player.level());}
+        @Override public String url(){return PortablePlaylist.url(media(),MegaphoneData.track(item()));}
         @Override public boolean present(){return !player.isRemoved() && WorldEvents.isClientWorld(player.level())
                 && item().getItem() instanceof MegaphoneItem && MegaphoneData.id(item()).filter(id::equals).isPresent() && MegaphoneData.playing(item());}
         @Override public Vec3 position(){return player.getEyePosition().add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
@@ -43,7 +46,7 @@ public final class MegaphoneClient {
             return MegaphoneAcoustics.gain(offset.length(),MegaphoneData.volume(item()),beam);}
         @Override public List<UnaryOperator<AudioStream>> decorators(){
             return List.of(pcm->new MegaphoneAudioStream(pcm,()->MegaphoneData.drive(item()),()->MegaphoneData.volume(item())));}
-        @Override public boolean viaApi(){return true;}
+        @Override public boolean viaApi(){return MediaKind.of(url()) == MediaKind.WEB;}
     }
     private MegaphoneClient(){}
     /** The arm of each hand holding a playing megaphone held up before the face, following the head. */

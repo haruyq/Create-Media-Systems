@@ -23,7 +23,7 @@ import net.minecraft.world.phys.Vec3;
  * without one, like a vanilla disc; at {@code volume} (0..1) beside it, falling off to silence at the range's edge.
  * The server and every client decide who hears an emitter by the same {@link #hears} (see Streams and ClientStreams).
  */
-public record EmitterRange(Optional<BoundingBox> area, float volume) {
+public record EmitterRange(Optional<BoundingBox> area, float volume, int radius) {
     public static final double DEFAULT_RANGE = 64;
     /** Listeners are dropped this far outside the range; the gap keeps the edge from flapping. */
     public static final double DROP_MARGIN = 8;
@@ -31,12 +31,17 @@ public record EmitterRange(Optional<BoundingBox> area, float volume) {
 
     public static final Codec<EmitterRange> CODEC = RecordCodecBuilder.create(i -> i.group(
             BoundingBox.CODEC.optionalFieldOf("offset_area").forGetter(EmitterRange::area),
-            Codec.FLOAT.optionalFieldOf("volume", 1f).forGetter(EmitterRange::volume)
+            Codec.FLOAT.optionalFieldOf("volume", 1f).forGetter(EmitterRange::volume),
+            Codec.intRange(0, 2048).optionalFieldOf("radius", 0).forGetter(EmitterRange::radius)
     ).apply(i, EmitterRange::new));
     public static final StreamCodec<ByteBuf, EmitterRange> STREAM_CODEC = ByteBufCodecs.fromCodec(CODEC);
 
     public EmitterRange {
         volume = Mth.clamp(volume, 0, 1);
+    }
+
+    public EmitterRange(Optional<BoundingBox> area, float volume) {
+        this(area, volume, 0);
     }
 
     public static EmitterRange at(float volume) {
@@ -59,12 +64,19 @@ public record EmitterRange(Optional<BoundingBox> area, float volume) {
     /** {@link #hears}, with {@code listener} already in the emitter's block space. */
     public boolean inRange(BlockPos emitter, Vec3 origin, Vec3 listener, double margin) {
         return areaAt(emitter).map(box -> box.inflate(margin).contains(listener))
-                .orElseGet(() -> listener.distanceTo(origin) <= DEFAULT_RANGE + margin);
+                .orElseGet(() -> listener.distanceTo(origin) <= reach() + margin);
     }
 
     public float gain(BlockPos emitter, Vec3 origin, Vec3 listener) {
-        double reach = areaAt(emitter).map(box -> farthestCorner(origin, box)).orElse(DEFAULT_RANGE);
+        double reach = areaAt(emitter).map(box -> farthestCorner(origin, box)).orElseGet(this::reach);
+        if (radius > 0 && area.isEmpty()) {
+            return volume * (float) Mth.clamp((reach - listener.distanceTo(origin)) / (reach * .22), 0, 1);
+        }
         return volume * (float) Mth.clamp(1 - listener.distanceTo(origin) / Math.max(reach, 1), 0, 1);
+    }
+
+    private double reach() {
+        return radius > 0 ? radius : DEFAULT_RANGE;
     }
 
     private static double farthestCorner(Vec3 center, AABB box) {

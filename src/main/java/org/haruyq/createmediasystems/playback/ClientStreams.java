@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Set;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.broadcast.BroadcastProfile;
+import org.haruyq.createmediasystems.broadcast.client.BroadcastAudioStream;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.Reports;
 import org.haruyq.createmediasystems.stream.EmitterRange;
@@ -31,6 +33,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -57,7 +61,7 @@ public final class ClientStreams {
      * jukeboxes, speakers and displays play it: one each was an OpenAL source each, and a wall of speakers froze the
      * game waiting on the sound thread.
      */
-    private record Side(BlockPos source, Streams.Channel channel) {
+    private record Side(BlockPos source, Streams.Channel channel, BroadcastProfile profile) {
     }
 
     /**
@@ -131,6 +135,7 @@ public final class ClientStreams {
         final PlaybackId playback;
         /** Where it plays: the side's, kept as a new playback replaces this one. */
         final Slot slot;
+        final BroadcastProfile profile;
         final Map<BlockPos, Streams.Sound> emitters = new LinkedHashMap<>();
         boolean present;
         boolean nearby;
@@ -149,10 +154,13 @@ public final class ClientStreams {
         @Nullable
         private StreamSound spreadOn;
         private double spreadRadius;
+        private volatile BroadcastAudioStream.Path path = new BroadcastAudioStream.Path(0, false);
+        private long lastTrace = Long.MIN_VALUE;
 
-        Group(PlaybackId playback, Slot slot) {
+        Group(PlaybackId playback, Slot slot, BroadcastProfile profile) {
             this.playback = playback;
             this.slot = slot;
+            this.profile = profile;
         }
 
         /** Sums up its emitters as heard from the camera now (see Mix); its stream asks this every tick. */
@@ -167,7 +175,7 @@ public final class ClientStreams {
                 Streams.Sound sound = emitter.getValue();
                 Vec3 world = toWorld(pos, sound.origin());
                 first = first == null ? world : first;
-                if (!blockPresent(pos)) {
+                if (!sound.profile().outdoor() && !blockPresent(pos)) {
                     continue;
                 }
                 present = true;
@@ -179,7 +187,23 @@ public final class ClientStreams {
             Vec3 heard = mix.at();
             at = heard != null ? heard : first != null ? first : at;
             tracedFrom = mix.loudest() != null ? mix.loudest() : at;
+            if (profile.outdoor() && tracedFrom != null) updatePath(camera, tracedFrom);
             radius = heard != null ? mix.radius() : 0;
+        }
+
+        private void updatePath(Vec3 camera, Vec3 from) {
+            double distance = camera.distanceTo(from);
+            boolean blocked = path.obstructed();
+            var mc = Minecraft.getInstance();
+            if (mc.level != null && mc.player != null && (lastTrace == Long.MIN_VALUE
+                    || mc.level.getGameTime() - lastTrace >= 5)) {
+                lastTrace = mc.level.getGameTime();
+                Vec3 end = camera.add(from.subtract(camera).normalize().scale(Math.clamp(distance - .9, 0, 96)));
+                blocked = mc.level.clip(new ClipContext(camera, end, ClipContext.Block.COLLIDER,
+                        ClipContext.Fluid.NONE, mc.player)).getType() != HitResult.Type.MISS;
+            }
+            path = new BroadcastAudioStream.Path(distance, blocked);
+            if (blocked) gain *= .58;
         }
 
         /**
@@ -389,7 +413,7 @@ public final class ClientStreams {
         BlockPos pos = payload.pos().immutable();
         Streams.Sound sound = payload.sound();
         RANGES.put(pos, payload.range());
-        Side side = new Side(sound.source(), sound.channel());
+        Side side = new Side(sound.source(), sound.channel(), sound.profile());
         Side was = SIDES.put(pos, side);
         if (was != null && !was.equals(side)) {
             leave(was, pos);
@@ -401,7 +425,7 @@ public final class ClientStreams {
             group.emitters.put(pos, sound);
             return;
         }
-        Group fresh = new Group(playback, group != null ? group.slot : new Slot(side.toString(), side));
+        Group fresh = new Group(playback, group != null ? group.slot : new Slot(side.toString(), side), side.profile());
         if (group != null) {
             fresh.emitters.putAll(group.emitters);
         }
@@ -413,14 +437,18 @@ public final class ClientStreams {
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
         var heard = new StreamSpec.Emitter(() -> fresh.at, () -> fresh.tracedFrom, () -> fresh.present,
                 () -> fresh.nearby, () -> fresh.gain, null);
-        fresh.slot.play(new StreamSound(new StreamSpec(payload.url(), payload.startSeconds(), side.channel(),
+        StreamSpec spec = new StreamSpec(payload.url(), payload.startSeconds(), side.channel(),
                 SoundSource.RECORDS, heard,
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
                 seconds -> Minecraft.getInstance().execute(() -> {
                     LogUtils.getLogger().info("CMS stream {} loaded, {}s long (0: unknown)", side, seconds);
                     fresh.emitters.keySet().stream().findFirst()
                             .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.Started(at, (float) seconds)));
-                })).from(side.source(), payload.load(), payload.video().orElse(null))));
+                })).from(side.source(), payload.load(), payload.video().orElse(null));
+        if (side.profile().outdoor()) {
+            spec = spec.decorated(opened -> BroadcastAudioStream.wrap(opened, side.profile(), () -> fresh.path));
+        }
+        fresh.slot.play(new StreamSound(spec));
     }
 
     /**

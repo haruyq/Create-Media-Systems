@@ -123,6 +123,12 @@ public final class PlaybackClock {
         revision++;
     }
 
+    /** A portable seek reanchors a running clock immediately, including across an unloaded interval. */
+    public void seek(long at, long now) {
+        seek(at);
+        if (running) start = now;
+    }
+
     /** A block source's clock runs on from where it is, from its next tick (see tick), or once its listeners have it. */
     public void resume() {
         if (!running) {
@@ -257,12 +263,12 @@ public final class PlaybackClock {
          */
         public int settle(PlaybackClock clock, long now, int energy, double rate) {
             long elapsed = settledAt == NEVER ? 0 : Math.max(0, now - settledAt);
-            settledAt = now;
+            settledAt = Math.max(settledAt, now);
             if (!clock.running()) {
                 return energy;
             }
             long current = clock.position(now), previous = Math.max(0, current - elapsed);
-            long end = clock.length > 0 ? Math.round(clock.length * TICKS_PER_SECOND) : Long.MAX_VALUE;
+            long end = clock.length > 0 ? (long) Math.ceil(clock.length * TICKS_PER_SECOND) : Long.MAX_VALUE;
             long paid = current >= end ? Math.min(elapsed, Math.max(0, end - previous)) : elapsed;
             double spent = owed + paid * rate;
             if (spent >= energy) {

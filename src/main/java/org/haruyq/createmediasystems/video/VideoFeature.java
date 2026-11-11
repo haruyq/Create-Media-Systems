@@ -25,12 +25,14 @@ import net.neoforged.neoforge.registries.DeferredItem;
 
 public final class VideoFeature implements Feature {
     public static final ModConfigSpec.IntValue REMOTE_RANGE = ServerConfig.intSetting("remoteRange", "blocks",
-            "Farthest (in blocks) a remote reaches the Blu-ray player it is paired with.", 64, 1, 4096);
+            "Farthest (in blocks) a remote reaches the device it is paired with.", 64, 1, 4096);
 
     public static final Supplier<DataComponentType<GlobalPos>> REMOTE_TARGET = COMPONENTS.registerComponentType(
             "remote_target", b -> b.persistent(GlobalPos.CODEC).networkSynchronized(GlobalPos.STREAM_CODEC));
     public static final Supplier<DataComponentType<UUID>> REMOTE_SOURCE = COMPONENTS.registerComponentType(
             "remote_source", b -> b.persistent(UUIDUtil.CODEC).networkSynchronized(UUIDUtil.STREAM_CODEC));
+    public static final Supplier<DataComponentType<UUID>> REMOTE_ENTITY = COMPONENTS.registerComponentType(
+            "remote_entity", b -> b.persistent(UUIDUtil.CODEC).networkSynchronized(UUIDUtil.STREAM_CODEC));
 
     public static final DeferredBlock<VideoPlayerBlock> VIDEO_PLAYER = BLOCKS.register("blu_ray_player",
             () -> new VideoPlayerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));

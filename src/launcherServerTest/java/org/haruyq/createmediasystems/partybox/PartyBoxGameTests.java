@@ -5,6 +5,9 @@ import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
+import org.haruyq.createmediasystems.disc.DiscFeature;
+import org.haruyq.createmediasystems.stream.DiscUrl;
+import org.haruyq.createmediasystems.stream.Remotable.Action;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -67,6 +70,33 @@ public final class PartyBoxGameTests {
         box.load(tag);box.tick();
         h.assertTrue(!box.playing() && box.positionTicks()==0,"Finished track returns to its beginning");
         h.assertTrue(box.energy()>=BatteryItem.CAPACITY-39,"Only the ten seconds of actual music drain the battery");h.succeed();
+    }
+    @GameTest(template="empty") public static void bluRayAdvancesAcrossUnloadAndKeepsItsPlaylistWhenPacked(GameTestHelper h) {
+        var box=box(h,10000);
+        var owner=java.util.UUID.randomUUID();
+        var first=new DiscUrl(owner,java.util.UUID.randomUUID()).toString();
+        var second=new DiscUrl(owner,java.util.UUID.randomUUID()).toString();
+        var disc=new ItemStack(DiscFeature.BLU_RAY.get());
+        disc.set(DiscFeature.PLAYLIST.get(),java.util.List.of(first,second));
+        box.inventory.setItem(0,disc);
+        box.learnLength(5);
+        var tag=new CompoundTag();box.save(tag);
+        long now=h.getLevel().getGameTime();
+        tag.putLong("PowerAt",now-160);tag.putLong("Start",now-160);
+        box.load(tag);box.settlePower();
+        h.assertTrue(box.playing() && box.track()==1 && second.equals(box.currentUrl()) && box.positionTicks()==60,
+                "Time past the first track's end belongs to the second track after reload");
+        box.learnLength(120);
+        box.control(Action.SEEK,25);
+        int revision=box.revision();
+        var packed=box.portableItem();var restored=new PartyBoxEntity(PartyBoxFeature.PARTYBOX_ENTITY.get(),h.getLevel());
+        restored.loadPortable(packed.get(PartyBoxFeature.PARTYBOX_STATE.get()));
+        h.assertTrue(!restored.playing() && restored.track()==1 && restored.positionTicks()==500
+                && ItemStack.matches(disc,restored.disc()),"Packing preserves the track, its seek and the original Blu-ray playlist");
+        box.control(Action.PREVIOUS,0);
+        h.assertTrue(box.track()==0 && box.playing() && box.positionTicks()==0 && box.revision()!=revision,
+                "Previous starts the first track at zero with a fresh playback revision");
+        h.succeed();
     }
     @GameTest(template="empty") public static void controlsRejectPacketsWithoutTheActualNearbyMenu(GameTestHelper h) {
         var box=box(h,10000);h.getLevel().addFreshEntity(box);var p=player(h);p.setPos(box.getX(),box.getY(),box.getZ()+1);

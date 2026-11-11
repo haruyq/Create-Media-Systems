@@ -26,6 +26,7 @@ public final class PartyBoxItem extends Item {
     @Override public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> text, TooltipFlag flag) {
         text.add(Component.literal("240 W  |  68 Wh  |  16.5 kg").withStyle(ChatFormatting.GRAY));
         text.add(Component.translatable("partybox.controls").withStyle(ChatFormatting.AQUA));
+        text.add(Component.translatable("partybox.remote_hint").withStyle(ChatFormatting.GRAY));
         text.add(Component.translatable("partybox.charge_hint").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

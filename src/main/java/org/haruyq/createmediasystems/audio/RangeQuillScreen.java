@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import org.haruyq.createmediasystems.broadcast.BroadcastTowerBlock;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -20,6 +21,7 @@ import com.simibubi.create.foundation.gui.widget.SelectionScrollInput;
 
 import net.createmod.catnip.gui.AbstractSimiScreen;
 import net.createmod.catnip.gui.element.GuiGameElement;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -78,7 +80,11 @@ final class RangeQuillScreen extends AbstractSimiScreen {
                 .or(() -> info.source().map(p -> Component.translatable("create_media_systems.speaker.status_connected", xyz(p))))
                 .orElseGet(() -> Component.translatable("create_media_systems.speaker.status_unlinked"));
         List<Component> channels = Arrays.stream(Streams.Channel.values()).map(Streams.Channel::label).toList();
-        return new RangeQuillScreen(Component.translatable("create_media_systems.speaker.title"), new ItemStack(AudioFeature.SPEAKER_ITEM.get()),
+        var level = Minecraft.getInstance().level;
+        var block = level == null ? AudioFeature.SPEAKER.get() : level.getBlockState(info.speaker()).getBlock();
+        var icon = block instanceof BroadcastTowerBlock
+                ? new ItemStack(block) : new ItemStack(AudioFeature.SPEAKER_ITEM.get());
+        return new RangeQuillScreen(Component.translatable("create_media_systems.speaker.title"), icon,
                 info.volume(), channels, info.channel().ordinal(), status, Component.translatable("create_media_systems.speaker.disconnect"),
                 (volume, reset, channel) -> PacketDistributor.sendToServer(new RangeQuill.SetSpeaker(
                         info.speaker(), reset ? Optional.empty() : connectTo, reset, volume, Streams.Channel.byId(channel))),

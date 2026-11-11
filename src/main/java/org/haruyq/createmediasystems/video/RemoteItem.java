@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.partybox.PartyBoxEntity;
 import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.Link;
 
@@ -30,7 +31,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/** Controls one Blu-ray player from afar, within the server's {@code remoteRange}. */
+/** Controls one paired device from afar, within the server's {@code remoteRange}. */
 public class RemoteItem extends Item {
     public RemoteItem(Properties properties) {
         super(properties);
@@ -47,20 +48,24 @@ public class RemoteItem extends Item {
             Link link = Link.to(context.getLevel(), context.getClickedPos());
             context.getItemInHand().set(VideoFeature.REMOTE_TARGET.get(), GlobalPos.of(context.getLevel().dimension(), link.pos()));
             context.getItemInHand().set(VideoFeature.REMOTE_SOURCE.get(), link.id());
+            context.getItemInHand().remove(VideoFeature.REMOTE_ENTITY.get());
             player.displayClientMessage(Component.translatable("create_media_systems.remote.paired"), true);
         }
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
     }
 
-    static ItemStack held(Player player) {
-        return player.getMainHandItem().is(VideoFeature.REMOTE.get()) ? player.getMainHandItem() : player.getOffhandItem();
+    public static void pair(PartyBoxEntity box, Player player, ItemStack remote) {
+        remote.set(VideoFeature.REMOTE_TARGET.get(), GlobalPos.of(box.level().dimension(), box.blockPosition()));
+        remote.set(VideoFeature.REMOTE_ENTITY.get(), box.getUUID());
+        remote.remove(VideoFeature.REMOTE_SOURCE.get());
+        player.displayClientMessage(Component.translatable("create_media_systems.remote.paired_partybox"), true);
     }
 
     /** Where the player {@code stack} is paired with is now (the stack follows it); null if unpaired or it is gone. */
     @Nullable
     public static GlobalPos target(Level level, ItemStack stack) {
         GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
-        if (target == null || level.isClientSide) {
+        if (target == null || level.isClientSide || stack.has(VideoFeature.REMOTE_ENTITY.get())) {
             return target;
         }
         Level targetLevel = level.getServer().getLevel(target.dimension());
@@ -84,7 +89,7 @@ public class RemoteItem extends Item {
             if (target == null) {
                 player.displayClientMessage(Component.translatable("create_media_systems.remote.unpaired"), true);
             } else {
-                RemoteScreen.open(target);
+                RemoteScreen.open(target, hand);
             }
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
@@ -93,16 +98,20 @@ public class RemoteItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
-        tooltip.add(target == null
+        tooltip.add(stack.has(VideoFeature.REMOTE_ENTITY.get())
+                ? Component.translatable("create_media_systems.remote.partybox").withStyle(ChatFormatting.GRAY)
+                : target == null
                 ? Component.translatable("create_media_systems.remote.unpaired").withStyle(ChatFormatting.DARK_GRAY)
                 : Component.translatable("create_media_systems.remote.target", target.pos().getX(), target.pos().getY(),
                         target.pos().getZ()).withStyle(ChatFormatting.GRAY));
     }
 
     /** Client → server: a remote's button for what it is paired with. */
-    public record RemoteControl(Remotable.Action action, int value) implements CustomPacketPayload {
+    public record RemoteControl(InteractionHand hand, Remotable.Action action, int value) implements CustomPacketPayload {
         public static final Type<RemoteControl> TYPE = new Type<>(CreateMediaSystems.id("remote_control"));
         public static final StreamCodec<ByteBuf, RemoteControl> CODEC = StreamCodec.composite(
+                ByteBufCodecs.idMapper(id -> id == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND,
+                        InteractionHand::ordinal), RemoteControl::hand,
                 Remotable.Action.CODEC, RemoteControl::action,
                 ByteBufCodecs.VAR_INT, RemoteControl::value,
                 RemoteControl::new);
@@ -114,19 +123,37 @@ public class RemoteItem extends Item {
     }
 
     static void remoteControl(ServerPlayer player, RemoteControl payload) {
-        ItemStack remote = held(player);
-        GlobalPos target = remote.is(VideoFeature.REMOTE.get()) ? RemoteItem.target(player.level(), remote) : null;
+        if (player.isSpectator()) return;
+        ItemStack remote = player.getItemInHand(payload.hand());
+        if (!remote.is(VideoFeature.REMOTE.get())) return;
+        GlobalPos target = RemoteItem.target(player.level(), remote);
         if (target == null) {
             if (remote.has(VideoFeature.REMOTE_TARGET.get())) {
                 player.displayClientMessage(Component.translatable("create_media_systems.remote.missing"), true);
             }
             return;
         }
+        if (target.dimension() != player.level().dimension()) {
+            tooFar(player);
+            return;
+        }
+        var entityId = remote.get(VideoFeature.REMOTE_ENTITY.get());
+        if (entityId != null) {
+            if (!(player.serverLevel().getEntity(entityId) instanceof PartyBoxEntity box) || box.isRemoved()) {
+                player.displayClientMessage(Component.translatable("create_media_systems.remote.missing"), true);
+                return;
+            }
+            double range = VideoFeature.REMOTE_RANGE.get();
+            if (player.distanceToSqr(box) > range * range) {
+                tooFar(player);
+                return;
+            }
+            box.control(payload.action(), payload.value());
+            return;
+        }
         BlockPos pos = target.pos();
-        if (target.dimension() != player.level().dimension()
-                || SableCompat.distance(player.level(), pos, player.blockPosition()) > VideoFeature.REMOTE_RANGE.get()) {
-            player.displayClientMessage(Component.translatable("create_media_systems.remote.too_far", VideoFeature.REMOTE_RANGE.get())
-                    .withStyle(ChatFormatting.RED), true);
+        if (SableCompat.distance(player.level(), pos, player.blockPosition()) > VideoFeature.REMOTE_RANGE.get()) {
+            tooFar(player);
             return;
         }
         if (!player.level().isLoaded(pos) || !(player.level().getBlockEntity(pos) instanceof Remotable videoPlayer)) {
@@ -134,6 +161,11 @@ public class RemoteItem extends Item {
             return;
         }
         videoPlayer.control(payload.action(), payload.value(), player);
+    }
+
+    private static void tooFar(ServerPlayer player) {
+        player.displayClientMessage(Component.translatable("create_media_systems.remote.too_far", VideoFeature.REMOTE_RANGE.get())
+                .withStyle(ChatFormatting.RED), true);
     }
 
     public static void registerPayloads(PayloadRegistrar registrar) {

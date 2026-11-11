@@ -5,12 +5,13 @@ import net.minecraft.network.codec.*;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.Remotable.Action;
 
 /** All settings require the actual held item's open server menu. */
 public record MegaphoneAction(int container,Kind kind,int value) implements CustomPacketPayload {
     /** What is asked of the horn, with its stable wire id. */
     public enum Kind {
-        PLAY_PAUSE(0), VOLUME(1), DRIVE(2);
+        PLAY_PAUSE(0), VOLUME(1), DRIVE(2), PREVIOUS(3), NEXT(4), SEEK(5), SEEK_BY(6);
 
         public final int id;
 
@@ -29,8 +30,12 @@ public record MegaphoneAction(int container,Kind kind,int value) implements Cust
     public static void register(PayloadRegistrar registrar){registrar.playToServer(TYPE,CODEC,(p,c)->{
         var player=c.player();if(p.kind==null || !(player.containerMenu instanceof MegaphoneMenu menu) || menu.containerId!=p.container || !menu.stillValid(player))return;
         var item=menu.horn();switch(p.kind){
-            case PLAY_PAUSE->MegaphoneData.play(item,player.level(),!MegaphoneData.playing(item));
-            case VOLUME->MegaphoneData.controls(item,p.value,MegaphoneData.drive(item));
+            case PLAY_PAUSE->MegaphoneData.control(item,player.level(),Action.PLAY_PAUSE,0);
+            case PREVIOUS->MegaphoneData.control(item,player.level(),Action.PREVIOUS,0);
+            case NEXT->MegaphoneData.control(item,player.level(),Action.NEXT,0);
+            case SEEK->MegaphoneData.control(item,player.level(),Action.SEEK,p.value);
+            case SEEK_BY->MegaphoneData.control(item,player.level(),Action.SEEK_BY,p.value);
+            case VOLUME->{MegaphoneData.tick(item,player.level());MegaphoneData.controls(item,p.value,MegaphoneData.drive(item));}
             case DRIVE->MegaphoneData.controls(item,MegaphoneData.volume(item),p.value);
         }
         player.getInventory().setChanged();

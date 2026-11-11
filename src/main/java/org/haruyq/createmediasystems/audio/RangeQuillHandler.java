@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.audio;
 
+import org.haruyq.createmediasystems.broadcast.BroadcastTowerBlock;
+
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.Reach;
@@ -163,7 +165,8 @@ public final class RangeQuillHandler {
             return true;
         }
         BlockState hovered = hoveredBlock == null ? null : player.level().getBlockState(hoveredBlock);
-        if (firstPos == null && hovered != null && hovered.is(AudioFeature.SPEAKER.get())) {
+        if (firstPos == null && hovered != null && (hovered.is(AudioFeature.SPEAKER.get())
+                || hovered.getBlock() instanceof BroadcastTowerBlock)) {
             pendingSpeaker = hoveredBlock;
             PacketDistributor.sendToServer(new RangeQuill.QueryBlockSettings(hoveredBlock));
             return true;

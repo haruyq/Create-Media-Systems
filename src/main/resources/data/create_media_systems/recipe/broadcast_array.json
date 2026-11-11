@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "SIS",
+    "SPS",
+    "SBS"
+  ],
+  "key": {
+    "S": {
+      "item": "create_media_systems:speaker"
+    },
+    "I": {
+      "item": "create:iron_sheet"
+    },
+    "P": {
+      "item": "create:precision_mechanism"
+    },
+    "B": {
+      "item": "create:brass_casing"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:broadcast_array",
+    "count": 1
+  }
+}

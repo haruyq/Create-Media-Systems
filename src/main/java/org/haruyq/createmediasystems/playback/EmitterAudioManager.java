@@ -159,13 +159,13 @@ public final class EmitterAudioManager {
         int revision = emitter.revision();
         double at = emitter.seconds();
         ItemStack media = emitter.media();
-        String url = MediaItem.url(media);
+        String url = emitter.url();
         if (url != null && UrlPolicy.isAllowed(url)) {
             var heard = new StreamSpec.Emitter(emitter::position, null,
                     () -> emitter.present() && emitter.revision() == revision, () -> inRange(emitter),
                     () -> gain(emitter), () -> pitch(emitter));
             StreamSpec spec = new StreamSpec(url, at, Streams.Channel.MIX, SoundSource.RECORDS, heard,
-                    seconds -> tellLength(mc, emitter, revision, seconds)).movingDisc(emitter.id(), emitter::seconds);
+                    seconds -> tellLength(mc, emitter, revision, seconds)).movingDisc(emitter.id(), revision, emitter::seconds);
             for (var decorator : emitter.decorators()) {
                 spec = spec.decorated(decorator);
             }

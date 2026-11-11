@@ -40,6 +40,11 @@ class BlockResourcesTest {
 
     private static final Map<String, Row> BLOCKS = new TreeMap<>(Map.ofEntries(
             Map.entry("blu_ray_player", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("broadcast_array", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("broadcast_base", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("broadcast_digital_horn", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("broadcast_horn", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("broadcast_mast", new Row(Tool.PICKAXE, false, true)),
             Map.entry("disc_cell_charger", new Row(Tool.PICKAXE, true, true)),
             Map.entry("disc_drive_emulator", new Row(Tool.PICKAXE, false, true)),
             Map.entry("disc_reader", new Row(Tool.AXE, false, true)),

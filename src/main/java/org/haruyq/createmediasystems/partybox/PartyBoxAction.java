@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.partybox;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.Remotable.Action;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -12,7 +13,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public record PartyBoxAction(int entity, Kind kind, int value) implements CustomPacketPayload {
     /** What is asked of the box from its open menu, with its stable wire id. */
     public enum Kind {
-        PLAY_PAUSE(0), VOLUME(1), BASS(2), LIGHTS(3), PULL(4), PACK(5);
+        PLAY_PAUSE(0), VOLUME(1), BASS(2), LIGHTS(3), PULL(4), PACK(5),
+        PREVIOUS(6), NEXT(7), SEEK(8), SEEK_BY(9);
 
         public final int id;
 
@@ -35,12 +37,16 @@ public record PartyBoxAction(int entity, Kind kind, int value) implements Custom
     }
     public static void handle(ServerPlayer player, PartyBoxAction request) {
         if(request.kind==null || !(player.level().getEntity(request.entity) instanceof PartyBoxEntity box) || box.isRemoved()) return;
-        if(!(player.containerMenu instanceof PartyBoxMenu menu) || menu.box!=box || !menu.stillValid(player)) return;
+        if(!(player.containerMenu instanceof PartyBoxMenu menu) || menu.box()!=box || !menu.stillValid(player)) return;
         switch(request.kind) {
-            case PLAY_PAUSE -> { if(box.playing()) box.pause(); else box.play(); }
-            case VOLUME -> box.setVolume(request.value);
-            case BASS -> box.setBass(request.value);
-            case LIGHTS -> box.setLights(request.value);
+            case PLAY_PAUSE -> box.control(Action.PLAY_PAUSE, 0);
+            case VOLUME -> { box.settlePower(); box.setVolume(request.value); }
+            case BASS -> { box.settlePower(); box.setBass(request.value); }
+            case LIGHTS -> { box.settlePower(); box.setLights(request.value); }
+            case PREVIOUS -> box.control(Action.PREVIOUS, 0);
+            case NEXT -> box.control(Action.NEXT, 0);
+            case SEEK -> box.control(Action.SEEK, request.value);
+            case SEEK_BY -> box.control(Action.SEEK_BY, request.value);
             case PULL -> { box.togglePull(player); player.closeContainer(); }
             case PACK -> { if(box.pack(player)) player.closeContainer(); }
         }

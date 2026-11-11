@@ -8,8 +8,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.*;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
-import org.haruyq.createmediasystems.stream.DiscKind;
-import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PortablePlaylist;
 
 public final class MegaphoneMenu extends HeldItemMenu {
     private final SimpleContainer contents=new SimpleContainer(2);private boolean updating;
@@ -19,7 +18,7 @@ public final class MegaphoneMenu extends HeldItemMenu {
         var level=inventory.player.level();contents.setItem(0,MegaphoneData.disc(item,level));contents.setItem(1,MegaphoneData.battery(item,level));
         contents.addListener(c->{if(!updating && !level.isClientSide && stillValid(inventory.player)){
             MegaphoneData.contents(item,level,c.getItem(0),c.getItem(1));inventory.setChanged();}});
-        addSlot(new FittingSlot(contents,0,28,60,item->MediaItem.fits(item, DiscKind.Slot.PORTABLE)));
+        addSlot(new FittingSlot(contents,0,28,60,PortablePlaylist::fits));
         addSlot(new FittingSlot(contents,1,28,108,BatteryItem::fits));
         addPlayerSlots(116,142);
     }
