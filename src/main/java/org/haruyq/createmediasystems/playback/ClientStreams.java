@@ -437,7 +437,7 @@ public final class ClientStreams {
     /**
      * In the last minute of each video playing here, resolves the next on its Blu-ray player, unless it is kept
      * already: it then starts without waiting on yt-dlp, which takes its own time on every computer, and the
-     * listeners all have it loaded about as soon as each other (see Streams#played).
+     * listeners all have it loaded about as soon as each other (see Streams#tick).
      */
     private static void resolveNext(ClientTickEvent.Post event) {
         var level = Minecraft.getInstance().level;

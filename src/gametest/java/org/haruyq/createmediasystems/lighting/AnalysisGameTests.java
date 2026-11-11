@@ -116,7 +116,7 @@ public final class AnalysisGameTests {
 
     /** Nobody listens here: its track plays once it has waited as long as a track waits for its listeners. */
     private static void loaded(VideoPlayerBlock.Entity player, LightingConsoleBlock.Entity console) {
-        put(player, "ticks", Streams.MAX_LOAD_TICKS);
+        Streams.tick(player, player.transport().clock(), player.getLevel().getGameTime() + Streams.MAX_LOAD_TICKS);
         AnalysisCoordinator.use(console);
     }
 

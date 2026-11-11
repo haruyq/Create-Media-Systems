@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.video;
 import java.util.List;
 
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Remotable;
 
 import org.jetbrains.annotations.Nullable;
@@ -123,8 +124,7 @@ final class RemoteScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            setMessage(Component.literal(VideoPlayerBlock.Entity.clock(value * length) + " / "
-                    + VideoPlayerBlock.Entity.clock(length)));
+            setMessage(Component.literal(PlaybackClock.format(value * length) + " / " + PlaybackClock.format(length)));
         }
 
         @Override
@@ -181,10 +181,8 @@ final class RemoteScreen extends Screen {
             if (playlist.isEmpty()) {
                 status = videoPlayer.state();
             } else {
-                int index = Math.min(videoPlayer.index(), playlist.size() - 1);
-                status = Component.translatable("create_media_systems.video_player.track", index + 1, playlist.size())
-                        .append("  ").append(videoPlayer.state());
-                url = playlist.get(index);
+                status = videoPlayer.track().append("  ").append(videoPlayer.state());
+                url = playlist.get(videoPlayer.shownIndex());
             }
         }
         seek.show(url == null || videoPlayer == null ? null

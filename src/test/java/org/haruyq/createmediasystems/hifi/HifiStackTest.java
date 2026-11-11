@@ -7,6 +7,7 @@ import java.util.List;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.playback.Tone;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.junit.jupiter.api.Test;
@@ -126,12 +127,26 @@ class HifiStackTest {
     void aTrackTakenUpWhereItWasLeftCountsOnFromThere() {
         DiscReaderBlock.Entity source = new DiscReaderBlock.Entity(new BlockPos(9, 64, 9),
                 AudioFeature.DISC_READER.get().defaultBlockState());
-        Streams.loading(source, null, 600, true);
-        assertEquals(600, Streams.played(source, 1), "its emitters haven't had their turn yet");
+        PlaybackClock clock = PlaybackClock.unattended();
+        clock.start(600);
+        Streams.loading(source, null, clock, 0);
+        Streams.tick(source, clock, 1);
+        assertEquals(600, clock.position(), "its emitters haven't had their turn yet");
         // Nobody is there to load it: it doesn't wait for them.
-        assertEquals(600, Streams.played(source, 2 * Streams.RELAY_TICKS));
-        assertEquals(650, Streams.played(source, 2 * Streams.RELAY_TICKS + 50));
-        Streams.loading(source, null, 600, false);
-        assertEquals(600, Streams.played(source, 2 * Streams.RELAY_TICKS + 50), "one that waits for someone to come");
+        tick(source, clock, 2, 2 * Streams.RELAY_TICKS);
+        assertEquals(600, clock.position());
+        tick(source, clock, 2 * Streams.RELAY_TICKS + 1, 2 * Streams.RELAY_TICKS + 50);
+        assertEquals(650, clock.position());
+        PlaybackClock waits = new PlaybackClock();
+        waits.start(600);
+        Streams.loading(source, null, waits, 0);
+        tick(source, waits, 1, 2 * Streams.RELAY_TICKS + 50);
+        assertEquals(600, waits.position(), "one that waits for someone to come");
+    }
+
+    private static void tick(DiscReaderBlock.Entity source, PlaybackClock clock, long from, long to) {
+        for (long now = from; now <= to; now++) {
+            Streams.tick(source, clock, now);
+        }
     }
 }

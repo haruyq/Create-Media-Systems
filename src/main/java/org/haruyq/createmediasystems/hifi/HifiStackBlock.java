@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -14,8 +13,10 @@ import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.playback.Tone;
 import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.DiscTransport;
 import org.haruyq.createmediasystems.stream.Downloads;
 import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -214,7 +215,10 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
      */
     static final int WARM_UP = 20;
 
-    public static class Entity extends BlockEntity implements VideoSource, Remotable, IHaveGoggleInformation {
+    public static class Entity extends BlockEntity implements VideoSource, Remotable, IHaveGoggleInformation,
+            DiscTransport.Deck {
+        private static final DiscTransport.Keys DISC_KEYS =
+                new DiscTransport.Keys("Track", "DiscPlaying", "DiscPaused", "DiscTicks");
         /** The client's stack whose knob is held, and which: the server's word for it waits (see HifiControls). */
         @Nullable
         public static Entity heldStack;
@@ -242,35 +246,28 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         /** The link of each of the tuner's stations; empty for none. */
         private final String[] stations = new String[STATIONS];
-        /** The station tuned in; -1 for none. */
+        /** The station tuned in; -1 for none. Its clock runs while one is. */
         private int station = -1;
-        private long tunedTicks;
+        private final PlaybackClock tuner = PlaybackClock.unattended();
 
         private ItemStack disc = ItemStack.EMPTY;
         private boolean trayOpen;
-        private int track;
-        private boolean discPlaying;
-        private boolean discPaused;
-        /** How far into its track the disc is (ticks). */
-        private long discTicks;
+        private final DiscTransport transport = new DiscTransport(this, true, PlaybackClock.unattended());
 
         private final ItemStack[] tapes = {ItemStack.EMPTY, ItemStack.EMPTY};
         private final Motion[] motions = {Motion.STOP, Motion.STOP};
-        /** Where each deck's tape is: the track, and how far into it (ticks). At its end, the track after the last. */
-        private final int[] tapeTracks = new int[2];
-        private final long[] tapeTicks = new long[2];
-
         /**
-         * Counts each input's restarts of the same link (a track played from its top again) as new playbacks. Each
-         * its own: a disc starting over is nothing to a tape that is heard.
+         * Where each deck's tape is: the track (at its end, the track after the last), and how far into it, on a
+         * clock that runs while the deck plays.
          */
-        private final int[] restarts = new int[Input.values().length];
+        private final int[] tapeTracks = new int[2];
+        private final PlaybackClock[] tapeClocks = {PlaybackClock.unattended(), PlaybackClock.unattended()};
+
         /** Whether what is heard still waits for its listeners to load it: its time stands until they have. */
         private boolean loading;
-        /** What its speakers were last told to play (see tick), and for how many ticks; not saved. */
+        /** What its speakers were last told to play (see tick); not saved. */
         @Nullable
         private Playing begun;
-        private long sinceBegin;
         /** Who last worked it, to start what it plays next. */
         @Nullable
         private Player by;
@@ -283,8 +280,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         public final float[] reels = new float[2];
         public final float[] lastReels = new float[2];
 
-        /** What is heard: which input, which deck, which link, and which start of it. */
-        private record Playing(Input input, int deck, String url, int restart) {
+        /**
+         * What is heard: which input, which deck, which link, and which run of its clock (see PlaybackClock#revision):
+         * a track played from its top again, or sought, is a new playback.
+         */
+        private record Playing(Input input, int deck, String url, int run) {
         }
 
         public Entity(BlockPos pos, BlockState state) {
@@ -354,11 +354,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         }
 
         public boolean discPlaying() {
-            return discPlaying;
+            return transport.playing();
         }
 
         public boolean discPaused() {
-            return discPaused;
+            return transport.paused();
         }
 
         /** Whether {@code input} is what is heard and still waits for its listeners to load it. */
@@ -368,7 +368,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         }
 
         public long discTicks() {
-            return discTicks;
+            return transport.clock().position();
         }
 
         public ItemStack tape(int deck) {
@@ -384,7 +384,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         }
 
         public long tapeTicks(int deck) {
-            return tapeTicks[deck];
+            return tapeClocks[deck].position();
         }
 
         /** What a knob is set to, 0 to 100. */
@@ -479,9 +479,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     items.add(disc);
                 }
                 disc = ItemStack.EMPTY;
-                discPlaying = discPaused = trayOpen = false;
-                track = 0;
-                discTicks = 0;
+                trayOpen = false;
+                transport.stop();
             } else if (unit == Unit.CASSETTE_DECK) {
                 for (int deck = 0; deck < 2; deck++) {
                     if (!tapes[deck].isEmpty()) {
@@ -490,6 +489,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 }
             } else if (unit == Unit.TUNER) {
                 station = -1;
+                tuner.stop();
             }
             return items;
         }
@@ -506,7 +506,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         @Override
         public int index() {
-            return track;
+            return transport.index();
         }
 
         /** The deck whose tape plays; -1 for neither. */
@@ -528,38 +528,37 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             switch (input) {
                 case DISC -> {
                     List<String> playlist = playlist();
-                    if (live(Unit.DISC_PLAYER) && wired(Cable.LINE) && discPlaying && !discPaused && !trayOpen
-                            && track < playlist.size()) {
-                        return new Playing(Input.DISC, 0, playlist.get(track), restarts[Input.DISC.ordinal()]);
+                    int track = transport.index();
+                    if (live(Unit.DISC_PLAYER) && wired(Cable.LINE) && transport.playing() && !transport.paused()
+                            && !trayOpen && track < playlist.size()) {
+                        return new Playing(Input.DISC, 0, playlist.get(track), transport.clock().revision());
                     }
                 }
                 case TAPE -> {
                     int deck = playingDeck();
                     if (live(Unit.CASSETTE_DECK) && deck >= 0) {
-                        return new Playing(Input.TAPE, deck, tracks(deck).get(tapeTracks[deck]), restarts[Input.TAPE.ordinal()]);
+                        return new Playing(Input.TAPE, deck, tracks(deck).get(tapeTracks[deck]), tapeClocks[deck].revision());
                     }
                 }
                 case TUNER -> {
                     if (live(Unit.TUNER) && station >= 0 && !stations[station].isEmpty()) {
-                        return new Playing(Input.TUNER, 0, stations[station], restarts[Input.TUNER.ordinal()]);
+                        return new Playing(Input.TUNER, 0, stations[station], tuner.revision());
                     }
                 }
             }
             return null;
         }
 
-        private long position(Playing playing) {
+        /** The clock of what {@code playing} plays. */
+        private PlaybackClock clock(Playing playing) {
             return switch (playing.input) {
-                case DISC -> discTicks;
-                case TAPE -> tapeTicks[playing.deck];
-                case TUNER -> tunedTicks;
+                case DISC -> transport.clock();
+                case TAPE -> tapeClocks[playing.deck];
+                case TUNER -> tuner;
             };
         }
 
-        /**
-         * What its speakers play, once tick has told them of it: the ticks since then, which Streams counts on from
-         * where it was (see Streams#loading), so a tape or a paused disc plays on from there.
-         */
+        /** What its speakers play, once tick has told them of it, as far in as its clock is. */
         @Override
         @Nullable
         public Streams.Source nowPlaying() {
@@ -567,14 +566,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             if (playing == null || !playing.equals(begun)) {
                 return null;
             }
-            Streams.Video video = null;
-            DiscKind kind = MediaItem.kindOf(disc);
-            if (playing.input == Input.DISC && kind != null && kind.hasPicture()) {
-                List<String> playlist = playlist();
-                video = new Streams.Video(worldPosition, kind.pictureHeight,
-                        track + 1 < playlist.size() ? Optional.of(playlist.get(track + 1)) : Optional.empty());
-            }
-            return new Streams.Source(playing.url, sinceBegin, video);
+            return playing.input == Input.DISC ? transport.source(worldPosition, MediaItem.kindOf(disc))
+                    : new Streams.Source(playing.url, clock(playing).position(), null);
         }
 
         /** The amplifier's volume knob, turned up slowly at first as a real one. */
@@ -635,31 +628,29 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             if (warming > 0) {
                 warming--;
             }
+            long now = level.getGameTime();
             // Whatever is heard now that wasn't a tick ago starts for its speakers, from where it is.
             Playing playing = audible();
             if (!Objects.equals(playing, begun)) {
                 begun = playing;
                 downloads.clear();
                 if (playing != null) {
-                    sinceBegin = 0;
-                    Streams.loading(this, by != null && !by.isRemoved() ? by : null, position(playing), true);
+                    Streams.loading(this, by != null && !by.isRemoved() ? by : null, clock(playing), now);
                 }
             }
-            boolean heard = playing != null;
-            boolean moving = false;
-            if (discPlaying && !discPaused) {
-                moving = true;
-                discTicks = heard && playing.input == Input.DISC ? Streams.played(this, ++sinceBegin) : discTicks + 1;
-                List<String> playlist = playlist();
-                if (track >= playlist.size()) {
-                    stopDisc();
-                } else if (level.getGameTime() % Streams.RELAY_TICKS == 0 && Streams.endedAt(playlist.get(track), discTicks)) {
-                    if (track + 1 < playlist.size()) {
-                        playTrack(track + 1);
-                    } else {
-                        stopDisc();
-                    }
+            // Everything runs on, heard or not; what is heard waits for its listeners to load it.
+            PlaybackClock heard = playing == null ? null : clock(playing);
+            for (PlaybackClock clock : clocks()) {
+                if (clock == heard) {
+                    Streams.tick(this, clock, now);
+                } else {
+                    clock.tick(now);
                 }
+            }
+            boolean moving = false;
+            if (transport.playing() && !transport.paused()) {
+                moving = true;
+                transport.advance(now);
             }
             for (int deck = 0; deck < 2; deck++) {
                 List<String> tracks = tracks(deck);
@@ -667,17 +658,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     case PLAY -> {
                         moving = true;
                         if (tapeTracks[deck] >= tracks.size()) {
-                            motions[deck] = Motion.STOP;
+                            move(deck, Motion.STOP);
                             changed();
-                            break;
-                        }
-                        tapeTicks[deck] = heard && playing.input == Input.TAPE && playing.deck == deck
-                                ? Streams.played(this, ++sinceBegin) : tapeTicks[deck] + 1;
-                        if (level.getGameTime() % Streams.RELAY_TICKS == 0
-                                && Streams.endedAt(tracks.get(tapeTracks[deck]), tapeTicks[deck])) {
+                        } else if (tapeClocks[deck].ended(tracks.get(tapeTracks[deck]), now)) {
                             tapeTracks[deck]++;
-                            tapeTicks[deck] = 0;
-                            restarts[Input.TAPE.ordinal()]++;
+                            tapeClocks[deck].start(0);
                             changed();
                         }
                     }
@@ -689,9 +674,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     }
                 }
             }
-            if (station >= 0) {
-                tunedTicks = heard && playing.input == Input.TUNER ? Streams.played(this, ++sinceBegin) : tunedTicks + 1;
-            }
             // Clients hold their counters while it loads, and count on once it plays.
             boolean waits = playing != null && !Streams.loaded(this);
             if (waits != loading) {
@@ -700,69 +682,89 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
             if (moving) {
                 setChanged();
-                if (level.getGameTime() % 100 == 0) {
+                if (now % 100 == 0) {
                     changed();
                 }
             }
         }
 
+        private List<PlaybackClock> clocks() {
+            return List.of(transport.clock(), tapeClocks[0], tapeClocks[1], tuner);
+        }
+
+        /** {@code deck} goes to {@code motion}: its tape's clock runs while it plays. */
+        private void move(int deck, Motion motion) {
+            motions[deck] = motion;
+            if (motion == Motion.PLAY) {
+                tapeClocks[deck].resume();
+            } else {
+                tapeClocks[deck].pause(level.getGameTime());
+            }
+        }
+
         /** Winds the tape of {@code deck} on or back, a track of unknown length taking two seconds; stops at either end. */
         private void wind(int deck, List<String> tracks) {
+            PlaybackClock clock = tapeClocks[deck];
             if (motions[deck] == Motion.FORWARD) {
                 if (tapeTracks[deck] >= tracks.size()) {
-                    motions[deck] = Motion.STOP;
+                    move(deck, Motion.STOP);
                     changed();
                     return;
                 }
-                tapeTicks[deck] += WIND;
+                long at = clock.position() + WIND;
                 double duration = Streams.duration(tracks.get(tapeTracks[deck]));
-                if (duration > 0 ? tapeTicks[deck] >= duration * 20 : tapeTicks[deck] >= 40 * WIND) {
+                if (duration > 0 ? at >= duration * PlaybackClock.TICKS_PER_SECOND : at >= 40 * WIND) {
                     tapeTracks[deck]++;
-                    tapeTicks[deck] = 0;
+                    clock.seek(0);
                     changed();
+                } else {
+                    clock.seek(at);
                 }
                 return;
             }
-            tapeTicks[deck] -= WIND;
-            if (tapeTicks[deck] >= 0) {
+            long at = clock.position() - WIND;
+            if (at >= 0) {
+                clock.seek(at);
                 return;
             }
             if (tapeTracks[deck] == 0 || tracks.isEmpty()) {
                 tapeTracks[deck] = 0;
-                tapeTicks[deck] = 0;
-                motions[deck] = Motion.STOP;
+                clock.seek(0);
+                move(deck, Motion.STOP);
             } else {
                 tapeTracks[deck] = Math.min(tapeTracks[deck], tracks.size()) - 1;
                 double duration = Streams.duration(tracks.get(tapeTracks[deck]));
-                tapeTicks[deck] = duration > 0 ? (long) (duration * 20) : 0;
+                clock.seek(duration > 0 ? (long) (duration * PlaybackClock.TICKS_PER_SECOND) : 0);
             }
             changed();
         }
 
         /** Between the server's words, a client counts on what plays and moves what moves. */
         private void clientTick() {
+            long now = level.getGameTime();
             // What is heard stands still while its listeners load it, as on the server.
             Playing waits = loading ? audible() : null;
-            if (discPlaying && !discPaused && (waits == null || waits.input != Input.DISC)) {
-                discTicks++;
-            }
+            transport.clock().tick(now, waits == null || waits.input != Input.DISC);
+            tuner.tick(now, waits == null || waits.input != Input.TUNER);
             lastTrayOut = trayOut;
             trayOut = Mth.clamp(trayOut + (trayOpen ? 0.12f : -0.12f), 0, 1);
             for (int deck = 0; deck < 2; deck++) {
                 lastReels[deck] = reels[deck];
+                PlaybackClock clock = tapeClocks[deck];
                 switch (motions[deck]) {
                     case PLAY -> {
-                        if (waits == null || waits.input != Input.TAPE || waits.deck != deck) {
-                            tapeTicks[deck]++;
+                        boolean counts = waits == null || waits.input != Input.TAPE || waits.deck != deck;
+                        clock.tick(now, counts);
+                        if (counts) {
                             reels[deck] += 9;
                         }
                     }
                     case FORWARD -> {
-                        tapeTicks[deck] += WIND;
+                        clock.seek(clock.position() + WIND);
                         reels[deck] += 55;
                     }
                     case REWIND -> {
-                        tapeTicks[deck] = Math.max(0, tapeTicks[deck] - WIND);
+                        clock.seek(Math.max(0, clock.position() - WIND));
                         reels[deck] -= 55;
                     }
                     case STOP -> {
@@ -771,47 +773,14 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
         }
 
-        private void playTrack(int entry) {
-            if (entry < 0 || entry >= playlist().size()) {
-                return;
-            }
-            track = entry;
-            discTicks = 0;
-            discPlaying = true;
-            discPaused = false;
-            restarts[Input.DISC.ordinal()]++;
-            changed();
-        }
-
-        /**
-         * The disc's track goes on from {@code to} ticks in, paused or not: as a new start of it (see restarts), heard,
-         * its listeners load it there and start together (see tick).
-         */
-        private void seekDisc(long to) {
-            List<String> playlist = playlist();
-            if (!discPlaying || track >= playlist.size()) {
-                return;
-            }
-            discTicks = Streams.seekable(playlist.get(track), to);
-            restarts[Input.DISC.ordinal()]++;
-        }
-
-        private void stopDisc() {
-            discPlaying = false;
-            discPaused = false;
-            track = 0;
-            discTicks = 0;
-            changed();
-        }
-
         /** Takes the tape out of {@code deck}, which remembers where it was stopped. */
         private ItemStack eject(int deck) {
             ItemStack tape = tapes[deck];
-            tape.set(HifiFeature.TAPE_POSITION.get(), new TapePosition(tapeTracks[deck], (int) tapeTicks[deck]));
+            tape.set(HifiFeature.TAPE_POSITION.get(), new TapePosition(tapeTracks[deck], (int) tapeClocks[deck].position()));
             tapes[deck] = ItemStack.EMPTY;
             motions[deck] = Motion.STOP;
             tapeTracks[deck] = 0;
-            tapeTicks[deck] = 0;
+            tapeClocks[deck].stop();
             return tape;
         }
 
@@ -838,7 +807,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     tapes[deck] = held.split(1);
                     TapePosition at = tapes[deck].getOrDefault(HifiFeature.TAPE_POSITION.get(), TapePosition.START);
                     tapeTracks[deck] = Mth.clamp(at.track(), 0, tracks(deck).size());
-                    tapeTicks[deck] = Math.max(0, at.ticks());
+                    tapeClocks[deck].seek(at.ticks());
                     click(1.2f);
                 } else if (!tapes[deck].isEmpty() && held.isEmpty()) {
                     player.getInventory().placeItemBackInInventory(eject(deck));
@@ -867,13 +836,12 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 case PRESET_1, PRESET_2, PRESET_3, PRESET_4, PRESET_5, PRESET_6 -> preset = Preset.byId(control.index);
                 case STATION_1, STATION_2, STATION_3, STATION_4, STATION_5, STATION_6 -> {
                     station = control.index;
-                    tunedTicks = 0;
-                    restarts[Input.TUNER.ordinal()]++;
+                    tuner.start(0);
                 }
                 case TRAY, OPEN -> {
                     if (!trayOpen) {
                         trayOpen = true;
-                        discPlaying = discPaused = false;
+                        transport.stop();
                     } else if (control == Control.TRAY && disc.isEmpty() && MediaItem.fits(held, DiscKind.Slot.DISC_TRAY)) {
                         disc = held.split(1);
                     } else if (control == Control.TRAY && !disc.isEmpty() && held.isEmpty()) {
@@ -881,8 +849,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                         disc = ItemStack.EMPTY;
                     } else {
                         trayOpen = false;
-                        track = 0;
-                        playTrack(0);
+                        transport.insert(player);
                     }
                 }
                 case PLAY -> control(Action.PLAY_PAUSE, 0, player);
@@ -892,16 +859,16 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 case PLAY_1, PLAY_2 -> {
                     int deck = control.index;
                     if (tapeTracks[deck] < tracks(deck).size()) {
-                        motions[deck] = Motion.PLAY;
+                        move(deck, Motion.PLAY);
                         // One tape at a time: the amplifier has one tape input.
                         if (motions[1 - deck] == Motion.PLAY) {
-                            motions[1 - deck] = Motion.STOP;
+                            move(1 - deck, Motion.STOP);
                         }
                     }
                 }
                 case REWIND_1, REWIND_2 -> wind(control.index, Motion.REWIND);
                 case FORWARD_1, FORWARD_2 -> wind(control.index, Motion.FORWARD);
-                case STOP_1, STOP_2 -> motions[control.index] = Motion.STOP;
+                case STOP_1, STOP_2 -> move(control.index, Motion.STOP);
                 default -> {
                 }
             }
@@ -909,7 +876,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         private void wind(int deck, Motion motion) {
             if (!tapes[deck].isEmpty()) {
-                motions[deck] = motion;
+                move(deck, motion);
             }
         }
 
@@ -938,39 +905,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 return;
             }
             this.by = by;
-            int last = playlist().size() - 1;
-            switch (action) {
-                case PLAY_PAUSE -> {
-                    if (trayOpen) {
-                        trayOpen = false;
-                        playTrack(0);
-                    } else if (!discPlaying) {
-                        playTrack(Math.min(track, last));
-                    } else {
-                        discPaused = !discPaused;
-                    }
-                }
-                case STOP -> stopDisc();
-                // Stopped, they pick the track to play; playing, a moment into a track the first goes back to its top.
-                case PREVIOUS -> {
-                    if (!discPlaying) {
-                        track = Math.max(track - 1, 0);
-                    } else {
-                        playTrack(discTicks > 60 ? track : Math.max(track - 1, 0));
-                    }
-                }
-                case NEXT -> {
-                    if (!discPlaying) {
-                        track = Math.max(Math.min(track + 1, last), 0);
-                    } else {
-                        playTrack(track + 1);
-                    }
-                }
-                case SELECT -> playTrack(value - 1);
-                case SEEK -> seekDisc(value * 20L);
-                case SEEK_BY -> seekDisc(discTicks + value * 20L);
-                default -> {
-                }
+            if (action == Action.PLAY_PAUSE && trayOpen) {
+                trayOpen = false;
+                transport.insert(by);
+            } else {
+                transport.control(action, value, by, level.getGameTime());
             }
             changed();
         }
@@ -1021,8 +960,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
             stations[index] = url;
             station = index;
-            tunedTicks = 0;
-            restarts[Input.TUNER.ordinal()]++;
+            tuner.start(0);
             by = player;
             changed();
         }
@@ -1032,7 +970,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         }
 
         /** Saved, and sent to clients, who draw it. */
-        private void changed() {
+        @Override
+        public void changed() {
             setChanged();
             if (level != null && !level.isClientSide) {
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
@@ -1041,15 +980,12 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         @Override
         public Component state() {
-            return Component.translatable(playlist().isEmpty() ? "create_media_systems.video_player.empty"
-                    : !discPlaying ? "create_media_systems.video_player.stopped"
-                    : discPaused ? "create_media_systems.video_player.paused" : "create_media_systems.video_player.playing");
+            return transport.state();
         }
 
-        /** {@code ticks} as m:ss. */
+        /** {@code ticks} into a track, as its counter shows it (see PlaybackClock#format). */
         public static String clock(long ticks) {
-            long seconds = Math.max(0, ticks) / 20;
-            return String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60);
+            return PlaybackClock.format(ticks / (double) PlaybackClock.TICKS_PER_SECOND);
         }
 
         @Override
@@ -1064,9 +1000,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     case EQUALIZER -> line("equalizer", preset.name(), effect * 2 + "%");
                     case TUNER -> station < 0 || stations[station].isEmpty() ? line("no_station")
                             : line("tuner", station + 1);
-                    case DISC_PLAYER -> playlist().isEmpty() ? state()
-                            : Component.translatable("create_media_systems.video_player.track",
-                            Math.min(track, playlist().size() - 1) + 1, playlist().size()).append("  ").append(state());
+                    case DISC_PLAYER -> playlist().isEmpty() ? state() : track().append("  ").append(state());
                     case CASSETTE_DECK -> line("deck", tapeLine(0), tapeLine(1));
                 };
                 boolean dead = unit != Unit.AMPLIFIER && !wired(Cable.system(unit));
@@ -1074,7 +1008,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                         HifiFeature.hifiUnit(unit).getDescriptionId()).withStyle(ChatFormatting.GOLD)));
                 tooltip.add(Component.literal("       ").append(dead ? line("unplugged_short") : status)
                         .withStyle(dead ? ChatFormatting.RED : ChatFormatting.GRAY));
-                if (unit == Unit.DISC_PLAYER && !dead && discPlaying) {
+                if (unit == Unit.DISC_PLAYER && !dead && transport.playing()) {
                     downloads.addTo(tooltip, "       ");
                 }
             }
@@ -1083,7 +1017,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         private String tapeLine(int deck) {
             return tapes[deck].isEmpty() ? "—" : motions[deck].name().charAt(0) + " "
-                    + Math.min(tapeTracks[deck] + 1, Math.max(1, tracks(deck).size())) + " " + clock(tapeTicks[deck]);
+                    + Math.min(tapeTracks[deck] + 1, Math.max(1, tracks(deck).size())) + " " + clock(tapeTicks(deck));
         }
 
         private static Component line(String key, Object... args) {
@@ -1110,22 +1044,19 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             }
             tag.put("Stations", links);
             tag.putInt("Station", station);
-            tag.putLong("TunedTicks", tunedTicks);
+            tag.putLong("TunedTicks", tuner.position());
             if (!disc.isEmpty()) {
                 tag.put("Disc", disc.save(registries));
             }
             tag.putBoolean("TrayOpen", trayOpen);
-            tag.putInt("Track", track);
-            tag.putBoolean("DiscPlaying", discPlaying);
-            tag.putBoolean("DiscPaused", discPaused);
-            tag.putLong("DiscTicks", discTicks);
+            transport.save(tag, DISC_KEYS);
             for (int deck = 0; deck < 2; deck++) {
                 if (!tapes[deck].isEmpty()) {
                     tag.put("Tape" + deck, tapes[deck].save(registries));
                 }
                 tag.putInt("Motion" + deck, motions[deck].ordinal());
                 tag.putInt("TapeTrack" + deck, tapeTracks[deck]);
-                tag.putLong("TapeTicks" + deck, tapeTicks[deck]);
+                tag.putLong("TapeTicks" + deck, tapeClocks[deck].position());
             }
         }
 
@@ -1161,20 +1092,17 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 stations[i] = i < links.size() ? links.getString(i) : "";
             }
             station = Mth.clamp(tag.getInt("Station"), -1, STATIONS - 1);
-            tunedTicks = tag.getLong("TunedTicks");
+            tuner.load(tag.getLong("TunedTicks"), station >= 0);
             disc = ItemStack.parseOptional(registries, tag.getCompound("Disc"));
             trayOpen = tag.getBoolean("TrayOpen");
-            track = Math.max(0, tag.getInt("Track"));
-            discPlaying = tag.getBoolean("DiscPlaying");
-            discPaused = tag.getBoolean("DiscPaused");
-            discTicks = tag.getLong("DiscTicks");
+            transport.load(tag, DISC_KEYS);
             loading = tag.getBoolean("Loading");
             downloads.read(tag);
             for (int deck = 0; deck < 2; deck++) {
                 tapes[deck] = ItemStack.parseOptional(registries, tag.getCompound("Tape" + deck));
                 motions[deck] = Motion.byId(tag.getInt("Motion" + deck));
                 tapeTracks[deck] = Math.max(0, tag.getInt("TapeTrack" + deck));
-                tapeTicks[deck] = Math.max(0, tag.getLong("TapeTicks" + deck));
+                tapeClocks[deck].load(tag.getLong("TapeTicks" + deck), motions[deck] == Motion.PLAY);
             }
         }
 

@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 
 import com.mojang.serialization.Codec;
 
@@ -59,6 +60,12 @@ public final class AudioFeature implements Feature {
     public static final Supplier<AttachmentType<JukeboxSettings>> JUKEBOX_SETTINGS = ATTACHMENTS.register(
             "jukebox_settings", () -> AttachmentType.builder(() -> JukeboxSettings.DEFAULT)
                     .serialize(JukeboxSettings.SERIALIZER).build());
+    /**
+     * Where a jukebox's custom disc is in its track (see Jukeboxes). Not saved: its song player keeps that, and the clock
+     * takes it up from there.
+     */
+    public static final Supplier<AttachmentType<PlaybackClock>> JUKEBOX_CLOCK = ATTACHMENTS.register(
+            "jukebox_clock", () -> AttachmentType.builder(() -> new PlaybackClock()).build());
     public static final DeferredBlock<DiscReaderBlock> DISC_READER = BLOCKS.register("disc_reader",
             () -> new DiscReaderBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
     public static final DeferredItem<?> DISC_READER_ITEM = ITEMS.registerSimpleBlockItem("disc_reader", DISC_READER);

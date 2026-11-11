@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
@@ -59,7 +60,8 @@ public final class DiscProjectile extends ThrowableItemProjectile {
             SynchedEntityData.defineId(DiscProjectile.class,EntityDataSerializers.INT);
     private long embeddedAtTick = -1L;
     private long spawnedAtTick = Long.MIN_VALUE;
-    private double durationSeconds = -1;
+    /** Its track's length in seconds once learned; server only (see clock). */
+    private double length = -1;
     private long nextDurationCheckTick;
     private LivingEntity attachedTarget;
     private int attachmentDeaths=-1;
@@ -93,14 +95,20 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         builder.define(ATTACH_BONE,-1);
     }
 
-    /** Server-synchronized start time; a joining listener seeks into the ongoing track. */
+    /**
+     * Its playback clock: it plays from the start time its synced data keeps (unset: not yet), so a joining listener
+     * seeks into the ongoing track; the length it learned is the server's alone.
+     */
+    private PlaybackClock clock() {
+        return PlaybackClock.of(0, entityData.get(MUSIC_START_TICK), true, 0, length);
+    }
+
     public double elapsedMusicSeconds() {
-        return playbackPositionTicks() / 20.0;
+        return clock().seconds(level().getGameTime());
     }
 
     public long playbackPositionTicks() {
-        long start = entityData.get(MUSIC_START_TICK);
-        return start == Long.MIN_VALUE ? 0 : Math.max(0L, level().getGameTime() - start);
+        return clock().position(level().getGameTime());
     }
 
     /** Snapshot this CD's server clock when it leaves the world, without affecting any other CD. */
@@ -205,9 +213,12 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     public void setCellTier(DiscCellTier tier) { entityData.set(CELL_TIER, tier.level); }
     public float damage() { return cellTier().damage; }
     @Override public ItemStack getPickResult() { return ItemStack.EMPTY; }
+    /** Its shooter's client tells its track's length, for a track the server can't tell the length of. */
     public void noteDuration(double seconds) {
-        if (!level().isClientSide && durationSeconds <= 0 && MediaItem.plausibleLength(seconds))
-            durationSeconds = seconds;
+        if (!level().isClientSide) learn(seconds);
+    }
+    private void learn(double seconds) {
+        PlaybackClock clock = clock(); clock.learn(seconds); length = clock.length();
     }
 
     @Override
@@ -244,21 +255,17 @@ public final class DiscProjectile extends ThrowableItemProjectile {
                 entityData.set(MUSIC_START_TICK, level().getGameTime()
                         - DiscPlayback.prepare(level(), getItem()).positionTicks());
             }
-            if (durationSeconds < 0 && level().getGameTime() >= nextDurationCheckTick) {
+            if (length <= 0 && level().getGameTime() >= nextDurationCheckTick) {
                 nextDurationCheckTick = level().getGameTime() + 20;
-                updateDuration();
+                learn(MediaItem.lengthSeconds(getItem(), level().registryAccess()));
             }
-            boolean ended = durationSeconds > 0 && elapsedMusicSeconds() >= durationSeconds;
-            if (ended || durationSeconds <= 0 && level().getGameTime() - spawnedAtTick >= UNKNOWN_LIFETIME_TICKS) {
+            boolean ended = clock().ended(level().getGameTime());
+            if (ended || length <= 0 && level().getGameTime() - spawnedAtTick >= UNKNOWN_LIFETIME_TICKS) {
                 recover(ended);
                 return false;
             }
         }
         return true;
-    }
-
-    private void updateDuration() {
-        durationSeconds = MediaItem.lengthSeconds(getItem(), level().registryAccess());
     }
 
     @Override
@@ -353,7 +360,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         tag.putLong("CmsDiscMusicStart", entityData.get(MUSIC_START_TICK));
         tag.putLong("CmsDiscEmbeddedAt", embeddedAtTick);
         tag.putLong("CmsDiscSpawnedAt", spawnedAtTick);
-        tag.putDouble("CmsDiscDuration", durationSeconds);
+        tag.putDouble("CmsDiscDuration", length);
         tag.putInt("CmsDiscCellTier", cellTier().level);
         if (blockAnchor != null) tag.putLong("CmsDiscBlockAnchor",blockAnchor.asLong());
         attachmentTargetUUID().ifPresent(id->tag.putUUID("CmsDiscAttachedTo",id));
@@ -371,7 +378,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
         embeddedAtTick = tag.getLong("CmsDiscEmbeddedAt");
         spawnedAtTick = tag.contains("CmsDiscSpawnedAt") ? tag.getLong("CmsDiscSpawnedAt")
                 : entityData.get(MUSIC_START_TICK);
-        durationSeconds = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;
+        length = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;
         blockAnchor = tag.contains("CmsDiscBlockAnchor") ? BlockPos.of(tag.getLong("CmsDiscBlockAnchor")) : null;
         setCellTier(DiscCellTier.at(tag.contains("CmsDiscCellTier") ? tag.getInt("CmsDiscCellTier") : 1));
         entityData.set(ATTACHED_TO,tag.hasUUID("CmsDiscAttachedTo")?Optional.of(tag.getUUID("CmsDiscAttachedTo")):Optional.empty());

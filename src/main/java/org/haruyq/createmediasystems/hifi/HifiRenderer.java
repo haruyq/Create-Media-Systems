@@ -299,7 +299,7 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             } else if (playlist.isEmpty()) {
                 pen.text(5.8f, 0.78f, 0.09f, 0.5f, "NO DISC", CYAN, true, MIDDLE, 5);
             } else {
-                pen.text(3.25f, 0.7f, 0.09f, 0.68f, String.format(Locale.ROOT, "%02d", Math.min(stack.index(), playlist.size() - 1) + 1),
+                pen.text(3.25f, 0.7f, 0.09f, 0.68f, String.format(Locale.ROOT, "%02d", stack.shownIndex() + 1),
                         CYAN, true, LEFT, 1.6f);
                 pen.text(4.95f, 0.72f, 0.09f, 0.26f, "/" + playlist.size(), 0x3F8FA0, true, LEFT, 1);
                 boolean loading = stack.loading(HifiStackBlock.Input.DISC);

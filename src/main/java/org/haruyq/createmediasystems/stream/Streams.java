@@ -58,15 +58,15 @@ public final class Streams {
 
     /** Per emitter, what it relays and to whom. */
     private static final Map<BlockEntity, Relay> RELAYS = new WeakHashMap<>();
-    /** How often (ticks) emitters relay their source's track, and sources check whether it has ended. */
+    /** How often (ticks of game time) emitters relay their source's track, and clocks ask whether it has ended. */
     public static final int RELAY_TICKS = 10;
     /** Longest a track waits for its listeners to load it: what a client waits for the API (see StreamSound). */
-    public static final long MAX_LOAD_TICKS = 90 * 20;
+    public static final long MAX_LOAD_TICKS = 90 * PlaybackClock.TICKS_PER_SECOND;
     /**
      * Longest a track waits for the rest of its listeners once one has it loaded: those slower to download it don't
      * hold everyone up for long, and catch up when they have it (see started).
      */
-    public static final long BARRIER_TICKS = 10 * 20;
+    public static final long BARRIER_TICKS = 10 * PlaybackClock.TICKS_PER_SECOND;
     private static final long LOADING = -1;
     /**
      * Per source, how its listeners load its track (see Load). Kept by the source's identity, or its place before it
@@ -81,10 +81,10 @@ public final class Streams {
     private static long lastLoadId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE / 2);
 
     /**
-     * A source's track as its listeners load it. Its position counts from when they all have it loaded (or the first
-     * of them, {@link #BARRIER_TICKS} on), when they are all told to play it together; so time spent loading (a fresh
-     * disc first waits out YouTube's pre-roll ad, a slow connection takes its time) is not taken as played: nobody
-     * starts that far in, and the track doesn't end that early.
+     * A source's track as its listeners load it. Its clock stands until they all have it loaded (or the first of them,
+     * {@link #BARRIER_TICKS} on), when they are all told to play it together; so time spent loading (a fresh disc first
+     * waits out YouTube's pre-roll ad, a slow connection takes its time) is not taken as played: nobody starts that far
+     * in, and the track doesn't end that early.
      */
     private static final class Load {
         /**
@@ -98,9 +98,11 @@ public final class Streams {
         final long barrierTicks;
         /** How far into the track it starts (ticks): 0 for the top, more for one taken up where it was left. */
         final long offset;
-        /** Whether it plays on after a moment with nobody there to load it, instead of waiting for someone to come. */
+        /** Whether it plays on after a moment with nobody there to load it (see PlaybackClock#unattended). */
         final boolean unattended;
-        /** The tick count since the track started at which it began to play; LOADING while it loads. */
+        /** The game time it began to load. */
+        final long since;
+        /** The game time it began to play; LOADING while it loads. */
         long playingFrom = LOADING;
         /** The players it was sent to while it loaded, whom it waits for. */
         final Set<ServerPlayer> expected = new HashSet<>();
@@ -109,14 +111,43 @@ public final class Streams {
          * of them, as a client may have opened its sides apart (one native player each), and each waits to be told.
          */
         final Map<ServerPlayer, Set<BlockPos>> ready = new HashMap<>();
-        /** The tick count at which the first of them had it loaded; LOADING until then. */
+        /** The game time the first of them had it loaded; LOADING until then. */
         long firstReadyAt = LOADING;
 
-        Load(@Nullable UUID startedBy, long barrierTicks, long offset, boolean unattended) {
+        Load(@Nullable UUID startedBy, long barrierTicks, long offset, boolean unattended, long since) {
             this.startedBy = startedBy;
             this.barrierTicks = barrierTicks;
             this.offset = offset;
             this.unattended = unattended;
+            this.since = since;
+        }
+
+        /**
+         * Whether it plays at game time {@code now}: once its listeners all have it loaded, or have had long enough, it
+         * starts playing, and those waiting are told to play it.
+         */
+        boolean open(long now) {
+            if (playingFrom != LOADING) {
+                return true;
+            }
+            expected.removeIf(ServerPlayer::isRemoved);
+            long age = now - since;
+            boolean everyone = !ready.isEmpty() && ready.keySet().containsAll(expected);
+            // Its emitters have had two turns to send it to whoever is near.
+            boolean nobody = unattended && age >= 2 * RELAY_TICKS && expected.isEmpty() && ready.isEmpty();
+            if (everyone || nobody || age >= MAX_LOAD_TICKS
+                    || firstReadyAt != LOADING && now - firstReadyAt >= barrierTicks) {
+                playingFrom = now;
+                ready.forEach((player, emitters) -> {
+                    if (!player.isRemoved()) {
+                        emitters.forEach(emitter -> PacketDistributor.sendToPlayer(player,
+                                new StreamPackets.SyncAtBlock(emitter, offset / (float) PlaybackClock.TICKS_PER_SECOND)));
+                    }
+                });
+                ready.clear();
+                expected.clear();
+            }
+            return playingFrom != LOADING;
         }
     }
 
@@ -241,34 +272,34 @@ public final class Streams {
                 : new Source(source.url(), source.ticks(), new Video(video.player(), video.maxHeight(), Optional.empty()));
     }
 
-    /** What {@code media} plays now, counted from when its listeners had it loaded (see played); null for nothing. */
+    /** What {@code media} plays now, as far in as its clock is (see PlaybackClock); null for nothing. */
     @Nullable
     public static Source playing(MediaSource media) {
-        Source source = media.nowPlaying();
-        return source == null ? null
-                : new Source(source.url(), played((BlockEntity) media, source.ticks()), source.video());
+        return media.nowPlaying();
     }
 
     /**
-     * {@code source} starts its track from the top: its position waits until its listeners have it (see Load).
-     * {@code by} is the player who started it; null when it follows on from the one before (who started that stays).
+     * {@code source}'s listeners load what {@code clock} plays, from where it is at game time {@code now}: it stands
+     * there until they all have it (see tick). A source calls this as it starts a track, or takes one up where it was
+     * left (a tape played on, a disc sought). {@code by} is the player who started it; null when it follows on from the
+     * one before (who started that stays).
      */
-    public static void loading(BlockEntity source, @Nullable Player by) {
-        loading(source, by, 0, false);
-    }
-
-    /**
-     * The same, {@code offset} ticks into its track: a tape played on from where it was stopped, a disc from where
-     * it was paused. The source counts its ticks from 0 again (see played). {@code unattended}: with nobody there
-     * to load it, it plays on after a moment instead of waiting for someone to come, as a deck's counter runs with
-     * nobody in the room.
-     */
-    public static void loading(BlockEntity source, @Nullable Player by, long offset, boolean unattended) {
+    public static void loading(BlockEntity source, @Nullable Player by, PlaybackClock clock, long now) {
         source.setChanged();
+        clock.hold(now);
         Load previous = LOADS.get(key(source));
         Source playing = source instanceof MediaSource media ? media.nowPlaying() : null;
         LOADS.put(key(source), new Load(by != null ? by.getUUID() : previous == null ? null : previous.startedBy,
-                MediaKind.barrierTicks(playing == null ? null : playing.url()), Math.max(0, offset), unattended));
+                MediaKind.barrierTicks(playing == null ? null : playing.url()), clock.position(now), clock.playsUnattended(), now));
+    }
+
+    /**
+     * One tick at game time {@code now} of {@code source}, whose listeners load what {@code clock} plays (see loading):
+     * the clock stands while they load it, and counts on once they all have it, or have had long enough.
+     */
+    public static void tick(BlockEntity source, PlaybackClock clock, long now) {
+        Load load = clock.running() ? LOADS.get(key(source)) : null;
+        clock.tick(now, load == null || load.open(now));
     }
 
     /** Which load of its track {@code source} plays (see Load#id); 0 for one never loaded since the server started. */
@@ -312,42 +343,8 @@ public final class Streams {
     }
 
     /**
-     * How many of the {@code ticks} since {@code source} started its track count as played (see Load). Once its
-     * listeners have it loaded, or have had long enough, it starts playing, and those waiting are told to play it.
-     */
-    public static long played(BlockEntity source, long ticks) {
-        Load load = LOADS.get(key(source));
-        if (load == null) {
-            return ticks;
-        }
-        if (load.playingFrom == LOADING) {
-            if (!load.ready.isEmpty() && load.firstReadyAt == LOADING) {
-                load.firstReadyAt = ticks;
-            }
-            load.expected.removeIf(ServerPlayer::isRemoved);
-            boolean everyone = !load.ready.isEmpty() && load.ready.keySet().containsAll(load.expected);
-            // Its emitters have had two turns to send it to whoever is near.
-            boolean nobody = load.unattended && ticks >= 2 * RELAY_TICKS && load.expected.isEmpty() && load.ready.isEmpty();
-            if (everyone || nobody || ticks >= MAX_LOAD_TICKS
-                    || load.firstReadyAt != LOADING && ticks - load.firstReadyAt >= load.barrierTicks) {
-                load.playingFrom = ticks;
-                load.ready.forEach((player, emitters) -> {
-                    if (!player.isRemoved()) {
-                        emitters.forEach(emitter ->
-                                PacketDistributor.sendToPlayer(player,
-                                        new StreamPackets.SyncAtBlock(emitter, load.offset / 20f)));
-                    }
-                });
-                load.ready.clear();
-                load.expected.clear();
-            }
-        }
-        return load.offset + (load.playingFrom == LOADING ? 0 : ticks - load.playingFrom);
-    }
-
-    /**
      * Whether {@code source}'s track plays, its listeners having it loaded (or having had long enough); false while
-     * it loads, when its position stands at 0 (see played). True for one never waited on.
+     * it loads, when its clock stands (see tick). True for one never waited on.
      */
     public static boolean loaded(BlockEntity source) {
         Load load = LOADS.get(key(source));
@@ -368,7 +365,7 @@ public final class Streams {
     /**
      * {@code player} has the stream of the emitter at {@code pos} loaded, paused until told to play it. Only from a
      * player that emitter sent it to. While its source's track loads, that is once every listener has it (see
-     * played); once it plays, at once, from how far in it is now: a player that took longer to download it, or joined
+     * Load#open); once it plays, at once, from how far in it is now: a player that took longer to download it, or joined
      * later, catches up there (see StreamPackets.SyncAtBlock). {@code duration} is the track's length as that
      * player's VLC sees it (0 if unknown, or live): it stands in for the API's, for tracks the API can't tell the
      * length of (pages only yt-dlp knows), so a Blu-ray player moves on when they end.
@@ -393,12 +390,17 @@ public final class Streams {
         boolean loading = load != null && load.playingFrom == LOADING;
         if (loading) {
             load.ready.computeIfAbsent(player, p -> new HashSet<>()).add(pos.immutable());
+            if (load.firstReadyAt == LOADING) {
+                load.firstReadyAt = level.getGameTime();
+            }
+            // Plays it now if this player was the last it waited for.
+            load.open(level.getGameTime());
         }
-        // Counts it as played so far, which plays it now if this player was the last it waited for.
         Source playing = source(level, sourcePos);
         learnDuration(playing, duration);
         if (playing != null && !loading) {
-            PacketDistributor.sendToPlayer(player, new StreamPackets.SyncAtBlock(pos, playing.ticks() / 20f));
+            PacketDistributor.sendToPlayer(player,
+                    new StreamPackets.SyncAtBlock(pos, playing.ticks() / (float) PlaybackClock.TICKS_PER_SECOND));
         }
     }
 
@@ -412,18 +414,13 @@ public final class Streams {
         }
     }
 
-    /** Whether {@code source} has played past its track's length, once the API has told us that length. */
-    public static boolean endedAt(Source source) {
-        return endedAt(source.url(), source.ticks());
-    }
-
     /**
      * Whether {@code url} has played past its length {@code ticks} in; false while that length is unknown. True for a
      * track the API refused: no listener can load it either, so a deck or player moves on past it.
      */
     public static boolean endedAt(String url, long ticks) {
         double duration = duration(url);
-        return REFUSED.contains(url) || duration > 0 && ticks >= duration * 20;
+        return REFUSED.contains(url) || duration > 0 && ticks >= duration * PlaybackClock.TICKS_PER_SECOND;
     }
 
     /**
@@ -480,7 +477,7 @@ public final class Streams {
                     load.expected.add(player);
                 }
                 PacketDistributor.sendToPlayer(player, new StreamPackets.PlayAtBlock(playing.url(), pos,
-                        playing.ticks() / 20f, settings, sound, Optional.ofNullable(playing.video()), loadId));
+                        playing.ticks() / (float) PlaybackClock.TICKS_PER_SECOND, settings, sound, Optional.ofNullable(playing.video()), loadId));
             }
         }
     }
@@ -518,7 +515,8 @@ public final class Streams {
      */
     public static long seekable(String url, long to) {
         double duration = duration(url);
-        return Math.max(0, duration > 0 ? Math.min(to, (long) (duration * 20) - 20) : to);
+        int second = PlaybackClock.TICKS_PER_SECOND;
+        return Math.max(0, duration > 0 ? Math.min(to, (long) (duration * second) - second) : to);
     }
 
     /** Track length in seconds from the API; negative while loading or for live/unknown streams. */

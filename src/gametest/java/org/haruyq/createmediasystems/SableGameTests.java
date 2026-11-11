@@ -64,7 +64,9 @@ public class SableGameTests {
         ItemStack remote = new ItemStack(VideoFeature.REMOTE.get());
         remote.set(VideoFeature.REMOTE_TARGET.get(), GlobalPos.of(level.dimension(), origin));
         remote.set(VideoFeature.REMOTE_SOURCE.get(), id);
-        Streams.played(player, Streams.MAX_LOAD_TICKS);
+        // Nobody listens here: its track plays once it has waited as long as a track waits for its listeners.
+        long played = level.getGameTime() + Streams.MAX_LOAD_TICKS;
+        Streams.tick(player, player.transport().clock(), played);
         BlockEntity groundBefore = level.getBlockEntity(ground);
         CompoundTag groundSaved = groundBefore.saveWithFullMetadata(level.registryAccess());
         level.removeBlockEntity(ground);
@@ -85,7 +87,9 @@ public class SableGameTests {
                 "a ground source is not moved with its speaker");
         VideoPlayerBlock.Entity moved = (VideoPlayerBlock.Entity) level.getBlockEntity(plot);
         helper.assertTrue(moved.playlist().equals(player.playlist()), "disc and playlist survive assembly");
-        helper.assertTrue(Streams.played(moved, Streams.MAX_LOAD_TICKS + 20) == 20, "playback clock follows the player");
+        Streams.tick(moved, moved.transport().clock(), played + 1);
+        helper.assertTrue(Streams.loadId(moved) == Streams.loadId(player) && Streams.loaded(moved)
+                && moved.transport().clock().position(played + 21) == 20, "playback clock follows the player");
         helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(origin).inflate(5)).isEmpty(),
                 "assembly must not drop or duplicate the disc");
 

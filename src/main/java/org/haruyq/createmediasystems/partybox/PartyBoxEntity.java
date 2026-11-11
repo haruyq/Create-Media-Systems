@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.*;
@@ -40,8 +41,10 @@ public final class PartyBoxEntity extends Entity {
         @Override public ItemStack removeItemNoUpdate(int slot) { settlePower();return super.removeItemNoUpdate(slot); }
     };
     private boolean changing;
-    private long powerAt = Long.MIN_VALUE;
-    private double fraction, duration = -1;
+    /** What its battery has paid for of its clock; server only. */
+    private PlaybackClock.Drain drain = new PlaybackClock.Drain(Long.MIN_VALUE, 0);
+    /** Its track's length in seconds once learned; server only (see clock). */
+    private double length = -1;
     private int lerpSteps;
     private double targetX, targetY, targetZ;
     private float targetYaw;
@@ -65,8 +68,16 @@ public final class PartyBoxEntity extends Entity {
     public int revision() { return entityData.get(REVISION); }
     public boolean playing() { return entityData.get(PLAYING); }
     public Optional<UUID> puller() { return entityData.get(PULLER); }
-    public long positionTicks() { return entityData.get(OFFSET) + (playing() ? Math.max(0, level().getGameTime() - entityData.get(START)) : 0); }
-    public double seconds() { return positionTicks() / 20.0; }
+    /** Its playback clock, as its synced data keeps it for every side; the length it learned is the server's alone. */
+    private PlaybackClock clock() {
+        return PlaybackClock.of(entityData.get(OFFSET), entityData.get(START), playing(), revision(), length);
+    }
+    private void keep(PlaybackClock clock) {
+        entityData.set(OFFSET, clock.offset()); entityData.set(START, clock.start()); entityData.set(PLAYING, clock.running());
+        entityData.set(REVISION, clock.revision()); length = clock.length();
+    }
+    public long positionTicks() { return clock().position(level().getGameTime()); }
+    public double seconds() { return clock().seconds(level().getGameTime()); }
     public Vec3 soundPosition() { return position().add(0, .34, 0); }
     public void setVolume(int value) { entityData.set(VOLUME, Math.clamp(value, 0, 32)); }
     public void setBass(int value) { entityData.set(BASS, Math.clamp(value, 0, 2)); }
@@ -76,31 +87,30 @@ public final class PartyBoxEntity extends Entity {
         if (changing || level().isClientSide) return;
         ItemStack next = inventory.getItem(0);
         if (!ItemStack.matches(next, disc())) {
-            pause(); duration = -1;
-            entityData.set(DISC, next.copy()); entityData.set(OFFSET, 0L);
-            entityData.set(REVISION, revision() + 1);
+            pause();
+            PlaybackClock clock = clock(); clock.stop(); clock.forget(); keep(clock);
+            entityData.set(DISC, next.copy());
         }
         entityData.set(BATTERY, inventory.getItem(1).copy());
         entityData.set(ENERGY, PartyBoxBatteryItem.energy(inventory.getItem(1)));
-        powerAt = level().getGameTime();
         if (!next.isEmpty() && energy() > 0 && !playing()) play();
     }
     public boolean play() {
         if (disc().isEmpty() || energy() <= 0) return false;
         if (MediaItem.silent(disc()) || !MediaItem.allowed(disc())) return false;
         if (playing()) return true;
-        entityData.set(START, level().getGameTime()); entityData.set(PLAYING, true);
-        entityData.set(REVISION, revision() + 1); powerAt = level().getGameTime();
+        tickPower();
+        PlaybackClock clock = clock(); clock.play(level().getGameTime()); keep(clock);
         return true;
     }
     public void pause() {
         if (!playing()) return;
         tickPower();if(!playing())return;
-        entityData.set(OFFSET, positionTicks()); entityData.set(PLAYING, false);
-        entityData.set(REVISION, revision() + 1);
+        PlaybackClock clock = clock(); clock.pause(level().getGameTime()); keep(clock);
     }
+    /** A listener's client tells its track's length, for a track the server can't tell the length of. */
     public void noteDuration(double seconds) {
-        if (duration <= 0 && MediaItem.plausibleLength(seconds)) duration = seconds;
+        PlaybackClock clock = clock(); clock.learn(seconds); keep(clock);
     }
     public void togglePull(Player player) {
         if (puller().filter(player.getUUID()::equals).isPresent()) { entityData.set(PULLER, Optional.empty()); previousPullerPosition=null; return; }
@@ -189,32 +199,17 @@ public final class PartyBoxEntity extends Entity {
         // A blocked trolley releases instead of teleporting through a wall or stretching the player's arm.
         if (player != null && player.distanceToSqr(this) > 6.25) entityData.set(PULLER, Optional.empty());
     }
+    /** Pays its battery for the music played since it last settled, and stops at the end of its track. */
     private void tickPower() {
+        PlaybackClock clock = clock();
+        if (!clock.running()) { drain.settle(clock, level().getGameTime(), energy(), 0); return; }
         long now = level().getGameTime();
-        if (powerAt == Long.MIN_VALUE) powerAt = now;
-        long elapsed = Math.max(0, now - powerAt); powerAt = now;
-        if (!playing()) return;
-        long currentPosition=positionTicks(), previousPosition=Math.max(0,currentPosition-elapsed);
-        boolean ended=duration>0 && currentPosition>=Math.round(duration*20);
-        long chargedTicks=ended?Math.min(elapsed,Math.max(0,Math.round(duration*20)-previousPosition)):elapsed;
-        double rate = PartyBoxSpecs.drainPerTick(volume(), bass(), lights());
-        double spent = fraction + chargedTicks * rate;
-        if (spent >= energy()) {
-            long allowed = Math.max(0, (long) Math.floor((energy() - fraction) / rate));
-            entityData.set(OFFSET, previousPosition + allowed);
-            entityData.set(PLAYING, false); entityData.set(REVISION, revision()+1);
-            entityData.set(ENERGY, 0); fraction = 0;
-        } else {
-            int whole=(int) spent; fraction=spent-whole;
-            if (whole > 0) entityData.set(ENERGY, energy()-whole);
-        }
-        PartyBoxBatteryItem.setEnergy(inventory.getItem(1), energy());
-        if (duration <= 0 && tickCount % 20 == 0) {
-            noteDuration(MediaItem.lengthSeconds(disc(), level().registryAccess()));
-        }
-        if (playing() && duration > 0 && seconds() >= duration) {
-            entityData.set(PLAYING,false);entityData.set(OFFSET,0L);entityData.set(REVISION,revision()+1);
-        }
+        int energy = drain.settle(clock, now, energy(), PartyBoxSpecs.drainPerTick(volume(), bass(), lights()));
+        entityData.set(ENERGY, energy);
+        PartyBoxBatteryItem.setEnergy(inventory.getItem(1), energy);
+        if (tickCount % 20 == 0) clock.learn(MediaItem.lengthSeconds(disc(), level().registryAccess()));
+        if (clock.running() && clock.ended(now)) clock.stop();
+        keep(clock);
     }
     public void settlePower(){if(!changing && !level().isClientSide && playing())tickPower();}
     public ItemStack portableItem() {
@@ -230,8 +225,7 @@ public final class PartyBoxEntity extends Entity {
         tag.put("Disc", inventory.getItem(0).saveOptional(registryAccess()));
         tag.put("Battery", inventory.getItem(1).saveOptional(registryAccess()));
         tag.putInt("Energy", energy()); tag.putInt("Volume", volume()); tag.putInt("Bass", bass()); tag.putInt("Lights", lights());
-        tag.putLong("Start", entityData.get(START)); tag.putLong("Offset", entityData.get(OFFSET)); tag.putBoolean("Playing", playing());
-        tag.putLong("PowerAt", powerAt); tag.putDouble("PowerFraction", fraction); tag.putDouble("Duration", duration);
+        clock().save(tag); drain.save(tag, "PowerFraction");
     }
     private void readContents(CompoundTag tag, boolean world) {
         changing=true;
@@ -241,12 +235,13 @@ public final class PartyBoxEntity extends Entity {
         entityData.set(DISC, inventory.getItem(0).copy()); entityData.set(BATTERY, inventory.getItem(1).copy());
         entityData.set(ENERGY, Math.min(PartyBoxBatteryItem.energy(inventory.getItem(1)), Math.max(0, tag.getInt("Energy"))));
         setVolume(tag.contains("Volume") ? tag.getInt("Volume") : 18); setBass(tag.getInt("Bass")); setLights(tag.getInt("Lights"));
-        entityData.set(START, world ? tag.getLong("Start") : level().getGameTime());
-        entityData.set(OFFSET, Math.max(0, tag.getLong("Offset")));
-        entityData.set(PLAYING, world && tag.getBoolean("Playing") && !disc().isEmpty() && energy()>0);
-        powerAt=world ? tag.getLong("PowerAt") : level().getGameTime();
-        fraction=Math.clamp(tag.getDouble("PowerFraction"), 0, .999999); duration=tag.getDouble("Duration");
-        entityData.set(REVISION, revision()+1); entityData.set(PULLER, Optional.empty());
+        // Packed into an item it stood still; in the world its clock ran on while unloaded, and its battery pays for that.
+        long now = level().getGameTime();
+        PlaybackClock saved = PlaybackClock.read(tag);
+        keep(PlaybackClock.of(saved.offset(), world ? saved.start() : now,
+                world && saved.running() && !disc().isEmpty() && energy() > 0, revision() + 1, saved.length()));
+        drain = world ? PlaybackClock.Drain.read(tag, "PowerFraction", now) : new PlaybackClock.Drain(now, tag.getDouble("PowerFraction"));
+        entityData.set(PULLER, Optional.empty());
     }
     @Override protected void addAdditionalSaveData(CompoundTag tag) { writeContents(tag); }
     @Override protected void readAdditionalSaveData(CompoundTag tag) { readContents(tag, true); }

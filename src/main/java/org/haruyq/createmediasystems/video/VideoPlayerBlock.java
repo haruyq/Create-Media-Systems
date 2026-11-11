@@ -1,15 +1,15 @@
 package org.haruyq.createmediasystems.video;
 
 import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
 
 import org.haruyq.createmediasystems.PercentSetting;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.DiscTransport;
 import org.haruyq.createmediasystems.stream.Downloads;
 import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.VideoSource;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -127,16 +127,10 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
-            DiscDrive.Fed {
+            DiscDrive.Fed, DiscTransport.Deck {
+        private static final DiscTransport.Keys KEYS = new DiscTransport.Keys("Index", "Playing", "Paused", "From", "Ticks");
         private ItemStack cd = ItemStack.EMPTY;
-        /** The playlist entry playing (or paused, or stopped at). */
-        private int index;
-        /** Ticks since the entry was started or sought; Streams counts on from {@link #from} with them (see played). */
-        private long ticks;
-        /** Where (ticks in) it was last sought to; 0 from the top. */
-        private long from;
-        private boolean playing;
-        private boolean paused;
+        private final DiscTransport transport = new DiscTransport(this, false, new PlaybackClock());
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
         /** How much of the video playing its listeners have downloaded. Not saved. */
@@ -185,7 +179,11 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         @Override
         public int index() {
-            return index;
+            return transport.index();
+        }
+
+        public DiscTransport transport() {
+            return transport;
         }
 
         /** Its remote or wrench turns all of its speakers and displays up or down. */
@@ -203,127 +201,64 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         @Nullable
         public Streams.Source nowPlaying() {
-            if (!playing || paused) {
-                return null;
-            }
-            List<String> playlist = playlist();
             DiscDrive drive = drive();
             DiscKind kind = drive != null ? drive.ready() : MediaItem.kindOf(cd);
-            return index < playlist.size() && kind != null
-                    ? new Streams.Source(playlist.get(index), counted(), new Streams.Video(worldPosition, kind.pictureHeight,
-                            index + 1 < playlist.size() ? Optional.of(playlist.get(index + 1)) : Optional.empty()))
-                    : null;
-        }
-
-        /**
-         * Its ticks as Streams counts on from them (see played): since it was started or sought, which its load adds
-         * {@link #from} to; with no load (the server restarted since), where it is.
-         */
-        private long counted() {
-            return Streams.loadId(this) == 0 ? from + ticks : ticks;
+            return kind == null ? null : transport.source(worldPosition, kind);
         }
 
         /** A new disc put in by {@code by} plays its first video; with none, the disc of a drive beside it does. */
         public void insert(ItemStack stack, @Nullable Player by) {
             cd = stack;
-            if (playlist().isEmpty()) {
-                playing = false;
-                changed();
-            } else {
-                play(0, by);
-            }
+            transport.insert(by);
         }
 
-        /**
-         * Plays entry {@code entry} from the top, if the playlist has it, as {@code by} asked (null: the one before
-         * ended); its displays and speakers start over.
-         */
-        private void play(int entry, @Nullable Player by) {
-            if (entry < 0 || entry >= playlist().size()) {
-                return;
+        /** Every listener loads the entry from where it now is, and they start together (see Streams#loading). */
+        @Override
+        public void started(@Nullable Player by, boolean sought) {
+            if (!sought) {
+                downloads.clear();
             }
-            index = entry;
-            ticks = 0;
-            from = 0;
-            playing = true;
-            paused = false;
-            downloads.clear();
-            Streams.loading(this, by);
-            changed();
+            if (level != null) {
+                Streams.loading(this, by, transport.clock(), level.getGameTime());
+            }
         }
 
         /** {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
         @Override
         public void control(Action action, int value, @Nullable Player by) {
-            switch (action) {
-                case PLAY_PAUSE -> {
-                    if (!playing) {
-                        play(index, by);
-                    } else {
-                        paused = !paused;
-                        changed();
-                    }
-                }
-                case STOP -> {
-                    playing = false;
-                    paused = false;
-                    ticks = 0;
-                    from = 0;
-                    changed();
-                }
-                case PREVIOUS -> play(Math.max(index - 1, 0), by);
-                case NEXT -> play(index + 1, by);
-                case SELECT -> play(value - 1, by);
-                case VOLUME -> volume.setValue(Mth.clamp(value, 0, 100));
-                case SEEK -> seek(value * 20L, by);
-                case SEEK_BY -> seek(Streams.played(this, counted()) + value * 20L, by);
+            if (action == Action.VOLUME) {
+                volume.setValue(Mth.clamp(value, 0, 100));
+            } else if (level != null) {
+                transport.control(action, value, by, level.getGameTime());
             }
-        }
-
-        /**
-         * The entry playing (or paused) goes on from {@code to} ticks in: every listener loads it there and they start
-         * together, as with a new entry (see Streams#loading).
-         */
-        private void seek(long to, @Nullable Player by) {
-            List<String> playlist = playlist();
-            if (!playing || index >= playlist.size()) {
-                return;
-            }
-            from = Streams.seekable(playlist.get(index), to);
-            ticks = 0;
-            Streams.loading(this, by, from, false);
-            changed();
         }
 
         @Override
         public void tick() {
             super.tick();
-            if (level == null || level.isClientSide || !playing || paused) {
+            if (level == null || level.isClientSide) {
                 return;
             }
-            ticks++;
-            setChanged();
-            Streams.Source source = Streams.playing(this);
-            if (ticks % Streams.RELAY_TICKS == 0 && source != null && Streams.endedAt(source)) {
-                if (index + 1 < playlist().size()) {
-                    play(index + 1, null);
-                } else {
-                    playing = false;
-                    changed();
-                }
+            long now = level.getGameTime();
+            Streams.tick(this, transport.clock(), now);
+            transport.advance(now);
+            if (transport.clock().running()) {
+                setChanged();
             }
         }
 
         @Override
         public void downloaded(ServerPlayer player, String url, float fraction) {
             List<String> playlist = playlist();
-            if (playing && index < playlist.size() && playlist.get(index).equals(url) && downloads.told(player, fraction)) {
+            if (transport.playing() && transport.index() < playlist.size() && playlist.get(transport.index()).equals(url)
+                    && downloads.told(player, fraction)) {
                 changed();
             }
         }
 
         /** Saved, and sent to clients for remotes and goggles. */
-        private void changed() {
+        @Override
+        public void changed() {
             setChanged();
             if (level != null && !level.isClientSide) {
                 sendData();
@@ -338,35 +273,33 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         @Override
         public Component state() {
-            return Component.translatable(playlist().isEmpty() ? "create_media_systems.video_player.empty"
-                    : !playing ? "create_media_systems.video_player.stopped"
-                    : paused ? "create_media_systems.video_player.paused" : "create_media_systems.video_player.playing");
+            return transport.state();
         }
 
         @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             List<String> playlist = playlist();
+            boolean playing = transport.playing();
             tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
-                    : !playing ? ChatFormatting.RED : paused ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
+                    : !playing ? ChatFormatting.RED : transport.paused() ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
             DriveEmulatorBlock.Entity beside = cd.isEmpty() ? DriveEmulatorBlock.beside(level, worldPosition) : null;
             if (beside != null) {
                 beside.describe(tooltip);
                 tooltip.add(Component.empty());
             } else if (!playlist.isEmpty()) {
-                tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.track",
-                        Math.min(index, playlist.size() - 1) + 1, playlist.size())).withStyle(ChatFormatting.GOLD));
-                tooltip.add(Component.literal("     " + shorten(playlist.get(Math.min(index, playlist.size() - 1))))
+                tooltip.add(Component.literal("     ").append(track()).withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("     " + shorten(playlist.get(shownIndex())))
                         .withStyle(ChatFormatting.DARK_GRAY));
                 tooltip.add(Component.empty());
             }
-            if (playing && !paused && level != null && level.isClientSide) {
+            if (playing && !transport.paused() && level != null && level.isClientSide) {
                 NativeAudio.Progress progress = NativeAudio.progress(worldPosition);
                 if (progress != null) {
                     tooltip.add(Component.literal("     ").append(progress.loading()
                             ? Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW)
-                            : Component.translatable("create_media_systems.video_player.position", value(clock(progress.seconds())
-                            + (progress.length() > 0 ? " / " + clock(progress.length()) : ""), ChatFormatting.WHITE)))
+                            : Component.translatable("create_media_systems.video_player.position", value(PlaybackClock.format(progress.seconds())
+                            + (progress.length() > 0 ? " / " + PlaybackClock.format(progress.length()) : ""), ChatFormatting.WHITE)))
                             .withStyle(ChatFormatting.GRAY));
                 }
             }
@@ -385,13 +318,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             return Component.literal(String.valueOf(value)).withStyle(color);
         }
 
-        /** {@code seconds} as m:ss, or h:mm:ss from an hour. */
-        static String clock(double seconds) {
-            long s = (long) seconds;
-            return s >= 3600 ? String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
-                    : String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
-        }
-
         private static String shorten(String url) {
             return url.length() > 40 ? url.substring(0, 39) + "…" : url;
         }
@@ -402,11 +328,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             if (!cd.isEmpty()) {
                 tag.put("Cd", cd.save(registries));
             }
-            tag.putInt("Index", index);
-            tag.putLong("Ticks", ticks);
-            tag.putLong("From", from);
-            tag.putBoolean("Playing", playing);
-            tag.putBoolean("Paused", paused);
+            transport.save(tag, KEYS);
             if (clientPacket) {
                 downloads.write(tag);
             }
@@ -416,11 +338,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.read(tag, registries, clientPacket);
             cd = ItemStack.parseOptional(registries, tag.getCompound("Cd"));
-            index = tag.getInt("Index");
-            ticks = tag.getLong("Ticks");
-            from = tag.getLong("From");
-            playing = tag.getBoolean("Playing");
-            paused = tag.getBoolean("Paused");
+            transport.load(tag, KEYS);
             if (clientPacket) {
                 downloads.read(tag);
             }

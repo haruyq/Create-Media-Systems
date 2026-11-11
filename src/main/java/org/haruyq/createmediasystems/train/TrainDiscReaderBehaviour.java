@@ -101,7 +101,7 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         if (context.data.getBoolean("Loading") && now - context.data.getLong("PlayingSince") >= Streams.MAX_LOAD_TICKS) {
             loaded(context, now); // nobody had it loaded in time: it plays on from here
         }
-        // Loading doesn't count as playing (see Streams#played): riders boarding meanwhile start from the top too.
+        // Loading doesn't count as playing (see Streams#tick): riders boarding meanwhile start from the top too.
         long ticks = context.data.getBoolean("Loading") ? 0 : now - context.data.getLong("PlayingSince");
         if (!UrlPolicy.isAllowed(url) || (Streams.duration(url) > 0 ? Streams.endedAt(url, ticks)
                 : ticks > UNKNOWN_LENGTH_RELAY_TICKS)) {

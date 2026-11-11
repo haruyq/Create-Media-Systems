@@ -32,5 +32,6 @@ public final class MegaphoneFeature implements Feature {
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
         MegaphoneAction.register(registrar);
+        MegaphoneLength.register(registrar);
     }
 }

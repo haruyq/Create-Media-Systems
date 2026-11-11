@@ -14,6 +14,7 @@ import net.neoforged.neoforge.client.event.*;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.*;
 import org.haruyq.createmediasystems.launcher.*;
 import org.haruyq.createmediasystems.megaphone.*;
@@ -77,7 +78,9 @@ public final class MegaphoneClient {
             if(url!=null && UrlPolicy.isAllowed(url)) {
                 double start=source.seconds();
                 var sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
-                        source::position,null,source::present,source::audible,source::gain,null,Streams.Channel.MIX,length->{});
+                        source::position,null,source::present,source::audible,source::gain,null,Streams.Channel.MIX,
+                        length->mc.execute(()->{if(mc.getConnection()!=null && source.player()==mc.player)
+                            PacketDistributor.sendToServer(new MegaphoneLength(source.id(),source.revision(),length));}));
                 sound.setDiscPlayback(id.get(),source::seconds);sound.setDynamicPitch(source::pitch);sound.setMegaphone(source::drive,source::volume);
                 ClientStreams.play(id.get(),sound);PLAYING.put(id.get(),new Playing(source,null,true,ticks));
             } else MediaItem.song(disc,mc.level.registryAccess()).ifPresent(song->{

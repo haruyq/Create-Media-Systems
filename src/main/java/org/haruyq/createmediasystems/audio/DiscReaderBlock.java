@@ -4,6 +4,7 @@ import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -89,8 +90,8 @@ public class DiscReaderBlock extends Block implements EntityBlock {
 
     public static class Entity extends BlockEntity implements MediaSource, DiscDrive.Fed {
         private ItemStack disc = ItemStack.EMPTY;
-        private long ticks;
-        private boolean playing;
+        /** How far into its disc's track it is; it runs while it plays. */
+        private final PlaybackClock clock = new PlaybackClock();
         /** Whether it had a redstone signal, so only a change starts or stops it. */
         private boolean powered;
 
@@ -101,8 +102,8 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         @Override
         @Nullable
         public Streams.Source nowPlaying() {
-            String url = playing ? url() : null;
-            return url != null ? new Streams.Source(url, ticks, null) : null;
+            String url = clock.running() ? url() : null;
+            return url != null ? new Streams.Source(url, clock.position(), null) : null;
         }
 
         /** Its disc's link, or with no disc that of the audio CD in a drive beside it (see DiscDrive). */
@@ -132,12 +133,22 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         /** A new disc (or none, but a drive's CD) starts from the beginning; speakers notice the restart on their next check. */
         public void insert(ItemStack stack, @Nullable Player by) {
             disc = stack;
-            ticks = 0;
-            playing = url() != null;
-            Streams.loading(this, by);
+            if (url() != null) {
+                play(by);
+            } else {
+                clock.stop();
+            }
             // A signal already on doesn't count as turning on later.
             powered = level != null && level.hasNeighborSignal(worldPosition);
             setChanged();
+        }
+
+        /** Its track plays from the top, for its listeners to load (see Streams#loading). */
+        private void play(@Nullable Player by) {
+            clock.start(0);
+            if (level != null) {
+                Streams.loading(this, by, clock, level.getGameTime());
+            }
         }
 
         /** A redstone signal turning on plays the disc from the start (unless it plays already); off stops it. */
@@ -146,24 +157,23 @@ public class DiscReaderBlock extends Block implements EntityBlock {
                 return;
             }
             powered = on;
-            if (on && !playing && url() != null) {
-                ticks = 0;
-                playing = true;
-                Streams.loading(this, null);
+            if (on && !clock.running() && url() != null) {
+                play(null);
             } else if (!on) {
-                playing = false;
+                clock.stop();
             }
             setChanged();
         }
 
         void tick() {
-            if (!playing) {
+            if (!clock.running()) {
                 return;
             }
-            ticks++;
-            Streams.Source source = Streams.playing(this);
-            if (ticks % Streams.RELAY_TICKS == 0 && source != null && Streams.endedAt(source)) {
-                playing = false;
+            long now = level.getGameTime();
+            Streams.tick(this, clock, now);
+            String url = url();
+            if (url != null && clock.ended(url, now)) {
+                clock.stop();
             }
             setChanged();
         }
@@ -174,8 +184,8 @@ public class DiscReaderBlock extends Block implements EntityBlock {
             if (!disc.isEmpty()) {
                 tag.put("Disc", disc.save(registries));
             }
-            tag.putLong("Ticks", ticks);
-            tag.putBoolean("Playing", playing);
+            tag.putLong("Ticks", clock.position());
+            tag.putBoolean("Playing", clock.running());
             tag.putBoolean("Powered", powered);
         }
 
@@ -183,8 +193,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
             disc = ItemStack.parseOptional(registries, tag.getCompound("Disc"));
-            ticks = tag.getLong("Ticks");
-            playing = tag.getBoolean("Playing");
+            clock.load(tag.getLong("Ticks"), tag.getBoolean("Playing"));
             powered = tag.getBoolean("Powered");
         }
     }
