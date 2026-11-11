@@ -8,6 +8,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -25,11 +26,13 @@ import java.util.zip.ZipFile;
 import com.sun.jna.Platform;
 
 final class DiscTools {
-    private static final String VERSION = "9.0.2";
-    private static final String ROOT = "ffmpeg-" + VERSION + "-full_build-shared/";
-    private static final URI DOWNLOAD = URI.create("https://github.com/GyanD/codexffmpeg/releases/download/"
-            + VERSION + "/ffmpeg-" + VERSION + "-full_build-shared.zip");
-    private static final String SHA256 = "8d31e162f1616e37aab3fa2db991b97e1b8dbeb1c8465fd81a81be16ff91b328";
+    private static final String VERSION = "9.0.2-cms-dvd1";
+    private static final String ROOT = "ffmpeg-" + VERSION + "/";
+    private static final URI DOWNLOAD = URI.create("https://github.com/haruyq/Create-Media-Systems/releases/download/disc-ffmpeg-"
+            + VERSION + "/ffmpeg-" + VERSION + "-win64.zip");
+    private static final String SHA256 = "e54ccd2c7761ef23b01fe0567972dabeb96bcda9633405963cdd4ef54900c9c1";
+    private static final String PREVIOUS = "9.0.2-win64";
+    private static final String PREVIOUS_SHA256 = "8d31e162f1616e37aab3fa2db991b97e1b8dbeb1c8465fd81a81be16ff91b328";
     private static final int MAX_DOWNLOAD = 256 * 1024 * 1024;
     private static final int MAX_UNPACKED = 768 * 1024 * 1024;
 
@@ -39,7 +42,7 @@ final class DiscTools {
     }
 
     static Installed ensure(Path directory, String ffmpeg, String ffprobe, Runnable downloading) throws IOException {
-        boolean autoFfmpeg = automatic(ffmpeg, "ffmpeg"), autoFfprobe = automatic(ffprobe, "ffprobe");
+        boolean autoFfmpeg = automatic(directory, ffmpeg, "ffmpeg"), autoFfprobe = automatic(directory, ffprobe, "ffprobe");
         if (!autoFfmpeg && !autoFfprobe) {
             return new Installed(ffmpeg, ffprobe);
         }
@@ -51,8 +54,16 @@ final class DiscTools {
                 autoFfprobe ? installed.resolve("ffprobe.exe").toString() : ffprobe);
     }
 
-    private static boolean automatic(String value, String name) {
-        return value.isBlank() || value.equals(name);
+    private static boolean automatic(Path directory, String value, String name) {
+        if (value.isBlank() || value.equals(name)) {
+            return true;
+        }
+        try {
+            return Path.of(value).toAbsolutePath().normalize()
+                    .equals(directory.resolve(PREVIOUS).resolve(name + ".exe").toAbsolutePath().normalize());
+        } catch (InvalidPathException invalid) {
+            return false;
+        }
     }
 
     static synchronized Path install(Path directory, URI download, String checksum, Runnable downloading) throws IOException {
@@ -61,6 +72,7 @@ final class DiscTools {
         try (var channel = FileChannel.open(directory.resolve(".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var lock = channel.lock()) {
             if (ready(target, checksum)) {
+                removePrevious(directory);
                 return target;
             }
             downloading.run();
@@ -72,10 +84,38 @@ final class DiscTools {
                 Files.delete(archive);
                 remove(target);
                 Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE);
+                removePrevious(directory);
                 return target;
             } finally {
                 remove(staging);
             }
+        }
+    }
+
+    private static void removePrevious(Path directory) throws IOException {
+        Path previous = directory.resolve(PREVIOUS), marker = previous.resolve(".complete");
+        try {
+            if (!previous.toRealPath().equals(directory.toRealPath().resolve(PREVIOUS)) || Files.size(marker) > 8192) {
+                return;
+            }
+            List<String> lines = Files.readAllLines(marker);
+            if (lines.isEmpty() || !lines.getFirst().equals(PREVIOUS_SHA256)) {
+                return;
+            }
+            List<String> names = lines.stream().skip(1).map(line -> line.split("\t", 2)[0]).toList();
+            if (!names.containsAll(List.of("ffmpeg.exe", "ffprobe.exe"))
+                    || names.stream().anyMatch(name -> !name.matches("[a-zA-Z0-9_+-][a-zA-Z0-9_.+-]*"))) {
+                return;
+            }
+            Files.deleteIfExists(previous.resolve("ffmpeg.exe"));
+            for (String name : names) {
+                Files.deleteIfExists(previous.resolve(name));
+            }
+            Files.delete(marker);
+            Files.delete(previous);
+        } catch (IOException inUse) {
+            // Keep the marker until all managed files are gone, so a later load can retry locked files.
+            checkInterrupted();
         }
     }
 
@@ -92,7 +132,7 @@ final class DiscTools {
             }
             for (String line : files.subList(1, files.size())) {
                 String[] parts = line.split("\t");
-                if (parts.length != 2 || !parts[0].matches("[a-zA-Z0-9_.-]+")
+                if (parts.length != 2 || !parts[0].matches("[a-zA-Z0-9_.+-]+")
                         || Files.size(directory.resolve(parts[0])) != Long.parseLong(parts[1])) {
                     return false;
                 }
@@ -166,7 +206,7 @@ final class DiscTools {
                     continue;
                 }
                 name = name.substring(ROOT.length());
-                if (!name.matches("bin/(ffmpeg\\.exe|ffprobe\\.exe|[a-zA-Z0-9_-]+\\.dll)|LICENSE|README\\.txt")) {
+                if (!name.matches("bin/(ffmpeg\\.exe|ffprobe\\.exe|[a-zA-Z0-9_+-]+\\.dll)|LICENSE|README\\.txt")) {
                     continue;
                 }
                 Path file = directory.resolve(name.substring(name.lastIndexOf('/') + 1));

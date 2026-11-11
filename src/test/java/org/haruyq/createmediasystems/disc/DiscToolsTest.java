@@ -93,22 +93,35 @@ class DiscToolsTest {
         server.start();
         URI uri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/ffmpeg.zip");
         AtomicInteger downloads = new AtomicInteger();
+        Path previous = previous();
         try {
             assertThrows(IOException.class, () -> DiscTools.install(directory, uri, "0".repeat(64), downloads::incrementAndGet));
+            assertTrue(Files.isRegularFile(previous.resolve("ffmpeg.exe")));
             try (var files = Files.list(directory)) {
-                assertEquals(List.of(".lock"), files.map(file -> file.getFileName().toString()).toList());
+                assertEquals(List.of(".lock", "9.0.2-win64"), files.map(file -> file.getFileName().toString()).sorted().toList());
             }
             Path installed = DiscTools.install(directory, uri, hash, downloads::incrementAndGet);
+            assertFalse(Files.exists(previous));
             assertTrue(Files.isRegularFile(installed.resolve("ffmpeg.exe")));
             assertTrue(Files.isRegularFile(installed.resolve("ffprobe.exe")));
             assertTrue(Files.isRegularFile(installed.resolve("LICENSE")));
             assertFalse(Files.exists(directory.resolve("escaped.exe")));
-            Files.delete(installed.resolve("avcodec-63.dll"));
+            Files.delete(installed.resolve("libstdc++-6.dll"));
             assertEquals(installed, DiscTools.install(directory, uri, hash, downloads::incrementAndGet));
-            assertTrue(Files.isRegularFile(installed.resolve("avcodec-63.dll")));
+            assertTrue(Files.isRegularFile(installed.resolve("libstdc++-6.dll")));
             assertEquals(3, downloads.get());
             server.stop(0);
+            Files.delete(previous().resolve("ffmpeg.exe"));
             assertEquals(installed, DiscTools.install(directory, uri, hash, () -> fail("Cached tools must work offline")));
+            assertFalse(Files.exists(previous), "retry a partially removed old installation even when the new one is cached");
+            Files.createDirectories(previous);
+            Files.writeString(previous.resolve("ffmpeg.exe"), "custom");
+            DiscTools.install(directory, uri, hash, () -> fail("Downloaded twice"));
+            assertEquals("custom", Files.readString(previous.resolve("ffmpeg.exe")), "an unmarked folder is not managed");
+            previous();
+            Files.writeString(previous.resolve(".complete"), "../outside\t1\n", java.nio.file.StandardOpenOption.APPEND);
+            DiscTools.install(directory, uri, hash, () -> fail("Downloaded twice"));
+            assertTrue(Files.exists(previous.resolve("ffmpeg.exe")), "reject paths outside the old installation before deleting anything");
         } finally {
             server.stop(0);
         }
@@ -138,14 +151,23 @@ class DiscToolsTest {
         }
     }
 
+    private Path previous() throws Exception {
+        Path previous = Files.createDirectories(directory.resolve("9.0.2-win64"));
+        Files.writeString(previous.resolve("ffmpeg.exe"), "old");
+        Files.writeString(previous.resolve("ffprobe.exe"), "old");
+        Files.writeString(previous.resolve(".complete"), "8d31e162f1616e37aab3fa2db991b97e1b8dbeb1c8465fd81a81be16ff91b328\n"
+                + "ffmpeg.exe\t3\nffprobe.exe\t3\n");
+        return previous;
+    }
+
     private static byte[] archive(boolean complete) throws Exception {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
-            for (String name : List.of("bin/ffmpeg.exe", "bin/ffprobe.exe", "bin/avcodec-63.dll", "LICENSE", "README.txt", "bin/../../escaped.exe")) {
+            for (String name : List.of("bin/ffmpeg.exe", "bin/ffprobe.exe", "bin/libstdc++-6.dll", "LICENSE", "README.txt", "bin/../../escaped.exe")) {
                 if (!complete && name.endsWith("ffprobe.exe")) {
                     continue;
                 }
-                zip.putNextEntry(new ZipEntry("ffmpeg-9.0.2-full_build-shared/" + name));
+                zip.putNextEntry(new ZipEntry("ffmpeg-9.0.2-cms-dvd1/" + name));
                 zip.write(new byte[]{1, 2, 3});
                 zip.closeEntry();
             }

@@ -112,6 +112,16 @@ class DiscStreamTest {
     }
 
     @Test
+    void waitsOnlyForWhereItsPlayerIs() {
+        assertTrue(DiscStream.follows(29, 29), "the segment it asked for");
+        assertTrue(DiscStream.follows(32, 29), "and the three read ahead of it");
+        assertFalse(DiscStream.follows(33, 29));
+        assertFalse(DiscStream.follows(23, 29), "what was read ahead before it sought on is left");
+        assertTrue(DiscStream.follows(0, 29), "the top, where every player opens");
+        assertTrue(DiscStream.follows(41, 40) && DiscStream.follows(43, 40), "opened 164 s in: 41 to 43 (see prepare)");
+    }
+
+    @Test
     void refusesScrambledPesPackets() {
         assertTrue(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0xb0}));
         assertFalse(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0x80}));

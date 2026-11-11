@@ -4,14 +4,31 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class DiscRunTest {
     private static final long FIRST = 4 * 90_000;
+
+    @Test
+    void keepsTheLastErrorAndWaitsForStderrBeforeReportingFailure(@TempDir Path directory) throws Exception {
+        Path helper = directory.resolve("FailedReader.java");
+        Files.writeString(helper, "class FailedReader { public static void main(String[] args) { "
+                + "System.err.print(\"x\".repeat(12000)); System.err.println(\"Unable to read DVD sector 1234\"); System.exit(1); } }");
+        try (DiscRun run = new DiscRun(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(), helper.toString()),
+                null, new DiscSource.Quality(480, 30, 1100), "libx264", 0)) {
+            IOException failure = assertThrows(IOException.class, run::take);
+            assertNotNull(failure.getCause());
+            assertTrue(failure.getCause().getMessage().endsWith("Unable to read DVD sector 1234"));
+        }
+    }
 
     @Test
     void cutsOnVideoBoundariesAndLeadsEachSegmentWithTheTables() throws Exception {
@@ -34,6 +51,20 @@ class DiscRunTest {
         assertEquals(FIRST + 360_000, DiscRun.videoPts(Arrays.copyOfRange(segments.get(1), 564, 752)));
         assertEquals(FIRST + 719_500, DiscRun.videoPts(Arrays.copyOfRange(segments.get(2), 564, 752)), "within a frame of the boundary");
         assertEquals(-1, DiscRun.videoPts(audio()));
+    }
+
+    @Test
+    void goesOnOnlyWhereANewPassWouldBeNoSooner() {
+        long second = 1_000_000_000L;
+        assertTrue(DiscRun.sooner(0, 16 * second, 6 * second), "its next segment is always its own");
+        // A real drive on a CSS disc: ten seconds to seek, six to read each segment.
+        assertTrue(DiscRun.sooner(1, 16 * second, 6 * second));
+        assertFalse(DiscRun.sooner(2, 16 * second, 6 * second), "three segments to read take longer than seeking there");
+        // A folder on a fast disk: under a second to start, a tenth for a segment.
+        assertTrue(DiscRun.sooner(6, second, second / 10));
+        assertFalse(DiscRun.sooner(12, second, second / 10));
+        assertTrue(DiscRun.sooner(DiscRun.REACH, 5 * second, 0), "until it knows how fast it reads");
+        assertFalse(DiscRun.sooner(DiscRun.REACH + 1, 5 * second, 0));
     }
 
     private static byte[] video(long pts) {

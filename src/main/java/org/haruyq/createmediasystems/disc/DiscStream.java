@@ -5,13 +5,13 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +44,13 @@ public final class DiscStream implements AutoCloseable {
             Thread.ofPlatform().daemon().name("CMS disc encoder").factory());
     private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<Integer, Cached> segments = new LinkedHashMap<>(16, 0.75f, true);
-    private final Map<UUID, ArrayDeque<Request>> serving = new HashMap<>();
+    /** As host: the request each viewer waits for now. Its next is in place of it: it waits for one at a time. */
+    private final Map<UUID, Request> waiting = new ConcurrentHashMap<>();
+    private final Set<UUID> serving = new HashSet<>();
+    /** The segment this computer's player asked for last, or opens at: the three after it are read ahead (see wanted). */
+    private volatile int playing = -1;
+    /** How many segments in a row a DVD's pass took longer to read than they play; -1 once that is said. */
+    private int slow;
     private final Map<UUID, Delivery> deliveries = new ConcurrentHashMap<>();
     private final Object reception = new Object();
     private final Object fetchLock = new Object();
@@ -137,6 +143,7 @@ public final class DiscStream implements AutoCloseable {
             fetch(-1);
         }
         int start = Math.min(count() - 1, Math.max(0, (int) (startSeconds / DiscSource.SEGMENT_SECONDS)));
+        playing = start - 1;
         // Queued in order, at the back: each at the front put 2 before 1, and a DVD's pass (DiscRun) seeks again for
         // every segment taken out of order, jumping at the first boundaries.
         List<CompletableFuture<byte[]>> ready = new ArrayList<>();
@@ -188,10 +195,13 @@ public final class DiscStream implements AutoCloseable {
                     exchange.sendResponseHeaders(404, -1);
                     return;
                 }
+                playing = index;
+                sweep();
                 body = await(segment(index));
                 // Ahead only of a player going on from the segment before: each opens at the top first, wherever it
-                // then starts, and a DVD's pass sent on from there seeks away from where the disc plays.
-                for (int i = index + 1; known(index - 1) && i < Math.min(count(), index + 4); i++) {
+                // then starts, and a DVD's pass sent on from there seeks away from where the disc plays. And only
+                // where it still is: it may have sought on while this waited.
+                for (int i = index + 1; playing == index && known(index - 1) && i < Math.min(count(), index + 4); i++) {
                     segment(i, true);
                 }
                 exchange.getResponseHeaders().set("Content-Type", "video/mp2t");
@@ -203,7 +213,7 @@ public final class DiscStream implements AutoCloseable {
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
         } catch (IOException failed) {
-            if (!closed) {
+            if (!closed && !(failed instanceof Stale)) {
                 status.accept("Disc buffering failed: " + failed.getMessage());
             }
         } finally {
@@ -213,6 +223,43 @@ public final class DiscStream implements AutoCloseable {
 
     private synchronized boolean known(int index) {
         return segments.containsKey(index);
+    }
+
+    /** A segment nobody waits for any more (see sweep). */
+    static final class Stale extends IOException {
+        Stale() {
+            super("Nobody waits for this disc segment any more");
+        }
+    }
+
+    /**
+     * Whether {@code index} is where a player at {@code playing} is: the segment it asked for, one of the three read
+     * ahead of it, or the top, which every player opens at.
+     */
+    static boolean follows(int index, int playing) {
+        return index == 0 || index >= playing && index <= playing + 3;
+    }
+
+    /** Whether anyone waits for {@code index} now: this computer's player (see follows), or a viewer. */
+    private boolean wanted(int index) {
+        return follows(index, playing) || waiting.values().stream().anyMatch(asked -> asked.index == index);
+    }
+
+    /** Drop abandoned reads after a seek, before they can restart the DVD pass at an old position. */
+    private synchronized void sweep() {
+        for (var it = segments.entrySet().iterator(); it.hasNext();) {
+            var each = it.next();
+            Cached queued = each.getValue();
+            if (!queued.ready.isDone() && !wanted(each.getKey()) && work.remove(queued.work)) {
+                it.remove();
+                queued.ready.completeExceptionally(new Stale());
+            }
+        }
+        synchronized (reception) {
+            if (pending != null && pending.index >= 0 && !wanted(pending.index)) {
+                pending.result.completeExceptionally(new Stale());
+            }
+        }
     }
 
     private CompletableFuture<byte[]> segment(int index) {
@@ -267,6 +314,7 @@ public final class DiscStream implements AutoCloseable {
                         throw new IOException("Disc sharing needs at least 0.5 Mbps per viewer");
                     }
                     long started = System.nanoTime();
+                    DiscRun before = run;
                     try {
                         bytes = encode(index, quality);
                     } catch (DiscSource.EncoderFailed failed) {
@@ -285,10 +333,17 @@ public final class DiscStream implements AutoCloseable {
                         adaptive.encoded(System.nanoTime() - started, available);
                     }
                     DiscRun current = run;
-                    report(index, source.segmented() || current == null ? quality : current.quality);
+                    long took = System.nanoTime() - started;
+                    report(index, source.segmented() || current == null ? quality : current.quality, took);
+                    slow(current != null && current == before && took > DiscSource.SEGMENT_SECONDS * 1_000_000_000L, took);
                 }
                 keep(index, bytes, result);
             } catch (IOException | RuntimeException failed) {
+                if (source != null && !(failed instanceof Stale)) {
+                    // What FFmpeg said goes no further than this log: it names this computer's drive and paths.
+                    status.accept("Disc segment " + index + " failed: " + failed.getMessage()
+                            + (failed.getCause() == null ? "" : " (FFmpeg: " + failed.getCause().getMessage() + ")"));
+                }
                 result.completeExceptionally(failed);
                 synchronized (this) {
                     segments.computeIfPresent(index, (key, current) -> current.ready == result ? null : current);
@@ -304,13 +359,25 @@ public final class DiscStream implements AutoCloseable {
         return result;
     }
 
-    private void report(int index, DiscSource.Quality used) {
+    /** {@code index} is encoded, in {@code nanos} (-1: on a DVD's pass's way to another). */
+    private void report(int index, DiscSource.Quality used, long nanos) {
         // A CD has no picture to say the quality of.
         boolean sound = source.cd() != null;
         lastQuality = sound ? "192 kbps" : used.height() + "p" + used.fps() + " " + used.kbps() + " kbps";
         lastEncoded = index;
         status.accept("Disc segment " + index + ": " + (sound ? lastQuality
-                : used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps"));
+                : used.height() + "p " + used.fps() + " fps, " + used.kbps() + " kbps")
+                + (nanos < 0 ? "" : String.format(Locale.ROOT, " in %.1f s", nanos / 1e9)));
+    }
+
+    private void slow(boolean slower, long nanos) {
+        if (slow < 0 || !slower) {
+            slow = Math.min(slow, 0);
+        } else if (++slow == 3) {
+            slow = -1;
+            status.accept(String.format(Locale.ROOT, "DVD reading and encoding took %.1f s for %d s of video; "
+                    + "playback is waiting for the host. Check the drive and FFmpeg runtime.", nanos / 1e9, DiscSource.SEGMENT_SECONDS));
+        }
     }
 
     private synchronized void keep(int index, byte[] bytes, CompletableFuture<byte[]> result) throws IOException {
@@ -339,9 +406,11 @@ public final class DiscStream implements AutoCloseable {
         if (known == null) {
             known = new Cached(quality, new CompletableFuture<>(), () -> { });
             segments.put(index, known);
+        } else {
+            work.remove(known.work);
         }
         keep(index, bytes, known.ready);
-        report(index, quality);
+        report(index, quality, -1);
     }
 
     /**
@@ -360,6 +429,8 @@ public final class DiscStream implements AutoCloseable {
             if (current != null) {
                 current.close();
             }
+            status.accept("Disc pass from segment " + index
+                    + (current == null ? "" : ", in place of one at " + current.next()));
             run = current = source.run(index, quality, codec);
             if (closed) {
                 current.close();
@@ -426,8 +497,10 @@ public final class DiscStream implements AutoCloseable {
             sendControl(control(2, request.id, index));
             return bytes;
         } catch (IOException failed) {
-            failures++;
-            lastError = failed.getMessage();
+            if (!(failed instanceof Stale)) {
+                failures++;
+                lastError = failed.getMessage();
+            }
             throw failed;
         } finally {
             waitingSince = 0;
@@ -475,51 +548,55 @@ public final class DiscStream implements AutoCloseable {
         } else if (type == 1) {
             synchronized (this) {
                 deliveries.keySet().retainAll(transport.connected());
-                ArrayDeque<Request> queue = serving.get(peer);
-                boolean start = queue == null;
-                if (start) {
-                    if (serving.size() >= 16 || closed) {
-                        return;
-                    }
-                    queue = new ArrayDeque<>();
-                    serving.put(peer, queue);
-                }
-                if (queue.size() >= 4) {
+                if (closed || serving.size() >= 16 && !serving.contains(peer)) {
                     return;
                 }
-                queue.add(new Request(request, index));
-                if (start) {
-                    workers.execute(() -> servePeer(peer));
-                }
+                Request asked = new Request(request, index, new CompletableFuture<>());
+                Request previous = waiting.put(peer, asked);
+                if (previous != null) previous.cancelled.completeExceptionally(new Stale());
+                sweep();
+                if (serving.add(peer)) workers.execute(() -> servePeer(peer));
             }
         }
     }
 
     private void servePeer(UUID peer) {
         while (!closed) {
-            Request request;
+            Request asked;
             synchronized (this) {
-                request = serving.get(peer).poll();
-                if (request == null) {
+                asked = waiting.get(peer);
+                if (asked == null) {
                     serving.remove(peer);
                     return;
                 }
             }
             try {
-                byte[] data = request.index < 0 ? new byte[0] : await(segment(request.index, false, true));
-                if (request.index >= 0) {
-                    // An encode already in flight can still use the previous, higher budget.
-                    data = await(segment(request.index, false, true));
+                byte[] data = new byte[0];
+                if (asked.index >= 0) {
+                    await(requested(peer, asked));
+                    data = await(requested(peer, asked));
                 }
-                deliveries.put(peer, new Delivery(request.id, request.index, data.length, System.nanoTime()));
-                reply(peer, request.id, request.index, data);
+                if (waiting.get(peer) == asked) {
+                    deliveries.put(peer, new Delivery(asked.id, asked.index, data.length, System.nanoTime()));
+                    reply(peer, asked, data);
+                }
             } catch (IOException failed) {
-                try {
-                    reply(peer, request.id, request.index, null);
-                } catch (IOException disconnected) {
+                if (waiting.get(peer) == asked && !closed) {
+                    status.accept("Disc segment " + asked.index + " failed for a viewer: " + failed.getMessage());
+                    try {
+                        reply(peer, asked, null);
+                    } catch (IOException disconnected) {
+                    }
                 }
+            } finally {
+                waiting.remove(peer, asked);
             }
         }
+    }
+
+    private synchronized CompletableFuture<byte[]> requested(UUID peer, Request asked) {
+        if (waiting.get(peer) != asked) return CompletableFuture.failedFuture(new Stale());
+        return segment(asked.index, false, true).applyToEither(asked.cancelled, bytes -> bytes);
     }
 
     private boolean ours(ByteBuffer message) {
@@ -527,7 +604,9 @@ public final class DiscStream implements AutoCloseable {
                 && message.getLong() == sourceId.getLeastSignificantBits();
     }
 
-    private void reply(UUID peer, int request, int index, byte[] bytes) throws IOException {
+    /** Sends {@code peer} the segment it {@code asked} for (null: none), for as long as it still waits for it. */
+    private void reply(UUID peer, Request asked, byte[] bytes) throws IOException {
+        int request = asked.id, index = asked.index;
         int total = bytes == null ? -1 : bytes.length;
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(45);
         for (int offset = 0; offset < Math.max(1, total);) {
@@ -539,6 +618,9 @@ public final class DiscStream implements AutoCloseable {
                 message.put(bytes, offset, size);
             }
             while (!closed && transport.state() != Transport.State.CLOSED && System.nanoTime() < until) {
+                if (waiting.get(peer) != asked) {
+                    return;
+                }
                 if (transport.send(peer, message.array())) {
                     break;
                 }
@@ -626,6 +708,7 @@ public final class DiscStream implements AutoCloseable {
         synchronized (this) {
             segments.values().forEach(f -> f.ready.completeExceptionally(new IOException("Disc session closed")));
             segments.clear();
+            waiting.clear();
             work.clear();
             cachedBytes = 0;
         }
@@ -647,7 +730,7 @@ public final class DiscStream implements AutoCloseable {
 
     private record Delivery(int id, int index, int bytes, long started) {}
 
-    private record Request(int id, int index) {}
+    private record Request(int id, int index, CompletableFuture<byte[]> cancelled) {}
 
     /**
      * Holds the quality down while this computer encodes segments slower than they play, and lets it back up
