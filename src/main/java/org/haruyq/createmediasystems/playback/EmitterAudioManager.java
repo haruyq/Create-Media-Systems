@@ -100,7 +100,6 @@ public final class EmitterAudioManager {
                 p.stream != null, p.stream != null ? p.stream.requestedSeconds() : -1, pitch(p.emitter), gain(p.emitter));
     }
 
-    /** Every emitter played here, as {@link #heard(UUID)}. */
     public static List<Heard> heard() {
         return PLAYING.keySet().stream().map(EmitterAudioManager::heard).toList();
     }

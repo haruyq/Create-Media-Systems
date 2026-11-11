@@ -31,7 +31,6 @@ final class SoundChannels {
         return true;
     }
 
-    /** Runs {@code task} on the sound thread. */
     static void execute(Runnable task) {
         ((SoundEngineAccessor) engine()).create_media_systems$executor().execute(task);
     }

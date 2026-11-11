@@ -120,7 +120,6 @@ public final class DisplayLight {
         }
     }
 
-    /** A display's faces, last found, in vertex buffers; a background look for the next ones; and its light. */
     private static final class Lit {
         final Refresh refresh = new Refresh();
         Bounds bounds;
@@ -417,7 +416,6 @@ public final class DisplayLight {
         }
     }
 
-    /** After the frame: the buffers of displays no longer drawn are freed. */
     private static void frameEnded() {
         WATER.clear();
         long frame = WorldEvents.frame();
@@ -469,7 +467,6 @@ public final class DisplayLight {
                     continue;
                 }
                 for (int cy = SectionPos.blockToSectionCoord(minY); cy <= SectionPos.blockToSectionCoord(maxY); cy++) {
-                    // Most of a room is air: whole sections of it are skipped.
                     if (chunk.getSection(chunk.getSectionIndexFromSectionY(cy)).hasOnlyAir()) {
                         continue;
                     }

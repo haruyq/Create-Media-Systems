@@ -92,7 +92,6 @@ public final class LightingBeams {
         /** Not at all, in one piece: a ray. */
         SOLID;
 
-        /** The steps it is drawn in. */
         int steps() {
             return this == SOLID ? 1 : LightingGpu.STEPS;
         }

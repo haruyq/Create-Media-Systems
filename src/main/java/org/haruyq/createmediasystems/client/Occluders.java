@@ -30,7 +30,6 @@ public final class Occluders {
 
         BlockPos getBlockPos();
 
-        /** Whether it stops light now. */
         boolean occludes();
 
         /** What stops light, in its level's block space as placed (Sable moves it with its block). */
@@ -45,7 +44,6 @@ public final class Occluders {
         OCCLUDERS.remove(occluder);
     }
 
-    /** Those in {@code level} that stop light now. */
     public static synchronized List<Occluder> in(Level level) {
         List<Occluder> found = new ArrayList<>();
         for (Occluder occluder : OCCLUDERS.keySet()) {

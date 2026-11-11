@@ -44,7 +44,6 @@ final class AnalysisLease {
         return player.equals(owner) && epoch == generation && next > (prepared ? sequence : liveSequence);
     }
 
-    /** The owner's upload {@code next} (see accepts) was taken at {@code now}. */
     void accepted(long next, boolean prepared, long now) {
         if (prepared) {
             sequence = next;

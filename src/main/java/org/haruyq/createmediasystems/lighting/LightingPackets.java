@@ -308,7 +308,6 @@ public final class LightingPackets {
             this.apply = apply;
         }
 
-        /** The control with wire id {@code id}; null if there is none. */
         @Nullable
         public static Control byId(int id) {
             return id >= 0 && id < BY_ID.length ? BY_ID[id] : null;

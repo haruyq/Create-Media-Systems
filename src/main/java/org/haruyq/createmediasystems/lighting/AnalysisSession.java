@@ -39,12 +39,10 @@ class AnalysisSession {
         tracks.keySet().removeIf(each -> !each.equals(track) && !each.equals(next));
     }
 
-    /** Whether {@code track} is its track or the next. */
     boolean has(String track) {
         return track.equals(this.track) || track.equals(next);
     }
 
-    /** Its track, then the next. */
     List<String> both() {
         return List.of(track, next);
     }

@@ -277,7 +277,6 @@ public final class LightingSettings {
             normalize();
         }
 
-        /** Brings every setting within what it can be (see LightingSettings#normalize). */
         public void normalize() {
             for (int i = 0; i < COLORS; i++) {
                 colors[i] &= 0xFFFFFF;
@@ -328,7 +327,6 @@ public final class LightingSettings {
         normalize();
     }
 
-    /** The group that is selected. */
     public Group selected() {
         return groups[selectedGroup];
     }

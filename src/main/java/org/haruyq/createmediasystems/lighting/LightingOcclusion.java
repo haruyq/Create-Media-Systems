@@ -68,7 +68,6 @@ final class LightingOcclusion {
     private LightingOcclusion() {
     }
 
-    /** It follows the client's world (see WorldEvents). */
     static void register() {
         WorldEvents.onSectionChanged((x, y, z) -> changed.add(SectionPos.asLong(x, y, z)));
         WorldEvents.onChunkLoaded(LightingOcclusion::chunkLoaded);
@@ -242,7 +241,6 @@ final class LightingOcclusion {
         origin = built.origin;
     }
 
-    /** Section {@code key} read again into the grid, if it is in it. */
     private static void mend(Level level, long key) {
         SectionPos at = SectionPos.of(key);
         int gx = at.minBlockX() - origin.getX(), gy = at.minBlockY() - origin.getY(), gz = at.minBlockZ() - origin.getZ();

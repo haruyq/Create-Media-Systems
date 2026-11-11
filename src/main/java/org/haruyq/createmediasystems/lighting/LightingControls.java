@@ -333,7 +333,6 @@ public final class LightingControls {
         return slot == null ? null : new Hit(console, slot, point);
     }
 
-    /** The player's eye, in {@code console}'s space. */
     private static Vec3 eye(LightingConsoleBlock.Entity console, Vec3 eye) {
         BlockPos origin = console.getBlockPos();
         Direction facing = console.getBlockState().getValue(LightingConsoleBlock.FACING);

@@ -871,7 +871,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return result;
         }
 
-        /** A group's fader at {@code x}, its cap at {@code value} in {@code color}. */
         static void fader(VertexConsumer metal, VertexConsumer ink, Matrix4f matrix, float x, float value, int color,
                           int light) {
             panel(ink, matrix, x - 0.023f, 0.23f, x + 0.023f, 1.23f, 0x0B0D14);

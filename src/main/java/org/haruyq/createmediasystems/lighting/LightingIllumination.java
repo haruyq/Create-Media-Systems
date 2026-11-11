@@ -75,7 +75,6 @@ public final class LightingIllumination {
     private LightingIllumination() {
     }
 
-    /** Changes in the client's world reach the lit faces (see WorldEvents). */
     static void register() {
         WorldEvents.onSectionChanged((x, y, z) -> DIRTY_SECTIONS.add(SectionPos.asLong(x, y, z)));
         WorldEvents.onChunkLoaded((x, z) -> DIRTY_COLUMNS.add(ChunkPos.asLong(x, z)));
@@ -247,7 +246,6 @@ public final class LightingIllumination {
             face.sight = sight;
         }
 
-        /** Traces unknown points within the beam's remaining budget. */
         void ensure(Face face, Geometry geometry, boolean inBeam) {
             if (!face.untraced) {
                 return;
@@ -936,7 +934,6 @@ public final class LightingIllumination {
         return !SURFACES.isEmpty();
     }
 
-    /** After the frame: changes seen this frame are done with, and lamps no longer drawn freed. */
     private static void endFrame() {
         SURFACES.clear();
         DIRTY_SECTIONS.clear();

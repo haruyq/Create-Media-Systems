@@ -158,7 +158,6 @@ public final class NativeAudio {
         return find(each -> disc.equals(each.id.disc()));
     }
 
-    /** Every playback here. */
     public static List<Playback> playbacks() {
         synchronized (PLAYBACKS) {
             return List.copyOf(PLAYBACKS);

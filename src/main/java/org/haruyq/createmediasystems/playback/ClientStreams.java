@@ -44,12 +44,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * reader's announcements, one music emitter's; different slots play at the same time.
  */
 public final class ClientStreams {
-    /** The slots a stream plays on now. */
     private static final Set<Slot> PLAYING = new LinkedHashSet<>();
     /** Live range per emitter block; RetuneAtBlock updates it without restarting the audio. */
     private static final Map<BlockPos, EmitterRange> RANGES = new HashMap<>();
     private static final Map<Side, Group> GROUPS = new HashMap<>();
-    /** The side each emitter block playing here plays. */
     private static final Map<BlockPos, Side> SIDES = new HashMap<>();
 
     /**
@@ -83,7 +81,6 @@ public final class ClientStreams {
             this.side = side;
         }
 
-        /** Plays {@code next} here, instead of what played. */
         public void play(StreamSound next) {
             var sounds = Minecraft.getInstance().getSoundManager();
             StreamSound previous = sound;
@@ -101,7 +98,6 @@ public final class ClientStreams {
             return sound != null;
         }
 
-        /** Stops its stream and lets go of its download. */
         public void stop() {
             StreamSound current = sound;
             sound = null;

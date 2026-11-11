@@ -9,7 +9,6 @@ public interface ClientFeature {
     /** Adds its client listeners and its settings (see ClientConfig), while the mod is constructed on a client. */
     void register(IEventBus modBus);
 
-    /** Adds its Ponder scenes (see PonderScenes). */
     default void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
     }
 }

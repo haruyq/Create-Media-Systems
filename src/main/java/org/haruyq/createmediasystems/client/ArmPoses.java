@@ -25,7 +25,6 @@ public final class ArmPoses {
     private ArmPoses() {
     }
 
-    /** Adds {@code pose}, from a feature's client setup. */
     public static void add(Pose pose) {
         POSES.add(pose);
     }

@@ -126,7 +126,6 @@ public final class AnalysisPlayback {
                            @Nullable Long pendingSequence, long sentAt) {
     }
 
-    /** Every session this client follows now. */
     public static List<Snapshot> snapshots() {
         List<Snapshot> snapshots = new ArrayList<>();
         for (Playback playback : PLAYING.values()) {

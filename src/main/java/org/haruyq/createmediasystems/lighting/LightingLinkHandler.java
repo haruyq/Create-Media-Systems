@@ -86,7 +86,6 @@ final class LightingLinkHandler {
         }
     }
 
-    /** The whole console {@code root} heads, desks and monitors. */
     private static AABB box(LightingConsoleBlock.Entity root) {
         return ConsoleLayout.bounds(root.getBlockPos(), root.getBlockState().getValue(LightingConsoleBlock.FACING));
     }

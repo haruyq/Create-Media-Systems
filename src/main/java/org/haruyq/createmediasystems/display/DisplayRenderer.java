@@ -91,7 +91,6 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     private record Overdraw(ResourceLocation texture, Vector3f[] corners) {
     }
 
-    /** Everything that draws and sets up displays and image viewers on this computer. */
     public static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(DisplayFeature.DISPLAY_ENTITY.get(), DisplayRenderer::new));

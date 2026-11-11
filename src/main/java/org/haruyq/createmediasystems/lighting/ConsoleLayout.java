@@ -153,17 +153,14 @@ public final class ConsoleLayout {
         return placed;
     }
 
-    /** The whole console at {@code origin}, desks and monitors. */
     public static AABB bounds(BlockPos origin, Direction facing) {
         return new AABB(origin).minmax(new AABB(at(origin, facing, BAYS - 1, 1, ROWS - 1)));
     }
 
-    /** The deck's height at {@code z}. */
     public static float deckHeight(float z) {
         return DECK_FOOT + z * DECK_RISE;
     }
 
-    /** How far back the monitors are at height {@code y}. */
     public static double monitorZ(float y) {
         return MONITOR_FOOT_Z + (y - 1) * MONITOR_LEAN;
     }
@@ -191,17 +188,14 @@ public final class ConsoleLayout {
                 ? point : null;
     }
 
-    /** The z a fader's cap is at for {@code value}. */
     public static float faderZ(float value) {
         return FADER_FRONT + value * FADER_TRAVEL;
     }
 
-    /** The value a fader dragged to {@code z} takes. */
     public static float faderValue(double z) {
         return (float) ((z - FADER_FRONT) / FADER_TRAVEL);
     }
 
-    /** Group {@code group}'s fader's x. */
     public static float groupFaderX(int group) {
         return 0.12f + group * 0.145f;
     }
@@ -248,7 +242,6 @@ public final class ConsoleLayout {
         return 3.2f + knob * 0.3f;
     }
 
-    /** The settings the right knobs turn, in order. */
     public static final Control[] SETTING_KNOBS = {Control.RANGE, Control.SPREAD, Control.SPEED};
 
     /** The aim pad's cross for {@code pan} and {@code tilt}: (x, z). */
@@ -260,7 +253,6 @@ public final class ConsoleLayout {
         return AIM_Z + Mth.clamp(tilt / LightingSettings.TILT.max(), -1, 1) * AIM_REACH_Z;
     }
 
-    /** The pan and tilt the aim pad dragged to {@code point} sets. */
     public static float aimPan(Vec3 point) {
         return (float) ((point.x - AIM_X) / AIM_REACH_X * LightingSettings.PAN.max());
     }
@@ -269,12 +261,10 @@ public final class ConsoleLayout {
         return (float) ((point.z - AIM_Z) / AIM_REACH_Z * LightingSettings.TILT.max());
     }
 
-    /** The top of monitor list row {@code row}. */
     public static float rowTop(int row) {
         return MONITOR_TOP - row * (MONITOR_TOP - MONITOR_BOTTOM) / MONITOR_ROWS;
     }
 
-    /** Monitor list row {@code row} of bay {@code bay}. */
     public static Area row(int bay, int row) {
         float top = rowTop(row);
         return new Area(bay + 0.065f, top - ROW_HEIGHT, bay + 0.935f, top);
@@ -316,13 +306,11 @@ public final class ConsoleLayout {
             return new Area(x, z, x + CELL_WIDTH, z + CELL_DEPTH);
         }
 
-        /** Whether {@code point} is on it. */
         public boolean contains(Vec3 point) {
             return area.contains(point.x, monitor ? point.y : point.z);
         }
     }
 
-    /** Every control on the console's face. */
     public static final List<Slot> SLOTS = slots();
 
     private static List<Slot> slots() {

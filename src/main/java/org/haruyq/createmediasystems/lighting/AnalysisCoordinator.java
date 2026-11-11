@@ -113,7 +113,6 @@ public final class AnalysisCoordinator {
                            long sequence, long liveSequence, long published, int ready, long trackEnd, long nextEnd) {
     }
 
-    /** Every session the server keeps now. */
     public static List<Snapshot> snapshots() {
         List<Snapshot> snapshots = new ArrayList<>();
         for (Map<UUID, Session> sessions : LEVELS.values()) {
@@ -129,7 +128,6 @@ public final class AnalysisCoordinator {
         return snapshots;
     }
 
-    /** The session of the source {@code source} in {@code level}; null if none. */
     @Nullable
     static Session session(ServerLevel level, UUID source) {
         Map<UUID, Session> sessions = LEVELS.get(level);

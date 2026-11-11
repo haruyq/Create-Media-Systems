@@ -108,7 +108,6 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                 ScreenEntity.format(height / (double) UNIT), ratio.label());
     }
 
-    /** A side, in sixteenths, within what a screen may be. */
     public static int clampSize(int sixteenths) {
         return Mth.clamp(sixteenths, UNIT / 4, MAX_SIZE * UNIT);
     }
@@ -201,7 +200,6 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                     .add(new Screen(facing()).at((float) width() / 2, (float) height() / 2, 0));
         }
 
-        /** Its screen stops light. */
         @Override
         public boolean occludes() {
             return true;

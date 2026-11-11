@@ -58,7 +58,6 @@ public final class PointLights {
         List<Entity> entities();
     }
 
-    /** Something in the world that gives lights. */
     @FunctionalInterface
     public interface Source {
         void collect(View view, Consumer<Light> lights);
@@ -80,7 +79,6 @@ public final class PointLights {
         });
     }
 
-    /** Adds {@code source}, from a feature's client setup. */
     public static void add(Source source) {
         SOURCES.add(source);
     }

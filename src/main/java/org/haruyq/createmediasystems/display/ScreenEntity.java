@@ -78,7 +78,6 @@ public abstract class ScreenEntity extends BlockEntity implements IHaveGoggleInf
         changed();
     }
 
-    /** Saved, and sent to clients, who draw it. */
     protected void changed() {
         setChanged();
         if (level != null) {

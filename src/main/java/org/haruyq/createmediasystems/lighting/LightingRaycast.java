@@ -130,7 +130,6 @@ public final class LightingRaycast {
         return new LightingRaycast(this);
     }
 
-    /** The render thread's cache follows the client's world (see WorldEvents). */
     static void register() {
         WorldEvents.onSectionChanged(LightingRaycast::sectionChanged);
         WorldEvents.onChunkLoaded(LightingRaycast::chunkLoaded);
@@ -140,7 +139,6 @@ public final class LightingRaycast {
         });
     }
 
-    /** A block in section ({@code x}, {@code y}, {@code z}) changed: its shapes are looked up again. */
     private static void sectionChanged(int x, int y, int z) {
         if (renderCache != null) {
             renderCache.sections.remove(SectionPos.asLong(x, y, z));

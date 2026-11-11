@@ -306,7 +306,6 @@ public final class SpeakerStressClient {
                 field.setAccessible(true);
                 return field.get(target);
             } catch (NoSuchFieldException ignored) {
-                // look in the superclass
             }
         }
         throw new NoSuchFieldException(target.getClass().getName() + "." + name);
