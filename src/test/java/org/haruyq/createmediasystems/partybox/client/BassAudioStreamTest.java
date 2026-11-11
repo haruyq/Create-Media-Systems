@@ -1,4 +1,5 @@
-package org.haruyq.createmediasystems.playback;
+package org.haruyq.createmediasystems.partybox.client;
+import org.haruyq.createmediasystems.playback.CmsStream;
 import static org.junit.jupiter.api.Assertions.*;
 import java.nio.*;
 import javax.sound.sampled.AudioFormat;

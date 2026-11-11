@@ -1,5 +1,6 @@
-package org.haruyq.createmediasystems.playback;
+package org.haruyq.createmediasystems.megaphone.client;
 
+import org.haruyq.createmediasystems.playback.CmsStream;
 import java.io.IOException;
 import java.nio.*;
 import java.util.function.IntSupplier;
