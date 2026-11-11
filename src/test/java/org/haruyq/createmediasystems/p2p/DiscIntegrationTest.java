@@ -60,7 +60,12 @@ class DiscIntegrationTest {
             Path file = Path.of("build", "disc-first.ts");
             Files.write(file, first);
             String probe = probe(file);
-            assertTrue(probe.contains("1920") && probe.contains("1080") && probe.contains("60/1") && probe.contains("ac3"), probe);
+            if (source.bluray()) {
+                assertTrue(probe.contains("1920") && probe.contains("1080") && probe.contains("60/1"), probe);
+            } else {
+                assertTrue(probe.contains("480") && probe.contains("30/1"), probe);
+            }
+            assertTrue(probe.contains("ac3"), probe);
             // As if the viewer's connection measured 2 Mbit/s: paced at 1.6.
             synchronized (peers[0]) {
                 peers[0].links.get(viewerId).rate.probed(250_000, 1_000_000_000L);
@@ -80,11 +85,21 @@ class DiscIntegrationTest {
             assertTrue(peers[1].received() > first.length);
             viewer.close();
             try (DiscStream late = streams[1] = new DiscStream(peers[1], id, null, log::add)) {
-                URI joined = late.prepare(0);
-                Files.write(low, get(http, joined.resolve("0.ts")));
-                String lateProfile = probe(low);
-                assertTrue(lateProfile.contains("480") || lateProfile.contains("360"),
-                        "A late viewer gets a lower bitrate even when the host cached the opening at 1080p: " + lateProfile);
+                if (source.bluray()) {
+                    URI joined = late.prepare(0);
+                    Files.write(low, get(http, joined.resolve("0.ts")));
+                    String lateProfile = probe(low);
+                    assertTrue(lateProfile.contains("480") || lateProfile.contains("360"),
+                            "A late viewer gets a lower bitrate even when the host cached the opening at 1080p: " + lateProfile);
+                } else {
+                    URI joined = late.prepare(16);
+                    assertArrayEquals(get(http, local.resolve("4.ts")), get(http, joined.resolve("4.ts")),
+                            "A DVD viewer joining mid-title receives the same segment as the host");
+                    int last = (int) Math.ceil(source.duration() / DiscSource.SEGMENT_SECONDS) - 1;
+                    String tail = last + ".ts";
+                    assertArrayEquals(get(http, local.resolve(tail)), get(http, joined.resolve(tail)),
+                            "A successful DVD read can still share its short final segment");
+                }
             }
             Files.write(Path.of("build", "disc-integration.log"), log);
         } finally {
