@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.video;
 import java.util.List;
 
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.Remotable;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -50,10 +51,10 @@ final class RemoteScreen extends Screen {
     protected void init() {
         int left = width / 2 - 100;
         int top = height / 2 - 40;
-        button(left, top, "⏮", VideoPlayerBlock.Action.PREVIOUS);
-        button(left + 52, top, "⏯", VideoPlayerBlock.Action.PLAY_PAUSE);
-        button(left + 104, top, "⏹", VideoPlayerBlock.Action.STOP);
-        button(left + 156, top, "⏭", VideoPlayerBlock.Action.NEXT);
+        button(left, top, "⏮", Remotable.Action.PREVIOUS);
+        button(left + 52, top, "⏯", Remotable.Action.PLAY_PAUSE);
+        button(left + 104, top, "⏹", Remotable.Action.STOP);
+        button(left + 156, top, "⏭", Remotable.Action.NEXT);
         number = addRenderableWidget(new EditBox(font, left, top + 28, 96, 20,
                 Component.translatable("create_media_systems.screen.remote.number")));
         number.setMaxLength(3);
@@ -61,7 +62,7 @@ final class RemoteScreen extends Screen {
         number.setHint(Component.translatable("create_media_systems.screen.remote.number"));
         addRenderableWidget(Button.builder(Component.translatable("create_media_systems.screen.remote.play_number"), b -> {
             if (!number.getValue().isEmpty()) {
-                send(VideoPlayerBlock.Action.SELECT, Integer.parseInt(number.getValue()));
+                send(Remotable.Action.SELECT, Integer.parseInt(number.getValue()));
             }
         }).bounds(left + 104, top + 28, 96, 20).build());
         Remotable videoPlayer = videoPlayer();
@@ -83,13 +84,13 @@ final class RemoteScreen extends Screen {
             @Override
             public void onRelease(double mouseX, double mouseY) {
                 super.onRelease(mouseX, mouseY);
-                send(VideoPlayerBlock.Action.VOLUME, (int) Math.round(value * 100));
+                send(Remotable.Action.VOLUME, (int) Math.round(value * 100));
             }
         });
-        addRenderableWidget(Button.builder(Component.literal("-10s"), b -> send(VideoPlayerBlock.Action.SEEK_BY, -10))
+        addRenderableWidget(Button.builder(Component.literal("-10s"), b -> send(Remotable.Action.SEEK_BY, -10))
                 .bounds(left, top + 84, 30, 20).build());
         seek = addRenderableWidget(new SeekBar(left + 34, top + 84, 132));
-        addRenderableWidget(Button.builder(Component.literal("+10s"), b -> send(VideoPlayerBlock.Action.SEEK_BY, 10))
+        addRenderableWidget(Button.builder(Component.literal("+10s"), b -> send(Remotable.Action.SEEK_BY, 10))
                 .bounds(left + 170, top + 84, 30, 20).build());
     }
 
@@ -146,7 +147,7 @@ final class RemoteScreen extends Screen {
         void release() {
             if (dragging) {
                 dragging = false;
-                send(VideoPlayerBlock.Action.SEEK, (int) (value * length));
+                send(Remotable.Action.SEEK, (int) (value * length));
             }
         }
     }
@@ -157,12 +158,12 @@ final class RemoteScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    private void button(int x, int y, String label, VideoPlayerBlock.Action action) {
+    private void button(int x, int y, String label, Remotable.Action action) {
         addRenderableWidget(Button.builder(Component.literal(label), b -> send(action, 0)).bounds(x, y, 44, 20).build());
     }
 
-    private static void send(VideoPlayerBlock.Action action, int value) {
-        PacketDistributor.sendToServer(new RemoteItem.RemoteControl(action.ordinal(), value));
+    private static void send(Remotable.Action action, int value) {
+        PacketDistributor.sendToServer(new RemoteItem.RemoteControl(action, value));
     }
 
     @Override

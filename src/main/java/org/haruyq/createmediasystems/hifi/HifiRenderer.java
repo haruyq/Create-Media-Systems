@@ -13,8 +13,9 @@ import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.lighting.LightingRenderer;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.playback.Spectrum;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.VideoDiscItem;
 
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -280,8 +281,13 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
         if (out > 0.05f) {
             pen.box(tray.left + 0.15f, tray.bottom + 0.12f, 0.06f, tray.right - 0.15f, tray.bottom + 0.3f, 0.06f + out, 0x1E1E21);
             if (!stack.disc().isEmpty()) {
-                int color = !(stack.disc().getItem() instanceof VideoDiscItem disc) ? 0x55555E
-                        : disc.maxHeight >= 1080 ? 0x5878C8 : disc.maxHeight > 0 ? 0xD8C690 : 0xD0D6DE;
+                DiscKind kind = MediaItem.kindOf(stack.disc());
+                int color = kind == null ? 0x55555E : switch (kind) {
+                    case BLU_RAY -> 0x5878C8;
+                    case DVD -> 0xD8C690;
+                    case CD, CASSETTE -> 0xD0D6DE;
+                    case CUSTOM_DISC -> 0x55555E;
+                };
                 pen.disc(tray.centerX(), tray.bottom + 0.3f, out - 2.5f, 2.3f, color);
             }
         }

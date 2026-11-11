@@ -2,7 +2,7 @@ package org.haruyq.createmediasystems.launcher;
 
 import java.util.List;
 
-import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -67,8 +67,7 @@ public final class DiscLauncherItem extends Item {
             player.displayClientMessage(Component.translatable("cell.create_media_systems.empty"), true);
             return false;
         }
-        String url = DiscPlayback.mediaUrl(DiscCellItem.master(before));
-        if (url != null && !ServerConfig.isAllowed(url)) {
+        if (!MediaItem.allowed(DiscCellItem.master(before))) {
             player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true);
             return false;
         }

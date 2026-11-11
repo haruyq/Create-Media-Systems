@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.SimpleContainer;
@@ -33,7 +35,7 @@ public final class DiscCellMenu extends AbstractContainerMenu {
             }
         });
         addSlot(new Slot(master, 0, 80, 45) {
-            @Override public boolean mayPlace(ItemStack stack) { return LauncherMagazine.isDisc(stack); }
+            @Override public boolean mayPlace(ItemStack stack) { return MediaItem.fits(stack, DiscKind.Slot.PORTABLE); }
             @Override public int getMaxStackSize() { return 1; }
         });
         for (int row = 0; row < 3; row++) for (int col = 0; col < 9; col++)
@@ -69,7 +71,7 @@ public final class DiscCellMenu extends AbstractContainerMenu {
         if (index == 0) {
             if (!moveItemStackTo(stack, 1, slots.size(), true)) return ItemStack.EMPTY;
         } else {
-            if (!LauncherMagazine.isDisc(stack) || !moveItemStackTo(stack, 0, 1, false)) return ItemStack.EMPTY;
+            if (!MediaItem.fits(stack, DiscKind.Slot.PORTABLE) || !moveItemStackTo(stack, 0, 1, false)) return ItemStack.EMPTY;
         }
         if (stack.isEmpty()) slot.setByPlayer(ItemStack.EMPTY); else slot.setChanged();
         slot.onTake(player, stack);

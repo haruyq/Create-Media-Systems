@@ -1,15 +1,17 @@
 package org.haruyq.createmediasystems.video;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.PercentSetting;
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.DiscDrive;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.Downloads;
+import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.VideoSource;
-import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -29,7 +31,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
@@ -82,8 +83,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        // A disc with no picture (a CD, a cassette) is a hi-fi stack's.
-        if (!(stack.getItem() instanceof VideoDiscItem disc) || disc.maxHeight <= 0) {
+        if (!MediaItem.fits(stack, DiscKind.Slot.PICTURE)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity videoPlayer && videoPlayer.cd.isEmpty()) {
@@ -126,21 +126,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     /** The Blu-ray player's volume: a block entity keeps one behaviour per type, and lighting has the default one. */
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
-
-    /**
-     * What a remote asks of a Blu-ray player (see Entity#control). SEEK goes to a second of the entry playing, SEEK_BY
-     * that many seconds on (or back) from where it is.
-     */
-    public enum Action {
-        PLAY_PAUSE, STOP, PREVIOUS, NEXT, SELECT, VOLUME, SEEK, SEEK_BY;
-
-        public static Action byId(int id) {
-            return values()[Mth.clamp(id, 0, values().length - 1)];
-        }
-    }
-
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
-            DriveEmulatorBlock.Fed {
+            DiscDrive.Fed {
         private ItemStack cd = ItemStack.EMPTY;
         /** The playlist entry playing (or paused, or stopped at). */
         private int index;
@@ -152,16 +139,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private boolean paused;
         private ScrollValueBehaviour volume;
         private ScrollValueBehaviour lighting;
-        /**
-         * How much of the video playing each listener has downloaded, 0..1: all of it once it plays for them or is
-         * kept (see ClientStreams#reportDownloads).
-         */
-        private final Map<ServerPlayer, Float> downloads = new HashMap<>();
-        /** Their average, in percent, as goggles show it; -1 while none has told. Not saved. */
-        private int downloaded = -1;
-        /** How many it is the average of, and how many of them have all of it. */
-        private int downloaders;
-        private int finished;
+        /** How much of the video playing its listeners have downloaded. Not saved. */
+        private final Downloads downloads = new Downloads();
 
         public Entity(BlockPos pos, BlockState state) {
             super(VideoFeature.VIDEO_PLAYER_ENTITY.get(), pos, state);
@@ -179,16 +158,21 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             behaviours.add(lighting);
         }
 
-        /** The drive whose disc it plays: one beside it with a DVD or Blu-ray ready, while it has no disc of its own. */
+        /** The drive whose disc it plays: one beside it with a disc that has a picture, while it has no disc of its own. */
         @Nullable
-        private DriveEmulatorBlock.Entity drive() {
-            return cd.isEmpty() ? DriveEmulatorBlock.feeding(level, worldPosition, false) : null;
+        private DiscDrive drive() {
+            return cd.isEmpty() ? DiscDrive.feeding(level, worldPosition, this) : null;
         }
 
         @Override
         public List<String> playlist() {
-            DriveEmulatorBlock.Entity drive = drive();
-            return drive != null ? List.of(drive.link()) : cd.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
+            DiscDrive drive = drive();
+            return drive != null ? List.of(drive.link()) : MediaItem.linksOf(cd);
+        }
+
+        @Override
+        public boolean plays(DiscKind kind) {
+            return kind.fits(DiscKind.Slot.PICTURE);
         }
 
         /** Plays the disc of the drive beside it from the top, or stops with it, unless it has its own. */
@@ -223,10 +207,10 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                 return null;
             }
             List<String> playlist = playlist();
-            DriveEmulatorBlock.Entity drive = drive();
-            return index < playlist.size()
-                    ? new Streams.Source(playlist.get(index), counted(), new Streams.Video(worldPosition,
-                            drive != null ? drive.disc().maxHeight : ((VideoDiscItem) cd.getItem()).maxHeight,
+            DiscDrive drive = drive();
+            DiscKind kind = drive != null ? drive.ready() : MediaItem.kindOf(cd);
+            return index < playlist.size() && kind != null
+                    ? new Streams.Source(playlist.get(index), counted(), new Streams.Video(worldPosition, kind.pictureHeight,
                             index + 1 < playlist.size() ? Optional.of(playlist.get(index + 1)) : Optional.empty()))
                     : null;
         }
@@ -264,9 +248,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             playing = true;
             paused = false;
             downloads.clear();
-            downloaded = -1;
-            downloaders = 0;
-            finished = 0;
             Streams.loading(this, by);
             changed();
         }
@@ -333,31 +314,10 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
         }
 
-        /**
-         * {@code player} has downloaded {@code payload.downloaded()} of the video the Blu-ray player at
-         * {@code payload.pos()} plays: counted while they listen to it and it still plays that video.
-         */
-        public static void downloaded(ServerPlayer player, StreamPackets.DownloadedAtBlock payload) {
-            ServerLevel level = player.serverLevel();
-            if (level.isLoaded(payload.pos()) && level.getBlockEntity(payload.pos()) instanceof Entity videoPlayer
-                    && Streams.listeners(level, payload.pos()).contains(player)) {
-                videoPlayer.downloaded(player, payload.url(), payload.downloaded());
-            }
-        }
-
-        void downloaded(ServerPlayer player, String url, float fraction) {
+        @Override
+        public void downloaded(ServerPlayer player, String url, float fraction) {
             List<String> playlist = playlist();
-            if (!playing || index >= playlist.size() || !playlist.get(index).equals(url)) {
-                return;
-            }
-            downloads.put(player, Mth.clamp(fraction, 0, 1));
-            downloads.keySet().removeIf(ServerPlayer::isRemoved);
-            int average = (int) (downloads.values().stream().mapToDouble(Float::doubleValue).average().orElse(0) * 100);
-            int done = (int) downloads.values().stream().filter(each -> each >= 1).count();
-            if (average != downloaded || downloads.size() != downloaders || done != finished) {
-                downloaded = average;
-                downloaders = downloads.size();
-                finished = done;
+            if (playing && index < playlist.size() && playlist.get(index).equals(url) && downloads.told(player, fraction)) {
                 changed();
             }
         }
@@ -410,14 +370,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
                             .withStyle(ChatFormatting.GRAY));
                 }
             }
-            if (playing && downloaded >= 0 && finished < downloaders) {
-                // Only while any of them waits. Several: their average, then how many have it.
-                tooltip.add(Component.literal("     ")
-                        .append(Component.translatable("create_media_systems.video_player.downloaded",
-                                value(downloaded + "%", ChatFormatting.AQUA)))
-                        .append(downloaders > 1 ? value("  " + finished + "/" + downloaders, ChatFormatting.WHITE)
-                                : Component.empty())
-                        .withStyle(ChatFormatting.GRAY));
+            if (playing) {
+                downloads.addTo(tooltip, "     ");
             }
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.volume_value",
                     value(volume.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
@@ -454,9 +408,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tag.putBoolean("Playing", playing);
             tag.putBoolean("Paused", paused);
             if (clientPacket) {
-                tag.putInt("Downloaded", downloaded);
-                tag.putInt("Downloaders", downloaders);
-                tag.putInt("Finished", finished);
+                downloads.write(tag);
             }
         }
 
@@ -470,9 +422,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             playing = tag.getBoolean("Playing");
             paused = tag.getBoolean("Paused");
             if (clientPacket) {
-                downloaded = tag.getInt("Downloaded");
-                downloaders = tag.getInt("Downloaders");
-                finished = tag.getInt("Finished");
+                downloads.read(tag);
             }
         }
     }

@@ -15,6 +15,7 @@ import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.StageLightBlock;
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL15;
@@ -86,7 +87,7 @@ public final class LightingBenchmark {
         var lighting = VideoPlayerBlock.Entity.class.getDeclaredField("lighting");
         lighting.setAccessible(true);
         ((ScrollValueBehaviour) lighting.get(player)).setValue(mode.displayLighting());
-        player.control(VideoPlayerBlock.Action.SELECT, 1, null);
+        player.control(Remotable.Action.SELECT, 1, null);
         active = new Phase(mode, System.nanoTime());
         level.players().forEach(LightingBenchmark::camera);
         LogUtils.getLogger().info("Lighting benchmark phase {}: {} fixtures", mode.key, console.fixtures.size());

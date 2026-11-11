@@ -7,7 +7,7 @@ import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.SourceLinks;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.stream.VideoSource;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -103,10 +103,10 @@ public class LightingLinkItem extends Item {
                 say(player, "full");
             }
         } else if (block instanceof MediaSource) {
-            if (block instanceof VideoPlayerBlock.Entity) {
+            if (block instanceof VideoSource) {
                 console.setVideoSource(pos);
             }
-            if (!player.isShiftKeyDown() || !(block instanceof VideoPlayerBlock.Entity)) {
+            if (!player.isShiftKeyDown() || !(block instanceof VideoSource)) {
                 console.setAudioSource(pos);
             }
             console.hasAudio = false;

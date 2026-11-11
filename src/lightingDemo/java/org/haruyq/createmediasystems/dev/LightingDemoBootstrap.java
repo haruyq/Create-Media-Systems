@@ -11,6 +11,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
@@ -186,7 +187,7 @@ public final class LightingDemoBootstrap {
                 String next = mediaUrl + "?next=1";
                 if (!Boolean.getBoolean("cms.lightingNetworkTest")) {
                     LightingDemoCache.seedNext(next, Path.of("media", "cms-lighting-lab.mp4"),
-                            VideoFeature.BLU_RAY.get().maxHeight);
+                            DiscKind.BLU_RAY.pictureHeight);
                 }
                 disc.set(VideoFeature.PLAYLIST.get(), List.of(mediaUrl, next));
             }

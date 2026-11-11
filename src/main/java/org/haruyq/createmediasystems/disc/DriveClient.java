@@ -12,6 +12,7 @@ import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.p2p.Transport;
+import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
 
@@ -130,7 +131,7 @@ public final class DriveClient {
         Optional<Disc> disc = found;
         DriveEmulatorBlock.Disc kind = disc == null || disc.isEmpty() ? null : disc.get().kind();
         return !emulator.getBlockPos().equals(block) ? "elsewhere" : disc == null ? "looking" : !drive ? "no_drive"
-                : kind != null && !emulator.feeds(kind) ? kind.audio() ? "no_reader" : "no_player"
+                : kind != null && !emulator.feeds(kind) ? kind.kind.hasPicture() ? "no_player" : "no_reader"
                 : ejected ? "ejected" : "insert";
     }
 
@@ -189,9 +190,9 @@ public final class DriveClient {
         } else if (disc.isPresent() && emulator != null && !taken && (loading || screen && !ejected)) {
             if (kind == null) {
                 // The real drive closes on it: so does the emulator, if anything beside it could play a disc.
-                if (!loading && (emulator.feeds(DriveEmulatorBlock.Disc.CD) || emulator.feeds(DriveEmulatorBlock.Disc.BLU_RAY))) {
+                if (!loading && emulator.feedsAny()) {
                     loading = true;
-                    send(block, Drive.LOADING, "", DriveEmulatorBlock.Disc.BLU_RAY);
+                    send(block, Drive.LOADING, "", null);
                 }
             } else if (emulator.feeds(kind)) {
                 insert(disc.get());
@@ -213,7 +214,7 @@ public final class DriveClient {
     /** The emulator's tray comes out again: the disc the real drive closed on is none it plays, or is gone. */
     private static void reopen() {
         loading = false;
-        send(block, Drive.OPEN, "", DriveEmulatorBlock.Disc.BLU_RAY);
+        send(block, Drive.OPEN, "", null);
     }
 
     private static void insert(Disc disc) {
@@ -255,7 +256,7 @@ public final class DriveClient {
         ejected = eject;
         // ponytail: the server takes the place in this player's dimension, so an emulator in another one is told only
         // once this player is back at it (see tick); send the dimension too if that wait matters.
-        send(block, Drive.OPEN, "", DriveEmulatorBlock.Disc.BLU_RAY);
+        send(block, Drive.OPEN, "", null);
     }
 
     /** Tells the emulator how each viewer's direct connection does (see DriveEmulatorBlock.Viewer), asking each for its round trip. */
@@ -286,11 +287,12 @@ public final class DriveClient {
         // stopped with the disc in.
         if (emulator.getLevel().getGameTime() % 20 == 0 && mc.player != null && mc.player.getUUID().equals(emulator.host())
                 && !((loaded != null || loading) && pos.equals(block))) {
-            send(pos, Drive.OPEN, "", DriveEmulatorBlock.Disc.BLU_RAY);
+            send(pos, Drive.OPEN, "", null);
         }
     }
 
-    private static void send(BlockPos emulator, Drive state, String text, DriveEmulatorBlock.Disc kind) {
+    /** Tells the server its real drive is in {@code state}, with a disc of {@code kind} (null while that is not known). */
+    private static void send(BlockPos emulator, Drive state, String text, @Nullable DriveEmulatorBlock.Disc kind) {
         PacketDistributor.sendToServer(new DriveEmulatorBlock.Update(emulator, state, text == null ? "" : text, kind));
     }
 
@@ -328,9 +330,8 @@ public final class DriveClient {
             if (sense == BECOMING_READY && loadable) {
                 return Optional.of(UNREAD);
             }
-            DriveEmulatorBlock.Disc kind = Files.isRegularFile(root.resolve("BDMV/index.bdmv")) ? DriveEmulatorBlock.Disc.BLU_RAY
-                    : Files.isRegularFile(root.resolve("VIDEO_TS/VIDEO_TS.IFO")) ? DriveEmulatorBlock.Disc.DVD
-                    : CdAudio.find(root) != null ? DriveEmulatorBlock.Disc.CD : null;
+            DiscKind found = DiscSource.kind(root);
+            DriveEmulatorBlock.Disc kind = found == null ? null : DriveEmulatorBlock.Disc.of(found);
             if (kind != null) {
                 String label = "";
                 try {

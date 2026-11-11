@@ -18,6 +18,7 @@ import org.haruyq.createmediasystems.*;
 import org.haruyq.createmediasystems.launcher.*;
 import org.haruyq.createmediasystems.megaphone.*;
 import org.haruyq.createmediasystems.playback.*;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
 
 public final class MegaphoneClient {
@@ -71,14 +72,14 @@ public final class MegaphoneClient {
             if(!(item.getItem() instanceof MegaphoneItem) || !MegaphoneData.playing(item))continue;
             var id=MegaphoneData.id(item);if(id.isEmpty() || PLAYING.containsKey(id.get()) || PLAYING.size()>=8)continue;
             var source=new Emitter(player,hand,id.get(),MegaphoneData.revision(item));if(!source.audible())continue;
-            var disc=MegaphoneData.disc(item,mc.level);String url=DiscPlayback.mediaUrl(disc);
-            if(url!=null && !url.isBlank() && ServerConfig.isAllowed(url)) {
+            var disc=MegaphoneData.disc(item,mc.level);String url=MediaItem.url(disc);
+            if(url!=null && ServerConfig.isAllowed(url)) {
                 double start=source.seconds();
                 var sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
                         source::position,null,source::present,source::audible,source::gain,null,Streams.Channel.MIX,length->{});
                 sound.setDiscPlayback(id.get(),source::seconds);sound.setDynamicPitch(source::pitch);sound.setMegaphone(source::drive,source::volume);
                 ClientStreams.play(id.get(),sound);PLAYING.put(id.get(),new Playing(source,null,true,ticks));
-            } else if(url==null)JukeboxSong.fromStack(mc.level.registryAccess(),disc).ifPresent(song->{
+            } else MediaItem.song(disc,mc.level.registryAccess()).ifPresent(song->{
                 var sound=new MegaphoneSound(source,song.value().soundEvent().value());mc.getSoundManager().play(sound);PLAYING.put(id.get(),new Playing(source,sound,false,ticks));
             });
         }

@@ -4,12 +4,9 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
-import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.launcher.DiscPlayback;
 import org.haruyq.createmediasystems.partybox.PartyBoxBatteryItem;
-import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 /** The physical item owns the media, controls, battery and server playback clock. */
 public final class MegaphoneData {
@@ -41,8 +38,8 @@ public final class MegaphoneData {
     public static boolean play(ItemStack item,Level level,boolean play) {
         tick(item,level);var t=state(item).copy();
         if(play) {
-            var media=disc(item,level);String url=DiscPlayback.mediaUrl(media);
-            if(media.isEmpty() || PartyBoxBatteryItem.energy(battery(item,level))<=0 || url!=null && !ServerConfig.isAllowed(url))return false;
+            var media=disc(item,level);
+            if(media.isEmpty() || PartyBoxBatteryItem.energy(battery(item,level))<=0 || MediaItem.silent(media) || !MediaItem.allowed(media))return false;
         }
         long at=position(item,level);double duration=t.getDouble("Duration");
         if(play && duration>0 && at>=duration*20)at=0;
@@ -50,7 +47,7 @@ public final class MegaphoneData {
         t.putBoolean("Playing",play);t.putInt("Revision",revision(item)+1);commit(item,t);return true;
     }
     public static void noteDuration(ItemStack item,double seconds) {
-        if(Double.isFinite(seconds) && seconds>0 && seconds<=86400 && state(item).getDouble("Duration")<=0) {
+        if(MediaItem.plausibleLength(seconds) && state(item).getDouble("Duration")<=0) {
             var t=state(item).copy();t.putDouble("Duration",seconds);commit(item,t);
         }
     }
@@ -74,8 +71,7 @@ public final class MegaphoneData {
             t.put("Battery",battery.saveOptional(level.registryAccess()));
             if(duration>0 && at>=duration*20){t.putLong("Offset",(long)(duration*20));t.putBoolean("Playing",false);t.putInt("Revision",revision(item)+1);}
             if(duration<=0 && now%20==0) {
-                var media=disc(item,level);var url=DiscPlayback.mediaUrl(media);
-                double length=url==null?JukeboxSong.fromStack(level.registryAccess(),media).map(s->(double)s.value().lengthInSeconds()).orElse(-1.0):Streams.duration(url);
+                double length=MediaItem.lengthSeconds(disc(item,level),level.registryAccess());
                 if(length>0)t.putDouble("Duration",length);
             }
             dirty=elapsed>0 || dirty;

@@ -10,6 +10,7 @@ import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import org.jetbrains.annotations.Nullable;
@@ -139,7 +140,7 @@ public class VideoPlayerGameTests {
             a.clear();
             b.clear();
 
-            player.control(VideoPlayerBlock.Action.SEEK, 300, first);
+            player.control(Remotable.Action.SEEK, 300, first);
             speaker.configure(level, source, 1, Streams.Channel.MIX);
             long seekLoad = Streams.loadId(player);
             helper.assertTrue(seekLoad != load, "a seek is a new load");
@@ -160,14 +161,14 @@ public class VideoPlayerGameTests {
                         "both are told to play from 300 s together: " + received);
             }
 
-            player.control(VideoPlayerBlock.Action.SEEK_BY, -10, first);
+            player.control(Remotable.Action.SEEK_BY, -10, first);
             helper.assertTrue(Streams.playing(player).ticks() == 290 * 20, "ten seconds back is 290 s");
-            player.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, first);
-            player.control(VideoPlayerBlock.Action.SEEK, 100, first);
+            player.control(Remotable.Action.PLAY_PAUSE, 0, first);
+            player.control(Remotable.Action.SEEK, 100, first);
             helper.assertTrue(player.nowPlaying() == null, "a seek leaves it paused");
-            player.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, first);
+            player.control(Remotable.Action.PLAY_PAUSE, 0, first);
             helper.assertTrue(Streams.playing(player).ticks() == 100 * 20, "and it plays on from 100 s");
-            player.control(VideoPlayerBlock.Action.SEEK, 10_000, first);
+            player.control(Remotable.Action.SEEK, 10_000, first);
             helper.assertTrue(Streams.playing(player).ticks() == 599 * 20,
                     "past the end it goes a second short of it, was " + Streams.playing(player).ticks());
         } finally {

@@ -13,6 +13,7 @@ import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
 import org.haruyq.createmediasystems.ServerConfig;
+import org.haruyq.createmediasystems.stream.DiscKind;
 
 import com.mojang.serialization.Codec;
 
@@ -57,11 +58,11 @@ public final class VideoFeature implements Feature {
     public static final DeferredHolder<SoundEvent, SoundEvent> DRIVE_SEEK =
             SOUNDS.register("drive_seek", () -> SoundEvent.createVariableRangeEvent(id("drive_seek")));
 
-    /** A DVD holds fewer videos than a Blu-ray, and plays them at most 480 lines tall. */
+    /** A DVD holds fewer videos than a Blu-ray, and plays them less sharp (see DiscKind). */
     public static final DeferredItem<VideoDiscItem> DVD = ITEMS.register("dvd",
-            () -> new VideoDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON), 16, 480));
+            () -> new VideoDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON), DiscKind.DVD));
     public static final DeferredItem<VideoDiscItem> BLU_RAY = ITEMS.register("blu_ray",
-            () -> new VideoDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE), 64, 1080));
+            () -> new VideoDiscItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE), DiscKind.BLU_RAY));
     public static final DeferredBlock<VideoPlayerBlock> VIDEO_PLAYER = BLOCKS.register("blu_ray_player",
             () -> new VideoPlayerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
     public static final DeferredItem<?> VIDEO_PLAYER_ITEM = ITEMS.registerSimpleBlockItem("blu_ray_player", VIDEO_PLAYER);

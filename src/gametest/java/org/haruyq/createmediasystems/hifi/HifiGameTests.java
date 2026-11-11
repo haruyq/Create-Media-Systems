@@ -7,7 +7,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.stream.Remotable;
 
 import com.mojang.authlib.GameProfile;
 
@@ -74,10 +74,10 @@ public class HifiGameTests {
             helper.assertTrue(playing != null && playing.url().equals("https://example.com/hifi-disc.mp3"), "it is heard");
             long paused = stack.discTicks();
             helper.assertTrue(paused > 10 && paused < 45, "with nobody to wait for it plays on, was at " + paused);
-            stack.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
+            stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
             helper.assertTrue(stack.nowPlaying() == null, "paused");
             helper.runAfterDelay(20, () -> {
-                stack.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
+                stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
                 helper.runAfterDelay(3, () -> {
                     Streams.Source again = Streams.playing(stack);
                     helper.assertTrue(again != null && again.ticks() == paused,
@@ -219,18 +219,18 @@ public class HifiGameTests {
         stack.press(player, Control.OPEN, 0);
         helper.runAfterDelay(HifiStackBlock.WARM_UP + 5, () -> {
             long load = Streams.loadId(stack);
-            stack.control(VideoPlayerBlock.Action.SEEK, 90, player);
+            stack.control(Remotable.Action.SEEK, 90, player);
             helper.runAfterDelay(2, () -> {
                 Streams.Source heard = Streams.playing(stack);
                 helper.assertTrue(Streams.loadId(stack) != load && heard != null && heard.ticks() == 90 * 20,
                         "heard again from 90 s, was " + (heard == null ? null : heard.ticks()));
-                stack.control(VideoPlayerBlock.Action.SEEK_BY, 10, player);
+                stack.control(Remotable.Action.SEEK_BY, 10, player);
                 helper.runAfterDelay(2, () -> {
                     helper.assertTrue(Streams.playing(stack).ticks() == 100 * 20, "ten seconds on is 100 s");
-                    stack.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
-                    stack.control(VideoPlayerBlock.Action.SEEK, 30, player);
+                    stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
+                    stack.control(Remotable.Action.SEEK, 30, player);
                     helper.assertTrue(stack.discPaused() && stack.discTicks() == 30 * 20, "paused, it waits at 30 s");
-                    stack.control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
+                    stack.control(Remotable.Action.PLAY_PAUSE, 0, player);
                     helper.runAfterDelay(2, () -> {
                         helper.assertTrue(Streams.playing(stack).ticks() == 30 * 20, "and plays on from there");
                         helper.succeed();

@@ -3,7 +3,8 @@ package org.haruyq.createmediasystems.launcher;
 import java.util.List;
 
 import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -34,7 +35,7 @@ public final class DiscCellItem extends Item {
     public static void setMaster(ItemStack cell, ItemStack master) {
         if (master.isEmpty()) cell.remove(LauncherFeature.CELL_MASTER.get());
         else {
-            if (!LauncherMagazine.isDisc(master)) throw new IllegalArgumentException("A cell accepts only a media disc");
+            if (!MediaItem.fits(master, DiscKind.Slot.PORTABLE)) throw new IllegalArgumentException("A cell accepts only a media disc");
             cell.set(LauncherFeature.CELL_MASTER.get(), ItemContainerContents.fromItems(List.of(master.copyWithCount(1))));
         }
     }
@@ -55,10 +56,7 @@ public final class DiscCellItem extends Item {
 
     public static boolean hasMaster(ItemStack cell) {
         ItemStack disc = master(cell);
-        if (!LauncherMagazine.isDisc(disc)) return false;
-        String url = DiscPlayback.mediaUrl(disc);
-        return !(disc.is(AudioFeature.CUSTOM_DISC.get()) || disc.is(VideoFeature.DVD.get())
-                || disc.is(VideoFeature.BLU_RAY.get())) || url != null && !url.isBlank();
+        return MediaItem.fits(disc, DiscKind.Slot.PORTABLE) && !MediaItem.silent(disc);
     }
 
     /** Makes a projection, spending exactly one shot's energy. Does not modify the original or its playback state. */

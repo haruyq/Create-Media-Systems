@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.partybox;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -21,7 +22,7 @@ public record PartyBoxAction(int entity, int action, int value, int revision) im
     public static void handle(ServerPlayer player, PartyBoxAction request) {
         if(!(player.level().getEntity(request.entity) instanceof PartyBoxEntity box) || box.isRemoved()) return;
         if(request.action==7) {
-            if(player.distanceToSqr(box)<128*128 && request.revision==box.revision() && request.value>0 && request.value<=86400)
+            if(player.distanceToSqr(box)<128*128 && request.revision==box.revision() && MediaItem.plausibleLength(request.value))
                 box.noteDuration(request.value);
             return;
         }

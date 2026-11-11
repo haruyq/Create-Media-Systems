@@ -10,19 +10,17 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.audio.CustomDiscItem;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.playback.Tone;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.Downloads;
+import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.VideoSource;
-import org.haruyq.createmediasystems.video.Remotable;
-import org.haruyq.createmediasystems.video.VideoDiscItem;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -276,6 +274,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         /** Who last worked it, to start what it plays next. */
         @Nullable
         private Player by;
+        /** How much of the video its disc plays its listeners have downloaded. Not saved. */
+        private final Downloads downloads = new Downloads();
 
         /** Client only: how far the tray is out (0 to 1) this tick and the last, and how far each deck's reels have turned. */
         public float trayOut;
@@ -497,15 +497,11 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         /** The links of the disc in the player. */
         @Override
         public List<String> playlist() {
-            if (disc.getItem() instanceof VideoDiscItem) {
-                return disc.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
-            }
-            String url = disc.get(AudioFeature.URL.get());
-            return url == null ? List.of() : List.of(url);
+            return MediaItem.linksOf(disc);
         }
 
         public List<String> tracks(int deck) {
-            return tapes[deck].getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
+            return MediaItem.linksOf(tapes[deck]);
         }
 
         @Override
@@ -572,9 +568,10 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 return null;
             }
             Streams.Video video = null;
-            if (playing.input == Input.DISC && disc.getItem() instanceof VideoDiscItem videoDisc && videoDisc.maxHeight > 0) {
+            DiscKind kind = MediaItem.kindOf(disc);
+            if (playing.input == Input.DISC && kind != null && kind.hasPicture()) {
                 List<String> playlist = playlist();
-                video = new Streams.Video(worldPosition, videoDisc.maxHeight,
+                video = new Streams.Video(worldPosition, kind.pictureHeight,
                         track + 1 < playlist.size() ? Optional.of(playlist.get(track + 1)) : Optional.empty());
             }
             return new Streams.Source(playing.url, sinceBegin, video);
@@ -642,6 +639,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             Playing playing = audible();
             if (!Objects.equals(playing, begun)) {
                 begun = playing;
+                downloads.clear();
                 if (playing != null) {
                     sinceBegin = 0;
                     Streams.loading(this, by != null && !by.isRemoved() ? by : null, position(playing), true);
@@ -806,11 +804,6 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             changed();
         }
 
-        private static boolean playable(ItemStack stack) {
-            return stack.getItem() instanceof CustomDiscItem
-                    || stack.getItem() instanceof VideoDiscItem && !stack.is(HifiFeature.CASSETTE.get());
-        }
-
         /** Takes the tape out of {@code deck}, which remembers where it was stopped. */
         private ItemStack eject(int deck) {
             ItemStack tape = tapes[deck];
@@ -841,7 +834,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             } else if (control == Control.DOOR_1 || control == Control.DOOR_2) {
                 // A door is opened by hand, live or not.
                 int deck = control.index;
-                if (tapes[deck].isEmpty() && held.is(HifiFeature.CASSETTE.get())) {
+                if (tapes[deck].isEmpty() && MediaItem.fits(held, DiscKind.Slot.TAPE_DECK)) {
                     tapes[deck] = held.split(1);
                     TapePosition at = tapes[deck].getOrDefault(HifiFeature.TAPE_POSITION.get(), TapePosition.START);
                     tapeTracks[deck] = Mth.clamp(at.track(), 0, tracks(deck).size());
@@ -881,7 +874,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     if (!trayOpen) {
                         trayOpen = true;
                         discPlaying = discPaused = false;
-                    } else if (control == Control.TRAY && disc.isEmpty() && playable(held)) {
+                    } else if (control == Control.TRAY && disc.isEmpty() && MediaItem.fits(held, DiscKind.Slot.DISC_TRAY)) {
                         disc = held.split(1);
                     } else if (control == Control.TRAY && !disc.isEmpty() && held.isEmpty()) {
                         player.getInventory().placeItemBackInInventory(disc);
@@ -892,10 +885,10 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                         playTrack(0);
                     }
                 }
-                case PLAY -> control(VideoPlayerBlock.Action.PLAY_PAUSE, 0, player);
-                case STOP -> control(VideoPlayerBlock.Action.STOP, 0, player);
-                case PREVIOUS -> control(VideoPlayerBlock.Action.PREVIOUS, 0, player);
-                case NEXT -> control(VideoPlayerBlock.Action.NEXT, 0, player);
+                case PLAY -> control(Action.PLAY_PAUSE, 0, player);
+                case STOP -> control(Action.STOP, 0, player);
+                case PREVIOUS -> control(Action.PREVIOUS, 0, player);
+                case NEXT -> control(Action.NEXT, 0, player);
                 case PLAY_1, PLAY_2 -> {
                     int deck = control.index;
                     if (tapeTracks[deck] < tracks(deck).size()) {
@@ -933,8 +926,8 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
 
         /** A remote's buttons work the disc player, and its slider the amplifier. */
         @Override
-        public void control(VideoPlayerBlock.Action action, int value, @Nullable Player by) {
-            if (action == VideoPlayerBlock.Action.VOLUME) {
+        public void control(Action action, int value, @Nullable Player by) {
+            if (action == Action.VOLUME) {
                 if (power()) {
                     setVolume(value);
                     changed();
@@ -980,6 +973,15 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                 }
             }
             changed();
+        }
+
+        /** Counts a listener's download of the video its disc plays, while it is what is heard. */
+        @Override
+        public void downloaded(ServerPlayer player, String url, float fraction) {
+            Playing playing = audible();
+            if (playing != null && playing.input == Input.DISC && playing.url.equals(url) && downloads.told(player, fraction)) {
+                changed();
+            }
         }
 
         /** Plugs {@code cable} in with the audio cable {@code player} holds, or pulls it out for them. */
@@ -1072,6 +1074,9 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                         HifiFeature.hifiUnit(unit).getDescriptionId()).withStyle(ChatFormatting.GOLD)));
                 tooltip.add(Component.literal("       ").append(dead ? line("unplugged_short") : status)
                         .withStyle(dead ? ChatFormatting.RED : ChatFormatting.GRAY));
+                if (unit == Unit.DISC_PLAYER && !dead && discPlaying) {
+                    downloads.addTo(tooltip, "       ");
+                }
             }
             return true;
         }
@@ -1164,6 +1169,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             discPaused = tag.getBoolean("DiscPaused");
             discTicks = tag.getLong("DiscTicks");
             loading = tag.getBoolean("Loading");
+            downloads.read(tag);
             for (int deck = 0; deck < 2; deck++) {
                 tapes[deck] = ItemStack.parseOptional(registries, tag.getCompound("Tape" + deck));
                 motions[deck] = Motion.byId(tag.getInt("Motion" + deck));
@@ -1177,6 +1183,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
         public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
             CompoundTag tag = saveWithoutMetadata(registries);
             tag.putBoolean("Loading", loading);
+            downloads.write(tag);
             return tag;
         }
 

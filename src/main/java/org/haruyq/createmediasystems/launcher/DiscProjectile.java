@@ -1,7 +1,7 @@
 package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
@@ -15,7 +15,6 @@ import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.BlockHitResult;
@@ -207,7 +206,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     public float damage() { return cellTier().damage; }
     @Override public ItemStack getPickResult() { return ItemStack.EMPTY; }
     public void noteDuration(double seconds) {
-        if (!level().isClientSide && durationSeconds <= 0 && Double.isFinite(seconds) && seconds > 0 && seconds <= 86400)
+        if (!level().isClientSide && durationSeconds <= 0 && MediaItem.plausibleLength(seconds))
             durationSeconds = seconds;
     }
 
@@ -259,11 +258,7 @@ public final class DiscProjectile extends ThrowableItemProjectile {
     }
 
     private void updateDuration() {
-        String url = DiscPlayback.mediaUrl(getItem());
-        durationSeconds = url == null
-                ? JukeboxSong.fromStack(level().registryAccess(), getItem())
-                        .map(song -> (double) song.value().lengthInSeconds()).orElse(-1.0)
-                : Streams.duration(url);
+        durationSeconds = MediaItem.lengthSeconds(getItem(), level().registryAccess());
     }
 
     @Override

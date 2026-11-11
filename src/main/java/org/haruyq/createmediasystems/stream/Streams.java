@@ -154,15 +154,15 @@ public final class Streams {
     }
 
     /**
-     * What a source is playing: the track and how far in it is, and the Blu-ray player it is a video of, if any, whose
+     * What a source is playing: the track and how far in it is, and the source it is a video of, if any, whose
      * displays and speakers clients play on one player (see NativeAudio).
      */
     public record Source(String url, long ticks, @Nullable Video video) {
     }
 
     /**
-     * The Blu-ray player a video plays from, the tallest picture (pixels) its disc plays, and the video after it on
-     * the disc, which clients get ready ahead.
+     * The source (a VideoSource) a video plays from, the tallest picture (pixels) its disc plays (see DiscKind), and
+     * the video after it on the disc, which clients get ready ahead.
      */
     public record Video(BlockPos player, int maxHeight, Optional<String> next) {
         public static final StreamCodec<ByteBuf, Video> CODEC = StreamCodec.composite(

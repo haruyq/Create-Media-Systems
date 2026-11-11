@@ -403,7 +403,7 @@ public final class LauncherDebugServer {
                 case "music-sync-end" -> {
                     if(savedInventory==null)throw new IllegalStateException("Start the music fixture first");
                     for(var disc:all)if(disc.getTags().contains("cms_launcher_check")) {
-                        String url=DiscPlayback.mediaUrl(disc.getItem());if(url==null)continue;
+                        String url=org.haruyq.createmediasystems.stream.MediaItem.url(disc.getItem());if(url==null)continue;
                         double duration=org.haruyq.createmediasystems.stream.Streams.duration(url);
                         if(duration<=3)throw new IllegalStateException("Wait for API duration metadata");
                         var tag=new net.minecraft.nbt.CompoundTag();disc.save(tag);tag.putDouble("CmsDiscDuration",duration);

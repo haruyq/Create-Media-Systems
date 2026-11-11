@@ -9,6 +9,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import net.minecraft.core.BlockPos;
@@ -102,7 +103,7 @@ public final class AnalysisGameTests {
                 "eligible viewer lag did not schedule a shared delay");
         AnalysisCoordinator.status(fake, new AnalysisPackets.Status(source, sessionId, true, 3_000, 2_001, 0, 0));
         helper.assertTrue(get(session, "delay").equals(delay), "invalid lag report changed the shared delay");
-        player.control(VideoPlayerBlock.Action.NEXT, 0, null);
+        player.control(Remotable.Action.NEXT, 0, null);
         AnalysisCoordinator.use(console);
         helper.assertTrue(!(boolean) get(session, "active"), "lights ran on the next track while it loaded");
         loaded(player, console);

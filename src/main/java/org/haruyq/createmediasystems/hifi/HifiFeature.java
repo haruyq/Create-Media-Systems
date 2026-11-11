@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
+import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.video.VideoDiscItem;
 
 import net.minecraft.core.component.DataComponentType;
@@ -48,9 +49,9 @@ public final class HifiFeature implements Feature {
             () -> new HifiCableItem(new Item.Properties()));
     /** A CD and a cassette hold links to sound alone, for a hi-fi stack's disc player and its deck. */
     public static final DeferredItem<VideoDiscItem> CD = ITEMS.register("cd",
-            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), 24, 0));
+            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), DiscKind.CD));
     public static final DeferredItem<VideoDiscItem> CASSETTE = ITEMS.register("cassette",
-            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), 12, 0));
+            () -> new VideoDiscItem(new Item.Properties().stacksTo(1), DiscKind.CASSETTE));
     /** Where a cassette was stopped. */
     public static final Supplier<DataComponentType<TapePosition>> TAPE_POSITION = COMPONENTS.registerComponentType(
             "tape_position", b -> b.persistent(TapePosition.CODEC).networkSynchronized(TapePosition.STREAM_CODEC));

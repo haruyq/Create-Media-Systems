@@ -5,7 +5,7 @@ import java.util.List;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -121,7 +121,7 @@ final class LightingLinkHandler {
                     : LightingText.message("other_family", LightingText.group(picked.settings, group),
                             StageLightBlock.familyName(picked.family(group)));
         }
-        return LightingText.message(block instanceof VideoPlayerBlock.Entity ? "hint_video" : "hint_audio");
+        return LightingText.message(block instanceof VideoSource ? "hint_video" : "hint_audio");
     }
 
     /** The whole console {@code root} heads, desks and monitors. */

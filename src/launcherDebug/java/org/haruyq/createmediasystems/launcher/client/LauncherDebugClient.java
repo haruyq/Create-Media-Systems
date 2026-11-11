@@ -239,7 +239,7 @@ public final class LauncherDebugClient {
                 m.put("audio",org.haruyq.createmediasystems.playback.NativeAudio.discProgress(d.getUUID()));
                 m.put("pitchTarget",DiscAudioClient.pitchAt(d));m.put("gainTarget",DiscAudioClient.gain(d));
                 m.put("item",d.getItem().toString());discs.add(m);
-                m.put("url", org.haruyq.createmediasystems.launcher.DiscPlayback.mediaUrl(d.getItem()));
+                m.put("url", org.haruyq.createmediasystems.stream.MediaItem.url(d.getItem()));
                 m.put("managed", org.haruyq.createmediasystems.playback.ClientStreams.contains(d.getUUID()));
             }
             row.put("discs",discs);

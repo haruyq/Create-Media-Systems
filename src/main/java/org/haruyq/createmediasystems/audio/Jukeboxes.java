@@ -2,7 +2,9 @@ package org.haruyq.createmediasystems.audio;
 
 import java.util.Optional;
 
+import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.JukeboxSettings;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -21,8 +23,8 @@ public final class Jukeboxes {
 
     @Nullable
     public static Streams.Source nowPlaying(JukeboxBlockEntity jukebox) {
-        return jukebox.getTheItem().is(AudioFeature.CUSTOM_DISC.get()) && jukebox.getSongPlayer().isPlaying()
-                ? new Streams.Source(jukebox.getTheItem().get(AudioFeature.URL.get()),
+        return MediaItem.fits(jukebox.getTheItem(), DiscKind.Slot.JUKEBOX) && jukebox.getSongPlayer().isPlaying()
+                ? new Streams.Source(MediaItem.url(jukebox.getTheItem()),
                         jukebox.getSongPlayer().getTicksSinceSongStarted(), null)
                 : null;
     }

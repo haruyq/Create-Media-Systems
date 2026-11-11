@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.stream.Remotable;
 import org.haruyq.createmediasystems.stream.SourceLinks;
 
 import org.jetbrains.annotations.Nullable;
@@ -118,11 +119,11 @@ public class RemoteItem extends Item {
                         target.pos().getZ()).withStyle(ChatFormatting.GRAY));
     }
 
-    /** Client → server: a remote's button ({@link VideoPlayerBlock.Action}) for its paired Blu-ray player. */
-    public record RemoteControl(int action, int value) implements CustomPacketPayload {
+    /** Client → server: a remote's button for what it is paired with. */
+    public record RemoteControl(Remotable.Action action, int value) implements CustomPacketPayload {
         public static final Type<RemoteControl> TYPE = new Type<>(CreateMediaSystems.id("remote_control"));
         public static final StreamCodec<ByteBuf, RemoteControl> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, RemoteControl::action,
+                Remotable.Action.CODEC, RemoteControl::action,
                 ByteBufCodecs.VAR_INT, RemoteControl::value,
                 RemoteControl::new);
 
@@ -152,7 +153,7 @@ public class RemoteItem extends Item {
             player.displayClientMessage(Component.translatable("create_media_systems.remote.missing").withStyle(ChatFormatting.RED), true);
             return;
         }
-        videoPlayer.control(VideoPlayerBlock.Action.byId(payload.action()), payload.value(), player);
+        videoPlayer.control(payload.action(), payload.value(), player);
     }
 
     public static void registerPayloads(PayloadRegistrar registrar) {

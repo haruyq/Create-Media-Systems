@@ -1,10 +1,8 @@
 package org.haruyq.createmediasystems.launcher;
 
-import java.util.List;
 import java.util.UUID;
 
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -46,19 +44,10 @@ public record DiscPlayback(UUID id, String source, long positionTicks) {
     }
 
     private static String source(Level level, ItemStack item) {
-        String url = mediaUrl(item);
+        String url = MediaItem.url(item);
         if (url != null) return "url:" + url;
         return JukeboxSong.fromStack(level.registryAccess(), item)
                 .map(song -> "song:" + song.value().soundEvent().value().getLocation())
                 .orElseGet(() -> "item:" + BuiltInRegistries.ITEM.getKey(item.getItem()));
-    }
-
-    public static String mediaUrl(ItemStack item) {
-        if (item.is(AudioFeature.CUSTOM_DISC.get())) return item.get(AudioFeature.URL.get());
-        if (item.is(VideoFeature.DVD.get()) || item.is(VideoFeature.BLU_RAY.get())) {
-            List<String> playlist = item.getOrDefault(VideoFeature.PLAYLIST.get(), List.of());
-            return playlist.isEmpty() ? null : playlist.getFirst();
-        }
-        return null;
     }
 }

@@ -6,10 +6,11 @@ import java.util.Locale;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.disc.DiscUrl;
 import org.haruyq.createmediasystems.disc.DriveClient;
 import org.haruyq.createmediasystems.disc.DriveScreen;
+import org.haruyq.createmediasystems.stream.DiscDrive;
+import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -115,29 +116,6 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         return type != VideoFeature.DRIVE_EMULATOR_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    /** What plays a drive's disc while it has none of its own: a Blu-ray player, a disc reader. */
-    public interface Fed {
-        /** The drive beside it took a disc ({@code by} put it in) or lost it. */
-        void driveChanged(@Nullable Player by);
-    }
-
-    /**
-     * The drive beside {@code pos} whose disc is ready for what is there: an audio CD for a disc reader
-     * ({@code audio}), a DVD or Blu-ray for a Blu-ray player; null for none.
-     */
-    @Nullable
-    public static Entity feeding(@Nullable BlockGetter level, BlockPos pos, boolean audio) {
-        if (level != null) {
-            for (Direction side : Direction.values()) {
-                if (level.getBlockEntity(pos.relative(side)) instanceof Entity emulator && emulator.drive == Drive.READY
-                        && emulator.disc.audio() == audio) {
-                    return emulator;
-                }
-            }
-        }
-        return null;
-    }
-
     /** The drive beside {@code pos}, with a disc in it if any has; null for none. */
     @Nullable
     public static Entity beside(@Nullable BlockGetter level, BlockPos pos) {
@@ -175,25 +153,31 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
     }
 
     /**
-     * The kinds of disc a drive takes: the tallest picture (pixels) each plays, 0 for sound alone, and the rate
-     * (kbps) a viewer's connection has to keep up for it to play well (see Viewer#stability).
+     * The kinds of disc a drive takes, as the media items they are (see DiscKind), and the rate (kbps) a viewer's
+     * connection has to keep up for each to play well (see Viewer#stability).
      */
     public enum Disc {
-        BLU_RAY("Blu-ray", 1080, 4000), DVD("DVD", 480, 2000), CD("CD", 0, 500);
+        BLU_RAY("Blu-ray", DiscKind.BLU_RAY, 4000), DVD("DVD", DiscKind.DVD, 2000), CD("CD", DiscKind.CD, 500);
 
         public final String name;
-        public final int maxHeight;
+        public final DiscKind kind;
         final int kbps;
 
-        Disc(String name, int maxHeight, int kbps) {
+        Disc(String name, DiscKind kind, int kbps) {
             this.name = name;
-            this.maxHeight = maxHeight;
+            this.kind = kind;
             this.kbps = kbps;
         }
 
-        /** Whether it is a disc reader's, not a Blu-ray player's. */
-        public boolean audio() {
-            return maxHeight == 0;
+        /** The drive's disc of {@code kind}; null for a kind no drive takes. */
+        @Nullable
+        public static Disc of(DiscKind kind) {
+            for (Disc disc : values()) {
+                if (disc.kind == kind) {
+                    return disc;
+                }
+            }
+            return null;
         }
 
         public static Disc byId(int id) {
@@ -235,8 +219,9 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
     }
 
     /**
-     * Client → server: this player's real drive, for the emulator at {@code pos}, is now {@code drive}.
-     * {@code text} is the disc's label as it is read, its link once it is shared (see DiscUrl), or why it failed.
+     * Client → server: this player's real drive, for the emulator at {@code pos}, is now {@code drive}, with a disc of
+     * kind {@code disc} (-1 while it is not known: open, or still loading). {@code text} is the disc's label as it is
+     * read, its link once it is shared (see DiscUrl), or why it failed.
      */
     public record Update(BlockPos pos, int drive, String text, int disc) implements CustomPacketPayload {
         public static final Type<Update> TYPE = new Type<>(CreateMediaSystems.id("drive_update"));
@@ -247,8 +232,8 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 ByteBufCodecs.VAR_INT, Update::disc,
                 Update::new);
 
-        public Update(BlockPos pos, Drive drive, String text, Disc disc) {
-            this(pos, drive.ordinal(), text.length() > 256 ? text.substring(0, 256) : text, disc.ordinal());
+        public Update(BlockPos pos, Drive drive, String text, @Nullable Disc disc) {
+            this(pos, drive.ordinal(), text.length() > 256 ? text.substring(0, 256) : text, disc == null ? -1 : disc.ordinal());
         }
 
         @Override
@@ -275,7 +260,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         registrar.playToServer(Update.TYPE, Update.CODEC, (payload, context) -> {
             if (emulator(context.player(), payload.pos()) instanceof Entity emulator) {
                 emulator.update((ServerPlayer) context.player(), Drive.byId(payload.drive()), payload.text(),
-                        Disc.byId(payload.disc()));
+                        payload.disc() < 0 ? null : Disc.byId(payload.disc()));
             }
         });
         registrar.playToServer(Viewers.TYPE, Viewers.CODEC, (payload, context) -> {
@@ -290,7 +275,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         return player.level().isLoaded(pos) ? player.level().getBlockEntity(pos) : null;
     }
 
-    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation {
+    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, DiscDrive {
         private Drive drive = Drive.OPEN;
         /** Whose real drive it is, from when they put a disc in until it comes out or they leave. */
         @Nullable
@@ -336,6 +321,13 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             return disc;
         }
 
+        @Override
+        @Nullable
+        public DiscKind ready() {
+            return drive == Drive.READY ? disc.kind : null;
+        }
+
+        @Override
         public String link() {
             return link;
         }
@@ -360,11 +352,21 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                     .withStyle(shown.color);
         }
 
-        /** Whether what plays a disc of kind {@code kind} is beside it: a disc reader for a CD, else a Blu-ray player. */
+        /** Whether what plays a disc of kind {@code kind} is beside it (see DiscDrive.Fed). */
         public boolean feeds(Disc kind) {
             for (Direction side : Direction.values()) {
-                BlockEntity beside = level == null ? null : level.getBlockEntity(worldPosition.relative(side));
-                if (kind.audio() ? beside instanceof DiscReaderBlock.Entity : beside instanceof VideoPlayerBlock.Entity) {
+                if (level != null && level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed
+                        && fed.plays(kind.kind)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Whether what plays any disc a drive takes is beside it. */
+        public boolean feedsAny() {
+            for (Disc kind : Disc.values()) {
+                if (feeds(kind)) {
                     return true;
                 }
             }
@@ -372,10 +374,11 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         }
 
         /**
-         * {@code player}'s real drive is now {@code next} (see Update). Anyone at a free emulator makes it theirs by
-         * putting a disc in; from then on only they change it, from anywhere, and only to a disc they share.
+         * {@code player}'s real drive is now {@code next} (see Update), with a disc of {@code kind} once that is known.
+         * Anyone at a free emulator makes it theirs by putting a disc in; from then on only they change it, from
+         * anywhere, and only to a disc they share.
          */
-        public void update(ServerPlayer player, Drive next, String text, Disc kind) {
+        public void update(ServerPlayer player, Drive next, String text, @Nullable Disc kind) {
             if (host == null ? next == Drive.OPEN || !player.canInteractWithBlock(worldPosition, 4)
                     : !host.equals(player.getUUID())) {
                 return;
@@ -394,7 +397,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 case READY -> {
                 }
             }
-            if (next != Drive.OPEN) {
+            if (next != Drive.OPEN && kind != null) {
                 disc = kind;
             }
             link = next == Drive.READY ? text : "";
@@ -459,7 +462,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 level.setBlockAndUpdate(worldPosition, getBlockState().setValue(LIT, drive != Drive.OPEN));
             }
             for (Direction side : Direction.values()) {
-                if (level.getBlockEntity(worldPosition.relative(side)) instanceof Fed fed) {
+                if (level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed) {
                     fed.driveChanged(by);
                 }
             }

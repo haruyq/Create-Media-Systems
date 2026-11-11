@@ -12,7 +12,7 @@ import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Disc;
 import org.haruyq.createmediasystems.video.DriveEmulatorBlock.Drive;
 import org.haruyq.createmediasystems.video.VideoPlayerBlock;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock.Action;
+import org.haruyq.createmediasystems.stream.Remotable.Action;
 
 import com.mojang.authlib.GameProfile;
 

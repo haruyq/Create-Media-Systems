@@ -2,9 +2,6 @@ package org.haruyq.createmediasystems.launcher;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemContainerContents;
@@ -12,11 +9,6 @@ import net.minecraft.world.item.component.ItemContainerContents;
 /** Installed and pending cells are owned by the launcher, including during an interrupted reload. */
 public final class LauncherMagazine {
     private LauncherMagazine() {}
-    public static boolean isDisc(ItemStack stack) {
-        return !stack.isEmpty() && (stack.is(AudioFeature.CUSTOM_DISC.get())
-                || stack.is(VideoFeature.DVD.get()) || stack.is(VideoFeature.BLU_RAY.get())
-                || stack.has(DataComponents.JUKEBOX_PLAYABLE));
-    }
     public static ItemStack cell(ItemStack launcher) {
         return launcher.getOrDefault(LauncherFeature.LAUNCHER_CELL.get(), ItemContainerContents.EMPTY).copyOne();
     }

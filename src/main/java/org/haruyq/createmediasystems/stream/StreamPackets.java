@@ -3,14 +3,13 @@ package org.haruyq.createmediasystems.stream;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.playback.ClientStreams;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -20,13 +19,31 @@ public final class StreamPackets {
     /** A disc's, image viewer's or announcement's link as sent: at most {@link UrlPolicy#MAX_LENGTH} characters. */
     public static final StreamCodec<ByteBuf, String> URL = ByteBufCodecs.stringUtf8(UrlPolicy.MAX_LENGTH);
 
+    /** What a client does with the server's words: ClientStreams, which sets it as the client starts. */
+    private static Client client;
+
     private StreamPackets() {
+    }
+
+    /** A client's handling of the streams the server sends it. */
+    public interface Client {
+        void play(PlayAtBlock payload);
+
+        void retune(RetuneAtBlock payload);
+
+        void sync(SyncAtBlock payload);
+
+        void stop(StopAtBlock payload);
+    }
+
+    public static void client(Client handler) {
+        client = handler;
     }
 
     /**
      * Server → client: stream {@code url} from the emitter at {@code pos}, sounding as {@code sound}, from
-     * {@code startSeconds} in. {@code video} is the Blu-ray player whose video it is (and its disc's quality), which
-     * its player also plays for that Blu-ray player's displays to show. {@code load} says which load of its source's
+     * {@code startSeconds} in. {@code video} is the source whose video it is (and its disc's quality), which its
+     * player also plays for that source's displays to show. {@code load} says which load of its source's
      * track it is (see Streams.Load): streams of one load are one playback, however far apart they come (while it
      * loads, every one of them says 0 s, so their time can't tell); 0 if unknown.
      */
@@ -111,8 +128,8 @@ public final class StreamPackets {
     }
 
     /**
-     * Client → server: {@code downloaded} (0..1) of the video {@code url} the Blu-ray player at {@code pos} plays is
-     * kept on that client (see VideoPlayerBlock.Entity#downloaded).
+     * Client → server: {@code downloaded} (0..1) of the video {@code url} the source at {@code pos} plays is kept on
+     * that client (see VideoSource#downloaded).
      */
     public record DownloadedAtBlock(BlockPos pos, String url, float downloaded) implements CustomPacketPayload {
         public static final Type<DownloadedAtBlock> TYPE = new Type<>(CreateMediaSystems.id("downloaded_at_block"));
@@ -129,13 +146,22 @@ public final class StreamPackets {
     }
 
     public static void registerPayloads(PayloadRegistrar registrar) {
-        registrar.playToClient(PlayAtBlock.TYPE, PlayAtBlock.CODEC, (payload, context) -> ClientStreams.play(payload));
-        registrar.playToClient(RetuneAtBlock.TYPE, RetuneAtBlock.CODEC, (payload, context) -> ClientStreams.retune(payload));
-        registrar.playToClient(SyncAtBlock.TYPE, SyncAtBlock.CODEC, (payload, context) -> ClientStreams.sync(payload));
-        registrar.playToClient(StopAtBlock.TYPE, StopAtBlock.CODEC, (payload, context) -> ClientStreams.stop(payload));
+        registrar.playToClient(PlayAtBlock.TYPE, PlayAtBlock.CODEC, (payload, context) -> client.play(payload));
+        registrar.playToClient(RetuneAtBlock.TYPE, RetuneAtBlock.CODEC, (payload, context) -> client.retune(payload));
+        registrar.playToClient(SyncAtBlock.TYPE, SyncAtBlock.CODEC, (payload, context) -> client.sync(payload));
+        registrar.playToClient(StopAtBlock.TYPE, StopAtBlock.CODEC, (payload, context) -> client.stop(payload));
         registrar.playToServer(StartedAtBlock.TYPE, StartedAtBlock.CODEC,
                 (payload, context) -> Streams.started((ServerPlayer) context.player(), payload.pos(), payload.duration()));
         registrar.playToServer(DownloadedAtBlock.TYPE, DownloadedAtBlock.CODEC,
-                (payload, context) -> VideoPlayerBlock.Entity.downloaded((ServerPlayer) context.player(), payload));
+                (payload, context) -> downloaded((ServerPlayer) context.player(), payload));
+    }
+
+    /** Counted by the source at {@code payload.pos()} while {@code player} listens to it. */
+    private static void downloaded(ServerPlayer player, DownloadedAtBlock payload) {
+        ServerLevel level = player.serverLevel();
+        if (level.isLoaded(payload.pos()) && level.getBlockEntity(payload.pos()) instanceof VideoSource source
+                && Streams.listeners(level, payload.pos()).contains(player)) {
+            source.downloaded(player, payload.url(), payload.downloaded());
+        }
     }
 }

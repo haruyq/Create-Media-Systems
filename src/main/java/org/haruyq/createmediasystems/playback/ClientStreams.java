@@ -265,6 +265,27 @@ public final class ClientStreams {
     }
 
     public static void register(IEventBus modBus) {
+        StreamPackets.client(new StreamPackets.Client() {
+            @Override
+            public void play(StreamPackets.PlayAtBlock payload) {
+                ClientStreams.play(payload);
+            }
+
+            @Override
+            public void retune(StreamPackets.RetuneAtBlock payload) {
+                ClientStreams.retune(payload);
+            }
+
+            @Override
+            public void sync(StreamPackets.SyncAtBlock payload) {
+                ClientStreams.sync(payload);
+            }
+
+            @Override
+            public void stop(StreamPackets.StopAtBlock payload) {
+                ClientStreams.stop(payload);
+            }
+        });
         modBus.addListener((FMLClientSetupEvent event) -> {
             Vlc.preload();
             Tools.preload();
@@ -435,7 +456,7 @@ public final class ClientStreams {
     }
 
     /**
-     * Once a second, tells the server how far each Blu-ray player's video is downloaded here: all of it once it plays
+     * Once a second, tells the server how far each video source's video is downloaded here: all of it once it plays
      * here (streamed, it needs no more) or is kept, else how much of its copy is (see VideoCache). Its goggles show
      * its listeners' average while any of them waits. Every second, not only on a change, as the server forgets what
      * it was told whenever a track starts over.

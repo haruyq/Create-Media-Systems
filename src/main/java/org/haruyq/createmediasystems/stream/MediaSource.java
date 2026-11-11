@@ -2,11 +2,7 @@ package org.haruyq.createmediasystems.stream;
 
 import org.jetbrains.annotations.Nullable;
 
-/**
- * A block entity that owns a track and how far in it is: a vanilla jukebox with a custom disc (see
- * JukeboxBlockEntityMixin), a disc reader, a Blu-ray player or a hi-fi stack. Speakers and displays link to one and
- * play it in sync.
- */
+/** A block entity that owns a track and how far in it is. Speakers and displays link to one and play it in sync. */
 public interface MediaSource {
     /**
      * What it plays now, with the ticks since its track started (loading included: Streams counts what of that

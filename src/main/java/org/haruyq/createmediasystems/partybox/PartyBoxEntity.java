@@ -2,12 +2,8 @@ package org.haruyq.createmediasystems.partybox;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
-import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.launcher.DiscPlayback;
-import org.haruyq.createmediasystems.launcher.LauncherMagazine;
-import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.*;
@@ -22,7 +18,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -92,10 +87,7 @@ public final class PartyBoxEntity extends Entity {
     }
     public boolean play() {
         if (disc().isEmpty() || energy() <= 0) return false;
-        String url = DiscPlayback.mediaUrl(disc());
-        if ((disc().is(AudioFeature.CUSTOM_DISC.get()) || disc().is(VideoFeature.DVD.get()) || disc().is(VideoFeature.BLU_RAY.get()))
-                && (url==null || url.isBlank())) return false;
-        if (url != null && !ServerConfig.isAllowed(url)) return false;
+        if (MediaItem.silent(disc()) || !MediaItem.allowed(disc())) return false;
         if (playing()) return true;
         entityData.set(START, level().getGameTime()); entityData.set(PLAYING, true);
         entityData.set(REVISION, revision() + 1); powerAt = level().getGameTime();
@@ -108,7 +100,7 @@ public final class PartyBoxEntity extends Entity {
         entityData.set(REVISION, revision() + 1);
     }
     public void noteDuration(double seconds) {
-        if (duration <= 0 && Double.isFinite(seconds) && seconds > 0 && seconds <= 86400) duration = seconds;
+        if (duration <= 0 && MediaItem.plausibleLength(seconds)) duration = seconds;
     }
     public void togglePull(Player player) {
         if (puller().filter(player.getUUID()::equals).isPresent()) { entityData.set(PULLER, Optional.empty()); previousPullerPosition=null; return; }
@@ -122,10 +114,9 @@ public final class PartyBoxEntity extends Entity {
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (level().isClientSide) return InteractionResult.SUCCESS;
         ItemStack held = player.getItemInHand(hand);
-        int slot = held.getItem() instanceof PartyBoxBatteryItem ? 1 : LauncherMagazine.isDisc(held) ? 0 : -1;
+        int slot = held.getItem() instanceof PartyBoxBatteryItem ? 1 : MediaItem.fits(held, DiscKind.Slot.PORTABLE) ? 0 : -1;
         if (slot >= 0) {
-            String url = slot == 0 ? DiscPlayback.mediaUrl(held) : null;
-            if (url != null && !ServerConfig.isAllowed(url)) {
+            if (slot == 0 && !MediaItem.allowed(held)) {
                 player.displayClientMessage(Component.translatable("create_media_systems.url.rejected"), true); return InteractionResult.CONSUME;
             }
             ItemStack previous = inventory.removeItemNoUpdate(slot);
@@ -219,9 +210,7 @@ public final class PartyBoxEntity extends Entity {
         }
         PartyBoxBatteryItem.setEnergy(inventory.getItem(1), energy());
         if (duration <= 0 && tickCount % 20 == 0) {
-            String url = DiscPlayback.mediaUrl(disc());
-            noteDuration(url == null ? JukeboxSong.fromStack(level().registryAccess(), disc())
-                    .map(s -> (double) s.value().lengthInSeconds()).orElse(-1.0) : Streams.duration(url));
+            noteDuration(MediaItem.lengthSeconds(disc(), level().registryAccess()));
         }
         if (playing() && duration > 0 && seconds() >= duration) {
             entityData.set(PLAYING,false);entityData.set(OFFSET,0L);entityData.set(REVISION,revision()+1);

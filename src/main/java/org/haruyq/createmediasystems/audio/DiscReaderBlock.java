@@ -1,8 +1,10 @@
 package org.haruyq.createmediasystems.audio;
 
+import org.haruyq.createmediasystems.stream.DiscDrive;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
-import org.haruyq.createmediasystems.video.DriveEmulatorBlock;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -36,7 +38,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!stack.is(AudioFeature.CUSTOM_DISC.get())) {
+        if (!MediaItem.fits(stack, DiscKind.Slot.JUKEBOX)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof Entity reader && reader.disc.isEmpty()) {
@@ -85,7 +87,7 @@ public class DiscReaderBlock extends Block implements EntityBlock {
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    public static class Entity extends BlockEntity implements MediaSource, DriveEmulatorBlock.Fed {
+    public static class Entity extends BlockEntity implements MediaSource, DiscDrive.Fed {
         private ItemStack disc = ItemStack.EMPTY;
         private long ticks;
         private boolean playing;
@@ -103,14 +105,20 @@ public class DiscReaderBlock extends Block implements EntityBlock {
             return url != null ? new Streams.Source(url, ticks, null) : null;
         }
 
-        /** Its disc's link, or with no disc that of the audio CD in a disc drive emulator beside it (see DriveEmulatorBlock). */
+        /** Its disc's link, or with no disc that of the audio CD in a drive beside it (see DiscDrive). */
         @Nullable
         private String url() {
             if (!disc.isEmpty()) {
-                return disc.get(AudioFeature.URL.get());
+                return MediaItem.url(disc);
             }
-            DriveEmulatorBlock.Entity drive = DriveEmulatorBlock.feeding(level, worldPosition, true);
+            DiscDrive drive = DiscDrive.feeding(level, worldPosition, this);
             return drive == null ? null : drive.link();
+        }
+
+        /** A drive's disc with sound alone. */
+        @Override
+        public boolean plays(DiscKind kind) {
+            return !kind.hasPicture();
         }
 
         /** Plays the CD of the drive beside it from the beginning, or stops with it, unless it has a disc of its own. */

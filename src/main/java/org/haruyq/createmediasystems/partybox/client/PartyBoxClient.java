@@ -3,21 +3,18 @@ package org.haruyq.createmediasystems.partybox.client;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
 import org.haruyq.createmediasystems.ServerConfig;
-import org.haruyq.createmediasystems.launcher.DiscPlayback;
 import org.haruyq.createmediasystems.launcher.DopplerMath;
 import org.haruyq.createmediasystems.partybox.*;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.StreamSound;
 import org.haruyq.createmediasystems.playback.PlaybackSync;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.Streams;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.sounds.SoundSource;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.*;
@@ -82,8 +79,8 @@ public final class PartyBoxClient {
         if(ticks%5!=0)return;
         for(var box:mc.level.getEntitiesOfClass(PartyBoxEntity.class,mc.player.getBoundingBox().inflate(PartyBoxSpecs.HEAR_RANGE))) {
             if(!audible(box)||PLAYING.containsKey(box.getUUID())||PLAYING.size()>=12)continue;
-            String url=DiscPlayback.mediaUrl(box.disc()); int revision=box.revision();Meter meter=new Meter();
-            if(url!=null && !url.isBlank() && ServerConfig.isAllowed(url)) {
+            String url=MediaItem.url(box.disc()); int revision=box.revision();Meter meter=new Meter();
+            if(url!=null && ServerConfig.isAllowed(url)) {
                 double start=box.seconds();
                 StreamSound sound=new StreamSound(ClientStreams.apiStream(url,start,Streams.Channel.MIX),url,null,0,start,SoundSource.RECORDS,
                         box::soundPosition,null,()->!box.isRemoved()&&box.playing()&&box.revision()==revision,()->audible(box),()->gain(box),null,Streams.Channel.MIX,
@@ -92,8 +89,8 @@ public final class PartyBoxClient {
                 sound.setDiscPlayback(box.getUUID(),box::seconds);sound.setDynamicPitch(()->pitchAt(box));
                 sound.setBassMode(box::bass);sound.setPcmMeter(meter::sample);
                 ClientStreams.play(box.getUUID(),sound);PLAYING.put(box.getUUID(),new Playing(box,revision,true,null,ticks,meter));
-            } else if(!box.disc().is(AudioFeature.CUSTOM_DISC.get()) && !box.disc().is(VideoFeature.DVD.get()) && !box.disc().is(VideoFeature.BLU_RAY.get())) {
-                JukeboxSong.fromStack(mc.level.registryAccess(),box.disc()).ifPresent(song->{
+            } else {
+                MediaItem.song(box.disc(),mc.level.registryAccess()).ifPresent(song->{
                     var sound=new PartyBoxSound(box,song.value().soundEvent().value(),meter);mc.getSoundManager().play(sound);
                     PLAYING.put(box.getUUID(),new Playing(box,revision,false,sound,ticks,meter));
                 });

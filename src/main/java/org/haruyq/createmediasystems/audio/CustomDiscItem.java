@@ -5,6 +5,8 @@ import java.util.List;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.ServerConfig;
 import org.haruyq.createmediasystems.client.TextPromptScreen;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
@@ -26,9 +28,20 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Jukebox-playable disc whose audio is the URL stored on it. Use in the air to edit the URL. */
-public class CustomDiscItem extends Item {
+public class CustomDiscItem extends Item implements MediaItem {
     public CustomDiscItem(Properties properties) {
         super(properties);
+    }
+
+    @Override
+    public DiscKind kind() {
+        return DiscKind.CUSTOM_DISC;
+    }
+
+    @Override
+    public List<String> links(ItemStack stack) {
+        String url = stack.get(AudioFeature.URL.get());
+        return url == null ? List.of() : List.of(url);
     }
 
     @Override
