@@ -9,6 +9,7 @@ import org.haruyq.createmediasystems.audio.AudioClient;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.ScreenLight;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.display.DisplayClient;
 import org.haruyq.createmediasystems.hifi.HifiClient;
@@ -45,6 +46,7 @@ public final class CreateMediaSystemsClient {
         FEATURES.forEach(feature -> feature.register(modBus));
         ClientConfig.register(container);
         ScreenLight.register();
+        WorldEvents.register();
         PointLights.register(modBus);
         modBus.addListener((FMLClientSetupEvent event) -> PonderIndex.addPlugin(new PonderPlugin() {
             @Override

@@ -6,6 +6,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.WorldEvents;
 
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3d;
@@ -39,7 +40,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class LightingRaycast {
     /**
      * How long the render thread's block shapes are kept at most, in nanoseconds. A changed block's section is
-     * forgotten at once (sectionChanged); this only bounds what a missed change could leave behind.
+     * forgotten at once (see register); this only bounds what a missed change could leave behind.
      */
     private static final long RENDER_CACHE_NANOS = 10_000_000_000L;
     /** Sections the render thread's cache holds at most (16 KB of references each) before it starts again. */
@@ -98,7 +99,7 @@ public final class LightingRaycast {
 
     private static Scene scene(Level level, boolean render, Function<SubLevelAccess, Pose3dc> poseOf) {
         boolean shared = render && level.isClientSide && level == Minecraft.getInstance().level;
-        long frame = shared ? LightingIllumination.frame() : -1;
+        long frame = shared ? WorldEvents.frame() : -1;
         if (shared && renderScene != null && renderScene.level == level && renderScene.frame == frame) {
             return renderScene;
         }
@@ -129,21 +130,25 @@ public final class LightingRaycast {
         return new LightingRaycast(this);
     }
 
-    static void forgetAll() {
-        renderCache = null;
-        renderScene = null;
+    /** The render thread's cache follows the client's world (see WorldEvents). */
+    static void register() {
+        WorldEvents.onSectionChanged(LightingRaycast::sectionChanged);
+        WorldEvents.onChunkLoaded(LightingRaycast::chunkLoaded);
+        WorldEvents.onLevelChanged(() -> {
+            renderCache = null;
+            renderScene = null;
+        });
     }
 
-    /** A block in section {@code key} changed: its shapes are looked up again. Render thread. */
-    static void sectionChanged(long key) {
+    /** A block in section ({@code x}, {@code y}, {@code z}) changed: its shapes are looked up again. */
+    private static void sectionChanged(int x, int y, int z) {
         if (renderCache != null) {
-            renderCache.sections.remove(key);
+            renderCache.sections.remove(SectionPos.asLong(x, y, z));
             renderCache.lastKey = Long.MIN_VALUE;
         }
     }
 
-    /** Chunk column ({@code x}, {@code z}) was loaded anew. Render thread. */
-    static void chunkChanged(int x, int z) {
+    private static void chunkLoaded(int x, int z) {
         if (renderCache == null) {
             return;
         }

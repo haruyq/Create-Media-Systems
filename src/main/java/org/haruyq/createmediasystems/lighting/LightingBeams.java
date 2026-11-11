@@ -4,6 +4,7 @@ import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -137,7 +138,7 @@ public final class LightingBeams {
      */
     public static void strip(Matrix4f matrix, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int colorA, int colorB, Fade fade,
                              float alpha, @Nullable Clip first, @Nullable Clip second, @Nullable Clip third) {
-        long now = LightingIllumination.frame();
+        long now = WorldEvents.frame();
         if (frame != now) {
             frame = now;
             batch = 0;

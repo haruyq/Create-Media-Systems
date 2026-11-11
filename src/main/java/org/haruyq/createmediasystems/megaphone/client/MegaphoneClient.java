@@ -47,7 +47,16 @@ public final class MegaphoneClient {
         @Override public boolean viaApi(){return true;}
     }
     private MegaphoneClient(){}
+    /** The arm of each hand holding a playing megaphone held up before the face, following the head. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,Player p,float yaw,float pitch) {
+        for(var hand:InteractionHand.values()) {
+            var item=p.getItemInHand(hand);if(!(item.getItem() instanceof MegaphoneItem) || !MegaphoneData.playing(item))continue;
+            boolean right=(p.getMainArm()==net.minecraft.world.entity.HumanoidArm.RIGHT)==(hand==InteractionHand.MAIN_HAND);
+            var arm=right?model.rightArm:model.leftArm;arm.xRot=(float)(-Math.PI/2+Math.toRadians(pitch)*.8);arm.yRot=(float)Math.toRadians(yaw)+(right?-.12f:.12f);arm.zRot=0;
+        }
+    }
     public static void register(IEventBus bus) {
+        org.haruyq.createmediasystems.client.ArmPoses.add(MegaphoneClient::poseArms);
         bus.addListener((RegisterMenuScreensEvent e)->e.register(MegaphoneFeature.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
         bus.addListener((RegisterClientExtensionsEvent e)->e.registerItem(new IClientItemExtensions(){
             private MegaphoneItemRenderer renderer;

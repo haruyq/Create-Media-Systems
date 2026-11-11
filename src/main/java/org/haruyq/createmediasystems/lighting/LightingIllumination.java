@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.lighting;
 
-import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayDeque;
@@ -16,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Workers;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.ScreenLight;
 import org.joml.Matrix4f;
@@ -63,18 +63,24 @@ import net.minecraft.world.phys.Vec3;
 public final class LightingIllumination {
     private static final Map<StageLightBlock.Entity, Beam> BEAMS = new HashMap<>();
     private static final ArrayDeque<SurfaceScan> SCANS = new ArrayDeque<>();
-    private static WeakReference<Level> knownLevel = new WeakReference<>(null);
     private static ShaderInstance shader;
     /** This frame's lit surfaces in the world, drawn with the beams (LightingRenderer.effects). */
     private static final List<Runnable> SURFACES = new ArrayList<>();
-    /** Sections and chunk columns whose blocks changed since the last frame (LevelRendererMixin). */
+    /** Sections and chunk columns whose blocks changed since the last frame (see WorldEvents). */
     private static final LongOpenHashSet DIRTY_SECTIONS = new LongOpenHashSet();
     private static final LongOpenHashSet DIRTY_COLUMNS = new LongOpenHashSet();
     /** Vertices built on the render thread, in native memory, till uploaded. */
     private static final ByteBufferBuilder SCRATCH = new ByteBufferBuilder(SurfaceLight.FORMAT.getVertexSize() * 4096);
-    private static long frame;
 
     private LightingIllumination() {
+    }
+
+    /** Changes in the client's world reach the lit faces (see WorldEvents). */
+    static void register() {
+        WorldEvents.onSectionChanged((x, y, z) -> DIRTY_SECTIONS.add(SectionPos.asLong(x, y, z)));
+        WorldEvents.onChunkLoaded((x, z) -> DIRTY_COLUMNS.add(ChunkPos.asLong(x, z)));
+        WorldEvents.onLevelChanged(LightingIllumination::forgetAll);
+        WorldEvents.onFrameEnded(LightingIllumination::endFrame);
     }
 
     /**
@@ -520,7 +526,7 @@ public final class LightingIllumination {
     }
 
     public static int light(Entity entity, float partialTick, int original) {
-        if (knownLevel.get() != entity.level() || LightTexture.block(original) == 15 || IrisCompat.shadowPass()) {
+        if (LightTexture.block(original) == 15 || IrisCompat.shadowPass()) {
             return original;
         }
         Vec3 target = SableCompat.bodyCenter(entity, partialTick);
@@ -529,7 +535,9 @@ public final class LightingIllumination {
         for (var entry : BEAMS.entrySet()) {
             StageLightBlock.Entity lamp = entry.getKey();
             Beam beam = entry.getValue();
-            if (lamp.isRemoved() || beam.origin == null || now < beam.at || now - beam.at > 2) {
+            // A Ponder scene's lamps light only its entities, and the world's only the world's.
+            if (lamp.getLevel() != entity.level() || lamp.isRemoved() || beam.origin == null || now < beam.at
+                    || now - beam.at > 2) {
                 continue;
             }
             // A fixture lit without a console (another mod's, on redstone, say) is lit while it draws its beam.
@@ -579,14 +587,11 @@ public final class LightingIllumination {
                               float strength, int color, LightingRaycast.Hit hit, LightingRaycast rays,
                               Matrix4f matrix, MultiBufferSource buffers, int maxRadius) {
         Level level = lamp.getLevel();
-        if (knownLevel.get() != level) {
-            forgetAll();
-            knownLevel = new WeakReference<>(level);
-        }
+        long frame = WorldEvents.frame();
         Beam beam = BEAMS.computeIfAbsent(lamp, ignored -> new Beam());
         long now = level.getGameTime();
         if (frame - beam.drawn > 1 || now < beam.at) {
-            // Undrawn a while (off screen, say): blocks may have changed unseen (see sectionChanged).
+            // Undrawn a while (off screen, say): blocks may have changed unseen (see register).
             beam.sight++;
             beam.stale = true;
         }
@@ -672,7 +677,7 @@ public final class LightingIllumination {
             }
         }
         // Every few ticks, the faces in the beam are checked to still stand; the rest wait till it reaches them. Most
-        // changes are seen at once (sectionChanged); this catches those made while the light was out of view.
+        // changes are seen at once (see register); this catches those made while the light was out of view.
         boolean check = beam.at - beam.checked >= CHECK_TICKS;
         // On different sub-levels (or one on none), the faces move in the lamp's space: each frame sees them anew.
         BlockPos surface = beam.center == null ? center : beam.center;
@@ -932,12 +937,11 @@ public final class LightingIllumination {
     }
 
     /** After the frame: changes seen this frame are done with, and lamps no longer drawn freed. */
-    public static void endFrame() {
+    private static void endFrame() {
         SURFACES.clear();
         DIRTY_SECTIONS.clear();
         DIRTY_COLUMNS.clear();
-        frame++;
-        LightingOcclusion.update();
+        long frame = WorldEvents.frame();
         for (Iterator<Map.Entry<StageLightBlock.Entity, Beam>> it = BEAMS.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<StageLightBlock.Entity, Beam> entry = it.next();
             if (entry.getKey().isRemoved() || frame - entry.getValue().drawn > FORGET_FRAMES) {
@@ -966,46 +970,15 @@ public final class LightingIllumination {
         }
     }
 
-    /** A block in section ({@code x}, {@code y}, {@code z}) changed (LevelRendererMixin). */
-    public static void sectionChanged(int x, int y, int z) {
-        long key = SectionPos.asLong(x, y, z);
-        DIRTY_SECTIONS.add(key);
-        LightingRaycast.sectionChanged(key);
-        LightingOcclusion.sectionChanged(x, y, z);
-    }
-
-    /** Blocks between these corners, inclusive, changed (LevelRendererMixin). */
-    public static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
-        for (int x = minX >> 4; x <= maxX >> 4; x++) {
-            for (int y = minY >> 4; y <= maxY >> 4; y++) {
-                for (int z = minZ >> 4; z <= maxZ >> 4; z++) {
-                    sectionChanged(x, y, z);
-                }
-            }
-        }
-    }
-
-    /** Chunk column ({@code x}, {@code z}) was loaded anew (LevelRendererMixin). */
-    public static void chunkChanged(int x, int z) {
-        DIRTY_COLUMNS.add(ChunkPos.asLong(x, z));
-        LightingRaycast.chunkChanged(x, z);
-        LightingOcclusion.chunkChanged(x, z);
-    }
-
     public static boolean blocksChanged() {
         return !DIRTY_SECTIONS.isEmpty() || !DIRTY_COLUMNS.isEmpty();
-    }
-
-    public static long frame() {
-        return frame;
     }
 
     static void setShader(ShaderInstance loaded) {
         shader = loaded;
     }
 
-    static void forgetAll() {
-        LightingRaycast.forgetAll();
+    private static void forgetAll() {
         BEAMS.values().forEach(Beam::close);
         BEAMS.clear();
         SCANS.clear();

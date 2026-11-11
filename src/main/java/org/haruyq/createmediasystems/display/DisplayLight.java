@@ -26,6 +26,7 @@ import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.Workers;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -85,7 +86,6 @@ public final class DisplayLight {
     private static CompletableFuture<Void> scanning = CompletableFuture.completedFuture(null);
     private static final Map<Block, float[]> MATERIALS = new ConcurrentHashMap<>();
     private static final float[] MATTE_MATERIAL = {1, 0.04f};
-    private static int frame;
     private static volatile boolean warned;
 
     static final class Refresh {
@@ -135,7 +135,7 @@ public final class DisplayLight {
         private Surface current;
         @Nullable
         private Surface pending;
-        int drawn;
+        long drawn;
         /** As drawn this frame. */
         final Matrix4f toScreen = new Matrix4f();
         final Vector3f camera = new Vector3f();
@@ -194,7 +194,8 @@ public final class DisplayLight {
             if (closed || shader == null) {
                 return;
             }
-            if (part == 0 && pending != null && pending.shadows.advance(frame, pending.buffers, pending.counts)) {
+            if (part == 0 && pending != null
+                    && pending.shadows.advance(WorldEvents.frame(), pending.buffers, pending.counts)) {
                 if (current != null) {
                     current.close();
                 }
@@ -314,6 +315,9 @@ public final class DisplayLight {
 
     static void register() {
         NeoForge.EVENT_BUS.addListener(DisplayLight::stage);
+        WorldEvents.onBlocksChanged(DisplayLight::blocksChanged);
+        WorldEvents.onChunkLoaded(DisplayLight::chunkChanged);
+        WorldEvents.onFrameEnded(DisplayLight::frameEnded);
         NeoForge.EVENT_BUS.addListener((ChunkEvent.Unload event) -> {
             if (event.getLevel().isClientSide()) {
                 ChunkPos pos = event.getChunk().getPos();
@@ -322,7 +326,7 @@ public final class DisplayLight {
         });
     }
 
-    public static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+    private static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         for (Lit lit : LIT.values()) {
             if (lit.bounds != null && lit.bounds.intersects(minX, minY, minZ, maxX, maxY, maxZ)) {
                 lit.refresh.invalidate();
@@ -330,7 +334,7 @@ public final class DisplayLight {
         }
     }
 
-    public static void chunkChanged(int x, int z) {
+    private static void chunkChanged(int x, int z) {
         blocksChanged(x << 4, Integer.MIN_VALUE, z << 4, (x << 4) + 15, Integer.MAX_VALUE, (z << 4) + 15);
     }
 
@@ -348,6 +352,7 @@ public final class DisplayLight {
         float range = range(width, height);
         long now = level.getGameTime();
         Lit lit = LIT.computeIfAbsent(display, d -> new Lit());
+        long frame = WorldEvents.frame();
         if (!display.getBlockPos().equals(lit.at) || lit.width != width || lit.height != height || lit.facing != display.facing()
                 || frame - lit.drawn > 1) {
             lit.at = display.getBlockPos().immutable();
@@ -403,22 +408,24 @@ public final class DisplayLight {
 
     /**
      * Water is drawn after block entities, see-through over what's beneath it: a reflection on it drawn with them
-     * would be mostly covered. (With Fabulous graphics, water still covers it some.) And the buffers of displays no
-     * longer drawn are freed.
+     * would be mostly covered. (With Fabulous graphics, water still covers it some.)
      */
     private static void stage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             WATER.forEach(Runnable::run);
             WATER.clear();
-        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
-            WATER.clear();
-            frame++;
-            for (Iterator<Map.Entry<DisplayBlock.Entity, Lit>> it = LIT.entrySet().iterator(); it.hasNext(); ) {
-                Map.Entry<DisplayBlock.Entity, Lit> entry = it.next();
-                if (entry.getKey().isRemoved() || frame - entry.getValue().drawn > FORGET_FRAMES) {
-                    entry.getValue().close();
-                    it.remove();
-                }
+        }
+    }
+
+    /** After the frame: the buffers of displays no longer drawn are freed. */
+    private static void frameEnded() {
+        WATER.clear();
+        long frame = WorldEvents.frame();
+        for (Iterator<Map.Entry<DisplayBlock.Entity, Lit>> it = LIT.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<DisplayBlock.Entity, Lit> entry = it.next();
+            if (entry.getKey().isRemoved() || frame - entry.getValue().drawn > FORGET_FRAMES) {
+                entry.getValue().close();
+                it.remove();
             }
         }
     }

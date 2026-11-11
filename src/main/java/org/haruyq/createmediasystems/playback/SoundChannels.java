@@ -2,9 +2,9 @@ package org.haruyq.createmediasystems.playback;
 
 import java.util.function.IntConsumer;
 
-import org.haruyq.createmediasystems.mixin.ChannelAccessor;
-import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
-import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
+import org.haruyq.createmediasystems.playback.mixin.ChannelAccessor;
+import org.haruyq.createmediasystems.playback.mixin.SoundEngineAccessor;
+import org.haruyq.createmediasystems.playback.mixin.SoundManagerAccessor;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;

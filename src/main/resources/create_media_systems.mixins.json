@@ -5,27 +5,14 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "BlockEntityMixin",
-    "ConfigSyncMixin",
-    "JukeboxBlockEntityMixin",
-    "NoteBlockMixin",
-    "ScheduleEditPacketMixin"
+    "ConfigSyncMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "client": [
     "GameRendererAccessor",
-    "LauncherArmMixin",
-    "PartyBoxArmMixin",
-    "ChannelAccessor",
-    "ChannelMixin",
-    "EntityRendererMixin",
-    "LevelRendererMixin",
-    "LibraryMixin",
-    "SoundEngineAccessor",
-    "SoundEngineMixin",
-    "SoundManagerAccessor",
-    "ScheduleScreenMixin",
-    "MegaphoneArmMixin"
+    "HumanoidModelMixin",
+    "LevelRendererMixin"
   ]
 }

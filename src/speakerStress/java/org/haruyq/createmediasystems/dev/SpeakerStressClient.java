@@ -14,10 +14,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.haruyq.createmediasystems.mixin.ChannelAccessor;
-import org.haruyq.createmediasystems.mixin.SoundEngineAccessor;
-import org.haruyq.createmediasystems.mixin.SoundManagerAccessor;
+import org.haruyq.createmediasystems.playback.mixin.ChannelAccessor;
+import org.haruyq.createmediasystems.playback.mixin.SoundEngineAccessor;
+import org.haruyq.createmediasystems.playback.mixin.SoundManagerAccessor;
 import org.haruyq.createmediasystems.playback.ClientStreams;
+import org.haruyq.createmediasystems.playback.StreamSound;
 import org.lwjgl.openal.AL10;
 
 import com.mojang.logging.LogUtils;
@@ -140,7 +141,7 @@ public final class SpeakerStressClient {
         }
         int streamsActive = 0;
         for (SoundInstance sound : channels.keySet()) {
-            streamsActive += sound.getLocation().getPath().equals("stream") ? 1 : 0;
+            streamsActive += sound instanceof StreamSound ? 1 : 0;
         }
         int orphanStreams = orphans;
         int engineStreams = streamsActive;

@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.lighting;
 
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout.Button;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout.Slot;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
@@ -17,7 +18,6 @@ import com.simibubi.create.foundation.utility.RaycastHelper;
 
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,7 +32,6 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class LightingControls {
-    private static ClientLevel knownLevel;
     private static Hit held;
     private static boolean pressed;
     private static int heldGroup;
@@ -51,6 +50,15 @@ public final class LightingControls {
     public static void register() {
         LightingLinkHandler.register();
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
+        WorldEvents.onLevelChanged(() -> {
+            held = null;
+            pressed = false;
+            hovered = null;
+            activated = null;
+            presetConsole = null;
+            savingGroup = -1;
+            noticeUntil = 0;
+        });
         NeoForge.EVENT_BUS.addListener((InputEvent.MouseScrollingEvent event) -> {
             if (scroll(event.getScrollDeltaY())) {
                 event.setCanceled(true);
@@ -348,16 +356,6 @@ public final class LightingControls {
 
     private static void tick() {
         Minecraft mc = Minecraft.getInstance();
-        if (knownLevel != mc.level) {
-            knownLevel = mc.level;
-            held = null;
-            pressed = false;
-            hovered = null;
-            activated = null;
-            presetConsole = null;
-            savingGroup = -1;
-            noticeUntil = 0;
-        }
         if (mc.level == null || mc.player == null) {
             return;
         }

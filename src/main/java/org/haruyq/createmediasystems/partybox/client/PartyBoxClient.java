@@ -50,11 +50,19 @@ public final class PartyBoxClient {
         if(!(EmitterAudioManager.playing(box.getUUID()) instanceof Speaker speaker))return 0;
         var meter=speaker.meter;return (float)(meter.value*Math.exp(-Math.max(0,System.nanoTime()-meter.at)/250000000.0));
     }
-    public static boolean pulling(net.minecraft.world.entity.player.Player player) {
+    private static boolean pulling(net.minecraft.world.entity.player.Player player) {
         return player.level().getEntitiesOfClass(PartyBoxEntity.class,player.getBoundingBox().inflate(4))
                 .stream().anyMatch(box->box.puller().filter(player.getUUID()::equals).isPresent());
     }
+    /** The main arm reaching back to the party box this player pulls. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,net.minecraft.world.entity.player.Player player,float yaw,float pitch) {
+        if(!pulling(player))return;
+        boolean right=player.getMainArm()==net.minecraft.world.entity.HumanoidArm.RIGHT;
+        var arm=right?model.rightArm:model.leftArm;
+        arm.xRot=.78f;arm.yRot=right?-.22f:.22f;arm.zRot=right?-.28f:.28f;
+    }
     public static void register(IEventBus bus) {
+        org.haruyq.createmediasystems.client.ArmPoses.add(PartyBoxClient::poseArms);
         bus.addListener((EntityRenderersEvent.RegisterRenderers event)->event.registerEntityRenderer(PartyBoxFeature.PARTYBOX_ENTITY.get(),PartyBoxRenderer::new));
         bus.addListener((RegisterMenuScreensEvent event)->event.register(PartyBoxFeature.PARTYBOX_MENU.get(),PartyBoxScreen::new));
         bus.addListener((RegisterClientExtensionsEvent event)->event.registerItem(new IClientItemExtensions() {

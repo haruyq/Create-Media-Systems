@@ -15,6 +15,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Rgb;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.ScreenLight;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
@@ -56,7 +57,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
@@ -87,10 +87,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     private static final int RAYS = 9;
 
     public static void register(IEventBus modBus) {
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
-            LightingIllumination.forgetAll();
-            LightingBeams.close();
-        });
+        WorldEvents.onLevelChanged(LightingBeams::close);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
                 effects(event);
@@ -101,7 +98,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderLevelStageEvent event) -> {
             if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
                 effects(event);
-                LightingIllumination.endFrame();
             }
         });
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
@@ -296,7 +292,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         // A beam out of view (as last traced) is traced again only every few frames, often enough to see it swing
         // back into view; meanwhile neither it nor its light is drawn, nor its light's faces looked at.
         if (level == Minecraft.getInstance().level && !trace.inView(frame)
-                && Math.floorMod(LightingIllumination.frame() + lamp.getBlockPos().hashCode(), OFF_SCREEN_FRAMES) != 0) {
+                && Math.floorMod(WorldEvents.frame() + lamp.getBlockPos().hashCode(), OFF_SCREEN_FRAMES) != 0) {
             return;
         }
         trace.update(frame, direction, right, up, pattern, group.range, group.spread);
@@ -438,7 +434,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
 
         void update(BeamFrame frame, Vec3 forward, Vec3 right, Vec3 up,
                     Pattern pattern, float range, float spread) {
-            long now = LightingIllumination.frame();
+            long now = WorldEvents.frame();
             Vec3 world = frame.world(frame.origin);
             double scale = Math.max(frame.basisX.length(), Math.max(frame.basisY.length(), frame.basisZ.length()));
             boolean moving = SableCompat.containing(frame.lamp.getLevel(), frame.lamp.getBlockPos()) != null

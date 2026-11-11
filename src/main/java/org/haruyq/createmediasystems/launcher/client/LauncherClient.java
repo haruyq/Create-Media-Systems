@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.launcher.client;
 
+import org.haruyq.createmediasystems.client.ArmPoses;
 import org.haruyq.createmediasystems.client.PointLights;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.haruyq.createmediasystems.client.mesh.CellLight;
@@ -80,7 +81,17 @@ public final class LauncherClient {
             GLFW.GLFW_KEY_R,
             "key.categories.create_media_systems");
 
+    /** Both arms up to a launcher in the main hand: the trigger hand at the grip, the other one under the barrel. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,net.minecraft.world.entity.player.Player p,float yaw,float pitch) {
+        if(!p.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))return;
+        boolean right=p.getMainArm()==HumanoidArm.RIGHT,reloading=LauncherMagazine.reloading(p.getMainHandItem());
+        var trigger=right?model.rightArm:model.leftArm;var support=right?model.leftArm:model.rightArm;
+        trigger.xRot=-1.42f+model.head.xRot;trigger.yRot=model.head.yRot+(right?-.12f:.12f);trigger.zRot=0;
+        support.xRot=(reloading?-.85f:-1.40f)+model.head.xRot;support.yRot=model.head.yRot+(right?.42f:-.42f);support.zRot=right?-.10f:.10f;
+    }
+
     public static void register(IEventBus modBus) {
+        ArmPoses.add(LauncherClient::poseArms);
         modBus.addListener(LauncherClient::registerExtensions);
         modBus.addListener(LauncherClient::registerRenderers);
         modBus.addListener(LauncherClient::registerKeys);

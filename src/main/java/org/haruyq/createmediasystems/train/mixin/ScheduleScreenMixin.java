@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.mixin;
+package org.haruyq.createmediasystems.train.mixin;
 
 import java.util.List;
 import java.util.function.Supplier;

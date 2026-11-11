@@ -33,6 +33,9 @@ public final class LightingClient implements ClientFeature {
         AnalysisPlayback.register();
         LightingControls.register();
         LightingRenderer.register(modBus);
+        LightingIllumination.register();
+        LightingOcclusion.register();
+        LightingRaycast.register();
     }
 
     @Override

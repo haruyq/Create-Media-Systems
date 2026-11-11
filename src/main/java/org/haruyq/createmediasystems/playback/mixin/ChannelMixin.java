@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.mixin;
+package org.haruyq.createmediasystems.playback.mixin;
 
 import org.haruyq.createmediasystems.playback.CmsStream;
 import org.haruyq.createmediasystems.playback.DeviceClock;
