@@ -72,7 +72,6 @@ class TransportTest {
             await(() -> host.connected().equals(List.of(VIEWER)) && viewer.connected().equals(List.of(HOST)), 20_000, said);
             assertFalse(viewer.send(new byte[1]), "only the host sends");
             await(() -> host.budgetBps() != LinkRate.INITIAL_BPS && viewer.budgetBps() > 0, 10_000, said);
-            assertTrue(said.stream().anyMatch(s -> s.startsWith("Measured the direct connection to viewer")), said::toString);
             // In-process, the probe measures far more than real connections carry: pace this one at 8 Mbit/s.
             synchronized (host) {
                 host.links.get(VIEWER).rate.probed(1_250_000, 1_000_000_000L);

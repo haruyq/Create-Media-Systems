@@ -319,7 +319,6 @@
   "create_media_systems.p2p.cooldown": "数秒待ってからもう一度試してください。",
   "create_media_systems.p2p.no_room": "%s は P2P セッションをホストしていません。",
   "create_media_systems.p2p.api_failed": "P2P API が拒否しました: %s",
-  "create_media_systems.p2p.requested": "サーバーに P2P チケットを要求しました...",
   "create_media_systems.p2p.left": "P2P セッションから退出しました。",
   "create_media_systems.p2p.host_left": "参加する前にホストが退出しました。",
   "create_media_systems.p2p.none": "P2P セッションに参加していません。",

@@ -319,7 +319,6 @@
   "create_media_systems.p2p.cooldown": "Wait a few seconds before asking again.",
   "create_media_systems.p2p.no_room": "%s is not hosting a P2P session.",
   "create_media_systems.p2p.api_failed": "The P2P API refused: %s",
-  "create_media_systems.p2p.requested": "Asked the server for a P2P ticket...",
   "create_media_systems.p2p.left": "Left the P2P session.",
   "create_media_systems.p2p.host_left": "The host left before you could join.",
   "create_media_systems.p2p.none": "Not in a P2P session.",

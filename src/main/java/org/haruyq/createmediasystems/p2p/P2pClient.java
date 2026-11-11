@@ -175,7 +175,6 @@ public final class P2pClient {
         Seat seat = SEATS.computeIfAbsent(host, h -> new Seat());
         seat.wanted = ++requests;
         server.accept(new P2p.Request(action, seat.wanted, name));
-        say(Component.translatable("create_media_systems.p2p.requested"), false);
         return 1;
     }
 

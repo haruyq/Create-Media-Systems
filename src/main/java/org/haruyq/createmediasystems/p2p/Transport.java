@@ -588,7 +588,7 @@ public final class Transport implements AutoCloseable {
                     ByteBuffer report = ByteBuffer.wrap(frame, 1, 16);
                     link.rate.probed(report.getLong(), report.getLong());
                     link.probedAt = System.nanoTime();
-                    listener.status(String.format(Locale.ROOT, "Measured the direct connection to %s: %.1f Mbps",
+                    LOGGER.info(String.format(Locale.ROOT, "Measured the direct connection to %s: %.1f Mbps",
                             name(link.peer), link.rate.bps() / 1e6));
                 }
             }
@@ -634,7 +634,7 @@ public final class Transport implements AutoCloseable {
         LinkRate rate = new LinkRate();
         rate.probed(link.probeBytes, nanos);
         budgetBps = rate.bps();
-        listener.status(String.format(Locale.ROOT, "Measured the direct connection from the host: %.1f Mbps", budgetBps / 1e6));
+        LOGGER.info(String.format(Locale.ROOT, "Measured the direct connection from the host: %.1f Mbps", budgetBps / 1e6));
     }
 
     /** Closes {@code link}, telling the player {@code reason} if any. A viewer has nothing left without its host. */
@@ -883,7 +883,7 @@ public final class Transport implements AutoCloseable {
             if (now == RTCDataChannelState.OPEN && !open) {
                 open = true;
                 openedAt = System.nanoTime();
-                listener.status("Connected directly to " + name(peer) + ".");
+                LOGGER.info("Connected directly to {}.", name(peer));
             } else if (now == RTCDataChannelState.CLOSED) {
                 drop(this, "The connection to " + name(peer) + " closed.");
             }
