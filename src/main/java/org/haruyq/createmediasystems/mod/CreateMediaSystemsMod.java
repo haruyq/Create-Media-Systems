@@ -53,24 +53,33 @@ public final class CreateMediaSystemsMod {
         CreateMediaSystems.register(modBus, container, FEATURES);
     }
 
+    /** Grouped by system: media, then each system's devices followed by its tools. */
     private static List<Supplier<? extends Item>> tabOrder() {
         List<Supplier<? extends Item>> order = new ArrayList<>(List.of(
-                MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
-                PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY));
-        order.addAll(LauncherFeature.DISC_CELLS);
-        order.addAll(List.of(LauncherFeature.DISC_CELL_CHARGER_ITEM, LauncherFeature.DISC_LAUNCHER,
-                AudioFeature.CUSTOM_DISC, TrainFeature.ANNOUNCEMENT_SCHEDULE, TrainFeature.TRAIN_DISC_READER_ITEM,
-                TrainFeature.TRAIN_SPEAKER_ITEM, AudioFeature.RANGE_QUILL, AudioFeature.DISC_READER_ITEM,
-                AudioFeature.SPEAKER_ITEM, TrainFeature.TRAIN_DETECTOR_ITEM, TrainFeature.TRAIN_SIGNAL_RECEIVER_ITEM,
+                // Media
+                AudioFeature.CUSTOM_DISC, DiscFeature.CD, DiscFeature.CASSETTE, DiscFeature.DVD, DiscFeature.BLU_RAY,
+                // Jukebox audio
+                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL));
+        // Hi-Fi
+        order.addAll(HifiFeature.hifiUnits());
+        order.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
+                // Video
+                VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM, VideoFeature.EQUALIZER_ITEM,
+                DisplayFeature.DISPLAY_ITEM, DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL,
+                // Lighting
+                LightingFeature.STAGE_LIGHT_ITEM, LightingFeature.LASER_PROJECTOR_ITEM, LightingFeature.LIGHTING_CONSOLE_ITEM,
+                LightingFeature.LIGHTING_MONITOR_ITEM, LightingFeature.LIGHTING_LINK,
+                // Broadcast
                 BroadcastFeature.BASE_ITEM, BroadcastFeature.MAST_ITEM, BroadcastFeature.HORN_ITEM,
                 BroadcastFeature.DIGITAL_HORN_ITEM, BroadcastFeature.ARRAY_ITEM,
-                DiscFeature.DVD, DiscFeature.BLU_RAY, VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM,
-                VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL, DisplayFeature.DISPLAY_ITEM,
-                DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.EQUALIZER_ITEM, LightingFeature.STAGE_LIGHT_ITEM,
-                LightingFeature.LASER_PROJECTOR_ITEM, LightingFeature.LIGHTING_CONSOLE_ITEM,
-                LightingFeature.LIGHTING_MONITOR_ITEM, LightingFeature.LIGHTING_LINK));
-        order.addAll(HifiFeature.hifiUnits());
-        order.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE, DiscFeature.CD, DiscFeature.CASSETTE));
+                // Train
+                TrainFeature.TRAIN_DISC_READER_ITEM, TrainFeature.TRAIN_SPEAKER_ITEM, TrainFeature.TRAIN_DETECTOR_ITEM,
+                TrainFeature.TRAIN_SIGNAL_RECEIVER_ITEM, TrainFeature.ANNOUNCEMENT_SCHEDULE,
+                // Portable
+                PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY, MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
+                // Disc Launcher
+                LauncherFeature.DISC_LAUNCHER, LauncherFeature.LAUNCHER_AIM_MODULE_ITEM, LauncherFeature.DISC_CELL_CHARGER_ITEM));
+        order.addAll(LauncherFeature.DISC_CELLS);
         return order;
     }
 }
