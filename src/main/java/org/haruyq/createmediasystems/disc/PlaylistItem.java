@@ -1,13 +1,19 @@
 package org.haruyq.createmediasystems.disc;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.StreamPackets;
+import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
+
+import org.jetbrains.annotations.Nullable;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
@@ -57,9 +63,17 @@ public class PlaylistItem extends Item implements MediaItem {
             return InteractionResultHolder.pass(stack);
         }
         if (level.isClientSide) {
-            PlaylistScreen.open(links(stack), kind.entries);
+            PlaylistScreen.open(links(stack), stack.getOrDefault(DiscFeature.PLAYLIST_TITLES.get(), Map.of()), kind.entries);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    /** {@code url}'s title among a disc's {@code titles}, or that it is an unknown source; null if not asked yet. */
+    @Nullable
+    static Component title(Map<String, String> titles, String url) {
+        String title = titles.get(url.strip());
+        return title == null ? null : title.isEmpty() ? Component.translatable("create_media_systems.disc.unknown_source")
+                : Component.literal(title);
     }
 
     @Override
@@ -70,8 +84,11 @@ public class PlaylistItem extends Item implements MediaItem {
             return;
         }
         tooltip.add(Component.translatable(kind.hasPicture() ? "create_media_systems.disc.entries" : "create_media_systems.disc.tracks", playlist.size()).withStyle(ChatFormatting.GOLD));
+        Map<String, String> titles = stack.getOrDefault(DiscFeature.PLAYLIST_TITLES.get(), Map.of());
         for (int i = 0; i < Math.min(playlist.size(), SHOWN_ENTRIES); i++) {
-            tooltip.add(Component.literal((i + 1) + ". " + playlist.get(i)).withStyle(ChatFormatting.GRAY));
+            Component title = title(titles, playlist.get(i));
+            tooltip.add(Component.literal((i + 1) + ". ").append(title == null ? Component.literal(playlist.get(i)) : title)
+                    .withStyle(ChatFormatting.GRAY));
         }
         if (playlist.size() > SHOWN_ENTRIES) {
             tooltip.add(Component.literal("…").withStyle(ChatFormatting.DARK_GRAY));
@@ -94,7 +111,7 @@ public class PlaylistItem extends Item implements MediaItem {
      * Writes {@code urls} onto the disc in the player's hand, all of them or (if any isn't allowed) none, and says which
      * entry was refused.
      */
-    static void writePlaylist(ServerPlayer player, List<String> urls) {
+    public static void writePlaylist(ServerPlayer player, List<String> urls) {
         ItemStack held = player.getMainHandItem();
         if (!(held.getItem() instanceof PlaylistItem disc)) {
             return;
@@ -112,12 +129,38 @@ public class PlaylistItem extends Item implements MediaItem {
         }
         if (playlist.isEmpty()) {
             held.remove(DiscFeature.PLAYLIST.get());
+            held.remove(DiscFeature.PLAYLIST_TITLES.get());
         } else {
             held.set(DiscFeature.PLAYLIST.get(), playlist);
+            writeTitles(player, playlist, held.getOrDefault(DiscFeature.PLAYLIST_TITLES.get(), Map.of()));
         }
         player.displayClientMessage(Component.translatable(disc.kind.hasPicture() ? "create_media_systems.disc.saved"
                 : "create_media_systems.disc.saved_tracks", playlist.size())
                 .withStyle(ChatFormatting.GREEN), true);
+    }
+
+    /**
+     * Asks the API for the title of each of {@code playlist}'s links {@code known} has none for, then writes them all
+     * onto the disc in the player's hand if it still holds that playlist. A link the API can't tell about gets an empty
+     * title, and is asked about again on the next save.
+     */
+    private static void writeTitles(ServerPlayer player, List<String> playlist, Map<String, String> known) {
+        List<String> urls = playlist.stream().distinct().toList();
+        List<CompletableFuture<String>> titles = urls.stream().map(url -> !known.getOrDefault(url, "").isEmpty()
+                ? CompletableFuture.completedFuture(known.get(url))
+                : CompletableFuture.completedFuture(url).thenCompose(Streams::info)
+                        .handle((info, error) -> error == null && info.title() != null ? info.title() : "")).toList();
+        CompletableFuture.allOf(titles.toArray(CompletableFuture[]::new)).thenRun(() -> player.server.execute(() -> {
+            ItemStack held = player.getMainHandItem();
+            if (!(held.getItem() instanceof PlaylistItem disc) || !disc.links(held).equals(playlist)) {
+                return; // switched discs or rewrote this one while the API was asked
+            }
+            Map<String, String> written = new HashMap<>();
+            for (int i = 0; i < urls.size(); i++) {
+                written.put(urls.get(i), titles.get(i).join());
+            }
+            held.set(DiscFeature.PLAYLIST_TITLES.get(), written);
+        }));
     }
 
     public static void registerPayloads(PayloadRegistrar registrar) {

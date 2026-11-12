@@ -9,12 +9,14 @@ import java.util.Map;
 
 import org.haruyq.createmediasystems.playback.YtDlp;
 import org.haruyq.createmediasystems.stream.UrlPolicy;
+import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -30,18 +32,21 @@ final class PlaylistScreen extends Screen {
     private static final int ROW_HEIGHT = 24;
     /** Edited in place; always at least one (maybe empty) row. */
     private final List<String> entries;
+    /** The disc's titles (see PlaylistItem#title), shown on hovering a link's box. */
+    private final Map<String, String> titles;
     private final int capacity;
     private int scroll;
     private boolean reading;
     private Component status = Component.empty();
 
-    static void open(List<String> playlist, int capacity) {
-        Minecraft.getInstance().setScreen(new PlaylistScreen(playlist, capacity));
+    static void open(List<String> playlist, Map<String, String> titles, int capacity) {
+        Minecraft.getInstance().setScreen(new PlaylistScreen(playlist, titles, capacity));
     }
 
-    private PlaylistScreen(List<String> playlist, int capacity) {
+    private PlaylistScreen(List<String> playlist, Map<String, String> titles, int capacity) {
         super(Component.translatable("create_media_systems.screen.playlist"));
         this.capacity = capacity;
+        this.titles = titles;
         entries = new ArrayList<>(playlist.subList(0, Math.min(playlist.size(), capacity)));
         if (entries.isEmpty()) {
             entries.add("");
@@ -59,7 +64,11 @@ final class PlaylistScreen extends Screen {
             EditBox box = new EditBox(font, left + 24, y, 246, 20, Component.translatable("create_media_systems.screen.playlist.url"));
             box.setMaxLength(UrlPolicy.MAX_LENGTH);
             box.setValue(entries.get(entry));
-            box.setResponder(value -> entries.set(entry, value));
+            box.setTooltip(tooltip(entries.get(entry)));
+            box.setResponder(value -> {
+                entries.set(entry, value);
+                box.setTooltip(tooltip(value));
+            });
             addRenderableWidget(box);
             if (row == 0 && scroll == 0) {
                 setInitialFocus(box);
@@ -76,6 +85,12 @@ final class PlaylistScreen extends Screen {
                 .bounds(left + 24, bottom, 120, 20).build()).active = entries.size() < capacity;
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> done())
                 .bounds(left + 218, bottom, 120, 20).build()).active = !reading;
+    }
+
+    @Nullable
+    private Tooltip tooltip(String url) {
+        Component title = PlaylistItem.title(titles, url);
+        return title == null ? null : Tooltip.create(title);
     }
 
     private void done() {

@@ -187,6 +187,7 @@
   "block.create_media_systems.display": "ディスプレイ",
   "item.create_media_systems.remote": "リモコン",
   "item.create_media_systems.display_quill": "ディスプレイの羽ペン",
+  "create_media_systems.disc.unknown_source": "不明なソース",
   "create_media_systems.disc.entries": "動画 %s 本",
   "create_media_systems.disc.saved": "ディスクに動画を %s 本保存しました。",
   "create_media_systems.disc.rejected": "%s 番目の動画は、このサーバーで許可されたリンクではありません。保存しませんでした。",

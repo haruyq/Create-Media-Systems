@@ -187,6 +187,7 @@
   "block.create_media_systems.display": "Display",
   "item.create_media_systems.remote": "Remote",
   "item.create_media_systems.display_quill": "Display Quill",
+  "create_media_systems.disc.unknown_source": "Unknown source",
   "create_media_systems.disc.entries": "%s videos",
   "create_media_systems.disc.saved": "Saved %s videos to the disc.",
   "create_media_systems.disc.rejected": "Video %s is not a link this server allows; nothing was saved.",
