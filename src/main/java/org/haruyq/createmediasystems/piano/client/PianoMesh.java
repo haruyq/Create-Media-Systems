@@ -15,6 +15,17 @@ final class PianoMesh {
     private static final float FRONT = .595f, TAIL = 2.827f, CENTER = .91f;
     private static final int EBONY = 0x1D1C21, EDGE = 0x3B3A42, INSET = 0x0E0D10;
     private static final int BRASS = 0xBF9450, GOLD = 0xDDB972, FELT = 0x701C32;
+    private static final float KEY_LEFT = .275f, KEY_RIGHT = 1.545f;
+    private static final float KEY_PITCH = (KEY_RIGHT - KEY_LEFT) / 52, KEY_GAP = .00055f;
+    private static final float KEY_FRONT = .109f, KEY_SHOULDER = .185f, KEY_BACK = .291f;
+    private static final float KEY_BOTTOM = .808f, WHITE_TOP = .833f, BLACK_TOP = .846f;
+    private static final float BLACK_HALF_WIDTH = .0067f, BLACK_TAPER = .00135f;
+    private static final int IVORY = 0xF1EDE6, IVORY_SIDE = 0xDED8CE;
+    private static final int EBONY_KEY = 0x222126, EBONY_KEY_SIDE = 0x151419;
+    private static final float[][] FALLBOARD = {
+        {KEY_BACK + .010f, .856f}, {.310f, .868f}, {.327f, .885f},
+        {.357f, .904f}, {.408f, .920f}, {.487f, .930f}, {.604f, .934f}
+    };
     private static final int SECTIONS = 56;
     // Keyboard at z=0, straight bass rim on the left, bentside and rounded tail on the right.
     private static final float[][] PROFILE = {
@@ -69,36 +80,119 @@ final class PianoMesh {
         band(.013f, .997f, .018f, 1.007f, 0x151319);
         panel(.013f, .717f, -1, 0x161518);
         box(.104f, .695f, .085f, 1.717f, .778f, .597f, EBONY);
-        box(.114f, .777f, .093f, 1.710f, .790f, .561f, 0x303039);
-        box(.10f, .78f, .107f, .168f, .850f, .619f, EBONY);
-        box(1.650f, .78f, .107f, 1.720f, .850f, .619f, EBONY);
-        box(.113f, .848f, .133f, .169f, .857f, .575f, 0x373640);
-        box(1.650f, .848f, .133f, 1.707f, .857f, .575f, 0x373640);
-        box(.161f, .791f, .532f, 1.658f, .875f, .605f, INSET);
-        box(.169f, .861f, .541f, 1.650f, .893f, .601f, EBONY);
-        box(.176f, .797f, .515f, 1.644f, .810f, .540f, FELT);
-        box(.841f, .872f, .539f, .979f, .876f, .541f, 0xAC8648);
+        box(.107f, .778f, .098f, 1.713f, KEY_BOTTOM, .595f, 0x2C2B31);
+        keyCheek(.100f, KEY_LEFT - .001f);
+        keyCheek(KEY_RIGHT + .001f, 1.720f);
+
+        // A recessed keybed keeps the hairline gaps legible without high-contrast speckle at a distance.
+        box(KEY_LEFT, KEY_BOTTOM, KEY_FRONT + .004f, KEY_RIGHT, .817f, KEY_BACK, 0xC5BEB3);
+        box(KEY_LEFT, KEY_BOTTOM, KEY_BACK + .001f, KEY_RIGHT, .833f, FALLBOARD[0][0], FELT);
+        fallboard();
+    }
+
+    private void keyCheek(float left, float right) {
+        box(left, .780f, KEY_FRONT - .004f, right, .839f, .597f, EBONY);
+        box(left + .005f, .839f, KEY_FRONT + .004f, right - .005f, .848f, .591f, 0x2F2E34);
+    }
+
+    private void fallboard() {
+        float left = KEY_LEFT - .003f, right = KEY_RIGHT + .003f;
+        float[] front = FALLBOARD[0], rear = FALLBOARD[FALLBOARD.length - 1];
+        for (int i = 0; i + 1 < FALLBOARD.length; i++) {
+            float[] a = FALLBOARD[i], b = FALLBOARD[i + 1];
+            keyRun(left, right, a[0], b[0], a[1], b[1], 0, 0x27262C, 0x1B1A20);
+        }
+        keyEnd(left, right, front[0], front[1], 0, -1, 0x201F25);
+        keyEnd(left, right, rear[0], rear[1], 0, 1, EBONY);
+        box(.851f, .844f, front[0] - .001f, .969f, .847f, front[0], 0xAC8648);
     }
 
     private void keyboard(PianoState state) {
         int white = 0;
-        float start = .174f, width = 1.470f / 52;
+        boolean previousWhitePressed = false;
         for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
-            float dip = state.pressed(note) ? .011f : 0;
-            float x = start + width * white;
-            if (black(note)) {
-                box(x - .0086f, .809f, .281f, x + .0086f, .853f - dip, .524f, 0x121218);
-                box(x - .0073f, .853f - dip, .286f, x + .0073f, .857f - dip, .518f, 0x33313B);
+            float seam = KEY_LEFT + KEY_PITCH * white;
+            boolean accidental = black(note);
+            boolean pressed = state.pressed(note);
+            if (pressed) {
+                pose.pushPose();
+                pose.translate(0, KEY_BOTTOM, .425f);
+                pose.mulPose(Axis.XN.rotationDegrees(accidental ? 2.25f : 1.75f));
+                pose.translate(0, -KEY_BOTTOM, -.425f);
+            }
+            if (accidental) {
+                blackKey(blackCenter(seam, note));
             } else {
-                float a = x + .00115f, b = x + width - .00115f;
-                float shoulderLeft = isNote(note - 1) && black(note - 1) ? x + .0091f : a;
-                float shoulderRight = isNote(note + 1) && black(note + 1) ? x + width - .0091f : b;
-                box(a, .779f, .102f, b, .824f - dip, .281f, 0xC3BDAC);
-                box(a, .824f - dip, .108f, b, .831f - dip, .281f, 0xF4EFE1);
-                box(shoulderLeft, .781f, .281f, shoulderRight, .831f - dip, .526f, 0xEDE5D8);
+                float left = seam + KEY_GAP, right = seam + KEY_PITCH - KEY_GAP;
+                boolean leftHasBlack = note > FIRST_NOTE && black(note - 1);
+                float stemLeft = leftHasBlack
+                        ? blackCenter(seam, note - 1) + BLACK_HALF_WIDTH + KEY_GAP : left;
+                float stemRight = note < LAST_NOTE && black(note + 1)
+                        ? blackCenter(seam + KEY_PITCH, note + 1) - BLACK_HALF_WIDTH - KEY_GAP : right;
+                whiteKey(left, right, stemLeft, stemRight);
+                if (white > 0 && !pressed && !previousWhitePressed) {
+                    restingSeam(seam, leftHasBlack ? KEY_SHOULDER : KEY_BACK);
+                }
+                previousWhitePressed = pressed;
                 white++;
             }
+            if (pressed) pose.popPose();
         }
+    }
+
+    private void restingSeam(float center, float back) {
+        // Pressing either neighbour exposes the deeper gap. At rest only a shallow shadow is visible.
+        float left = center - KEY_GAP, right = center + KEY_GAP;
+        float front = KEY_FRONT + .0035f, y = WHITE_TOP - .00075f;
+        quad(left, y, front, right, y, front, right, y, back, left, y, back, 0, 1, 0, 0xD5D0C7);
+    }
+
+    private static float blackCenter(float seam, int note) {
+        // The sharps in each group are offset to leave similar widths on the white key stems.
+        float offset = switch (note % 12) {
+            case 1 -> -.09f;
+            case 3 -> .09f;
+            case 6 -> -.14f;
+            case 10 -> .14f;
+            default -> 0;
+        };
+        return seam + offset * KEY_PITCH;
+    }
+
+    private void whiteKey(float left, float right, float stemLeft, float stemRight) {
+        float nose = WHITE_TOP - .0025f, bevel = KEY_FRONT + .0035f;
+        keyEnd(left, right, KEY_FRONT, nose, 0, -1, IVORY_SIDE);
+        keyRun(left, right, KEY_FRONT, bevel, nose, WHITE_TOP, 0, 0xECE6DD, IVORY_SIDE);
+        keyRun(left, right, bevel, KEY_SHOULDER, WHITE_TOP, WHITE_TOP, 0, IVORY, IVORY_SIDE);
+        keyRun(stemLeft, stemRight, KEY_SHOULDER, KEY_BACK, WHITE_TOP, WHITE_TOP, 0, IVORY, IVORY_SIDE);
+        if (stemLeft > left) keyEnd(left, stemLeft, KEY_SHOULDER, WHITE_TOP, 0, 1, IVORY_SIDE);
+        if (stemRight < right) keyEnd(stemRight, right, KEY_SHOULDER, WHITE_TOP, 0, 1, IVORY_SIDE);
+        keyEnd(stemLeft, stemRight, KEY_BACK, WHITE_TOP, 0, 1, IVORY_SIDE);
+    }
+
+    private void blackKey(float center) {
+        float left = center - BLACK_HALF_WIDTH, right = center + BLACK_HALF_WIDTH;
+        float toe = .834f, front = KEY_SHOULDER + .0015f, ramp = front + .013f;
+        keyEnd(left, right, front, toe, BLACK_TAPER, -1, EBONY_KEY_SIDE);
+        keyRun(left, right, front, ramp, toe, BLACK_TOP, BLACK_TAPER, 0x2D2C32, EBONY_KEY_SIDE);
+        keyRun(left, right, ramp, KEY_BACK, BLACK_TOP, BLACK_TOP, BLACK_TAPER, EBONY_KEY, EBONY_KEY_SIDE);
+        keyEnd(left, right, KEY_BACK, BLACK_TOP, BLACK_TAPER, 1, EBONY_KEY_SIDE);
+    }
+
+    private void keyEnd(float left, float right, float z, float y, float taper, int normal, int color) {
+        quad(left, KEY_BOTTOM, z, right, KEY_BOTTOM, z, right - taper, y, z, left + taper, y, z, 0, 0, normal, color);
+    }
+
+    private void keyRun(float left, float right, float frontZ, float backZ, float frontY, float backY,
+            float taper, int topColor, int sideColor) {
+        float slope = (backY - frontY) / (backZ - frontZ);
+        float normal = Mth.invSqrt(1 + slope * slope);
+        quad(left + taper, frontY, frontZ, right - taper, frontY, frontZ, right - taper, backY, backZ,
+                left + taper, backY, backZ, 0, normal, -slope * normal, topColor);
+        quad(left, KEY_BOTTOM, frontZ, left, KEY_BOTTOM, backZ, left + taper, backY, backZ,
+                left + taper, frontY, frontZ, -1, 0, 0, sideColor);
+        quad(right, KEY_BOTTOM, backZ, right, KEY_BOTTOM, frontZ, right - taper, frontY, frontZ,
+                right - taper, backY, backZ, 1, 0, 0, sideColor);
     }
 
     private void leg(float x, float z, float radius) {
