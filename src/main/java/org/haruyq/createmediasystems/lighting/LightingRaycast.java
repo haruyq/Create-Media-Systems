@@ -3,9 +3,13 @@ package org.haruyq.createmediasystems.lighting;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.api.lighting.client.FixtureOptics;
+import org.haruyq.createmediasystems.api.lighting.client.LightRays;
 import org.haruyq.createmediasystems.client.WorldEvents;
 
 import dev.ryanhcode.sable.companion.SubLevelAccess;
@@ -36,7 +40,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** One frame's Sable-aware beam traces. Endpoints and the returned point/normal are world-space. */
-public final class LightingRaycast {
+public final class LightingRaycast implements LightRays {
     /**
      * How long the render thread's block shapes are kept at most, in nanoseconds. A changed block's section is
      * forgotten at once (see register); this only bounds what a missed change could leave behind.
@@ -46,10 +50,14 @@ public final class LightingRaycast {
     private static final int RENDER_CACHE_SECTIONS = 1024;
     private static final List<AABB> EMPTY = List.of();
     private static final List<AABB> FULL = Shapes.block().toAabbs();
+    private static final Map<String, FixtureOptics> OPTICS = new ConcurrentHashMap<>();
     private static Cache renderCache;
     private static Scene renderScene;
     private final Level level;
     private final BlockPos ignored;
+    /** How the fixture at {@code ignored} traces its light, if another mod's family says (FixtureOptics). */
+    @Nullable
+    private final FixtureOptics optics;
     private final List<Snapshot> subLevels;
     private final List<LightingScreens.Panel> screens;
     private final Cache cache;
@@ -81,6 +89,7 @@ public final class LightingRaycast {
     private LightingRaycast(Level level, BlockPos ignored, boolean render) {
         this.level = level;
         this.ignored = ignored;
+        optics = optics(level, ignored);
         if (render && level.isClientSide) {
             if (renderCache == null || renderCache.level != level || renderCache.sections.size() > RENDER_CACHE_SECTIONS
                     || System.nanoTime() - renderCache.created > RENDER_CACHE_NANOS) {
@@ -119,6 +128,7 @@ public final class LightingRaycast {
     private LightingRaycast(LightingRaycast from) {
         level = from.level;
         ignored = from.ignored;
+        optics = from.optics;
         subLevels = from.subLevels;
         screens = from.screens;
         cache = new Cache(level);
@@ -129,16 +139,46 @@ public final class LightingRaycast {
         return new LightingRaycast(this);
     }
 
+    /** api.lighting.client.FixtureOptics#register. */
+    public static void addOptics(String family, FixtureOptics optics) {
+        OPTICS.put(family, optics);
+    }
+
+    /** The optics of {@code family}'s fixture at {@code fixture} on a client; null for CMS's own. */
+    @Nullable
+    static FixtureOptics optics(Level level, @Nullable BlockPos fixture) {
+        return OPTICS.isEmpty() || fixture == null || !level.isClientSide
+                || !(level.getBlockEntity(fixture) instanceof StageLightBlock.Entity lamp) ? null : OPTICS.get(lamp.family());
+    }
+
     static void register() {
-        WorldEvents.onSectionChanged(LightingRaycast::sectionChanged);
-        WorldEvents.onChunkLoaded(LightingRaycast::chunkLoaded);
+        WorldEvents.onSectionChanged((x, y, z) -> {
+            forgetSection(x, y, z);
+            sectionChanged(SectionPos.asLong(x, y, z));
+        });
+        WorldEvents.onChunkLoaded((x, z) -> {
+            chunkLoaded(x, z);
+            chunkChanged(x, z);
+        });
         WorldEvents.onLevelChanged(() -> {
             renderCache = null;
             renderScene = null;
         });
     }
 
-    private static void sectionChanged(int x, int y, int z) {
+    /**
+     * Create: Large Lights 0.1.0 injects at the head of these two by name (its LightingRaycastMixin), so they keep
+     * these names and signatures, and no other method here may be named so, until 2.0. Nothing else is in them.
+     */
+    @Deprecated(forRemoval = true)
+    static void sectionChanged(long key) {
+    }
+
+    @Deprecated(forRemoval = true)
+    static void chunkChanged(int x, int z) {
+    }
+
+    private static void forgetSection(int x, int y, int z) {
         if (renderCache != null) {
             renderCache.sections.remove(SectionPos.asLong(x, y, z));
             renderCache.lastKey = Long.MIN_VALUE;
@@ -263,6 +303,12 @@ public final class LightingRaycast {
     }
 
     private BlockHitResult trace(Vec3 from, Vec3 to, Predicate<BlockPos> allowed) {
+        if (optics != null) {
+            BlockHitResult own = optics.trace(level, ignored, from, to, allowed);
+            if (own != null) {
+                return own.getType() == HitResult.Type.MISS ? null : own;
+            }
+        }
         ClipContext context = new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
                 CollisionContext.empty());
         if (level.isDebug()) {
@@ -424,6 +470,6 @@ public final class LightingRaycast {
         return new Hit(BlockHitResult.miss(to, direction, BlockPos.containing(to)), to, Vec3.ZERO);
     }
 
-    public record Hit(BlockHitResult block, Vec3 point, Vec3 normal) {
+    public record Hit(BlockHitResult block, Vec3 point, Vec3 normal) implements LightRays.Hit {
     }
 }

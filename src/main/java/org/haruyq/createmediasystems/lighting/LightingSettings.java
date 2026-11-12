@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.jetbrains.annotations.Nullable;
+import org.haruyq.createmediasystems.api.lighting.GroupView;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.Rgb;
@@ -202,14 +204,14 @@ public final class LightingSettings {
         }
     }
 
-    public static final class Group {
+    public static final class Group implements GroupView {
         public final int[] colors = DEFAULT_COLORS.clone();
         public int colorCount = 2;
-        public Mapping mapping = Mapping.SEQUENCE;
+        public LightingSettings.Mapping mapping = LightingSettings.Mapping.SEQUENCE;
         public ColorMode colorMode = ColorMode.OWN;
-        public Motion motion = Motion.FIXED;
-        public Pattern pattern = Pattern.SPOT;
-        public Band audioBand = Band.ALL;
+        public LightingSettings.Motion motion = LightingSettings.Motion.FIXED;
+        public LightingSettings.Pattern pattern = LightingSettings.Pattern.SPOT;
+        public LightingSettings.Band audioBand = LightingSettings.Band.ALL;
         public boolean audio;
         public boolean colorCycle;
         public float brightness = BRIGHTNESS.initial();
@@ -227,10 +229,10 @@ public final class LightingSettings {
             audio = preset.audio;
             colorCycle = preset.colorCycle;
             colorMode = ColorMode.OWN;
-            audioBand = Band.ALL;
+            audioBand = LightingSettings.Band.ALL;
             speed = SPEED.initial();
             spread = preset.spread;
-            if (preset.motion == Motion.TRACK && player != null) {
+            if (preset.motion == LightingSettings.Motion.TRACK && player != null) {
                 target = player;
             }
         }
@@ -262,11 +264,11 @@ public final class LightingSettings {
             int[] saved = tag.getIntArray("Colors");
             System.arraycopy(saved, 0, colors, 0, Math.min(COLORS, saved.length));
             colorCount = tag.getInt("ColorCount");
-            mapping = byId(Mapping.values(), tag.getInt("Mapping"));
+            mapping = byId(LightingSettings.Mapping.values(), tag.getInt("Mapping"));
             colorMode = byId(ColorMode.values(), tag.getInt("ColorMode"));
-            motion = byId(Motion.values(), tag.getInt("Motion"));
-            pattern = byId(Pattern.values(), tag.getInt("Pattern"));
-            audioBand = byId(Band.values(), tag.getInt("AudioBand"));
+            motion = byId(LightingSettings.Motion.values(), tag.getInt("Motion"));
+            pattern = byId(LightingSettings.Pattern.values(), tag.getInt("Pattern"));
+            audioBand = byId(LightingSettings.Band.values(), tag.getInt("AudioBand"));
             audio = tag.getBoolean("Audio");
             colorCycle = tag.getBoolean("ColorCycle");
             brightness = BRIGHTNESS.load(tag);
@@ -300,6 +302,77 @@ public final class LightingSettings {
         /** Whether it shows its video source's colours now, a video being seen ({@code video}). */
         public boolean videoColors(boolean video) {
             return colorMode == ColorMode.VIDEO && video;
+        }
+
+        @Override
+        public int colorCount() {
+            return colorCount;
+        }
+
+        @Override
+        public boolean colorCycle() {
+            return colorCycle;
+        }
+
+        @Override
+        public boolean audio() {
+            return audio;
+        }
+
+        @Override
+        public GroupView.Band audioBand() {
+            return GroupView.Band.valueOf(audioBand.name());
+        }
+
+        @Override
+        public GroupView.Motion motion() {
+            return GroupView.Motion.valueOf(motion.name());
+        }
+
+        @Override
+        public GroupView.Pattern pattern() {
+            return GroupView.Pattern.valueOf(pattern.name());
+        }
+
+        @Override
+        public GroupView.Mapping mapping() {
+            return GroupView.Mapping.valueOf(mapping.name());
+        }
+
+        @Override
+        public float brightness() {
+            return brightness;
+        }
+
+        @Override
+        public float range() {
+            return range;
+        }
+
+        @Override
+        public float spread() {
+            return spread;
+        }
+
+        @Override
+        public float speed() {
+            return speed;
+        }
+
+        @Override
+        public float pan() {
+            return pan;
+        }
+
+        @Override
+        public float tilt() {
+            return tilt;
+        }
+
+        @Override
+        @Nullable
+        public UUID target() {
+            return target;
         }
     }
 

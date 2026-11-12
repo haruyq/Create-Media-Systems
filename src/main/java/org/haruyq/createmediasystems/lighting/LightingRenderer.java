@@ -16,6 +16,7 @@ import org.haruyq.createmediasystems.Rgb;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.ScreenLight;
 import org.haruyq.createmediasystems.client.WorldEvents;
+import org.haruyq.createmediasystems.api.lighting.client.ConsolePage;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.haruyq.createmediasystems.lighting.LightingSettings.Motion;
@@ -689,7 +690,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             }
             // The left bay, group faders and group list, is the console's own, unless a page takes it too: the right
             // three are another mod's page while one is active.
-            LightingConsolePage page = LightingConsolePage.showing(console);
+            ConsolePage page = LightingConsolePage.showing(console);
             if (page == null || !page.ownsLeftBay()) {
                 for (int i = 0; i < LightingSettings.GROUPS; i++) {
                     float x = ConsoleLayout.groupFaderX(i);

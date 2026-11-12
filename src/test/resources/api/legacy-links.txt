@@ -1,0 +1,180 @@
+# What released add-ons link to outside the api package (see ApiCompatibilityTest).
+# Recorded from: create_large_lights-0.1.0.jar, cms_disc_extension-0.1.0.jar
+class org/haruyq/createmediasystems/CreateMediaSystems
+class org/haruyq/createmediasystems/Reach
+class org/haruyq/createmediasystems/Rgb
+class org/haruyq/createmediasystems/SableCompat
+class org/haruyq/createmediasystems/client/IrisCompat
+class org/haruyq/createmediasystems/client/SurfaceLight
+class org/haruyq/createmediasystems/disc/DiscReaders
+class org/haruyq/createmediasystems/disc/DiscReaders$Opener
+class org/haruyq/createmediasystems/disc/DiscSource
+class org/haruyq/createmediasystems/lighting/AnalysisFrame
+class org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity
+class org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Playhead
+class org/haruyq/createmediasystems/lighting/LightingConsolePage
+class org/haruyq/createmediasystems/lighting/LightingConsolePage$Area
+class org/haruyq/createmediasystems/lighting/LightingConsolePage$Control
+class org/haruyq/createmediasystems/lighting/LightingConsoleSurface
+class org/haruyq/createmediasystems/lighting/LightingIllumination
+class org/haruyq/createmediasystems/lighting/LightingPackets$Control
+class org/haruyq/createmediasystems/lighting/LightingRaycast
+class org/haruyq/createmediasystems/lighting/LightingRaycast$Hit
+class org/haruyq/createmediasystems/lighting/LightingRenderer
+class org/haruyq/createmediasystems/lighting/LightingSettings
+class org/haruyq/createmediasystems/lighting/LightingSettings$Band
+class org/haruyq/createmediasystems/lighting/LightingSettings$Group
+class org/haruyq/createmediasystems/lighting/LightingSettings$Mapping
+class org/haruyq/createmediasystems/lighting/LightingSettings$Motion
+class org/haruyq/createmediasystems/lighting/LightingText
+class org/haruyq/createmediasystems/lighting/StageLightBlock$Entity
+implements org/haruyq/createmediasystems/disc/DiscReaders$Opener
+implements org/haruyq/createmediasystems/disc/DiscSource$Access
+implements org/haruyq/createmediasystems/lighting/LightingConsolePage
+implements org/haruyq/createmediasystems/lighting/LightingConsolePage$Control
+implements org/haruyq/createmediasystems/lighting/StageLightBlock$Entity
+mixin org/haruyq/createmediasystems/lighting/LightingIllumination$SurfaceScan read
+mixin org/haruyq/createmediasystems/lighting/LightingRaycast chunkChanged
+mixin org/haruyq/createmediasystems/lighting/LightingRaycast sectionChanged
+mixin org/haruyq/createmediasystems/lighting/LightingRaycast trace
+org/haruyq/createmediasystems/CreateMediaSystems id (Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+org/haruyq/createmediasystems/Reach blockEntity (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/BlockPos;DLjava/lang/Class;)Ljava/lang/Object;
+org/haruyq/createmediasystems/Rgb mix (IIF)I
+org/haruyq/createmediasystems/SableCompat containing (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Ldev/ryanhcode/sable/companion/SubLevelAccess;
+org/haruyq/createmediasystems/SableCompat mayInteract (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/BlockPos;)Z
+org/haruyq/createmediasystems/SableCompat toBlockSpace (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+org/haruyq/createmediasystems/SableCompat toRenderBlockSpace (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+org/haruyq/createmediasystems/SableCompat toRenderWorld (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+org/haruyq/createmediasystems/SableCompat toWorld (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+org/haruyq/createmediasystems/SableCompat toWorld (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/AABB;)Lnet/minecraft/world/phys/AABB;
+org/haruyq/createmediasystems/client/IrisCompat shaderPackInUse ()Z
+org/haruyq/createmediasystems/client/IrisCompat shadowPass ()Z
+org/haruyq/createmediasystems/client/SurfaceLight forEachQuad (Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/util/RandomSource;Ljava/util/function/Consumer;)V
+org/haruyq/createmediasystems/disc/DiscReaders register (Lorg/haruyq/createmediasystems/disc/DiscReaders$Opener;)V
+org/haruyq/createmediasystems/disc/DiscSource open (Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;ILorg/haruyq/createmediasystems/disc/DiscSource$Access;)Lorg/haruyq/createmediasystems/disc/DiscSource;
+org/haruyq/createmediasystems/lighting/AnalysisFrame bass ()F
+org/haruyq/createmediasystems/lighting/AnalysisFrame high ()F
+org/haruyq/createmediasystems/lighting/AnalysisFrame left ()I
+org/haruyq/createmediasystems/lighting/AnalysisFrame level ()F
+org/haruyq/createmediasystems/lighting/AnalysisFrame mid ()F
+org/haruyq/createmediasystems/lighting/AnalysisFrame pulse ()F
+org/haruyq/createmediasystems/lighting/AnalysisFrame right ()I
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity audio (J)Lorg/haruyq/createmediasystems/lighting/AnalysisFrame;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity audioSource ()Lnet/minecraft/core/BlockPos;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity changed ()V
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity controller ()Lorg/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity extras (Ljava/lang/String;)Lnet/minecraft/nbt/CompoundTag;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity fixtures ()Ljava/util/List;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity formed Z
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity getBlockPos ()Lnet/minecraft/core/BlockPos;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity getLevel ()Lnet/minecraft/world/level/Level;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity group (Lnet/minecraft/core/BlockPos;)I
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity groupSize (I)I
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity isRemoved ()Z
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity playhead Lorg/haruyq/createmediasystems/lighting/LightingConsoleBlock$Playhead;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity settings Lorg/haruyq/createmediasystems/lighting/LightingSettings;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity video (J)Lorg/haruyq/createmediasystems/lighting/AnalysisFrame;
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Playhead phase (JD)D
+org/haruyq/createmediasystems/lighting/LightingConsoleBlock$Playhead seconds (JD)D
+org/haruyq/createmediasystems/lighting/LightingConsolePage register (Ljava/lang/String;Lorg/haruyq/createmediasystems/lighting/LightingConsolePage;)V
+org/haruyq/createmediasystems/lighting/LightingConsolePage send (Lorg/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity;Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;IIFF)V
+org/haruyq/createmediasystems/lighting/LightingConsolePage$Area <init> (FFFF)V
+org/haruyq/createmediasystems/lighting/LightingConsolePage$Area bottom ()F
+org/haruyq/createmediasystems/lighting/LightingConsolePage$Area contains (DD)Z
+org/haruyq/createmediasystems/lighting/LightingConsolePage$Area left ()F
+org/haruyq/createmediasystems/lighting/LightingConsolePage$Area right ()F
+org/haruyq/createmediasystems/lighting/LightingConsolePage$Area top ()F
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface buffers ()Lnet/minecraft/client/renderer/MultiBufferSource;
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface deckText (FFLjava/lang/String;IF)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface fader (FFI)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface faderValue (D)F
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface height (F)F
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface key (FFFFIZ)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface knob (FFIF)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface monitor (FFFFI)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface monitorText (FFLnet/minecraft/network/chat/Component;F)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface panel (FFFFI)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface panelBorder (FFFFFI)V
+org/haruyq/createmediasystems/lighting/LightingConsoleSurface pose ()Lorg/joml/Matrix4f;
+org/haruyq/createmediasystems/lighting/LightingIllumination blocksChanged (IIIIII)V
+org/haruyq/createmediasystems/lighting/LightingIllumination frame ()J
+org/haruyq/createmediasystems/lighting/LightingIllumination render (Lorg/haruyq/createmediasystems/lighting/StageLightBlock$Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;DFFILorg/haruyq/createmediasystems/lighting/LightingRaycast$Hit;Lorg/haruyq/createmediasystems/lighting/LightingRaycast;Lorg/joml/Matrix4f;Lnet/minecraft/client/renderer/MultiBufferSource;I)V
+org/haruyq/createmediasystems/lighting/LightingPackets$Control AIM Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control COLOR Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control COUNT Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control CYCLE Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control MASTER Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control MOTION Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control RANGE Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control RGB Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control TARGET Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingPackets$Control VIDEO Lorg/haruyq/createmediasystems/lighting/LightingPackets$Control;
+org/haruyq/createmediasystems/lighting/LightingRaycast clip (Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;)Lorg/haruyq/createmediasystems/lighting/LightingRaycast$Hit;
+org/haruyq/createmediasystems/lighting/LightingRaycast hasSubLevels (Lnet/minecraft/world/phys/AABB;)Z
+org/haruyq/createmediasystems/lighting/LightingRaycast rendered (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lorg/haruyq/createmediasystems/lighting/LightingRaycast;
+org/haruyq/createmediasystems/lighting/LightingRaycast$Hit block ()Lnet/minecraft/world/phys/BlockHitResult;
+org/haruyq/createmediasystems/lighting/LightingRaycast$Hit point ()Lnet/minecraft/world/phys/Vec3;
+org/haruyq/createmediasystems/lighting/LightingRenderer beamBuffers (Lnet/minecraft/world/level/Level;Lnet/minecraft/client/renderer/MultiBufferSource;)Lnet/minecraft/client/renderer/MultiBufferSource;
+org/haruyq/createmediasystems/lighting/LightingRenderer beamType ()Lnet/minecraft/client/renderer/RenderType;
+org/haruyq/createmediasystems/lighting/LightingRenderer lensType ()Lnet/minecraft/client/renderer/RenderType;
+org/haruyq/createmediasystems/lighting/LightingSettings color (Lorg/haruyq/createmediasystems/lighting/LightingSettings$Group;IIDIIZ)I
+org/haruyq/createmediasystems/lighting/LightingSettings enabled Z
+org/haruyq/createmediasystems/lighting/LightingSettings groups [Lorg/haruyq/createmediasystems/lighting/LightingSettings$Group;
+org/haruyq/createmediasystems/lighting/LightingSettings master F
+org/haruyq/createmediasystems/lighting/LightingSettings selectedColor I
+org/haruyq/createmediasystems/lighting/LightingSettings selectedGroup I
+org/haruyq/createmediasystems/lighting/LightingSettings$Band ALL Lorg/haruyq/createmediasystems/lighting/LightingSettings$Band;
+org/haruyq/createmediasystems/lighting/LightingSettings$Band BASS Lorg/haruyq/createmediasystems/lighting/LightingSettings$Band;
+org/haruyq/createmediasystems/lighting/LightingSettings$Band HIGH Lorg/haruyq/createmediasystems/lighting/LightingSettings$Band;
+org/haruyq/createmediasystems/lighting/LightingSettings$Band MID Lorg/haruyq/createmediasystems/lighting/LightingSettings$Band;
+org/haruyq/createmediasystems/lighting/LightingSettings$Band values ()[Lorg/haruyq/createmediasystems/lighting/LightingSettings$Band;
+org/haruyq/createmediasystems/lighting/LightingSettings$Group audio Z
+org/haruyq/createmediasystems/lighting/LightingSettings$Group audioBand Lorg/haruyq/createmediasystems/lighting/LightingSettings$Band;
+org/haruyq/createmediasystems/lighting/LightingSettings$Group brightness F
+org/haruyq/createmediasystems/lighting/LightingSettings$Group colorCount I
+org/haruyq/createmediasystems/lighting/LightingSettings$Group colors [I
+org/haruyq/createmediasystems/lighting/LightingSettings$Group mapping Lorg/haruyq/createmediasystems/lighting/LightingSettings$Mapping;
+org/haruyq/createmediasystems/lighting/LightingSettings$Group motion Lorg/haruyq/createmediasystems/lighting/LightingSettings$Motion;
+org/haruyq/createmediasystems/lighting/LightingSettings$Group pan F
+org/haruyq/createmediasystems/lighting/LightingSettings$Group range F
+org/haruyq/createmediasystems/lighting/LightingSettings$Group speed F
+org/haruyq/createmediasystems/lighting/LightingSettings$Group target Ljava/util/UUID;
+org/haruyq/createmediasystems/lighting/LightingSettings$Group tilt F
+org/haruyq/createmediasystems/lighting/LightingSettings$Group videoColors (Z)Z
+org/haruyq/createmediasystems/lighting/LightingSettings$Mapping PER_FIXTURE Lorg/haruyq/createmediasystems/lighting/LightingSettings$Mapping;
+org/haruyq/createmediasystems/lighting/LightingSettings$Motion CIRCLE Lorg/haruyq/createmediasystems/lighting/LightingSettings$Motion;
+org/haruyq/createmediasystems/lighting/LightingSettings$Motion SWEEP Lorg/haruyq/createmediasystems/lighting/LightingSettings$Motion;
+org/haruyq/createmediasystems/lighting/LightingSettings$Motion TRACK Lorg/haruyq/createmediasystems/lighting/LightingSettings$Motion;
+org/haruyq/createmediasystems/lighting/LightingText mode (Lorg/haruyq/createmediasystems/lighting/LightingSettings$Mode;)Lnet/minecraft/network/chat/MutableComponent;
+org/haruyq/createmediasystems/lighting/LightingText number (Ljava/lang/Object;)Lnet/minecraft/network/chat/MutableComponent;
+org/haruyq/createmediasystems/lighting/LightingText on (Z)Lnet/minecraft/network/chat/MutableComponent;
+org/haruyq/createmediasystems/lighting/LightingText readable (I)I
+org/haruyq/createmediasystems/lighting/LightingText text (Ljava/lang/Object;I)Lnet/minecraft/network/chat/MutableComponent;
+org/haruyq/createmediasystems/lighting/StageLightBlock$Entity <init> (Lnet/minecraft/world/level/block/entity/BlockEntityType;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V
+org/haruyq/createmediasystems/lighting/StageLightBlock$Entity addToGoggleTooltip (Ljava/util/List;Z)Z
+org/haruyq/createmediasystems/lighting/StageLightBlock$Entity loadAdditional (Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V
+org/haruyq/createmediasystems/lighting/StageLightBlock$Entity saveAdditional (Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V
+override org/haruyq/createmediasystems/disc/DiscReaders$Opener open (Ljava/nio/file/Path;ILjava/lang/Runnable;)Lorg/haruyq/createmediasystems/disc/DiscSource;
+override org/haruyq/createmediasystems/disc/DiscSource$Access close ()V
+override org/haruyq/createmediasystems/disc/DiscSource$Access environment ()Ljava/util/Map;
+override org/haruyq/createmediasystems/disc/DiscSource$Access media (Ljava/nio/file/Path;)Ljava/lang/String;
+override org/haruyq/createmediasystems/disc/DiscSource$Access protocols ()Ljava/lang/String;
+override org/haruyq/createmediasystems/lighting/LightingConsolePage hit (Lorg/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity;Lnet/minecraft/world/phys/Vec3;Z)Lorg/haruyq/createmediasystems/lighting/LightingConsolePage$Control;
+override org/haruyq/createmediasystems/lighting/LightingConsolePage render (Lorg/haruyq/createmediasystems/lighting/LightingConsoleBlock$Entity;Lorg/haruyq/createmediasystems/lighting/LightingConsoleSurface;)V
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control area ()Lorg/haruyq/createmediasystems/lighting/LightingConsolePage$Area;
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control drag (Lnet/minecraft/world/phys/Vec3;)V
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control drags ()Z
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control label ()Lnet/minecraft/network/chat/Component;
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control monitor ()Z
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control press (Z)V
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control scroll (IZZ)V
+override org/haruyq/createmediasystems/lighting/LightingConsolePage$Control value ()Lnet/minecraft/network/chat/Component;
+override org/haruyq/createmediasystems/lighting/StageLightBlock$Entity addToGoggleTooltip (Ljava/util/List;Z)Z
+override org/haruyq/createmediasystems/lighting/StageLightBlock$Entity family ()Ljava/lang/String;
+override org/haruyq/createmediasystems/lighting/StageLightBlock$Entity fixtureName ()Lnet/minecraft/network/chat/Component;
+override org/haruyq/createmediasystems/lighting/StageLightBlock$Entity loadAdditional (Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V
+override org/haruyq/createmediasystems/lighting/StageLightBlock$Entity saveAdditional (Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V
+shadow org/haruyq/createmediasystems/lighting/LightingIllumination$SurfaceScan lamp Lnet/minecraft/core/BlockPos;
+shadow org/haruyq/createmediasystems/lighting/LightingIllumination$SurfaceScan level Lnet/minecraft/world/level/Level;
+shadow org/haruyq/createmediasystems/lighting/LightingRaycast ignored Lnet/minecraft/core/BlockPos;
+shadow org/haruyq/createmediasystems/lighting/LightingRaycast level Lnet/minecraft/world/level/Level;

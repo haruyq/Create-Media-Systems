@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TreeMap;
 
+import org.haruyq.createmediasystems.api.disc.DiscAccess;
+
 /**
  * A Blu-ray's playlist: its clips, and the languages of the first clip's sound and subtitle streams in the order of
  * their PIDs, which is the order FFmpeg numbers them in. Only the playlist names them: the clips themselves do not.
@@ -160,7 +162,7 @@ record BlurayPlaylist(int title, List<Clip> clips, List<String> audio, List<Stri
         return concat(root, start, seconds, DiscSource.SEGMENT_SECONDS, null);
     }
 
-    byte[] concat(Path root, double start, double seconds, double preroll, DiscSource.Access access) throws IOException {
+    byte[] concat(Path root, double start, double seconds, double preroll, DiscAccess access) throws IOException {
         StringBuilder text = new StringBuilder("ffconcat version 1.0\n");
         double at = 0;
         for (Clip clip : clips) {

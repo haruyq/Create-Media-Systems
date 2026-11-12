@@ -349,6 +349,12 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
+    // ApiCompatibilityTest: -PrecordApi re-records the API, -PlegacyJars=a.jar,b.jar what released add-ons link to.
+    if (providers.gradleProperty('recordApi').isPresent()) {
+        systemProperty 'api.record', 'true'
+    }
+    systemProperty 'api.legacyJars', providers.gradleProperty('legacyJars').getOrElse('')
+    systemProperty 'api.project', projectDir.absolutePath
 }
 
 

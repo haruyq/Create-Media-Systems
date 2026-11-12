@@ -11,7 +11,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
+import org.haruyq.createmediasystems.api.lighting.client.FixtureOptics;
+import org.jetbrains.annotations.Nullable;
 import org.haruyq.createmediasystems.client.SurfaceLight;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Workers;
@@ -33,6 +36,7 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
 
+import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -971,6 +975,18 @@ public final class LightingIllumination {
         return !DIRTY_SECTIONS.isEmpty() || !DIRTY_COLUMNS.isEmpty();
     }
 
+    /** Linked by Create: Large Lights 0.1.0 (src/test/resources/api/legacy-links.txt); use api.client.WorldChanges. */
+    @Deprecated(forRemoval = true)
+    public static void blocksChanged(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        WorldEvents.blocksChanged(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /** Linked by Create: Large Lights 0.1.0; use api.client.WorldChanges#frame. */
+    @Deprecated(forRemoval = true)
+    public static long frame() {
+        return WorldEvents.frame();
+    }
+
     static void setShader(ShaderInstance loaded) {
         shader = loaded;
     }
@@ -1124,6 +1140,8 @@ public final class LightingIllumination {
         final boolean sable;
         final SubLevelAccess owner;
         final Vec3 lampOffset;
+        @Nullable
+        final FixtureOptics optics;
         final Map<Key, Face> known = new HashMap<>();
         final RandomSource random = RandomSource.create(42);
         final Iterator<BlockPos> positions;
@@ -1142,6 +1160,7 @@ public final class LightingIllumination {
             this.sable = sable;
             owner = sable ? SableCompat.containing(level, center) : null;
             lampOffset = Vec3.atLowerCornerOf(lamp);
+            optics = LightingRaycast.optics(level, lamp);
             for (Face face : previous) {
                 if (face != null) {
                     known.put(new Key(face.pos.asLong(), face.quad), face);
@@ -1203,7 +1222,7 @@ public final class LightingIllumination {
             BlockState state = level.getBlockState(pos);
             Vec3 offset = Vec3.atLowerCornerOf(pos).add(state.getOffset(level, pos));
             int[] index = {0};
-            SurfaceLight.forEachQuad(level, pos, state, random, quad -> {
+            Consumer<BakedQuad> each = quad -> {
                 int[] data = quad.getVertices();
                 Face before = known.get(new Key(pos.asLong(), index[0]));
                 if (before != null && before.state == state && Arrays.equals(before.vertices, data)) {
@@ -1221,7 +1240,11 @@ public final class LightingIllumination {
                 Face face = new Face(pos.immutable(), state, index[0]++, data, points, uv, winding, tint, lampOffset);
                 found.add(face);
                 created.add(face);
-            });
+            };
+            // One call of SurfaceLight.forEachQuad here: Create: Large Lights 0.1.0 redirects it (until 2.0).
+            if (optics == null || !optics.forEachQuad(level, lamp, pos, state, each)) {
+                SurfaceLight.forEachQuad(level, pos, state, random, each);
+            }
         }
     }
 }

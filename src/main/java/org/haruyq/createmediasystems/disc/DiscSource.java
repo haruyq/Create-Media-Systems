@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.haruyq.createmediasystems.api.disc.DiscAccess;
+import org.haruyq.createmediasystems.api.disc.DiscHandle;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.jetbrains.annotations.Nullable;
 
@@ -22,7 +24,7 @@ import com.google.gson.JsonParser;
  * chosen drawn into its picture (see Tracks).
  */
 public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration,
-                         BlurayPlaylist playlist, Access access, CdAudio cd, Tracks tracks) implements AutoCloseable {
+                         BlurayPlaylist playlist, DiscAccess access, CdAudio cd, Tracks tracks) implements DiscHandle {
     public static final int SEGMENT_SECONDS = 4;
     /**
      * How long (seconds) before a Blu-ray's segment its subtitles are read from: one that came up before the segment
@@ -35,22 +37,9 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     private static final Quality DVD = new Quality(480, 30, 2500);
     private static final java.util.regex.Pattern HARDWARE_ENCODER = java.util.regex.Pattern.compile("h264_(nvenc|qsv|amf)");
 
-    public interface Access extends AutoCloseable {
-        default String media(Path file) {
-            return "file:" + file.toAbsolutePath().toString().replace('\\', '/');
-        }
-
-        default String protocols() {
-            return "file,pipe";
-        }
-
-        default Map<String, String> environment() {
-            return Map.of();
-        }
-
-        @Override
-        default void close() {
-        }
+    /** Linked by CMS Disc Extension 0.1.0 (src/test/resources/api/legacy-links.txt); use api.disc.DiscAccess. */
+    @Deprecated(forRemoval = true)
+    public interface Access extends DiscAccess {
     }
 
     /**
@@ -110,15 +99,23 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     }
 
     public DiscSource(String ffmpeg, Path root, boolean bluray, int title, double duration, BlurayPlaylist playlist,
-                      Access access) {
+                      DiscAccess access) {
         this(ffmpeg, root, bluray, title, duration, playlist, access, null, new Tracks(List.of(), List.of()));
     }
 
     public static DiscSource open(String ffmpeg, String ffprobe, Path path, int title) throws IOException {
-        return open(ffmpeg, ffprobe, path, title, null);
+        return open(ffmpeg, ffprobe, path, title, (DiscAccess) null);
     }
 
+    /** Linked by CMS Disc Extension 0.1.0; use api.disc.CmsDiscs#open. */
+    @Deprecated(forRemoval = true)
     public static DiscSource open(String ffmpeg, String ffprobe, Path path, int title, Access access) throws IOException {
+        return open(ffmpeg, ffprobe, path, title, (DiscAccess) access);
+    }
+
+    /** {@code access} is closed if the disc can't be opened. */
+    public static DiscSource open(String ffmpeg, String ffprobe, Path path, int title, @Nullable DiscAccess access)
+            throws IOException {
         try {
             return read(ffmpeg, ffprobe, path, title, access);
         } catch (IOException | RuntimeException failed) {
@@ -135,7 +132,7 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
                 : CdAudio.find(root) != null ? DiscKind.CD : null;
     }
 
-    private static DiscSource read(String ffmpeg, String ffprobe, Path path, int title, Access access) throws IOException {
+    private static DiscSource read(String ffmpeg, String ffprobe, Path path, int title, DiscAccess access) throws IOException {
         Path root = path.toRealPath();
         String name = root.getFileName() == null ? "" : root.getFileName().toString();
         if (name.equalsIgnoreCase("VIDEO_TS") || name.equalsIgnoreCase("BDMV")) {
@@ -438,7 +435,7 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
      * Why a disc reader failed, from its exit code and errors; null if it did not. Its hardware encoder, if FFmpeg's
      * errors name it: anything else (a disc that can't be read, a title that isn't there) is the disc's.
      */
-    static IOException failure(int exitCode, String errors, Access access) {
+    static IOException failure(int exitCode, String errors, DiscAccess access) {
         if (exitCode == 0 && !(access == null && errors.toLowerCase(Locale.ROOT).contains("encrypted"))) {
             return null;
         }
@@ -458,7 +455,7 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         return run(command, input, limit, timeout, null);
     }
 
-    private static byte[] run(List<String> command, byte[] input, int limit, int timeout, Access access) throws IOException {
+    private static byte[] run(List<String> command, byte[] input, int limit, int timeout, DiscAccess access) throws IOException {
         Process process;
         try {
             process = start(command, access);
@@ -505,7 +502,7 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         }
     }
 
-    static Process start(List<String> command, Access access) throws IOException {
+    static Process start(List<String> command, DiscAccess access) throws IOException {
         ProcessBuilder builder = new ProcessBuilder(command);
         if (access != null) builder.environment().putAll(access.environment());
         return builder.start();

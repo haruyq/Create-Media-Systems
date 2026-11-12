@@ -1,5 +1,9 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.api.lighting.ConsolePlayhead;
+import org.haruyq.createmediasystems.api.lighting.ConsoleSetting;
+import org.haruyq.createmediasystems.api.lighting.ConsoleView;
+import org.haruyq.createmediasystems.api.lighting.GroupView;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -158,7 +162,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
      * Where a console's media is, as a client last sampled it (see AnalysisPlayback#sample): its clock (s) and its
      * audio's motion phase, each NaN for none, as of {@code at} (System.nanoTime); drawn running on from there.
      */
-    public record Playhead(double seconds, double phase, double phaseSpeed, long at) {
+    public record Playhead(double seconds, double phase, double phaseSpeed, long at) implements ConsolePlayhead {
         public static final Playhead NONE = new Playhead(Double.NaN, Double.NaN, 0, 0);
 
         /** Its clock at {@code now} (System.nanoTime); {@code fallback} without one. */
@@ -176,7 +180,7 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         }
     }
 
-    public static class Entity extends BlockEntity implements IHaveGoggleInformation {
+    public static class Entity extends BlockEntity implements IHaveGoggleInformation, ConsoleView {
         public final LightingSettings settings = new LightingSettings();
         /** Its fixtures, in their order: a fixture's order is its place among those of its group. */
         private final List<Fixture> fixtures = new ArrayList<>();
@@ -486,6 +490,46 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
         public boolean accepts(StageLightBlock.Entity light, int group) {
             String family = family(group, light.getBlockPos());
             return family == null || family.equals(light.family());
+        }
+
+        @Override
+        public boolean formed() {
+            return formed;
+        }
+
+        @Override
+        public ConsolePlayhead playhead() {
+            return playhead;
+        }
+
+        @Override
+        public boolean enabled() {
+            return settings.enabled;
+        }
+
+        @Override
+        public float master() {
+            return settings.master;
+        }
+
+        @Override
+        public int selectedGroup() {
+            return settings.selectedGroup;
+        }
+
+        @Override
+        public int selectedColor() {
+            return settings.selectedColor;
+        }
+
+        @Override
+        public GroupView groupSettings(int group) {
+            return settings.groups[group];
+        }
+
+        @Override
+        public void set(ConsoleSetting setting, int group, int index, float value, float other) {
+            LightingConsolePage.send(this, LightingPackets.Control.valueOf(setting.name()), group, index, value, other);
         }
 
         public int groupSize(int group) {

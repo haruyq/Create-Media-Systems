@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
+import org.haruyq.createmediasystems.api.disc.DiscAccess;
+
 /**
  * One FFmpeg pass over a DVD title, cut into the stream's segments as it goes (see DiscSource#run). Only as far ahead
  * as is asked for: the segment after the one taken waits to be handed over, and FFmpeg waits on its full output pipe
@@ -26,7 +28,7 @@ final class DiscRun implements AutoCloseable {
     final DiscSource.Quality quality;
     final String encoder;
     private final Process process;
-    private final DiscSource.Access access;
+    private final DiscAccess access;
     private final SynchronousQueue<byte[]> segments = new SynchronousQueue<>();
     private final Thread reader;
     private final Thread errorReader;
@@ -37,7 +39,7 @@ final class DiscRun implements AutoCloseable {
     private int next;
     private boolean ended;
 
-    DiscRun(List<String> command, DiscSource.Access access, DiscSource.Quality quality, String encoder, int first) throws IOException {
+    DiscRun(List<String> command, DiscAccess access, DiscSource.Quality quality, String encoder, int first) throws IOException {
         this.access = access;
         this.quality = quality;
         this.encoder = encoder;

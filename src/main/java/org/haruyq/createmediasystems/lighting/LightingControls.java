@@ -5,6 +5,7 @@ import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout.Button;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout.Slot;
+import org.haruyq.createmediasystems.api.lighting.client.ConsolePage;
 import org.haruyq.createmediasystems.lighting.LightingConsolePage.Area;
 import org.haruyq.createmediasystems.lighting.LightingPackets.Control;
 import org.haruyq.createmediasystems.lighting.LightingPackets.FixtureAction;
@@ -75,7 +76,7 @@ public final class LightingControls {
 
     /** A control pointed at {@code point}: the console's own ({@code slot}), or a page's ({@code page}; slot is then null). */
     record Hit(LightingConsoleBlock.Entity console, @Nullable Slot slot, Vec3 point, boolean monitor,
-               @Nullable LightingConsolePage.Control page) {
+               @Nullable ConsolePage.Control page) {
         Hit(LightingConsoleBlock.Entity console, Slot slot, Vec3 point) {
             this(console, slot, point, slot.monitor(), null);
         }
@@ -91,7 +92,11 @@ public final class LightingControls {
 
         /** Where it lights up, as pointed at. */
         Area area() {
-            return page != null ? page.area() : slot.area(point);
+            if (page == null) {
+                return slot.area(point);
+            }
+            ConsolePage.Area bounds = page.bounds();
+            return new Area(bounds.left(), bounds.bottom(), bounds.right(), bounds.top());
         }
 
         /** This, if the point is within it; null if not. */
@@ -326,9 +331,9 @@ public final class LightingControls {
             return null;
         }
         // Right of the left bay, another mod's page answers while it shows.
-        LightingConsolePage page = LightingConsolePage.showing(console);
+        ConsolePage page = LightingConsolePage.showing(console);
         if (page != null && (point.x >= 1 || page.ownsLeftBay())) {
-            LightingConsolePage.Control control = page.hit(console, point, onMonitor);
+            ConsolePage.Control control = page.hit(console, point, onMonitor);
             return control == null ? null : new Hit(console, null, point, onMonitor, control).within();
         }
         Slot slot = ConsoleLayout.slot(point, onMonitor);

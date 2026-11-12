@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.lighting;
 
+import org.haruyq.createmediasystems.api.lighting.client.ConsoleSurface;
 import org.haruyq.createmediasystems.client.QuadOutput;
 import org.joml.Matrix4f;
 
@@ -13,7 +14,7 @@ import net.minecraft.network.chat.Component;
  * (x across, 0 to 4; z from the front edge back, 0 to 1.55) and the deck rises to the back, so what is drawn at a
  * z sits on it there; monitor coordinates are (x across; y up, 1.12 to 1.86).
  */
-public final class LightingConsoleSurface {
+public final class LightingConsoleSurface implements ConsoleSurface {
     private final MultiBufferSource buffers;
     private final Matrix4f matrix;
     private final int light;

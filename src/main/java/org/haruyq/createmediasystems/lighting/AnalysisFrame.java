@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.lighting;
 
 import org.haruyq.createmediasystems.Rgb;
+import org.haruyq.createmediasystems.api.lighting.AudioLevels;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -12,7 +13,7 @@ import net.minecraft.network.codec.StreamCodec;
  * console (see LightingConsoleBlock.Entity#receive).
  */
 public record AnalysisFrame(long millis, float level, float bass, float mid, float high, float pulse, float bpm,
-                            int left, int right, boolean audio, boolean video, double motionPhase) {
+                            int left, int right, boolean audio, boolean video, double motionPhase) implements AudioLevels {
     public static final int INTERVAL = 100;
     public static final int MAX_FRAMES = 72_001;
     /** Longest track analysed ahead (see CachedLightingAnalysis). */
