@@ -136,8 +136,8 @@ public final class StreamSound extends AbstractTickableSoundInstance {
         double step = 1.0 / FADE_TICKS;
         volume = (float) Mth.clamp(heard ? emitter.gain().getAsDouble() : 0, volume - step, volume + step);
         follow();
-        // Positional streams only: Sound Physics leaves sounds at the listener alone.
-        if (!relative && SoundPhysicsCompat.available() && ticksPlayed++ % SoundPhysicsCompat.INTERVAL_TICKS == 0) {
+        if (!relative && emitter.useSoundPhysics() && SoundPhysicsCompat.available()
+                && ticksPlayed++ % SoundPhysicsCompat.INTERVAL_TICKS == 0) {
             Vec3 at = new Vec3(x, y, z);
             Vec3 from = emitter.tracedFrom() == null ? null : emitter.tracedFrom().get();
             soundPhysics.update(this, from == null ? at : from, at);

@@ -9,27 +9,38 @@ import java.util.function.IntToDoubleFunction;
 import javax.sound.sampled.AudioFormat;
 
 import net.minecraft.client.sounds.AudioStream;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.haruyq.createmediasystems.broadcast.BroadcastProfile;
-import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.junit.jupiter.api.Test;
 
 class BroadcastAudioStreamTest {
     private static final int RATE = 48_000;
 
     @Test
-    void theArrayIsQuieterBelowButStillAudibleAndReachesFarther() {
-        var array = BroadcastProfile.ARRAY;
-        double below = array.gain(new Vec3(0, -18, 0));
-        double alongBeam = array.gain(new Vec3(18, 0, 0));
-        assertTrue(below > .1 && below < alongBeam / 3);
-        var hornRange = new EmitterRange(java.util.Optional.empty(), 1, BroadcastProfile.HORN.reach);
-        var arrayRange = new EmitterRange(java.util.Optional.empty(), 1, array.reach);
-        var far = new Vec3(650, 0, 0);
-        assertTrue(!hornRange.inRange(BlockPos.ZERO, Vec3.ZERO, far, 0)
-                && arrayRange.inRange(BlockPos.ZERO, Vec3.ZERO, far, 0)
-                && arrayRange.gain(BlockPos.ZERO, Vec3.ZERO, far) * array.gain(far) > .08);
+    void eachTowerIsClearlyAudibleBelowItsMast() {
+        for (var profile : BroadcastProfile.values()) {
+            if (!profile.outdoor()) continue;
+            double below = profile.gain(new Vec3(0, -12, 0));
+            double alongside = profile.gain(new Vec3(12, 0, 0));
+            assertTrue(below > .68 && below < alongside, profile.name());
+            assertTrue(profile.gain(new Vec3(.5, -12, .5)) > below * .98, profile.name());
+            assertTrue(profile.gain(new Vec3(0, 12, 0)) < below, profile.name());
+        }
+    }
+
+    @Test
+    void speechRetainsGainOverTheAdvertisedRangeAndFadesAtTheEdge() {
+        for (var profile : BroadcastProfile.values()) {
+            if (!profile.outdoor()) continue;
+            double far = profile.gain(new Vec3(profile.reach * .9, 0, 0));
+            double nearEdge = profile.gain(new Vec3(profile.reach * .95, 0, 0));
+            double atEdge = profile.gain(new Vec3(profile.reach * .99, 0, 0));
+            assertTrue(far > .25 && nearEdge > .15 && nearEdge < far, profile.name());
+            assertTrue(atEdge > 0 && atEdge < .04, profile.name());
+            assertEquals(0, profile.gain(new Vec3(profile.reach, 0, 0)));
+        }
+        assertEquals(0, BroadcastProfile.HORN.gain(new Vec3(650, 0, 0)));
+        assertTrue(BroadcastProfile.ARRAY.gain(new Vec3(650, 0, 0)) > .31);
     }
 
     @Test
