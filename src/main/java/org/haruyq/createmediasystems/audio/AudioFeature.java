@@ -8,6 +8,8 @@ import static org.haruyq.createmediasystems.CreateMediaSystems.ITEMS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.SOUNDS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.id;
 
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
@@ -16,6 +18,7 @@ import org.haruyq.createmediasystems.stream.PlaybackClock;
 
 import com.mojang.serialization.Codec;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -64,7 +67,11 @@ public final class AudioFeature implements Feature {
      */
     public static final Supplier<AttachmentType<PlaybackClock>> JUKEBOX_CLOCK = ATTACHMENTS.register(
             "jukebox_clock", () -> AttachmentType.builder(() -> new PlaybackClock()).build());
-    public static final DeferredBlock<DiscReaderBlock> DISC_READER = BLOCKS.register("disc_reader",
+    /** Who locked the tuning of which note block in a chunk. */
+    public static final Supplier<AttachmentType<Map<BlockPos, UUID>>> NOTE_BLOCK_LOCKS = ATTACHMENTS.register(
+            "note_block_locks", () -> AttachmentType.<Map<BlockPos, UUID>>builder(() -> Map.of())
+                    .serialize(NoteBlockLocks.CODEC).build());
+    public static final DeferredBlock<DiscReaderBlock> DISC_READER =BLOCKS.register("disc_reader",
             () -> new DiscReaderBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.JUKEBOX)));
     public static final DeferredItem<?> DISC_READER_ITEM = ITEMS.registerSimpleBlockItem("disc_reader", DISC_READER);
     public static final Supplier<BlockEntityType<DiscReaderBlock.Entity>> DISC_READER_ENTITY = BLOCK_ENTITIES.register(
