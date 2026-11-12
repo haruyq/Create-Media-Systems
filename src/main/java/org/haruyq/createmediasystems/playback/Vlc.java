@@ -29,7 +29,7 @@ import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
 /**
- * libvlc 3, bound with JNA (which Minecraft ships). On 64-bit Windows it is VideoLAN's own VLC build, downloaded once
+ * libvlc 3, bound with JNA (which Minecraft ships). On x86-64 Windows it is VideoLAN's own VLC build, downloaded once
  * into the game folder at startup (see {@link #unpack}); elsewhere it is the computer's own VLC 3.
  */
 final class Vlc {
@@ -37,6 +37,8 @@ final class Vlc {
     private static final String[] ARGS = {
             "--quiet", "--no-video-title-show", "--no-snapshot-preview", "--no-osd", "--no-stats",
             "--no-metadata-network-access", "--http-reconnect"};
+    /** Where CMS downloads VideoLAN's VLC; VideoLAN has no VLC 3 for Windows on ARM, so that uses the computer's own. */
+    private static final boolean X64_WINDOWS = Platform.isWindows() && Platform.is64Bit() && !Platform.isARM();
     private static final String VERSION = "3.0.24";
     private static final String SHA256 = "fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323";
 
@@ -60,7 +62,7 @@ final class Vlc {
             }
         } catch (IOException | RuntimeException | LinkageError e) {
             LogUtils.getLogger().warn("VLC could not be loaded; discs and displays can't play media", e);
-            missing = Platform.isWindows() && Platform.is64Bit() ? "VLC could not be loaded"
+            missing = X64_WINDOWS ? "VLC could not be loaded"
                     : "Install VLC 3 (videolan.org) to play media";
         }
         LIB = missing == null ? lib : null;
@@ -88,7 +90,7 @@ final class Vlc {
 
     private static Lib load() throws IOException {
         Map<String, Object> options = Map.of(Library.OPTION_STRING_ENCODING, StandardCharsets.UTF_8.name());
-        if (Platform.isWindows() && Platform.is64Bit()) {
+        if (X64_WINDOWS) {
             Path dir = unpack();
             // libvlc.dll needs libvlccore.dll; VLC finds its plugins next to it.
             NativeLibrary.getInstance(dir.resolve("libvlccore.dll").toString());
@@ -105,7 +107,7 @@ final class Vlc {
     }
 
     /**
-     * VideoLAN's own VLC for 64-bit Windows, downloaded once into {@code create_media_systems/vlc/<version>} and checked
+     * VideoLAN's own VLC for x86-64 Windows, downloaded once into {@code create_media_systems/vlc/<version>} and checked
      * against VideoLAN's published SHA-256; the parts playback and lighting analysis don't use (its interfaces,
      * scripting, network output) are left out.
      */
