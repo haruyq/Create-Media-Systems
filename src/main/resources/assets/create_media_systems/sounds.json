@@ -24,6 +24,15 @@
       }
     ]
   },
+  "keyboard_synth": {
+    "sounds": [
+      {
+        "name": "minecraft:music_disc.13",
+        "type": "event",
+        "stream": true
+      }
+    ]
+  },
   "disc_fire": {
     "subtitle": "subtitles.create_media_systems.disc_fire",
     "sounds": [

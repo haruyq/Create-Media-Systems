@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.blaze3d.audio.Channel;
 
 import net.minecraft.client.sounds.AudioStream;
@@ -39,6 +40,12 @@ abstract class ChannelMixin {
 
     @Shadow
     public abstract void attachBufferStream(AudioStream stream);
+
+    @ModifyExpressionValue(method = "attachBufferStream", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/audio/Channel;calculateBufferSize(Ljavax/sound/sampled/AudioFormat;I)I"))
+    private int create_media_systems$streamBuffer(int bytes, AudioStream stream) {
+        return stream instanceof CmsStream cms ? cms.bufferBytes(bytes) : bytes;
+    }
 
     @Inject(method = "attachBufferStream", at = @At("HEAD"))
     private void create_media_systems$attach(AudioStream stream, CallbackInfo ci) {
