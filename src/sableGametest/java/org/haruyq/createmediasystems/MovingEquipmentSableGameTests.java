@@ -114,15 +114,20 @@ public final class MovingEquipmentSableGameTests {
     public static void launcherUsesBothTransformsOnAContraptionAssembledInsideAShip(GameTestHelper h) {
         var level = h.getLevel();
         BlockPos start = h.absolutePos(new BlockPos(4, 1, 4));
-        level.setBlockAndUpdate(start, AllBlocks.MECHANICAL_BEARING.getDefaultState()
-                .setValue(DirectionalBlock.FACING, Direction.UP));
-        level.setBlockAndUpdate(start.above(), Blocks.IRON_BLOCK.defaultBlockState());
-        level.setBlockAndUpdate(start.above().east(), Blocks.IRON_BLOCK.defaultBlockState());
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, start, List.of(start, start.above(), start.above().east()),
-                new BoundingBox3i(start.getX(), start.getY(), start.getZ(), start.getX() + 1, start.getY() + 1, start.getZ()));
+        level.setBlockAndUpdate(start, Blocks.IRON_BLOCK.defaultBlockState());
+        var ship = SubLevelAssemblyHelper.assembleBlocks(level, start, List.of(start),
+                new BoundingBox3i(start.getX(), start.getY(), start.getZ(), start.getX(), start.getY(), start.getZ()));
         var plot = ship.getPlot().getCenterBlock();
-        var bearing = (MechanicalBearingBlockEntity) level.getBlockEntity(plot);
-        level.addFreshEntity(new SuperGlueEntity(level, new AABB(plot.above()).minmax(new AABB(plot.above().east()))));
+        var bearingPos = plot.above();
+        var deck = bearingPos.above();
+        level.setBlockAndUpdate(bearingPos, AllBlocks.MECHANICAL_BEARING.getDefaultState()
+                .setValue(DirectionalBlock.FACING, Direction.UP));
+        level.setBlockAndUpdate(deck, Blocks.IRON_BLOCK.defaultBlockState());
+        level.setBlockAndUpdate(deck.east(), Blocks.IRON_BLOCK.defaultBlockState());
+        h.assertTrue(level.getBlockEntity(bearingPos) instanceof MechanicalBearingBlockEntity,
+                "The bearing is installed in the ship's plot");
+        var bearing = (MechanicalBearingBlockEntity) level.getBlockEntity(bearingPos);
+        level.addFreshEntity(new SuperGlueEntity(level, new AABB(deck).minmax(new AABB(deck.east()))));
         bearing.assemble();
         var carrier = bearing.getMovedContraption();
         h.assertTrue(carrier != null && SableCompat.containing(level, carrier.blockPosition()) == ship,
