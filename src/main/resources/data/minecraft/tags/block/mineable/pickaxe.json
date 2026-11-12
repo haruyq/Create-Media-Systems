@@ -1,5 +1,10 @@
 {
   "values": [
+    "create_media_systems:broadcast_base",
+    "create_media_systems:broadcast_mast",
+    "create_media_systems:broadcast_horn",
+    "create_media_systems:broadcast_digital_horn",
+    "create_media_systems:broadcast_array",
     "create_media_systems:disc_cell_charger",
     "create_media_systems:train_detector",
     "create_media_systems:train_signal_receiver",

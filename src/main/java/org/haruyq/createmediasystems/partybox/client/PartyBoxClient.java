@@ -33,6 +33,7 @@ public final class PartyBoxClient {
         @Override public UUID id(){return box.getUUID();}
         @Override public int revision(){return box.revision();}
         @Override public ItemStack media(){return box.disc();}
+        @Override public String url(){return box.currentUrl();}
         @Override public boolean present(){return !box.isRemoved() && WorldEvents.isClientWorld(box.level()) && box.playing();}
         @Override public Vec3 position(){return box.soundPosition();}
         /** Its steps after client interpolation; none in its first ticks, while it may still jump into place. */

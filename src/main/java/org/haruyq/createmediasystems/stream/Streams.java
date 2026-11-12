@@ -26,6 +26,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.haruyq.createmediasystems.ApiHttp;
+import org.haruyq.createmediasystems.broadcast.BroadcastProfile;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
 
@@ -254,7 +255,7 @@ public final class Streams {
      * {@code facing} if it has one, playing {@code channel} of the track of the source at {@code source}. Clients
      * play every emitter of one source as one playback.
      */
-    public record Sound(Vec3 origin, Optional<Direction> facing, Channel channel, BlockPos source) {
+    public record Sound(Vec3 origin, Optional<Direction> facing, Channel channel, BlockPos source, BroadcastProfile profile) {
         /** Share of the volume heard straight behind a directional emitter; sides get about half. A tuning knob. */
         static final double BEHIND_GAIN = 0.15;
 
@@ -265,11 +266,17 @@ public final class Streams {
                 ByteBufCodecs.optional(Direction.STREAM_CODEC), Sound::facing,
                 Channel.CODEC, Sound::channel,
                 BlockPos.STREAM_CODEC, Sound::source,
+                BroadcastProfile.CODEC, Sound::profile,
                 Sound::new);
+
+        public Sound(Vec3 origin, Optional<Direction> facing, Channel channel, BlockPos source) {
+            this(origin, facing, channel, source, BroadcastProfile.STANDARD);
+        }
 
         /** Volume multiplier for a listener at {@code listener}: 1 straight ahead, {@link #BEHIND_GAIN} straight behind. */
         public double directivity(Vec3 listener) {
             Vec3 toListener = listener.subtract(origin);
+            if (profile.outdoor()) return profile.gain(toListener);
             if (facing.isEmpty() || toListener.lengthSqr() < 1e-6) {
                 return 1;
             }
@@ -486,7 +493,11 @@ public final class Streams {
      */
     public static boolean endedAt(String url, long ticks) {
         double duration = duration(url);
-        return REFUSED.contains(url) || duration > 0 && ticks >= duration * PlaybackClock.TICKS_PER_SECOND;
+        return refused(url) || duration > 0 && ticks >= duration * PlaybackClock.TICKS_PER_SECOND;
+    }
+
+    static boolean refused(String url) {
+        return REFUSED.contains(url);
     }
 
     /**
@@ -597,13 +608,18 @@ public final class Streams {
     public static <E extends BlockEntity & Emitter> void relay(ServerLevel level, E emitter, Optional<BlockPos> link,
                                                                Vec3 origin, Optional<Direction> facing, Channel channel,
                                                                float volume) {
+        relay(level, emitter, link, origin, facing, channel, volume, BroadcastProfile.STANDARD);
+    }
+
+    public static <E extends BlockEntity & Emitter> void relay(ServerLevel level, E emitter, Optional<BlockPos> link,
+            Vec3 origin, Optional<Direction> facing, Channel channel, float volume, BroadcastProfile profile) {
         BlockPos source = link.orElse(emitter.getBlockPos());
         float sourceGain = level.isLoaded(source) && level.getBlockEntity(source) instanceof MediaSource media
                 ? media.gain() : 1;
         boolean givenWay = emitter.givesWay() && RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey() != emitter
                 && relays(entry, level, source) && !(entry.getKey() instanceof Emitter other && other.givesWay()));
-        relay(level, emitter, new Sound(origin, facing, channel, source),
-                EmitterRange.at(givenWay ? 0 : volume * sourceGain));
+        relay(level, emitter, new Sound(origin, facing, channel, source, profile),
+                new EmitterRange(Optional.empty(), givenWay ? 0 : volume * sourceGain, profile.reach));
     }
 
     public static void stop(Object emitter) {

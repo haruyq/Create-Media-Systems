@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Feature;
 import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.broadcast.BroadcastFeature;
 import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.display.DisplayFeature;
 import org.haruyq.createmediasystems.hifi.HifiFeature;
@@ -35,7 +36,7 @@ public final class CreateMediaSystemsMod {
     /** Making each loads its registry entries. */
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
-            new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature());
+            new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature());
 
     private static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -61,6 +62,8 @@ public final class CreateMediaSystemsMod {
                 AudioFeature.CUSTOM_DISC, TrainFeature.ANNOUNCEMENT_SCHEDULE, TrainFeature.TRAIN_DISC_READER_ITEM,
                 TrainFeature.TRAIN_SPEAKER_ITEM, AudioFeature.RANGE_QUILL, AudioFeature.DISC_READER_ITEM,
                 AudioFeature.SPEAKER_ITEM, TrainFeature.TRAIN_DETECTOR_ITEM, TrainFeature.TRAIN_SIGNAL_RECEIVER_ITEM,
+                BroadcastFeature.BASE_ITEM, BroadcastFeature.MAST_ITEM, BroadcastFeature.HORN_ITEM,
+                BroadcastFeature.DIGITAL_HORN_ITEM, BroadcastFeature.ARRAY_ITEM,
                 DiscFeature.DVD, DiscFeature.BLU_RAY, VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM,
                 VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL, DisplayFeature.DISPLAY_ITEM,
                 DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.EQUALIZER_ITEM, LightingFeature.STAGE_LIGHT_ITEM,

@@ -5,6 +5,7 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 import org.jetbrains.annotations.Nullable;
+import org.haruyq.createmediasystems.stream.MediaItem;
 
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.entity.Entity;
@@ -24,6 +25,11 @@ public interface MusicEmitter {
 
     /** What it plays: a media item's link, or a jukebox record. */
     ItemStack media();
+
+    @Nullable
+    default String url() {
+        return MediaItem.url(media());
+    }
 
     /** Whether it is still in this world, playing, and heard at all. */
     boolean present();

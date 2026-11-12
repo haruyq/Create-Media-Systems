@@ -2,34 +2,58 @@ package org.haruyq.createmediasystems.partybox;
 
 import org.haruyq.createmediasystems.FittingSlot;
 import org.haruyq.createmediasystems.power.BatteryItem;
-import org.haruyq.createmediasystems.stream.DiscKind;
-import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PortablePlaylist;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
 public final class PartyBoxMenu extends AbstractContainerMenu {
-    public final PartyBoxEntity box;
+    @Nullable private final PartyBoxEntity serverBox;
+    private final Level level;
+    private final int entity;
+
     public PartyBoxMenu(int id, Inventory player, RegistryFriendlyByteBuf data) {
-        this(id, player, player.player.level().getEntity(data.readVarInt()) instanceof PartyBoxEntity box ? box : null);
+        this(id, player, data.readVarInt(), null);
     }
+
     public PartyBoxMenu(int id, Inventory player, PartyBoxEntity box) {
-        super(PartyBoxFeature.PARTYBOX_MENU.get(), id); this.box=box;
-        var storage = box == null ? new net.minecraft.world.SimpleContainer(2) : box.inventory;
-        addSlot(new FittingSlot(storage, 0, 25, 58, item -> MediaItem.fits(item, DiscKind.Slot.PORTABLE)));
+        this(id, player, box.getId(), box);
+    }
+
+    private PartyBoxMenu(int id, Inventory player, int entity, @Nullable PartyBoxEntity box) {
+        super(PartyBoxFeature.PARTYBOX_MENU.get(), id);
+        serverBox = box;
+        level = player.player.level();
+        this.entity = entity;
+        var storage = box == null ? new SimpleContainer(2) : box.inventory;
+        addSlot(new FittingSlot(storage, 0, 25, 58, PortablePlaylist::fits));
         addSlot(new FittingSlot(storage, 1, 25, 109, BatteryItem::fits));
         for(int row=0;row<3;row++) for(int col=0;col<9;col++) addSlot(new Slot(player,9+row*9+col,116+col*18,152+row*18));
         for(int col=0;col<9;col++) addSlot(new Slot(player,col,116+col*18,210));
     }
-    @Override public boolean stillValid(Player player) { return box != null && !box.isRemoved() && box.distanceToSqr(player) < 64; }
+
+    /** The menu can arrive a tick before the client starts tracking the trolley. */
+    @Nullable
+    public PartyBoxEntity box() {
+        return serverBox != null ? serverBox
+                : level.getEntity(entity) instanceof PartyBoxEntity box && !box.isRemoved() ? box : null;
+    }
+
+    @Override public boolean stillValid(Player player) {
+        return level.isClientSide || serverBox != null && !serverBox.isRemoved() && serverBox.distanceToSqr(player) < 64;
+    }
+
     @Override public void clicked(int slot,int button,net.minecraft.world.inventory.ClickType type,Player player){
-        if(box!=null)box.settlePower();super.clicked(slot,button,type,player);
+        if(serverBox!=null)serverBox.settlePower();super.clicked(slot,button,type,player);
     }
     @Override public ItemStack quickMoveStack(Player player, int index) {
-        if(box!=null)box.settlePower();
+        if(serverBox!=null)serverBox.settlePower();
         if(index<0 || index>=slots.size()) return ItemStack.EMPTY;
         Slot slot=slots.get(index); if(!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack stack=slot.getItem(), before=stack.copy();

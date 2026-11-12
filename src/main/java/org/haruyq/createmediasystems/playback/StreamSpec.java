@@ -47,7 +47,11 @@ public record StreamSpec(String track, double startSeconds, Streams.Channel chan
      * A moving disc's playback (see {@link #movingDisc}): its own identity, not the URL or a time tolerance, and a
      * server-owned clock its player opens at and is held to.
      */
-    public record DiscClock(UUID id, DoubleSupplier seconds) {
+    public record DiscClock(UUID id, int revision, DoubleSupplier seconds) {
+        public DiscClock(UUID id, DoubleSupplier seconds) {
+            this(id, 0, seconds);
+        }
+
         /** Where its track is now (ms). */
         long millis() {
             return Math.max(0, Math.round(seconds.getAsDouble() * 1000));
@@ -72,8 +76,12 @@ public record StreamSpec(String track, double startSeconds, Streams.Channel chan
 
     /** A moving disc's: a playback of its own ({@code id}), held to {@code seconds}, the server's clock of it. */
     public StreamSpec movingDisc(UUID id, DoubleSupplier seconds) {
+        return movingDisc(id, 0, seconds);
+    }
+
+    public StreamSpec movingDisc(UUID id, int revision, DoubleSupplier seconds) {
         return new StreamSpec(track, startSeconds, channel, category, emitter, started, source, load, video,
-                new DiscClock(id, seconds), decorators, apiOnly);
+                new DiscClock(id, revision, seconds), decorators, apiOnly);
     }
 
     /** Its samples also go through {@code decorator} (an emitter's own sound: bass, a horn), after those before. */
@@ -98,7 +106,8 @@ public record StreamSpec(String track, double startSeconds, Streams.Channel chan
 
     /** The playback it plays, asked for at {@code requestedAt} (System.nanoTime). */
     PlaybackId playback(long requestedAt) {
-        return PlaybackId.of(track, source, load, disc == null ? null : disc.id(), startSeconds, requestedAt);
+        return PlaybackId.of(track, source, load, disc == null ? null : disc.id(),
+                disc == null ? 0 : disc.revision(), startSeconds, requestedAt);
     }
 
     /** The API's stream of it (see ApiHttp#streamUrl), from {@code offset} seconds past its start. */

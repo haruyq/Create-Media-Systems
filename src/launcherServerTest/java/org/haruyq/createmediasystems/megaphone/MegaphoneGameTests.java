@@ -9,6 +9,9 @@ import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.*;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
+import org.haruyq.createmediasystems.disc.DiscFeature;
+import org.haruyq.createmediasystems.stream.DiscUrl;
+import org.haruyq.createmediasystems.stream.Remotable.Action;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID) @PrefixGameTestTemplate(false)
 public final class MegaphoneGameTests {
@@ -37,5 +40,21 @@ public final class MegaphoneGameTests {
         var p=h.makeMockPlayer(GameType.CREATIVE);var item=horn(h,10000);p.getInventory().setItem(1,item);p.getInventory().selected=0;MegaphoneData.play(item,h.getLevel(),true);
         ((MegaphoneItem)item.getItem()).inventoryTick(item,h.getLevel(),p,1,false);
         h.assertTrue(!MegaphoneData.playing(item) && !MegaphoneData.disc(item,h.getLevel()).isEmpty(),"Unheld equipment pauses without losing media or generating a world ghost speaker");h.succeed();
+    }
+    @GameTest(template="empty") public static void hornSkipsAndSeeksOnItsHeldItemClock(GameTestHelper h){
+        var item=horn(h,10000);var level=h.getLevel();
+        var disc=new ItemStack(DiscFeature.CD.get());
+        var owner=java.util.UUID.randomUUID();
+        disc.set(DiscFeature.PLAYLIST.get(),java.util.List.of(
+                new DiscUrl(owner,java.util.UUID.randomUUID()).toString(),new DiscUrl(owner,java.util.UUID.randomUUID()).toString()));
+        MegaphoneData.contents(item,level,disc,MegaphoneData.battery(item,level));
+        MegaphoneData.control(item,level,Action.NEXT,0);
+        MegaphoneData.control(item,level,Action.SEEK,21);
+        h.assertTrue(!MegaphoneData.playing(item) && MegaphoneData.track(item)==1 && MegaphoneData.seconds(item,level)==21,
+                "Transport updates the selected song and position even when paused");
+        MegaphoneData.control(item,level,Action.PLAY_PAUSE,0);
+        h.assertTrue(MegaphoneData.playing(item) && MegaphoneData.seconds(item,level)==21
+                && ItemStack.matches(disc,MegaphoneData.disc(item,level)),"Play resumes the cue without changing the original CD");
+        h.succeed();
     }
 }

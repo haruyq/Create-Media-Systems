@@ -41,7 +41,7 @@ public enum DiscKind {
         TAPE_DECK,
         /** Plays a disc's one link, as a jukebox does. */
         JUKEBOX,
-        /** Carried or thrown about: plays an item's first link, or the jukebox song of a disc that is no media item. */
+        /** Carried or thrown about: accepts links or the jukebox song of a disc that is no media item. */
         PORTABLE
     }
 }
