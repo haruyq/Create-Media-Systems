@@ -50,7 +50,8 @@ final class PxS1100Ponder {
     private record Shot(float scale, float offset, float pitch, float yaw) {}
 
     private static final Shot STAGE = new Shot(1.23f, 0, -35, 145);
-    private static final Shot KEYS = new Shot(3.85f, -.38f, -51, 173);
+    private static final Shot KEYS = new Shot(10.25f, -.70f, -49, 174);
+    private static final float KEYS_SCREEN_FRACTION = .78f;
 
     private static PonderScene active;
     private static KeyboardAudio audio;
@@ -81,12 +82,13 @@ final class PxS1100Ponder {
         var root = util.grid().at(2, 1, 2);
         var state = PxS1100Feature.BLOCK.get().defaultBlockState();
         var bass = KeyboardBlock.bass(root, state);
-        var keys = KeyboardBlock.point(root, state, new Vec3(1, .72, .43));
-        var power = KeyboardBlock.point(root, state, MODEL.power);
-        var dcIn = KeyboardBlock.point(root, state, MODEL.dcIn);
-        var usb = KeyboardBlock.point(root, state, MODEL.usbMidi);
-        var lineLeft = KeyboardBlock.point(root, state, MODEL.lineLeft);
-        var lineRight = KeyboardBlock.point(root, state, MODEL.lineRight);
+        var centre = new Vec3(-.5, 0, 0);
+        var keys = KeyboardBlock.point(root, state, new Vec3(1, .72, .43)).add(centre);
+        var power = KeyboardBlock.point(root, state, MODEL.power).add(centre);
+        var dcIn = KeyboardBlock.point(root, state, MODEL.dcIn).add(centre);
+        var usb = KeyboardBlock.point(root, state, MODEL.usbMidi).add(centre);
+        var lineLeft = KeyboardBlock.point(root, state, MODEL.lineLeft).add(centre);
+        var lineRight = KeyboardBlock.point(root, state, MODEL.lineRight).add(centre);
 
         scene.world().setBlocks(util.select().fromTo(0, 0, 0, 4, 0, 4), Blocks.POLISHED_DEEPSLATE.defaultBlockState(), false);
         scene.world().setBlocks(util.select().fromTo(1, 0, 1, 4, 0, 3), Blocks.DARK_OAK_PLANKS.defaultBlockState(), false);
@@ -95,7 +97,8 @@ final class PxS1100Ponder {
         scene.world().showSection(rug, Direction.DOWN);
         scene.world().setBlock(root, state, false);
         scene.world().setBlock(bass, state.setValue(KeyboardBlock.PART, KeyboardBlock.Part.BASS), false);
-        scene.world().showSection(util.select().fromTo(root, bass), Direction.DOWN);
+        var instrument = scene.world().showIndependentSection(util.select().fromTo(root, bass), Direction.DOWN);
+        scene.world().moveSection(instrument, centre, 1);
         scene.special().movePointOfInterest(keys);
         scene.idle(16);
 
@@ -167,7 +170,12 @@ final class PxS1100Ponder {
                 float progress = 1 - remainingTicks / (float) totalTicks;
                 float smooth = progress * progress * (3 - 2 * progress);
                 var camera = ponder.builder();
-                camera.scaleSceneView(Mth.lerp(smooth, from.scale(), to.scale()));
+                var window = Minecraft.getInstance().getWindow();
+                float fitted = Math.min(KEYS.scale(), KEYS_SCREEN_FRACTION * window.getGuiScaledWidth()
+                        / (30 * (float) MODEL.body.getXsize()));
+                float fromScale = from == KEYS ? Math.max(STAGE.scale(), fitted) : from.scale();
+                float toScale = to == KEYS ? Math.max(STAGE.scale(), fitted) : to.scale();
+                camera.scaleSceneView(Mth.lerp(smooth, fromScale, toScale));
                 camera.setSceneOffsetY(Mth.lerp(smooth, from.offset(), to.offset()));
             }
         });
