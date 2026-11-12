@@ -13,6 +13,7 @@ import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
 import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.createmod.ponder.foundation.PonderScene;
+import net.createmod.ponder.foundation.instruction.RotateSceneInstruction;
 import net.createmod.ponder.foundation.instruction.TickingInstruction;
 import net.createmod.ponder.foundation.ui.PonderUI;
 import net.minecraft.client.Minecraft;
@@ -46,7 +47,10 @@ import static org.haruyq.createmediasystems.client.PonderScenes.say;
 final class PxS1100Ponder {
     private static final KeyboardLayout MODEL = KeyboardLayout.PX;
     private static final Map<PonderScene, Demo> DEMOS = new WeakHashMap<>();
-    private static final float WIDE = 1.23f, CLOSE = 1.57f;
+    private record Shot(float scale, float offset, float pitch, float yaw) {}
+
+    private static final Shot STAGE = new Shot(1.23f, 0, -35, 145);
+    private static final Shot KEYS = new Shot(3.85f, -.38f, -51, 173);
 
     private static PonderScene active;
     private static KeyboardAudio audio;
@@ -69,10 +73,11 @@ final class PxS1100Ponder {
         DEMOS.put(builder.getScene(), demo);
         builder.addInstruction(ponder -> {
             demo.reset();
-            ponder.builder().scaleSceneView(WIDE);
+            ponder.builder().scaleSceneView(STAGE.scale());
+            ponder.builder().setSceneOffsetY(STAGE.offset());
         });
         var scene = plate(builder, "px_s1100", "Performing with the Hayacio PX-S1100WE");
-        scene.scaleSceneView(WIDE);
+        scene.scaleSceneView(STAGE.scale());
         var root = util.grid().at(2, 1, 2);
         var state = PxS1100Feature.BLOCK.get().defaultBlockState();
         var bass = KeyboardBlock.bass(root, state);
@@ -132,13 +137,10 @@ final class PxS1100Ponder {
         connect(scene, util, root, right, lineRight, Channel.RIGHT, PonderPalette.BLUE, quill, "Right");
         scene.addInstruction(ignored -> demo.external = true);
         say(scene, 85, keys, PonderPalette.GREEN, "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.");
-        scene.rotateCameraY(-22);
-        zoom(scene, WIDE, CLOSE, 22);
         scene.overlay().showText(75).attachKeyFrame().pointAt(keys).placeNearTarget()
                 .text("U.N. Owen Was Her? (MIDI © chishige 2016)");
         playScore(scene, demo, PonderScore.load(), List.of(SpeakerBlock.mouth(left, Direction.NORTH),
                 SpeakerBlock.mouth(right, Direction.NORTH)));
-        zoom(scene, CLOSE, WIDE, 18);
         scene.idle(18);
         scene.addInstruction(ignored -> demo.view.putBoolean("Powered", false));
         scene.markAsFinished();
@@ -157,21 +159,35 @@ final class PxS1100Ponder {
         scene.idle(26);
     }
 
-    private static void zoom(CreateSceneBuilder scene, float from, float to, int ticks) {
+    private static void zoom(CreateSceneBuilder scene, Shot from, Shot to, int ticks) {
+        scene.addInstruction(new RotateSceneInstruction(to.pitch(), to.yaw(), false));
         scene.addInstruction(new TickingInstruction(false, ticks) {
             @Override public void tick(PonderScene ponder) {
                 super.tick(ponder);
                 float progress = 1 - remainingTicks / (float) totalTicks;
-                ponder.builder().scaleSceneView(Mth.lerp(progress * progress * (3 - 2 * progress), from, to));
+                float smooth = progress * progress * (3 - 2 * progress);
+                var camera = ponder.builder();
+                camera.scaleSceneView(Mth.lerp(smooth, from.scale(), to.scale()));
+                camera.setSceneOffsetY(Mth.lerp(smooth, from.offset(), to.offset()));
             }
         });
     }
 
     private static void playScore(CreateSceneBuilder scene, Demo demo, PonderScore score, List<Vec3> mouths) {
         int time = 0, lastPulse = -20;
+        int cutToKeys = 70, pullBack = score.duration() - 130;
+        boolean closeUp = false, wide = false;
         for (var cue : score.cues()) {
             if (time < cue.tick()) scene.idle(cue.tick() - time);
             time = cue.tick();
+            if (pullBack > cutToKeys && !closeUp && time >= cutToKeys) {
+                zoom(scene, STAGE, KEYS, 24);
+                closeUp = true;
+            }
+            if (closeUp && !wide && time >= pullBack) {
+                zoom(scene, KEYS, STAGE, 27);
+                wide = true;
+            }
             scene.addInstruction(ignored -> demo.apply(cue.events()));
             if (time - lastPulse >= 8 && cue.events().stream().anyMatch(event -> event.command() == KeyboardMidi.ON && event.value() > 0)) {
                 for (var mouth : mouths) notes(scene, mouth.add(0, .11, 0), 2);
