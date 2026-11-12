@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.List;
 
@@ -40,7 +40,7 @@ public final class KeyboardGameTests {
                 new ItemStack(Items.SMOOTH_QUARTZ), new ItemStack(Items.SMOOTH_QUARTZ), new ItemStack(Items.SMOOTH_QUARTZ),
                 AllItems.BRASS_SHEET.asStack(), new ItemStack(Items.NOTE_BLOCK), AllItems.BRASS_SHEET.asStack(),
                 AllItems.ANDESITE_ALLOY.asStack(), AllItems.PRECISION_MECHANISM.asStack(), AllItems.ANDESITE_ALLOY.asStack()));
-        var item = KeyboardFeature.ITEM.get();
+        var item = PxS1100Feature.ITEM.get();
         test.assertTrue(level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, recipe, level)
                 .filter(match -> match.id().equals(CreateMediaSystems.id("px_s1100"))
                         && match.value().assemble(recipe, level.registryAccess()).is(item)).isPresent(), "Wrong keyboard recipe");
@@ -50,7 +50,7 @@ public final class KeyboardGameTests {
         player.setPos(root.getX() + 2.5, root.getY(), root.getZ() + .5);
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item));
         var facing = player.getDirection().getOpposite();
-        var placed = KeyboardFeature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FACING, facing);
+        var placed = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FACING, facing);
         var bass = KeyboardBlock.bass(root, placed);
         for (var half : List.of(root, bass)) level.setBlockAndUpdate(half.below(), Blocks.STONE.defaultBlockState());
         var hit = new BlockHitResult(root.below().getCenter().add(0, .5, 0), Direction.UP, root.below(), false);
@@ -82,7 +82,7 @@ public final class KeyboardGameTests {
         var rotated = KeyboardBlock.bass(root, placed.setValue(KeyboardBlock.FACING, Rotation.CLOCKWISE_90.rotate(facing)));
         level.setBlockAndUpdate(rotated.below(), Blocks.STONE.defaultBlockState());
         var wrenchHit = new BlockHitResult(root.getCenter(), Direction.UP, root, false);
-        test.assertTrue(KeyboardFeature.BLOCK.get().onWrenched(keyboard.state(),
+        test.assertTrue(PxS1100Feature.BLOCK.get().onWrenched(keyboard.state(),
                 new UseOnContext(player, InteractionHand.MAIN_HAND, wrenchHit)).consumesAction()
                 && level.getBlockState(bass).isAir() && level.getBlockEntity(root) == keyboard
                 && keyboard.runtime().energy() == 190, "Wrench rotation misplaced a half or reset the keyboard");
@@ -100,7 +100,7 @@ public final class KeyboardGameTests {
         var root = test.absolutePos(new BlockPos(3, 4, 3));
         var deck = root.below();
         var bearingPos = deck.below();
-        var state = KeyboardFeature.BLOCK.get().defaultBlockState();
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState();
         level.setBlockAndUpdate(bearingPos, AllBlocks.MECHANICAL_BEARING.getDefaultState().setValue(DirectionalBlock.FACING, Direction.UP));
         level.setBlockAndUpdate(deck, Blocks.IRON_BLOCK.defaultBlockState());
         test.assertTrue(KeyboardBlock.place(level, root, state), "Fixture placement failed");

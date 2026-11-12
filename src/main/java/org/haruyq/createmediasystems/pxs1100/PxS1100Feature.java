@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.function.Supplier;
 
@@ -26,9 +26,9 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Feature;
 
-import static org.haruyq.createmediasystems.keyboard.KeyboardBlock.FACING;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardBlock.FACING;
 
-public final class KeyboardFeature implements Feature {
+public final class PxS1100Feature implements Feature {
     public static final Supplier<SoundEvent> SYNTH = CreateMediaSystems.SOUNDS.register("keyboard_synth", SoundEvent::createVariableRangeEvent);
     public static final DeferredBlock<KeyboardBlock> BLOCK = CreateMediaSystems.BLOCKS.register("px_s1100",
             () -> new KeyboardBlock(BlockBehaviour.Properties.of().strength(2.5f).sound(SoundType.METAL)

@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import net.minecraft.nbt.CompoundTag;
 

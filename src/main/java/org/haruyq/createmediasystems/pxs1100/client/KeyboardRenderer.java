@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -28,13 +28,13 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.model.CompositeModel;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.keyboard.KeyboardBlock;
-import org.haruyq.createmediasystems.keyboard.KeyboardBlockEntity;
-import org.haruyq.createmediasystems.keyboard.KeyboardFeature;
-import org.haruyq.createmediasystems.keyboard.KeyboardKeys;
-import org.haruyq.createmediasystems.keyboard.KeyboardLayout;
-import org.haruyq.createmediasystems.keyboard.KeyboardMidi;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardBlock;
+import org.haruyq.createmediasystems.pxs1100.KeyboardBlockEntity;
+import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
+import org.haruyq.createmediasystems.pxs1100.KeyboardKeys;
+import org.haruyq.createmediasystems.pxs1100.KeyboardLayout;
+import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 
@@ -51,7 +51,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
 
     static void register(IEventBus bus) {
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
-                event.registerBlockEntityRenderer(KeyboardFeature.ENTITY.get(), context -> new KeyboardRenderer()));
+                event.registerBlockEntityRenderer(PxS1100Feature.ENTITY.get(), context -> new KeyboardRenderer()));
         bus.addListener((ModelEvent.RegisterAdditional event) -> {
             var names = new HashSet<>(List.of("stand", "body", "body_tabletop", "full", "full_tabletop",
                     "keys_static", "volume_knob", "power_button", "music_stand", "pedal"));
@@ -67,7 +67,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
 
     @Override public void render(KeyboardBlockEntity keyboard, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         var state = keyboard.state();
-        var instrument = KeyboardClient.instrument(keyboard.target());
+        var instrument = PxS1100Client.instrument(keyboard.target());
         var view = instrument == null ? keyboard.clientView() : instrument.view;
         var settings = instrument == null ? KeyboardSettings.load(view.getCompound("Settings")) : instrument.settings;
         var keys = instrument == null ? REST : instrument.keys;

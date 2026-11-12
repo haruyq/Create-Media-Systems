@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -12,13 +12,13 @@ import javax.sound.midi.MidiUnavailableException;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 
-import org.haruyq.createmediasystems.keyboard.KeyboardMidi;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings.Tone;
+import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings.Tone;
 import org.haruyq.gervill.SoftSynthesizer;
 import org.haruyq.gervill.ModelPatch;
 
-import static org.haruyq.createmediasystems.keyboard.KeyboardMidi.*;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardMidi.*;
 
 /** One stereo SoundFont synth for one instrument, advanced by its two OpenAL sources. */
 final class KeyboardSynth implements AutoCloseable {

@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -9,7 +9,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Target;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 
 public final class KeyboardBlockEntity extends BlockEntity implements KeyboardRuntime.Host {
     static final String DATA = "Keyboard";
@@ -22,7 +22,7 @@ public final class KeyboardBlockEntity extends BlockEntity implements KeyboardRu
     private KeyboardRuntime runtime;
 
     public KeyboardBlockEntity(BlockPos pos, BlockState state) {
-        super(KeyboardFeature.ENTITY.get(), pos, state);
+        super(PxS1100Feature.ENTITY.get(), pos, state);
         target = Target.placed(pos);
     }
 

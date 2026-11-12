@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,13 +22,13 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.haruyq.createmediasystems.client.MidiPort;
-import org.haruyq.createmediasystems.keyboard.KeyboardLayout;
-import org.haruyq.createmediasystems.keyboard.KeyboardMidi;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Action;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings.Tone;
+import org.haruyq.createmediasystems.pxs1100.KeyboardLayout;
+import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Action;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings.Tone;
 
-import static org.haruyq.createmediasystems.keyboard.KeyboardMidi.*;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardMidi.*;
 import static org.lwjgl.glfw.GLFW.*;
 
 final class KeyboardScreen extends Screen {
@@ -46,8 +46,8 @@ final class KeyboardScreen extends Screen {
     private static String preferred;
     private static int preferredChannel = -1;
 
-    private final KeyboardClient client;
-    private final KeyboardClient.Instrument instrument;
+    private final PxS1100Client client;
+    private final PxS1100Client.Instrument instrument;
     private final MidiPort midi;
     private final ArrayBlockingQueue<KeyboardMidi> pending = new ArrayBlockingQueue<>(384);
     private final AtomicBoolean drainPosted = new AtomicBoolean(), resetMidi = new AtomicBoolean();
@@ -67,7 +67,7 @@ final class KeyboardScreen extends Screen {
     private int left, top, panel, tall, keyLeft, keyTop, keyWidth, keyHeight, mouseNote = -1;
     private boolean mouseDown, pedalLatched;
 
-    KeyboardScreen(KeyboardClient client, KeyboardClient.Instrument instrument, boolean browser) {
+    KeyboardScreen(PxS1100Client client, PxS1100Client.Instrument instrument, boolean browser) {
         super(Component.translatable("block.create_media_systems.px_s1100"));
         this.client = client;
         this.instrument = instrument;
@@ -85,7 +85,7 @@ final class KeyboardScreen extends Screen {
         postDrain();
     }
 
-    KeyboardClient.Instrument instrument() { return instrument; }
+    PxS1100Client.Instrument instrument() { return instrument; }
     void openTones() { switchTab(Tab.TONES); }
 
     @Override protected void init() {

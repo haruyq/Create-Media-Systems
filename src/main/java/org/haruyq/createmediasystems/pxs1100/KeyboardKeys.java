@@ -1,10 +1,10 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.haruyq.createmediasystems.keyboard.KeyboardMidi.*;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardMidi.*;
 
 public final class KeyboardKeys {
     private final int[][] down = new int[16][128], sustained = new int[16][128], latched = new int[16][128];

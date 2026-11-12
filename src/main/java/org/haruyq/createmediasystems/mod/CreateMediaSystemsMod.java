@@ -13,7 +13,7 @@ import org.haruyq.createmediasystems.broadcast.BroadcastFeature;
 import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.display.DisplayFeature;
 import org.haruyq.createmediasystems.hifi.HifiFeature;
-import org.haruyq.createmediasystems.keyboard.KeyboardFeature;
+import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
@@ -38,7 +38,7 @@ public final class CreateMediaSystemsMod {
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
-            new KeyboardFeature());
+            new PxS1100Feature());
 
     private static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -61,7 +61,7 @@ public final class CreateMediaSystemsMod {
                 // Media
                 AudioFeature.CUSTOM_DISC, DiscFeature.CD, DiscFeature.CASSETTE, DiscFeature.DVD, DiscFeature.BLU_RAY,
                 // Jukebox audio
-                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL, KeyboardFeature.ITEM));
+                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL, PxS1100Feature.ITEM));
         // Hi-Fi
         order.addAll(HifiFeature.hifiUnits());
         order.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,

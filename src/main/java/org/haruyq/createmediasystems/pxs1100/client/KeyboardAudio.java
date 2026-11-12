@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -19,11 +19,11 @@ import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
-import org.haruyq.createmediasystems.keyboard.KeyboardBlockEntity;
-import org.haruyq.createmediasystems.keyboard.KeyboardFeature;
-import org.haruyq.createmediasystems.keyboard.KeyboardMidi;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Frame;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardBlockEntity;
+import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
+import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Frame;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
 import org.haruyq.createmediasystems.playback.CmsStream;
 
 final class KeyboardAudio implements AutoCloseable {
@@ -148,7 +148,7 @@ final class KeyboardAudio implements AutoCloseable {
         private final StereoStart start;
 
         Speaker(int channel, StereoStart start) {
-            super(KeyboardFeature.SYNTH.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
+            super(PxS1100Feature.SYNTH.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
             this.channel = channel;
             this.start = start;
             attenuation = Attenuation.NONE;

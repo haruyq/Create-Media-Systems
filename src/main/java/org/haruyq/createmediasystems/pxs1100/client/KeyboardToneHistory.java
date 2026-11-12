@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -8,7 +8,7 @@ import java.util.List;
 import com.google.gson.Gson;
 import com.mojang.logging.LogUtils;
 import org.haruyq.createmediasystems.client.ClientFiles;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings.Tone;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings.Tone;
 
 final class KeyboardToneHistory {
     private static final Gson JSON = new Gson();

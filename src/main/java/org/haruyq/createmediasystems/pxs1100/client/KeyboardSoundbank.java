@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,8 +18,8 @@ import javax.sound.midi.Instrument;
 import com.mojang.logging.LogUtils;
 import net.neoforged.fml.loading.FMLPaths;
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings.Tone;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings.Tone;
 import org.haruyq.gervill.ModelPatch;
 import org.haruyq.gervill.SF2Soundbank;
 

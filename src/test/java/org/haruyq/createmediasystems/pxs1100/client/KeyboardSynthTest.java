@@ -1,15 +1,15 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
-import org.haruyq.createmediasystems.keyboard.KeyboardKeys;
-import org.haruyq.createmediasystems.keyboard.KeyboardMidi;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardKeys;
+import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
 import org.junit.jupiter.api.Test;
 
-import static org.haruyq.createmediasystems.keyboard.KeyboardMidi.*;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardMidi.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KeyboardSynthTest {

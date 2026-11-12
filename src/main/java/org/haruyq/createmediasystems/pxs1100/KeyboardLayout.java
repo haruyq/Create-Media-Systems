@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.io.IOException;
 import java.io.InputStreamReader;

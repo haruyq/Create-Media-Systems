@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,12 +16,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Target;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import org.jetbrains.annotations.Nullable;
 
-import static org.haruyq.createmediasystems.keyboard.KeyboardMidi.*;
-import static org.haruyq.createmediasystems.keyboard.KeyboardPackets.Action;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardMidi.*;
+import static org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Action;
 
 final class KeyboardRuntime {
     static final int DRAW = 10, CAPACITY = DRAW * 20 * 60 * 60 * 4, MAX_INPUT = 2048;

@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.DecoderException;

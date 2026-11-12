@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.List;
 
@@ -21,7 +21,7 @@ public final class KeyboardSableGameTests {
     public static void keyboardSpeakersAndPowerFollowASableShip(GameTestHelper test) {
         var level = test.getLevel();
         var root = test.absolutePos(new BlockPos(3, 4, 3));
-        var state = KeyboardFeature.BLOCK.get().defaultBlockState();
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState();
         var bass = KeyboardBlock.bass(root, state);
         test.assertTrue(KeyboardBlock.place(level, root, state), "Fixture placement failed");
         ((KeyboardBlockEntity) level.getBlockEntity(root)).runtime().charge(1600, false);

@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,7 +40,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Target;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 import org.haruyq.createmediasystems.power.BatteryItem;
 import org.jetbrains.annotations.Nullable;
 
@@ -185,7 +185,7 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
 
     public static boolean onKnob(Level level, BlockHitResult hit, Target target) {
         var state = level.getBlockState(hit.getBlockPos());
-        if (!state.is(KeyboardFeature.BLOCK.get()) || !root(hit.getBlockPos(), state).equals(target.pos())) return false;
+        if (!state.is(PxS1100Feature.BLOCK.get()) || !root(hit.getBlockPos(), state).equals(target.pos())) return false;
         var at = local(target.pos(), state, SableCompat.hitInBlockSpace(level, hit.getBlockPos(), hit.getLocation()));
         return KeyboardLayout.PX.panel.get("volume_knob").contains(at.add(0,
                 state.getValue(STAND) ? 0 : -KeyboardLayout.PX.tabletop, 0));
@@ -249,7 +249,7 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
     }
 
     static boolean part(BlockState candidate, Part part, BlockState reference) {
-        return candidate.is(KeyboardFeature.BLOCK.get()) && candidate.getValue(PART) == part
+        return candidate.is(PxS1100Feature.BLOCK.get()) && candidate.getValue(PART) == part
                 && candidate.getValue(FACING) == reference.getValue(FACING)
                 && up(candidate) == up(reference);
     }
@@ -296,6 +296,6 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
 
     @Override public @Nullable <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         if (level.isClientSide || state.getValue(PART) == Part.BASS) return null;
-        return createTickerHelper(type, KeyboardFeature.ENTITY.get(), (world, pos, block, keyboard) -> keyboard.runtime().tick());
+        return createTickerHelper(type, PxS1100Feature.ENTITY.get(), (world, pos, block, keyboard) -> keyboard.runtime().tick());
     }
 }

@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard.client;
+package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.util.HashMap;
 import java.util.List;
@@ -16,18 +16,18 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.WorldEvents;
-import org.haruyq.createmediasystems.keyboard.KeyboardBlock;
-import org.haruyq.createmediasystems.keyboard.KeyboardFeature;
-import org.haruyq.createmediasystems.keyboard.KeyboardKeys;
-import org.haruyq.createmediasystems.keyboard.KeyboardMidi;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Action;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Frame;
-import org.haruyq.createmediasystems.keyboard.KeyboardSettings;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Target;
+import org.haruyq.createmediasystems.pxs1100.KeyboardBlock;
+import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
+import org.haruyq.createmediasystems.pxs1100.KeyboardKeys;
+import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Action;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Frame;
+import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 
-public final class KeyboardClient implements KeyboardPackets.Client {
-    private static final KeyboardClient INSTANCE = new KeyboardClient();
+public final class PxS1100Client implements KeyboardPackets.Client {
+    private static final PxS1100Client INSTANCE = new PxS1100Client();
     private final Map<Target, Instrument> instruments = new HashMap<>();
     private Instrument local;
 
@@ -49,7 +49,7 @@ public final class KeyboardClient implements KeyboardPackets.Client {
         }
     }
 
-    private KeyboardClient() {}
+    private PxS1100Client() {}
 
     public static void register(IEventBus bus) {
         KeyboardPackets.client(INSTANCE);
@@ -133,7 +133,7 @@ public final class KeyboardClient implements KeyboardPackets.Client {
         if (mc.level == null || mc.screen != null || !(mc.hitResult instanceof BlockHitResult hit)
                 || hit.getType() != HitResult.Type.BLOCK || event.getScrollDeltaY() == 0) return;
         var state = mc.level.getBlockState(hit.getBlockPos());
-        if (!state.is(KeyboardFeature.BLOCK.get())) return;
+        if (!state.is(PxS1100Feature.BLOCK.get())) return;
         var target = Target.placed(KeyboardBlock.root(hit.getBlockPos(), state));
         if (!KeyboardBlock.onKnob(mc.level, hit, target)) return;
         int direction = event.getScrollDeltaY() > 0 ? 1 : -1;
@@ -162,7 +162,7 @@ public final class KeyboardClient implements KeyboardPackets.Client {
         if (target.mounted()) {
             if (mc.level.getEntity(target.carrier()) instanceof AbstractContraptionEntity carrier && carrier.getContraption() != null) {
                 var block = carrier.getContraption().getBlocks().get(pos);
-                if (block != null && block.state().is(KeyboardFeature.BLOCK.get())) {
+                if (block != null && block.state().is(PxS1100Feature.BLOCK.get())) {
                     var left = carrier.toGlobalVector(KeyboardBlock.speaker(pos, block.state(), 0), 1);
                     var right = carrier.toGlobalVector(KeyboardBlock.speaker(pos, block.state(), 1), 1);
                     return new Frame(SableCompat.toRenderWorld(mc.level, carrier.blockPosition(), left),
@@ -171,7 +171,7 @@ public final class KeyboardClient implements KeyboardPackets.Client {
             }
         } else {
             var state = mc.level.getBlockState(pos);
-            if (state.is(KeyboardFeature.BLOCK.get())) {
+            if (state.is(PxS1100Feature.BLOCK.get())) {
                 return new Frame(SableCompat.toRenderWorld(mc.level, pos, KeyboardBlock.speaker(pos, state, 0)),
                         SableCompat.toRenderWorld(mc.level, pos, KeyboardBlock.speaker(pos, state, 1)));
             }

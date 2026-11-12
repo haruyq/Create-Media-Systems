@@ -1,4 +1,4 @@
-package org.haruyq.createmediasystems.keyboard;
+package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.List;
 
@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate.StructureBlockInfo;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.keyboard.KeyboardPackets.Target;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 import org.haruyq.createmediasystems.power.BatteryItem;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,7 +68,7 @@ final class MountedKeyboard implements MovementBehaviour {
         var contraption = carrier.getContraption();
         if (!carrier.isAlive() || contraption == null || contraption.disassembled) return null;
         var block = contraption.getBlocks().get(pos);
-        if (block == null || !block.state().is(KeyboardFeature.BLOCK.get())
+        if (block == null || !block.state().is(PxS1100Feature.BLOCK.get())
                 || block.state().getValue(KeyboardBlock.PART) != KeyboardBlock.Part.MAIN) return null;
         var actor = contraption.getActorAt(pos);
         return actor != null && actor.right != null && actor.right.blockEntityData != null ? actor.right : null;
@@ -148,7 +148,7 @@ final class MountedKeyboard implements MovementBehaviour {
             if (hand != InteractionHand.MAIN_HAND || player.isSpectator() || !carrier.isAlive()
                     || carrier.getContraption() == null || carrier.getContraption().disassembled) return false;
             var block = carrier.getContraption().getBlocks().get(pos);
-            if (block == null || !block.state().is(KeyboardFeature.BLOCK.get())) return false;
+            if (block == null || !block.state().is(PxS1100Feature.BLOCK.get())) return false;
             if (!(player instanceof ServerPlayer server)) return player.level().isClientSide;
             var root = KeyboardBlock.root(pos, block.state());
             var context = keyboardAt(carrier, root);
