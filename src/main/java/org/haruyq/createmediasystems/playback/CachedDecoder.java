@@ -96,8 +96,9 @@ public final class CachedDecoder {
     private static void decode(NativeMediaResolver.Prepared prepared, List<String> options, Span span, MediaTap tap,
                                BooleanSupplier cancelled) throws InterruptedException {
         check(cancelled);
-        if (Vlc.LIB == null || Vlc.INSTANCE == null) {
-            throw new IllegalStateException(Vlc.MISSING);
+        String missing = Vlc.missing();
+        if (missing != null) {
+            throw new IllegalStateException(missing);
         }
         if (Decoder.INSTANCE == null) {
             throw new IllegalStateException("VLC could not start the cache decoder");

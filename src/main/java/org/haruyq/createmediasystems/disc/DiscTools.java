@@ -46,8 +46,9 @@ final class DiscTools {
         if (!autoFfmpeg && !autoFfprobe) {
             return new Installed(ffmpeg, ffprobe);
         }
-        if (!Platform.isWindows() || !Platform.is64Bit() || Platform.isARM()) {
-            throw new IOException("Automatic FFmpeg setup needs Windows x64; set discFfmpegPath and discFfprobePath to your own installation");
+        // Windows on ARM runs the x64 build too (Windows 11 emulates it); elsewhere it is the computer's own, from PATH.
+        if (!Platform.isWindows() || !Platform.is64Bit()) {
+            return new Installed(autoFfmpeg ? "ffmpeg" : ffmpeg, autoFfprobe ? "ffprobe" : ffprobe);
         }
         Path installed = install(directory, DOWNLOAD, SHA256, downloading);
         return new Installed(autoFfmpeg ? installed.resolve("ffmpeg.exe").toString() : ffmpeg,

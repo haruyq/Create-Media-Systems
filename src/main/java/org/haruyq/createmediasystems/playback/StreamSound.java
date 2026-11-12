@@ -264,8 +264,9 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private AudioStream open() {
         if (playsNatively()) {
             try {
-                if (Vlc.MISSING != null) {
-                    throw new IOException(Vlc.MISSING);
+                String missing = Vlc.missing();
+                if (missing != null) {
+                    throw new IOException(missing);
                 }
                 AudioStream opened = NativeAudio.play(
                         () -> new VlcPlayer(spec.video(), requestedAt, spec.startSeconds()),

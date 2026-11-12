@@ -42,32 +42,19 @@ final class Vlc {
     private static final String VERSION = "3.0.24";
     private static final String SHA256 = "fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323";
 
+    /** Set once VLC is loaded; read {@link #missing} first. */
     @Nullable
-    static final Lib LIB;
+    static volatile Lib LIB;
     @Nullable
-    static final Pointer INSTANCE;
-    /** Why VLC isn't there, for the player; null if it is. */
+    static volatile Pointer INSTANCE;
     @Nullable
-    static final String MISSING;
+    private static volatile String missing;
+    /** Whether the download failed (offline at startup, say), so it is worth trying again; when it was last tried. */
+    private static boolean retry;
+    private static long triedAt;
 
     static {
-        Lib lib = null;
-        Pointer instance = null;
-        String missing = null;
-        try {
-            lib = load();
-            instance = lib.libvlc_new(ARGS.length, ARGS);
-            if (instance == null) {
-                missing = "VLC could not start";
-            }
-        } catch (IOException | RuntimeException | LinkageError e) {
-            LogUtils.getLogger().warn("VLC could not be loaded; discs and displays can't play media", e);
-            missing = X64_WINDOWS ? "VLC could not be loaded"
-                    : "Install VLC 3 (videolan.org) to play media";
-        }
-        LIB = missing == null ? lib : null;
-        INSTANCE = missing == null ? instance : null;
-        MISSING = missing;
+        tryLoad();
     }
 
     private Vlc() {
@@ -81,10 +68,44 @@ final class Vlc {
         return LIB == null ? null : LIB.libvlc_new(args.length, args);
     }
 
-    /** Loads VLC (calling it is what loads it: it downloads the first time, so call it off the game's threads). */
+    /** Loads VLC: touching this class is what loads it, and it downloads the first time, so call it off the game's threads. */
     static void preload() {
-        if (MISSING == null) {
+    }
+
+    /**
+     * Why VLC isn't there, for the player; null if it is. A download that failed is tried again (on the caller's
+     * thread, so not the game's), at most once a minute.
+     */
+    @Nullable
+    static synchronized String missing() {
+        if (LIB == null && retry && System.currentTimeMillis() - triedAt > 60_000) {
+            tryLoad();
+        }
+        return missing;
+    }
+
+    private static synchronized void tryLoad() {
+        triedAt = System.currentTimeMillis();
+        retry = false;
+        try {
+            Lib lib = load();
+            Pointer instance = lib.libvlc_new(ARGS.length, ARGS);
+            if (instance == null) {
+                missing = "VLC could not start";
+                return;
+            }
+            LIB = lib;
+            INSTANCE = instance;
+            missing = null;
             LogUtils.getLogger().info("VLC is ready");
+        } catch (IOException e) {
+            // Only the download throws this: a connection, an HTTP status or a checksum that may be right next time.
+            LogUtils.getLogger().warn("VLC could not be downloaded; discs and displays can't play media until it is", e);
+            retry = true;
+            missing = "VLC could not be downloaded from videolan.org; check the internet connection";
+        } catch (RuntimeException | LinkageError e) {
+            LogUtils.getLogger().warn("VLC could not be loaded; discs and displays can't play media", e);
+            missing = X64_WINDOWS ? "VLC could not be loaded" : "Install VLC 3 (videolan.org) to play media";
         }
     }
 
@@ -115,6 +136,7 @@ final class Vlc {
         Path dir = ClientFiles.DIR.resolve("vlc").resolve(VERSION);
         Path done = dir.resolve(".unpacked");
         if (Files.exists(done)) {
+            removeOthers(dir);
             return dir;
         }
         String url = "https://download.videolan.org/pub/videolan/vlc/" + VERSION + "/win64/vlc-" + VERSION + "-win64.zip";
@@ -150,7 +172,26 @@ final class Vlc {
             }
         }
         Files.writeString(done, VERSION);
+        removeOthers(dir);
         return dir;
+    }
+
+    /** Deletes the other VLCs CMS unpacked beside {@code dir} (older versions); any still in use stay. */
+    private static void removeOthers(Path dir) {
+        try (var others = Files.list(dir.getParent())) {
+            for (Path other : others.filter(o -> !o.equals(dir) && Files.isRegularFile(o.resolve(".unpacked"))).toList()) {
+                LogUtils.getLogger().info("Removing the old VLC in {}", other);
+                try (var files = Files.walk(other)) {
+                    for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                        Files.deleteIfExists(file);
+                    }
+                } catch (IOException inUse) {
+                    // Another game running it; next start tries again.
+                }
+            }
+        } catch (IOException none) {
+            // Nothing to remove.
+        }
     }
 
     /** The parts of VLC CMS keeps (a class of its own, so checking them doesn't load VLC). */
