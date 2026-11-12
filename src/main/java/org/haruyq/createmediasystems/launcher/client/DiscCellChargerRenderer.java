@@ -18,7 +18,7 @@ public final class DiscCellChargerRenderer implements BlockEntityRenderer<DiscCe
         // Rest the actual bottom on the socket, including each item's FIXED transform.
         pose.translate(.5, charger.cell().getItem() instanceof DiscCellItem ? .55125 : .61125, .5);
         double time = charger.getLevel() == null ? 0 : charger.getLevel().getGameTime() + (double)partial;
-        pose.mulPose(Axis.YP.rotationDegrees((float)(time * Math.min(1.5f, Math.abs(charger.getSpeed()) / 64f)%360)));
+        pose.mulPose(Axis.YP.rotationDegrees((float)(time * Math.min(1.5f, Math.abs(charger.renderRpm()) / 64f)%360)));
         pose.scale(.6f, .6f, .6f);
         Minecraft.getInstance().getItemRenderer().renderStatic(charger.cell(), ItemDisplayContext.FIXED, light, overlay,
                 pose, buffers, charger.getLevel(), 0);

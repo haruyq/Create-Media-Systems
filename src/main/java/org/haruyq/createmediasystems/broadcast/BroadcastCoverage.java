@@ -15,6 +15,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 
 /** Remembers linked stations so a listener can hear them beyond simulation distance, even after a restart. */
@@ -56,20 +57,27 @@ final class BroadcastCoverage extends SavedData {
             var entry = entries.next();
             BlockPos tower = entry.getKey();
             Station station = entry.getValue();
-            if (!level.isInWorldBounds(tower) || !level.isInWorldBounds(station.source)
+            boolean plot = SableCompat.inPlotGrid(level, tower);
+            if (plot && SableCompat.containing(level, tower) == null
+                    || !level.isInWorldBounds(tower) || !level.isInWorldBounds(station.source)
                     || level.isLoaded(tower) && !(level.getBlockState(tower).getBlock() instanceof BroadcastTowerBlock)) {
                 entries.remove();
                 setDirty();
                 continue;
             }
             double reach = station.profile.reach + EmitterRange.DROP_MARGIN;
-            if (level.players().stream().noneMatch(player -> player.distanceToSqr(tower.getCenter()) <= reach * reach)) continue;
-            var chunks = level.getChunkSource();
-            ChunkPos towerChunk = new ChunkPos(tower), sourceChunk = new ChunkPos(station.source);
-            chunks.addRegionTicket(TICKET, towerChunk, TICKET_DISTANCE, tower, true);
-            if (!sourceChunk.equals(towerChunk)) {
-                chunks.addRegionTicket(TICKET, sourceChunk, TICKET_DISTANCE, tower, true);
+            var origin = SableCompat.toWorld(level, tower, MovingBroadcastPackets.Frame.mouth(tower));
+            if (level.players().stream().noneMatch(player -> SableCompat.eye(player, 1).distanceToSqr(origin) <= reach * reach)) continue;
+            if (!plot) keepLoaded(level, tower, tower);
+            if (plot || !new ChunkPos(tower).equals(new ChunkPos(station.source))) {
+                keepLoaded(level, station.source, tower);
             }
+        }
+    }
+
+    static void keepLoaded(ServerLevel level, BlockPos block, BlockPos owner) {
+        if (level.isInWorldBounds(block) && !SableCompat.inPlotGrid(level, block)) {
+            level.getChunkSource().addRegionTicket(TICKET, new ChunkPos(block), TICKET_DISTANCE, owner, true);
         }
     }
 

@@ -38,5 +38,6 @@ public final class PartyBoxFeature implements Feature {
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
         PartyBoxAction.register(registrar);
+        PartyBoxPlacement.register(registrar);
     }
 }

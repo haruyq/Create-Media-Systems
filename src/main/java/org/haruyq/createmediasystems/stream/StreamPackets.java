@@ -1,5 +1,9 @@
 package org.haruyq.createmediasystems.stream;
 
+import java.util.UUID;
+import net.minecraft.core.UUIDUtil;
+import org.haruyq.createmediasystems.broadcast.MovingBroadcastPackets;
+
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -45,8 +49,16 @@ public final class StreamPackets {
      * have it and stop it themselves (getting off the train), so the server tells them neither.
      */
     public sealed interface Target {
-        StreamCodec<ByteBuf, Target> CODEC = ByteBufCodecs.BOOL.dispatch(target -> target instanceof Channel,
-                channel -> channel ? Channel.CODEC : Block.CODEC);
+        StreamCodec<ByteBuf, Target> CODEC = ByteBufCodecs.VAR_INT.dispatch(target -> switch (target) {
+            case Block ignored -> 0;
+            case Channel ignored -> 1;
+            case Mobile ignored -> 2;
+        }, id -> switch (id) {
+            case 0 -> Block.CODEC;
+            case 1 -> Channel.CODEC;
+            case 2 -> Mobile.CODEC;
+            default -> throw new IllegalArgumentException("Unknown stream target " + id);
+        });
 
         /** What tells its listener to play what it has loaded, from {@code seconds} in; null for none. */
         @Nullable
@@ -83,6 +95,20 @@ public final class StreamPackets {
             @Nullable
             public CustomPacketPayload stop() {
                 return null;
+            }
+        }
+
+        record Mobile(UUID id) implements Target {
+            static final StreamCodec<ByteBuf, Mobile> CODEC = UUIDUtil.STREAM_CODEC.map(Mobile::new, Mobile::id);
+
+            @Override
+            public CustomPacketPayload sync(float seconds) {
+                return new MovingBroadcastPackets.Sync(id, seconds);
+            }
+
+            @Override
+            public CustomPacketPayload stop() {
+                return new MovingBroadcastPackets.Stop(id);
             }
         }
     }

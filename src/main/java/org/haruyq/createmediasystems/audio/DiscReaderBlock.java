@@ -75,7 +75,7 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    public static class Entity extends BlockEntity implements MediaSource, DiscDrive.Fed, ItemSlot.Holder {
+    public static class Entity extends BlockEntity implements MediaSource.Captured, DiscDrive.Fed, ItemSlot.Holder {
         private final ItemSlot disc = new ItemSlot("Disc", stack -> MediaItem.fits(stack, DiscKind.Slot.JUKEBOX));
         private final PlaybackClock clock = new PlaybackClock();
         private boolean powered;
@@ -96,7 +96,7 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             if (!disc.isEmpty()) {
                 return MediaItem.url(disc.get());
             }
-            DiscDrive drive = DiscDrive.feeding(level, worldPosition, this);
+            DiscDrive drive = level == null ? null : DiscDrive.feeding(level, worldPosition, this);
             return drive == null ? null : drive.link();
         }
 
@@ -156,11 +156,21 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             }
             long now = level.getGameTime();
             Streams.tick(this, clock, now);
+            advance(now);
+            setChanged();
+        }
+
+        @Override
+        public void tickCaptured(long now) {
+            clock.tick(now);
+            advance(now);
+        }
+
+        private void advance(long now) {
             String url = url();
             if (url != null && clock.ended(url, now)) {
                 clock.stop();
             }
-            setChanged();
         }
 
         @Override

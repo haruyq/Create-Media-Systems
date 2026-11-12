@@ -1,5 +1,9 @@
 package org.haruyq.createmediasystems.launcher;
 
+import com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour;
+import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+
 import static org.haruyq.createmediasystems.CreateMediaSystems.ATTACHMENTS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCKS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCK_ENTITIES;
@@ -126,6 +130,10 @@ public final class LauncherFeature implements Feature {
 
     @Override
     public void register(IEventBus modBus) {
+        modBus.addListener((FMLCommonSetupEvent event) -> event.enqueueWork(() -> {
+            MovementBehaviour.REGISTRY.register(DISC_CELL_CHARGER.get(), new MovingDiscCellCharger());
+            MovingInteractionBehaviour.REGISTRY.register(DISC_CELL_CHARGER.get(), new MovingDiscCellCharger.Interaction());
+        }));
         modBus.addListener(DiscCellCharger::registerCapabilities);
         modBus.addListener(LauncherFeature::hideUnavailableCells);
         NeoForge.EVENT_BUS.register(DiscLauncherTrigger.class);
@@ -142,6 +150,7 @@ public final class LauncherFeature implements Feature {
 
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
+        MovingDiscCellCharger.register(registrar);
         DiscLauncherReloadPacket.registerPayloads(registrar);
         DiscLauncherTrigger.register(registrar);
         LauncherFeedback.register(registrar);

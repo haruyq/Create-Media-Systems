@@ -34,6 +34,11 @@ public interface MediaSource {
         return Tone.FLAT;
     }
 
+    /** A captured deck can advance its own playback data without a world or an installed block entity. */
+    interface Captured extends MediaSource {
+        void tickCaptured(long now);
+    }
+
     /**
      * A source that is no block entity (a train's disc reader, carried by its train), known by the id it keeps; its
      * emitters relay it to an audience they pick (see Streams#relay). Its listeners play its track as soon as they

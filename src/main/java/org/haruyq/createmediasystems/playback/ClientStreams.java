@@ -123,6 +123,10 @@ public final class ClientStreams {
             return sound == null ? -1 : sound.requestedSeconds();
         }
 
+        public void sync(double seconds) {
+            if (sound != null) sound.sync(seconds);
+        }
+
         @Override
         public String toString() {
             return name;

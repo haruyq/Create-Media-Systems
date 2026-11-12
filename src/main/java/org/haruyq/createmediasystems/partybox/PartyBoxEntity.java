@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.partybox;
 
+import org.haruyq.createmediasystems.ContraptionSurface;
+
 import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.power.ChargeableItem;
 import java.util.Optional;
@@ -215,7 +217,8 @@ public final class PartyBoxEntity extends Entity implements Portable {
             Vec3 target = player.position().subtract(facing.scale(.85)).add(right.scale(side*.26));
             Vec3 delta = target.subtract(position()).multiply(1, 0, 1);
             double distance = delta.length();
-            Vec3 walking=previousPullerPosition==null?Vec3.ZERO:player.position().subtract(previousPullerPosition).multiply(1,0,1);
+            Vec3 walking = previousPullerPosition == null ? Vec3.ZERO
+                    : player.position().subtract(previousPullerPosition).subtract(ContraptionSurface.sharedStep(this, player)).multiply(1, 0, 1);
             previousPullerPosition=player.position();
             if(walking.horizontalDistanceSqr()>.45*.45)walking=Vec3.ZERO;
             // Feed forward the puller's real step. A spring alone trails by v/k and leaves the handle behind the hand.

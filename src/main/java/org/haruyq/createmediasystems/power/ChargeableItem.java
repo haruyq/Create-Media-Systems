@@ -22,6 +22,15 @@ public interface ChargeableItem {
         }
     }
 
+    /** Transfers charge from a removable battery into a device with the given free capacity. */
+    static int drawBattery(ItemStack battery, int room) {
+        if (!BatteryItem.fits(battery)) return 0;
+        int stored = energy(battery);
+        int moved = Math.min(stored, Math.max(0, room));
+        if (moved > 0) setEnergy(battery, stored - moved);
+        return moved;
+    }
+
     /** How full {@code stack} is, 0..1; 0 for any other item. */
     static float charge(ItemStack stack) {
         return stack.getItem() instanceof ChargeableItem item ? (float) energy(stack) / item.capacity() : 0;

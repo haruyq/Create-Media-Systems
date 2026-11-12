@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.video;
 
+import org.haruyq.createmediasystems.stream.MediaSource;
+
 import java.util.List;
 
 import org.haruyq.createmediasystems.ItemSlot;
@@ -113,7 +115,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
     /** A block entity keeps one behaviour per type, and lighting has the default one. */
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
-    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable,
+    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable, MediaSource.Captured,
             DiscDrive.Fed, DiscTransport.Deck, ItemSlot.Holder {
         private static final DiscTransport.Keys KEYS = new DiscTransport.Keys("Index", "Playing", "Paused", "From", "Ticks");
         private final ItemSlot cd = new ItemSlot("Cd", stack -> MediaItem.fits(stack, DiscKind.Slot.PICTURE));
@@ -141,7 +143,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         @Nullable
         private DiscDrive drive() {
-            return cd.isEmpty() ? DiscDrive.feeding(level, worldPosition, this) : null;
+            return cd.isEmpty() && level != null ? DiscDrive.feeding(level, worldPosition, this) : null;
         }
 
         @Override
@@ -177,6 +179,12 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
 
         public DiscTransport transport() {
             return transport;
+        }
+
+        @Override
+        public void tickCaptured(long now) {
+            transport.clock().tick(now);
+            transport.advance(now);
         }
 
         @Override

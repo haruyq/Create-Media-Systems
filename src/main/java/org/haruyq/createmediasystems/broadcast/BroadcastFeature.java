@@ -7,6 +7,9 @@ import static org.haruyq.createmediasystems.CreateMediaSystems.ITEMS;
 import java.util.List;
 import java.util.function.Supplier;
 
+import com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour;
+import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -18,9 +21,11 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 import org.haruyq.createmediasystems.Feature;
@@ -60,6 +65,8 @@ public final class BroadcastFeature implements Feature {
                 tooltip.add(Component.translatable(hint, values).withStyle(ChatFormatting.GRAY));
                 if (getBlock() instanceof BroadcastTowerBlock) {
                     tooltip.add(Component.translatable("broadcast.tower.link").withStyle(ChatFormatting.AQUA));
+                } else if (getBlock() instanceof BroadcastBaseBlock) {
+                    tooltip.add(Component.translatable("broadcast.base.reserve").withStyle(ChatFormatting.GRAY));
                 }
             }
         });
@@ -67,8 +74,18 @@ public final class BroadcastFeature implements Feature {
 
     @Override
     public void register(IEventBus modBus) {
+        modBus.addListener((FMLCommonSetupEvent event) -> event.enqueueWork(() -> {
+            var tower = new MovingBroadcastTower();
+            for (var head : List.of(HORN, DIGITAL_HORN, ARRAY)) MovementBehaviour.REGISTRY.register(head.get(), tower);
+            MovingInteractionBehaviour.REGISTRY.register(BASE.get(), new MovingBroadcastTower.BaseInteraction());
+        }));
         modBus.addListener((RegisterCapabilitiesEvent event) -> event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK,
                 BASE_ENTITY.get(), (base, face) -> base.port()));
         NeoForge.EVENT_BUS.addListener(BroadcastCoverage::tick);
+    }
+
+    @Override
+    public void registerPayloads(PayloadRegistrar registrar) {
+        MovingBroadcastPackets.register(registrar);
     }
 }

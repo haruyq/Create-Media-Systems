@@ -16,6 +16,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
+import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.Streams;
 
 public final class BroadcastTowerBlock extends SpeakerBlock {
@@ -64,6 +66,7 @@ public final class BroadcastTowerBlock extends SpeakerBlock {
 
     public static final class Tower extends SpeakerBlock.Entity {
         private boolean broadcasting;
+        private final MovingBroadcast onShip = new MovingBroadcast();
         private BlockPos registeredSource;
 
         public Tower(BlockPos pos, BlockState state) {
@@ -102,6 +105,16 @@ public final class BroadcastTowerBlock extends SpeakerBlock {
             }
             boolean powered = source != null && volume() > 0 && Streams.source(level, source) != null
                     && base(level).filter(base -> base.supply(profile(), level.getGameTime())).isPresent();
+            if (powered && SableCompat.containing(level, worldPosition) != null) {
+                if (broadcasting) Streams.stop(this);
+                broadcasting = false;
+                float gain = level.getBlockEntity(source) instanceof MediaSource media ? media.gain() : 1;
+                var frame = MovingBroadcastPackets.Frame.at(-1, worldPosition,
+                        local -> SableCompat.toWorld(level, worldPosition, local));
+                onShip.relay(level, frame, source, null, channel(), volume() * gain, profile(), refresh);
+                return;
+            }
+            onShip.stop();
             if (powered && (refresh || !broadcasting)) {
                 Streams.relay(level, this, Optional.of(source), worldPosition.getCenter().add(0, .26, 0),
                         Optional.empty(), channel(), volume(), profile());
@@ -109,6 +122,12 @@ public final class BroadcastTowerBlock extends SpeakerBlock {
                 Streams.stop(this);
             }
             broadcasting = powered;
+        }
+
+        @Override
+        public void setRemoved() {
+            onShip.stop();
+            super.setRemoved();
         }
     }
 }

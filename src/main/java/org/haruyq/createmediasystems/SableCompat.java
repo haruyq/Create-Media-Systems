@@ -15,6 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -52,6 +53,20 @@ public final class SableCompat {
         return subLevel == null ? local : subLevel.logicalPose().transformPosition(local);
     }
 
+    /** Both world raycasts and vanilla use packets can describe a hit on a plot. */
+    public static Vec3 hitInBlockSpace(Level level, BlockPos block, Vec3 point) {
+        var ship = containing(level, block);
+        if (ship == null) return point;
+        Vec3 projected = ship.logicalPose().transformPositionInverse(point);
+        Vec3 center = block.getCenter();
+        return point.distanceToSqr(center) <= projected.distanceToSqr(center) ? point : projected;
+    }
+
+    public static Vec3 hitInWorld(Level level, BlockHitResult hit) {
+        BlockPos block = hit.getBlockPos();
+        return toWorld(level, block, hitInBlockSpace(level, block, hit.getLocation()));
+    }
+
     public static Vec3 toRenderWorld(Level level, BlockPos anchor, Vec3 local) {
         SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(level, anchor);
         return subLevel instanceof ClientSubLevelAccess client
@@ -79,6 +94,11 @@ public final class SableCompat {
                 new BoundingBox3d(-30_000_000, -30_000_000, -30_000_000, 30_000_000, 30_000_000, 30_000_000));
     }
 
+    public static Iterable<? extends SubLevelAccess> subLevels(Level level, AABB bounds) {
+        return SableCompanion.INSTANCE.getAllIntersecting(level,
+                new BoundingBox3d(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ));
+    }
+
     /** Whether {@code pos} lies in the far-off plots where sub-levels keep their blocks. */
     public static boolean inPlotGrid(Level level, BlockPos pos) {
         return SableCompanion.INSTANCE.isInPlotGrid(level, pos);
@@ -91,6 +111,14 @@ public final class SableCompat {
     /** Where {@code entity}'s eye is in the world this frame, carried along by a sub-level it rides. */
     public static Vec3 eye(Entity entity, float partialTick) {
         return SableCompanion.INSTANCE.getEyePositionInterpolated(entity, partialTick);
+    }
+
+    @Nullable
+    static Vec3 sharedStep(Entity first, Entity second) {
+        var ship = SableCompanion.INSTANCE.getTrackingOrVehicleSubLevel(first);
+        if (ship == null || ship != SableCompanion.INSTANCE.getTrackingOrVehicleSubLevel(second)) return null;
+        Vec3 local = ship.logicalPose().transformPositionInverse(second.position());
+        return second.position().subtract(ship.lastPose().transformPosition(local));
     }
 
     public static Vec3 bodyCenter(Entity entity, float partialTick) {
