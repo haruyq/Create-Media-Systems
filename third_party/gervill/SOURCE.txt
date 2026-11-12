@@ -1,0 +1,8 @@
+Gervill source provenance
+
+Eclipse Temurin 21.0.12.1+1, source revision 1c417fbfc2f7.
+From lib/src.zip, java.desktop/com/sun/media/sound.
+GPL-2.0-only with the Classpath exception. See LICENSE.txt and the source notices.
+
+The package was relocated to org.haruyq.gervill. SoftSynthesizer uses
+the public os.name property for OS detection.
