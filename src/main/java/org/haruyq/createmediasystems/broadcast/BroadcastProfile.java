@@ -7,10 +7,12 @@ import net.minecraft.world.phys.Vec3;
 
 /** Outdoor speech acoustics, with one block approximating one metre. */
 public enum BroadcastProfile {
-    STANDARD(0, 0, 0, 0, 1, 1, 0, 0),
-    HORN(1, 400, 8, 30, .24, 39, 350, 3800),
-    ARRAY(2, 800, 12, 7.5, .16, 75, 380, 11_000),
-    DIGITAL_HORN(3, 500, 10, 30, .22, 50, 180, 6500);
+    STANDARD(0, 0, 0, 0, 1, 1, 1, 0, 0),
+    HORN(1, 400, 8, 30, .24, .82, 96, 350, 3800),
+    ARRAY(2, 800, 12, 7.5, .16, .72, 240, 380, 11_000),
+    DIGITAL_HORN(3, 500, 10, 30, .22, .79, 128, 180, 6500);
+
+    private static final double EDGE_FADE = .08;
 
     public static final StreamCodec<ByteBuf, BroadcastProfile> CODEC =
             ByteBufCodecs.idMapper(BroadcastProfile::byId, profile -> profile.id);
@@ -20,15 +22,16 @@ public enum BroadcastProfile {
     public final int energyPerTick;
     public final int highPassHz;
     public final int lowPassHz;
-    private final double halfBeam, floor, reference;
+    private final double halfBeam, offAxis, below, reference;
 
-    BroadcastProfile(int id, int reach, int energyPerTick, double halfBeam, double floor,
+    BroadcastProfile(int id, int reach, int energyPerTick, double halfBeam, double offAxis, double below,
             double reference, int highPassHz, int lowPassHz) {
         this.id = id;
         this.reach = reach;
         this.energyPerTick = energyPerTick;
         this.halfBeam = halfBeam;
-        this.floor = floor;
+        this.offAxis = offAxis;
+        this.below = below;
         this.reference = reference;
         this.highPassHz = highPassHz;
         this.lowPassHz = lowPassHz;
@@ -53,6 +56,9 @@ public enum BroadcastProfile {
 
     public double gain(Vec3 displacement) {
         if (!outdoor()) return 1;
+        double distance = displacement.length();
+        if (distance >= reach) return 0;
+        if (distance < 1e-6) return 1;
         double horizontal = displacement.horizontalDistance();
         // Four cabinet faces overlap at the edges of their horizontal coverage.
         double azimuth = horizontal < 1e-6 ? 1
@@ -60,9 +66,11 @@ public enum BroadcastProfile {
         double elevation = Math.toDegrees(Math.atan2(displacement.y, horizontal));
         double beamOffset = (elevation + 4) / halfBeam;
         double beam = Math.exp(-.34657 * beamOffset * beamOffset);
-        // Sound below the array includes cabinet spill and ground reflection even outside its main beam.
-        double vertical = floor + (1 - floor) * beam;
-        double distance = displacement.length() / reference;
-        return azimuth * vertical / Math.sqrt(1 + distance * distance);
+        // Downward spill is diffuse, so it has no horizontal null directly below the pole.
+        double downward = Math.max(0, -displacement.y / distance);
+        double spill = offAxis + (below - offAxis) * downward * downward;
+        double edge = Math.min(1, (reach - distance) / (reach * EDGE_FADE));
+        double fade = edge * edge * (3 - 2 * edge);
+        return (spill + (1 - spill) * azimuth * beam) * reference / Math.hypot(reference, distance) * fade;
     }
 }

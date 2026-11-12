@@ -1,18 +1,26 @@
 {
   "block.note_block.trumpet": {
-    "sounds": ["create_media_systems:note/trumpet"],
+    "sounds": [
+      "create_media_systems:note/trumpet"
+    ],
     "subtitle": "subtitles.block.note_block.note"
   },
   "block.note_block.trumpet_exposed": {
-    "sounds": ["create_media_systems:note/trumpet_exposed"],
+    "sounds": [
+      "create_media_systems:note/trumpet_exposed"
+    ],
     "subtitle": "subtitles.block.note_block.note"
   },
   "block.note_block.trumpet_weathered": {
-    "sounds": ["create_media_systems:note/trumpet_weathered"],
+    "sounds": [
+      "create_media_systems:note/trumpet_weathered"
+    ],
     "subtitle": "subtitles.block.note_block.note"
   },
   "block.note_block.trumpet_oxidized": {
-    "sounds": ["create_media_systems:note/trumpet_oxidized"],
+    "sounds": [
+      "create_media_systems:note/trumpet_oxidized"
+    ],
     "subtitle": "subtitles.block.note_block.note"
   },
   "stream": {
@@ -24,7 +32,8 @@
       }
     ]
   },
-  "keyboard_synth": {
+  "midi_keyboard": {
+    "subtitle": "subtitles.create_media_systems.midi_keyboard",
     "sounds": [
       {
         "name": "minecraft:music_disc.13",
@@ -105,6 +114,15 @@
       {
         "name": "create_media_systems:drive_seek",
         "attenuation_distance": 10
+      }
+    ]
+  },
+  "keyboard_synth": {
+    "sounds": [
+      {
+        "name": "minecraft:music_disc.13",
+        "type": "event",
+        "stream": true
       }
     ]
   }

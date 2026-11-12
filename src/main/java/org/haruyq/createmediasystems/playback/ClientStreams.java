@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.broadcast.BroadcastOcclusion;
 import org.haruyq.createmediasystems.broadcast.BroadcastProfile;
 import org.haruyq.createmediasystems.broadcast.client.BroadcastAudioStream;
 import org.haruyq.createmediasystems.client.ClientConfig;
@@ -33,8 +34,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -185,7 +184,9 @@ public final class ClientStreams {
                 present = true;
                 nearby |= inRange(pos, sound.origin());
                 Vec3 ear = toBlockSpace(pos, camera);
-                mix.add(world, range(pos).gain(pos, sound.origin(), ear) * sound.directivity(ear));
+                EmitterRange range = range(pos);
+                double volume = profile.outdoor() ? range.volume() : range.gain(pos, sound.origin(), ear);
+                mix.add(world, volume * sound.directivity(ear));
             }
             gain = mix.gain();
             Vec3 heard = mix.at();
@@ -202,12 +203,10 @@ public final class ClientStreams {
             if (mc.level != null && mc.player != null && (lastTrace == Long.MIN_VALUE
                     || mc.level.getGameTime() - lastTrace >= 5)) {
                 lastTrace = mc.level.getGameTime();
-                Vec3 end = camera.add(from.subtract(camera).normalize().scale(Math.clamp(distance - .9, 0, 96)));
-                blocked = mc.level.clip(new ClipContext(camera, end, ClipContext.Block.COLLIDER,
-                        ClipContext.Fluid.NONE, mc.player)).getType() != HitResult.Type.MISS;
+                blocked = BroadcastOcclusion.obstructed(mc.player, camera, from);
             }
             path = new BroadcastAudioStream.Path(distance, blocked);
-            if (blocked) gain *= .58;
+            gain *= path.transmission();
         }
 
         /**
@@ -441,7 +440,7 @@ public final class ClientStreams {
                 payload.load());
         payload.video().ifPresent(video -> video.next().ifPresent(next -> MediaSources.fetchAhead(next, video)));
         var heard = new StreamSpec.Emitter(() -> fresh.at, () -> fresh.tracedFrom, () -> fresh.present,
-                () -> fresh.nearby, () -> fresh.gain, null);
+                () -> fresh.nearby, () -> fresh.gain, null, !side.profile().outdoor());
         StreamSpec spec = new StreamSpec(payload.url(), payload.startSeconds(), side.channel(),
                 SoundSource.RECORDS, heard,
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
