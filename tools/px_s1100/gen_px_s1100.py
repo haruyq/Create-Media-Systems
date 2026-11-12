@@ -288,16 +288,11 @@ def build_keys():
 def key_elements(frame, k):
     if k["black"]:
         cx = k["cx"]
+        side = ksw("b_side")
         return [
-            box(frame, cx - BLACK_W / 2, cx + BLACK_W / 2, BLACK_Y0, BLACK_Y1 - 8.0, BLACK_Z0, KEY_Z1,
-                {"front": ksw("b_front"), "left": ksw("b_side"), "right": ksw("b_side"), "top": ksw("b_side")}),
-            box(frame, cx - BLACK_W / 2, cx + BLACK_W / 2, BLACK_Y1 - 8.0, BLACK_Y1 - 3.5, BLACK_Z0 + 3.5, KEY_Z1,
-                {"front": ksw("b_front"), "left": ksw("b_side"), "right": ksw("b_side")}),
-            box(frame, cx - BLACK_W / 2 + 1.0, cx + BLACK_W / 2 - 1.0, BLACK_Y1 - 3.5, BLACK_Y1,
-                BLACK_Z0 + 7.0, KEY_Z1,
-                {"front": ksw("b_front"), "left": ksw("b_side"), "right": ksw("b_side"), "top": ksw("b_top")}),
-            box(frame, cx - BLACK_W / 2, cx + BLACK_W / 2, BLACK_Y1 - 3.5, BLACK_Y1 - 3.4, BLACK_Z0 + 3.5, KEY_Z1,
-                {"top": ksw("b_side")}),
+            box(frame, cx - BLACK_W / 2, cx + BLACK_W / 2, BLACK_Y0, BLACK_Y1, BLACK_Z0, KEY_Z1,
+                {"front": ksw("b_front"), "back": side, "left": side, "right": side,
+                 "top": ksw("b_top"), "bottom": side}),
         ]
     side = ksw("w_side")
     return [
