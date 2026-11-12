@@ -157,9 +157,28 @@ class DiscStreamTest {
 
     @Test
     void refusesScrambledPesPackets() {
-        assertTrue(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0xb0}));
-        assertFalse(DiscSource.scrambled(new byte[]{0, 0, 1, (byte) 0xe0, 0, 0, (byte) 0x80}));
+        assertTrue(DiscSource.scrambled(pack(0, 0xe0, 0xb0)));
+        assertTrue(DiscSource.scrambled(pack(18, 0xbd, 0x90)), "after a system header");
+        assertFalse(DiscSource.scrambled(pack(0, 0xe0, 0x80)));
         assertFalse(DiscSource.scrambled(new byte[]{0, 0, 1}));
+        byte[] sound = pack(0, 0xbd, 0x80);
+        System.arraycopy(new byte[]{0, 0, 1, (byte) 0xe3, 0, 0, (byte) 0xb0}, 0, sound, 115, 7);
+        assertFalse(DiscSource.scrambled(sound), "the same bytes inside a packet, as AC-3 sound has them");
+    }
+
+    /** A DVD pack: its header, a system header of this many bytes if any, and a packet's header with these flags. */
+    private static byte[] pack(int system, int id, int flags) {
+        byte[] pack = new byte[2 * 2048];
+        int at = 2048;
+        System.arraycopy(new byte[]{0, 0, 1, (byte) 0xba, 0x44}, 0, pack, at, 5);
+        pack[at + 13] = (byte) 0xf8;
+        at += 14;
+        if (system > 0) {
+            System.arraycopy(new byte[]{0, 0, 1, (byte) 0xbb, 0, (byte) (system - 6)}, 0, pack, at, 6);
+            at += system;
+        }
+        System.arraycopy(new byte[]{0, 0, 1, (byte) id, 0, 0, (byte) flags}, 0, pack, at, 7);
+        return pack;
     }
 
     @Test

@@ -219,16 +219,26 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         }
     }
 
+    /**
+     * Whether a VOB's packs (2048 bytes each) say that they are scrambled. Only the packet that follows a pack's header
+     * is asked: the same bytes come up by chance inside a packet, in AC-3 sound for one.
+     */
     static boolean scrambled(byte[] bytes) {
-        for (int i = 0; i + 6 < bytes.length; i++) {
-            int id = bytes[i + 3] & 255;
-            if (bytes[i] == 0 && bytes[i + 1] == 0 && bytes[i + 2] == 1
-                    && (id == 0xbd || id >= 0xc0 && id <= 0xef) && (bytes[i + 6] & 0xc0) == 0x80
-                    && (bytes[i + 6] & 0x30) != 0) {
+        for (int pack = 0; pack + 2048 <= bytes.length; pack += 2048) {
+            if (code(bytes, pack) != 0xba) continue;
+            int at = pack + 14 + (bytes[pack + 13] & 7);
+            if (code(bytes, at) == 0xbb) at += 6 + ((bytes[at + 4] & 255) << 8 | bytes[at + 5] & 255);
+            int id = code(bytes, at);
+            if ((id == 0xbd || id >= 0xc0 && id <= 0xef) && (bytes[at + 6] & 0xc0) == 0x80 && (bytes[at + 6] & 0x30) != 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** The start code at an offset (00 00 01 and this), or -1 where there is none or no room for a packet's header. */
+    private static int code(byte[] bytes, int at) {
+        return at + 6 < bytes.length && bytes[at] == 0 && bytes[at + 1] == 0 && bytes[at + 2] == 1 ? bytes[at + 3] & 255 : -1;
     }
 
     List<String> input() {
