@@ -21,6 +21,7 @@ public final class BroadcastClient {
     private BroadcastClient() {}
 
     public static void register(IEventBus bus) {
+        MovingBroadcastAudio.register();
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(BroadcastFeature.TOWER_ENTITY.get(), context -> new TowerRenderer()));
         bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {

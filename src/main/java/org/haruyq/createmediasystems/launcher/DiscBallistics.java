@@ -6,10 +6,14 @@ import java.util.function.Predicate;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.haruyq.createmediasystems.ContraptionSurface;
+import org.haruyq.createmediasystems.SableCompat;
+import org.jetbrains.annotations.Nullable;
 
 /** A swept segment with the actual contact coordinate; vanilla's throwable helper loses that coordinate. */
 public final class DiscBallistics {
@@ -30,7 +34,19 @@ public final class DiscBallistics {
     }
 
     public static HitResult trace(Entity disc,Vec3 start,Vec3 end,Predicate<Entity> canHit) {
+        return trace(disc, start, end, canHit, ContraptionSurface.nearest(disc, start, end));
+    }
+
+    static HitResult trace(Entity disc, Vec3 start, Vec3 end, Predicate<Entity> canHit, @Nullable ContraptionSurface.Hit moving) {
         HitResult closest=disc.level().clip(new ClipContext(start,end,ClipContext.Block.COLLIDER,ClipContext.Fluid.NONE,disc));
+        if (closest instanceof BlockHitResult block && block.getType() == HitResult.Type.BLOCK
+                && SableCompat.containing(disc.level(), block.getBlockPos()) != null) {
+            var at = SableCompat.hitInWorld(disc.level(), block);
+            closest = new BlockHitResult(at, block.getDirection(), block.getBlockPos(), block.isInside());
+        }
+        if (moving != null && start.distanceToSqr(moving.location()) < start.distanceToSqr(closest.getLocation())) {
+            closest = new MovingHit(moving);
+        }
         Vec3 limit=closest.getLocation();double distance=start.distanceToSqr(limit);
         for(Entity target:disc.level().getEntities(disc,disc.getBoundingBox().expandTowards(end.subtract(start)).inflate(1),canHit)) {
             for (var zone : hitBoxes(target)) {
@@ -47,5 +63,14 @@ public final class DiscBallistics {
             }
         }
         return closest;
+    }
+
+    static final class MovingHit extends BlockHitResult {
+        final ContraptionSurface.Hit surface;
+
+        MovingHit(ContraptionSurface.Hit surface) {
+            super(surface.location(), surface.local().getDirection(), surface.local().getBlockPos(), surface.local().isInside());
+            this.surface = surface;
+        }
     }
 }

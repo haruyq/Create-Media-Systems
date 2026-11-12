@@ -550,12 +550,30 @@ public final class Streams {
      */
     public static void relay(ServerLevel level, Object emitter, StreamPackets.Target target, MediaSource.Keyed source,
                              Collection<ServerPlayer> audience, BiFunction<Source, Long, CustomPacketPayload> play) {
-        Source playing = update(level, emitter, new Relay(target, null, source));
+        relay(level, emitter, new Relay(target, null, source), audience, play);
+    }
+
+    /** A moving broadcaster uses a stable network target even though its pose changes. */
+    public static void relayMoving(ServerLevel level, Object emitter, StreamPackets.Target.Mobile target,
+            BlockPos source, Channel channel, BroadcastProfile profile, Collection<ServerPlayer> audience,
+            BiFunction<Source, Long, CustomPacketPayload> play) {
+        relay(level, emitter, new Relay(target, new Sound(Vec3.ZERO, Optional.empty(), channel, source, profile), null),
+                audience, play);
+    }
+
+    private static void relay(ServerLevel level, Object emitter, Relay requested, Collection<ServerPlayer> audience,
+            BiFunction<Source, Long, CustomPacketPayload> play) {
+        Source playing = update(level, emitter, requested);
         if (playing == null) {
             return;
         }
         Relay relay = RELAYS.get(emitter);
-        relay.listeners.removeIf(player -> player.isRemoved() || !audience.contains(player));
+        relay.listeners.removeIf(player -> {
+            if (player.isRemoved()) return true;
+            if (audience.contains(player)) return false;
+            send(player, requested.target.stop());
+            return true;
+        });
         Load load = relay.load(level);
         for (ServerPlayer player : audience) {
             if (relay.listeners.add(player)) {

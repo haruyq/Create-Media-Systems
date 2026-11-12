@@ -15,6 +15,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import org.haruyq.createmediasystems.SableCompat;
 
 final class DiscAimAssist {
     private static final double ACQUIRE_ANGLE = Math.toRadians(6);
@@ -43,7 +44,7 @@ final class DiscAimAssist {
     static Solution select(Player shooter, @Nullable Focus locked, int inputDelay) {
         boolean submerged = shooter.isEyeInFluid(FluidTags.WATER);
         // The disc travels in a straight line and uses vanilla throwable drag at each step.
-        Aim aim = new Aim(shooter, shooter.getEyePosition(), shooter.getLookAngle(),
+        Aim aim = new Aim(shooter, SableCompat.eye(shooter, 1), shooter.getLookAngle(),
                 submerged ? 24 : 64, submerged ? .8f : .99f, inputDelay,
                 entity -> entity.canBeHitByProjectile() && !shooter.isPassengerOfSameVehicle(entity));
         if (locked != null && eligible(shooter, parent(locked.part)) && aim.canHit.test(locked.part)) {

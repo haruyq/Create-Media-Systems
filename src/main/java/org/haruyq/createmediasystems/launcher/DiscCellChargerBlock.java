@@ -1,11 +1,13 @@
 package org.haruyq.createmediasystems.launcher;
 
 import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.power.BatteryItem;
 import org.haruyq.createmediasystems.SableCompat;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -40,10 +42,18 @@ public final class DiscCellChargerBlock extends KineticBlock implements IBE<Disc
     @Override protected ItemInteractionResult useItemOn(ItemStack held, BlockState state, Level level, BlockPos pos,
             Player player, InteractionHand hand, BlockHitResult hit) {
         if (!(held.getItem() instanceof ChargeableItem)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-        if (!level.isClientSide && level.getBlockEntity(pos) instanceof DiscCellCharger charger && charger.cell().isEmpty()) {
-            charger.insert(held.split(1));
+        if (!level.isClientSide && level.getBlockEntity(pos) instanceof DiscCellCharger charger) {
+            if (player.isShiftKeyDown() && BatteryItem.fits(held)) {
+                charger.supplyReserve(player, held);
+            } else if (charger.cell().isEmpty()) {
+                charger.insert(held.split(1));
+            }
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    static void showReserve(Player player, int energy) {
+        player.displayClientMessage(Component.translatable("equipment.reserve", energy, DiscCellCharger.RESERVE_CAPACITY), true);
     }
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof DiscCellCharger charger)
@@ -51,7 +61,7 @@ public final class DiscCellChargerBlock extends KineticBlock implements IBE<Disc
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
     @Override public void onRemove(BlockState state, Level level, BlockPos pos, BlockState next, boolean moved) {
-        if (!level.isClientSide && !state.is(next.getBlock()) && level.getBlockEntity(pos) instanceof DiscCellCharger charger) {
+        if (!moved && !level.isClientSide && !state.is(next.getBlock()) && level.getBlockEntity(pos) instanceof DiscCellCharger charger) {
             ItemStack cell = charger.take();
             if (!cell.isEmpty()) Containers.dropItemStack(level, pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5, cell);
         }

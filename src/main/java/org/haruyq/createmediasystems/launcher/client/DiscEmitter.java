@@ -65,7 +65,7 @@ record DiscEmitter(DiscProjectile disc) implements MusicEmitter {
             Entity target = disc.attachmentTarget();
             return target == null ? Vec3.ZERO : DopplerMath.step(target);
         }
-        return disc.embedded() ? null : disc.getDeltaMovement();
+        return disc.embedded() ? DopplerMath.step(disc) : disc.getDeltaMovement();
     }
 
     @Override

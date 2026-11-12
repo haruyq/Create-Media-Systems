@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.megaphone.client;
 
 import org.haruyq.createmediasystems.client.WorldEvents;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
 import java.util.*;
 import java.util.function.UnaryOperator;
@@ -37,12 +38,12 @@ public final class MegaphoneClient {
         @Override public String url(){return PortablePlaylist.url(media(),MegaphoneData.track(item()));}
         @Override public boolean present(){return !player.isRemoved() && WorldEvents.isClientWorld(player.level())
                 && item().getItem() instanceof MegaphoneItem && MegaphoneData.id(item()).filter(id::equals).isPresent() && MegaphoneData.playing(item());}
-        @Override public Vec3 position(){return player.getEyePosition().add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
+        @Override public Vec3 position(){return SableCompat.eye(player,1).add(player.getLookAngle().scale(.46)).add(0,-.16,0);}
         @Override public Vec3 velocity(){return DopplerMath.step(player);}
         @Override public double seconds(){return MegaphoneData.seconds(item(),player.level());}
         @Override public double range(){return MegaphoneAcoustics.RANGE;}
         @Override public double gain(Entity ear){
-            Vec3 offset=ear.getEyePosition().subtract(position());double beam=ear==player?.4:MegaphoneAcoustics.direction(player.getLookAngle(),offset);
+            Vec3 offset=SableCompat.eye(ear,1).subtract(position());double beam=ear==player?.4:MegaphoneAcoustics.direction(player.getLookAngle(),offset);
             return MegaphoneAcoustics.gain(offset.length(),MegaphoneData.volume(item()),beam);}
         @Override public List<UnaryOperator<AudioStream>> decorators(){
             return List.of(pcm->new MegaphoneAudioStream(pcm,()->MegaphoneData.drive(item()),()->MegaphoneData.volume(item())));}

@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.hifi;
 
+import org.haruyq.createmediasystems.stream.MediaSource;
+
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -197,7 +199,7 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
      */
     static final int WARM_UP = 20;
 
-    public static class Entity extends BlockEntity implements VideoSource, Remotable, IHaveGoggleInformation {
+    public static class Entity extends BlockEntity implements VideoSource, Remotable, IHaveGoggleInformation, MediaSource.Captured {
         /** Bottom first. */
         private final List<Unit> units = new ArrayList<>();
         /** The cables plugged in (see Cable#bit). */
@@ -484,6 +486,16 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
                     changed();
                 }
             }
+        }
+
+        @Override
+        public void tickCaptured(long now) {
+            if (amplifier.warming > 0) amplifier.warming--;
+            for (UnitPart.Source source : sources()) {
+                for (PlaybackClock clock : source.clocks()) clock.tick(now);
+                source.tick(now);
+            }
+            begun = audible();
         }
 
         /** {@code player} worked {@code control}; {@code value} is what a knob was turned to. */

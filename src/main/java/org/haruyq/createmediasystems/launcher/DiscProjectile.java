@@ -1,5 +1,9 @@
 package org.haruyq.createmediasystems.launcher;
 
+import org.haruyq.createmediasystems.ContraptionSurface;
+import org.haruyq.createmediasystems.SableCompat;
+import net.neoforged.neoforge.event.EventHooks;
+
 import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.stream.MediaItem;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
@@ -68,6 +72,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     private LivingEntity attachedTarget;
     private int attachmentDeaths=-1;
     private BlockPos blockAnchor;
+    private DiscSurfaceAnchor movingSurface;
 
     public DiscProjectile(EntityType<? extends DiscProjectile> type, Level level) {
         super(type, level);
@@ -91,7 +96,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         Level level = shooter.level();
         DiscPlayback playback = DiscPlayback.prepare(level, disc).at(startSeconds * 20L);
         DiscProjectile projectile = new DiscProjectile(level, shooter, disc, playback);
-        projectile.setPos(shooter.getEyePosition());
+        projectile.setPos(SableCompat.eye(shooter, 1));
         projectile.shoot(direction.x, direction.y, direction.z, LAUNCH_SPEED, aimed ? 0f : .15f);
         return projectile;
     }
@@ -217,7 +222,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     void tickLoaded(boolean checkPlayback) {
         if (attached()) {
             if (tickPlayback()) followAttachment();
-        } else if (checkPlayback) {
+        } else if (checkPlayback || movingSurface != null) {
             tickPlayback();
         } else if (blockAttachmentExpired()) {
             discard();
@@ -248,6 +253,15 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
             baseTick();
             if(attached())followAttachment();else setDeltaMovement(Vec3.ZERO);
         } else {
+            if (!level().isClientSide) {
+                Vec3 start = position(), end = start.add(getDeltaMovement());
+                var moving = ContraptionSurface.nearest(this, start, end);
+                if (moving != null && DiscBallistics.trace(this, start, end, this::canHitEntity, moving)
+                        instanceof DiscBallistics.MovingHit hit && !EventHooks.onProjectileImpact(this, hit)) {
+                    hitTargetOrDeflectSelf(hit);
+                    if (embedded() || isRemoved()) return;
+                }
+            }
             super.tick();
         }
     }
@@ -338,13 +352,19 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
 
     @Override
     protected void onHit(HitResult hit) {
-        if (!level().isClientSide && !embedded()) {
+        if (!level().isClientSide && !embedded() && !(hit instanceof DiscBallistics.MovingHit)) {
             hit=DiscBallistics.trace(this,position(),position().add(getDeltaMovement()),this::canHitEntity);
             if(hit.getType()==HitResult.Type.MISS)return;
+        }
+        if (hit instanceof DiscBallistics.MovingHit moving) {
+            movingSurface = DiscSurfaceAnchor.onContraption(moving.surface);
+            embed(hit);
+            return;
         }
         super.onHit(hit);
         if (!level().isClientSide && hit.getType() == HitResult.Type.BLOCK && !embedded()) {
             blockAnchor = ((BlockHitResult)hit).getBlockPos().immutable();
+            movingSurface = DiscSurfaceAnchor.onShip(level(), blockAnchor, hit.getLocation());
             embed(hit);
         }
     }
@@ -356,6 +376,12 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
     }
 
     private boolean hasBlockSupport() {
+        if (movingSurface != null && level() instanceof ServerLevel server) {
+            Vec3 at = movingSurface.position(server);
+            if (at == null) return false;
+            setPos(at);
+            return true;
+        }
         AABB contact = new AABB(position(),position()).inflate(.0625);
         if (blockAnchor != null)
             return !level().hasChunkAt(blockAnchor) || supportedBy(blockAnchor,contact);
@@ -385,6 +411,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
         tag.putDouble("CmsDiscDuration", length);
         tag.putInt("CmsDiscCellTier", cellTier().level);
         if (blockAnchor != null) tag.putLong("CmsDiscBlockAnchor",blockAnchor.asLong());
+        if (movingSurface != null) tag.put("CmsDiscMovingSurface", movingSurface.save());
         attachmentTargetUUID().ifPresent(id->tag.putUUID("CmsDiscAttachedTo",id));
         anchor().save(tag);tag.putInt("CmsDiscAttachmentDeaths",attachmentDeaths);
         writeVector(tag,"CmsDiscAttachPoint",entityData.get(ATTACH_POINT));writeVector(tag,"CmsDiscAttachForward",entityData.get(ATTACH_FORWARD));
@@ -400,6 +427,7 @@ public final class DiscProjectile extends ThrowableItemProjectile implements Por
                 : entityData.get(MUSIC_START_TICK);
         length = tag.contains("CmsDiscDuration") ? tag.getDouble("CmsDiscDuration") : -1;
         blockAnchor = tag.contains("CmsDiscBlockAnchor") ? BlockPos.of(tag.getLong("CmsDiscBlockAnchor")) : null;
+        movingSurface = DiscSurfaceAnchor.read(tag.getCompound("CmsDiscMovingSurface"));
         setCellTier(DiscCellTier.at(tag.contains("CmsDiscCellTier") ? tag.getInt("CmsDiscCellTier") : 1));
         entityData.set(ATTACHED_TO,tag.hasUUID("CmsDiscAttachedTo")?Optional.of(tag.getUUID("CmsDiscAttachedTo")):Optional.empty());
         entityData.set(ATTACHED_ID,-1);attachedTarget=null;
