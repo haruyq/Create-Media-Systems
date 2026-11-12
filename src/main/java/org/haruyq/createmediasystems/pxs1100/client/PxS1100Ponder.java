@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.pxs1100.client;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -14,12 +13,14 @@ import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
 import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.createmod.ponder.foundation.PonderScene;
+import net.createmod.ponder.foundation.instruction.TickingInstruction;
 import net.createmod.ponder.foundation.ui.PonderUI;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
@@ -45,9 +46,7 @@ import static org.haruyq.createmediasystems.client.PonderScenes.say;
 final class PxS1100Ponder {
     private static final KeyboardLayout MODEL = KeyboardLayout.PX;
     private static final Map<PonderScene, Demo> DEMOS = new WeakHashMap<>();
-    private static final int[][] CHORDS = {{48, 55, 64}, {45, 52, 60}, {43, 50, 62}, {48, 55, 64}};
-    private static final int[][] MELODY = {{67, 72, 76, 74}, {69, 72, 77, 76}, {67, 71, 74, 71}, {67, 69, 72, 76}};
-    private static final int[] ACCENTS = {96, 75, 89, 78};
+    private static final float WIDE = 1.23f, CLOSE = 1.57f;
 
     private static PonderScene active;
     private static KeyboardAudio audio;
@@ -68,8 +67,12 @@ final class PxS1100Ponder {
     private static void studio(SceneBuilder builder, SceneBuildingUtil util) {
         var demo = new Demo();
         DEMOS.put(builder.getScene(), demo);
-        builder.addInstruction(ignored -> demo.reset());
+        builder.addInstruction(ponder -> {
+            demo.reset();
+            ponder.builder().scaleSceneView(WIDE);
+        });
         var scene = plate(builder, "px_s1100", "Performing with the Hayacio PX-S1100WE");
+        scene.scaleSceneView(WIDE);
         var root = util.grid().at(2, 1, 2);
         var state = PxS1100Feature.BLOCK.get().defaultBlockState();
         var bass = KeyboardBlock.bass(root, state);
@@ -80,19 +83,23 @@ final class PxS1100Ponder {
         var lineLeft = KeyboardBlock.point(root, state, MODEL.lineLeft);
         var lineRight = KeyboardBlock.point(root, state, MODEL.lineRight);
 
-        scene.world().setBlocks(util.select().fromTo(0, 0, 1, 4, 0, 3), Blocks.DARK_OAK_PLANKS.defaultBlockState(), false);
+        scene.world().setBlocks(util.select().fromTo(0, 0, 0, 4, 0, 4), Blocks.POLISHED_DEEPSLATE.defaultBlockState(), false);
+        scene.world().setBlocks(util.select().fromTo(1, 0, 1, 4, 0, 3), Blocks.DARK_OAK_PLANKS.defaultBlockState(), false);
+        var rug = util.select().fromTo(2, 1, 1, 3, 1, 1);
+        scene.world().setBlocks(rug, Blocks.RED_CARPET.defaultBlockState(), false);
+        scene.world().showSection(rug, Direction.DOWN);
         scene.world().setBlock(root, state, false);
         scene.world().setBlock(bass, state.setValue(KeyboardBlock.PART, KeyboardBlock.Part.BASS), false);
         scene.world().showSection(util.select().fromTo(root, bass), Direction.DOWN);
         scene.special().movePointOfInterest(keys);
         scene.idle(16);
 
-        scene.rotateCameraY(135);
+        scene.rotateCameraY(180);
         scene.idle(24);
         scene.overlay().showControls(dcIn, Pointing.DOWN, 55).rightClick().withItem(new ItemStack(PowerFeature.BATTERY.get()));
         say(scene, 80, dcIn, "Feed Forge Energy into the rear of the bass side, or use a charged battery.");
         say(scene, 75, usb, PonderPalette.BLUE, "Connect a MIDI keyboard to your computer. Select the device in Settings.");
-        scene.rotateCameraY(-135);
+        scene.rotateCameraY(-180);
         scene.idle(20);
 
         scene.overlay().showControls(power, Pointing.DOWN, 28).rightClick();
@@ -105,9 +112,9 @@ final class PxS1100Ponder {
         scene.effects().indicateSuccess(root);
         scene.overlay().showControls(keys, Pointing.DOWN, 28).rightClick();
         say(scene, 70, keys, "Right-click to play with the mouse, computer keyboard, or MIDI. Space works the damper.");
-        phrase(scene, demo, 2, List.of(
-                KeyboardBlock.point(root, state, MODEL.speakers.get(0)),
-                KeyboardBlock.point(root, state, MODEL.speakers.get(1))));
+        scene.addInstruction(ignored -> demo.apply(List.of(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 103))));
+        scene.idle(10);
+        scene.addInstruction(ignored -> demo.apply(List.of(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 0))));
 
         var left = util.grid().at(4, 1, 3);
         var right = util.grid().at(1, 1, 3);
@@ -123,18 +130,16 @@ final class PxS1100Ponder {
         say(scene, 80, lineLeft, "Pick the piano with the Jukebox Range Quill, then right-click each Speaker to link it.");
         connect(scene, util, root, left, lineLeft, Channel.LEFT, PonderPalette.GREEN, quill, "Left");
         connect(scene, util, root, right, lineRight, Channel.RIGHT, PonderPalette.BLUE, quill, "Right");
-        scene.addInstruction(ignored -> {
-            demo.external = true;
-            demo.settings.main = new KeyboardSettings.Tone(0, 4);
-            demo.settings.chorus = 22;
-            demo.apply(List.of());
-        });
+        scene.addInstruction(ignored -> demo.external = true);
         say(scene, 85, keys, PonderPalette.GREEN, "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.");
         scene.rotateCameraY(-22);
-        scene.idle(8);
-        phrase(scene, demo, CHORDS.length, List.of(SpeakerBlock.mouth(left, Direction.NORTH),
+        zoom(scene, WIDE, CLOSE, 22);
+        scene.overlay().showText(75).attachKeyFrame().pointAt(keys).placeNearTarget()
+                .text("U.N. Owen Was Her? (MIDI © chishige 2016)");
+        playScore(scene, demo, PonderScore.load(), List.of(SpeakerBlock.mouth(left, Direction.NORTH),
                 SpeakerBlock.mouth(right, Direction.NORTH)));
-        scene.idle(12);
+        zoom(scene, CLOSE, WIDE, 18);
+        scene.idle(18);
         scene.addInstruction(ignored -> demo.view.putBoolean("Powered", false));
         scene.markAsFinished();
     }
@@ -152,31 +157,28 @@ final class PxS1100Ponder {
         scene.idle(26);
     }
 
-    private static void phrase(CreateSceneBuilder scene, Demo demo, int bars, List<Vec3> mouths) {
-        for (int bar = 0; bar < bars; bar++) {
-            for (int beat = 0; beat < ACCENTS.length; beat++) {
-                var down = new ArrayList<KeyboardMidi>();
-                if (beat == 0) {
-                    down.add(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 103));
-                    for (int note : CHORDS[bar]) down.add(KeyboardMidi.note(note, 67));
-                }
-                int melody = MELODY[bar][beat];
-                down.add(KeyboardMidi.note(melody, ACCENTS[beat]));
-                scene.addInstruction(ignored -> demo.apply(down));
-                if (beat % 2 == 0) {
-                    for (var mouth : mouths) notes(scene, mouth.add(0, .11, 0), 4);
-                }
-                scene.idle(7);
-                var up = new ArrayList<KeyboardMidi>();
-                up.add(KeyboardMidi.note(melody, 0));
-                if (beat == ACCENTS.length - 1) {
-                    for (int note : CHORDS[bar]) up.add(KeyboardMidi.note(note, 0));
-                    up.add(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 0));
-                }
-                scene.addInstruction(ignored -> demo.apply(up));
-                scene.idle(3);
+    private static void zoom(CreateSceneBuilder scene, float from, float to, int ticks) {
+        scene.addInstruction(new TickingInstruction(false, ticks) {
+            @Override public void tick(PonderScene ponder) {
+                super.tick(ponder);
+                float progress = 1 - remainingTicks / (float) totalTicks;
+                ponder.builder().scaleSceneView(Mth.lerp(progress * progress * (3 - 2 * progress), from, to));
+            }
+        });
+    }
+
+    private static void playScore(CreateSceneBuilder scene, Demo demo, PonderScore score, List<Vec3> mouths) {
+        int time = 0, lastPulse = -20;
+        for (var cue : score.cues()) {
+            if (time < cue.tick()) scene.idle(cue.tick() - time);
+            time = cue.tick();
+            scene.addInstruction(ignored -> demo.apply(cue.events()));
+            if (time - lastPulse >= 8 && cue.events().stream().anyMatch(event -> event.command() == KeyboardMidi.ON && event.value() > 0)) {
+                for (var mouth : mouths) notes(scene, mouth.add(0, .11, 0), 2);
+                lastPulse = time;
             }
         }
+        if (time < score.duration()) scene.idle(score.duration() - time);
     }
 
     static void tick(Minecraft mc) {
@@ -229,6 +231,8 @@ final class PxS1100Ponder {
         int revision;
         boolean external;
 
+        Demo() { reset(); }
+
         void reset() {
             view.putBoolean("Powered", false);
             view.putInt("Energy", 100_000);
@@ -242,7 +246,12 @@ final class PxS1100Ponder {
         }
 
         void apply(List<KeyboardMidi> events) {
-            events.forEach(keys::apply);
+            for (var event : events) {
+                keys.apply(event);
+                if (event.command() == KeyboardMidi.CONTROL && event.key() == 7 && event.channel() == 0) {
+                    settings.volume = event.value();
+                }
+            }
             this.events = events;
             revision++;
         }
