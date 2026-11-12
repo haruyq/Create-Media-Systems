@@ -1,5 +1,13 @@
 {
   "block.create_media_systems.px_s1100": "Hayacio PX-S1100WE MIDIキーボード",
+  "create_media_systems.ponder.px_s1100.header": "Hayacio PX-S1100WEで演奏する",
+  "create_media_systems.ponder.px_s1100.text_1": "低音側の背面からFEを供給するか、充電済みのバッテリーを使います。",
+  "create_media_systems.ponder.px_s1100.text_2": "MIDIキーボードをPCにつなぎ、演奏画面の「設定」で入力機器を選びます。",
+  "create_media_systems.ponder.px_s1100.text_3": "右クリックで演奏画面を開きます。マウス、PCのキー、MIDIで演奏でき、Spaceでダンパーがかかります。",
+  "create_media_systems.ponder.px_s1100.text_4": "ジュークボックス範囲の羽ペンでピアノを選び、各スピーカーを右クリックして接続します。",
+  "create_media_systems.ponder.px_s1100.text_5": "左",
+  "create_media_systems.ponder.px_s1100.text_6": "右",
+  "create_media_systems.ponder.px_s1100.text_7": "左右に振り分けるとステレオになります。1台ならミックスを選びます。接続中はスピーカーから音が出ます。",
   "keyboard.play": "演奏",
   "keyboard.tones": "音色",
   "keyboard.settings": "設定",

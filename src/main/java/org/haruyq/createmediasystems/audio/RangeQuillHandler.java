@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Quill;
+import org.haruyq.createmediasystems.pxs1100.KeyboardBlock;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.MediaSource;
 
@@ -171,19 +172,7 @@ public final class RangeQuillHandler {
             PacketDistributor.sendToServer(new RangeQuill.QueryBlockSettings(hoveredBlock));
             return true;
         }
-        if (firstPos == null && hovered != null && player.level().getBlockEntity(hoveredBlock) instanceof MediaSource) {
-            if (!hoveredBlock.equals(source)) {
-                source = hoveredBlock;
-                current = null;
-                PacketDistributor.sendToServer(new RangeQuill.QueryBlockSettings(source));
-                Quill.status("create_media_systems.range.linked", source.getX(), source.getY(), source.getZ());
-            } else if (hovered.is(Blocks.JUKEBOX)) {
-                Minecraft.getInstance().setScreen(RangeQuillScreen.forJukebox());
-            } else {
-                Quill.status("create_media_systems.range.reader_has_no_range");
-            }
-            return true;
-        }
+        if (firstPos == null && hovered != null && pickSource(player, hovered)) return true;
         if (selectedPos == null) {
             Quill.status("create_media_systems.range.no_target");
             return true;
@@ -195,6 +184,22 @@ public final class RangeQuillHandler {
         }
         firstPos = selectedPos;
         Quill.status("create_media_systems.range.first_pos");
+        return true;
+    }
+
+    private static boolean pickSource(LocalPlayer player, BlockState hovered) {
+        BlockPos picked = hovered.getBlock() instanceof KeyboardBlock ? KeyboardBlock.root(hoveredBlock, hovered) : hoveredBlock;
+        if (!(player.level().getBlockEntity(picked) instanceof MediaSource)) return false;
+        if (!picked.equals(source)) {
+            source = picked;
+            current = null;
+            PacketDistributor.sendToServer(new RangeQuill.QueryBlockSettings(source));
+            Quill.status("create_media_systems.range.linked", source.getX(), source.getY(), source.getZ());
+        } else if (hovered.is(Blocks.JUKEBOX)) {
+            Minecraft.getInstance().setScreen(RangeQuillScreen.forJukebox());
+        } else {
+            Quill.status("create_media_systems.range.reader_has_no_range");
+        }
         return true;
     }
 

@@ -41,7 +41,7 @@ public final class CreateMediaSystemsClient {
     private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT, LauncherClient::register, PartyBoxClient::register,
             MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(), new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
-            DiscClient::register, BroadcastClient::register, PxS1100Client::register);
+            DiscClient::register, BroadcastClient::register, PxS1100Client.INSTANCE);
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

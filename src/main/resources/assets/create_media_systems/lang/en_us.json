@@ -1,5 +1,13 @@
 {
   "block.create_media_systems.px_s1100": "Hayacio PX-S1100WE MIDI Keyboard",
+  "create_media_systems.ponder.px_s1100.header": "Performing with the Hayacio PX-S1100WE",
+  "create_media_systems.ponder.px_s1100.text_1": "Feed Forge Energy into the rear of the bass side, or use a charged battery.",
+  "create_media_systems.ponder.px_s1100.text_2": "Connect a MIDI keyboard to your computer. Select the device in Settings.",
+  "create_media_systems.ponder.px_s1100.text_3": "Right-click to play with the mouse, computer keyboard, or MIDI. Space works the damper.",
+  "create_media_systems.ponder.px_s1100.text_4": "Pick the piano with the Jukebox Range Quill, then right-click each Speaker to link it.",
+  "create_media_systems.ponder.px_s1100.text_5": "Left",
+  "create_media_systems.ponder.px_s1100.text_6": "Right",
+  "create_media_systems.ponder.px_s1100.text_7": "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.",
   "keyboard.play": "Play",
   "keyboard.tones": "Tones",
   "keyboard.settings": "Settings",

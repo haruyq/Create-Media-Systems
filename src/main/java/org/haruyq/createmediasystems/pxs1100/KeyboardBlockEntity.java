@@ -1,6 +1,9 @@
 package org.haruyq.createmediasystems.pxs1100;
 
+import java.util.Optional;
+
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -8,10 +11,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
+import org.haruyq.createmediasystems.stream.LiveSource;
+import org.haruyq.createmediasystems.stream.Streams;
 
-public final class KeyboardBlockEntity extends BlockEntity implements KeyboardRuntime.Host {
+public final class KeyboardBlockEntity extends BlockEntity implements KeyboardRuntime.Host, LiveSource {
     static final String DATA = "Keyboard";
     public static final double AUDIBLE_RANGE = KeyboardRuntime.RANGE;
 
@@ -45,6 +51,13 @@ public final class KeyboardBlockEntity extends BlockEntity implements KeyboardRu
         return new KeyboardPackets.Frame(
                 SableCompat.toWorld(level, worldPosition, KeyboardBlock.speaker(worldPosition, state(), 0)),
                 SableCompat.toWorld(level, worldPosition, KeyboardBlock.speaker(worldPosition, state(), 1)));
+    }
+
+    @Override
+    public void heardThrough(ServerLevel level, BlockPos emitter, Vec3 origin, Optional<Direction> facing,
+            Streams.Channel channel, float volume) {
+        var sound = new Streams.Sound(origin, facing, channel, worldPosition);
+        runtime().heardThrough(new KeyboardPackets.Output(emitter.immutable(), sound, volume), level.getGameTime());
     }
 
     @Override public void decorations(boolean stand, boolean rack) {

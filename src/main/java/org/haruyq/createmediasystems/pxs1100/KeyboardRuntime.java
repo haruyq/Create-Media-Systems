@@ -2,22 +2,29 @@ package org.haruyq.createmediasystems.pxs1100;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Output;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Routing;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 import org.haruyq.createmediasystems.power.ChargeableItem;
+import org.haruyq.createmediasystems.stream.EmitterRange;
+import org.haruyq.createmediasystems.stream.Streams;
 import org.jetbrains.annotations.Nullable;
 
 import static org.haruyq.createmediasystems.pxs1100.KeyboardMidi.*;
@@ -40,10 +47,12 @@ final class KeyboardRuntime {
     }
 
     private record Timed(int tick, KeyboardMidi event) {}
+    private record Heard(Output output, long lastRelay) {}
 
     private final Host host;
     private final KeyboardKeys keys = new KeyboardKeys();
-    private final Set<ServerPlayer> listeners = new HashSet<>();
+    private final Map<ServerPlayer, Routing> listeners = new HashMap<>();
+    private final Map<BlockPos, Heard> speakers = new HashMap<>();
     private final List<Timed> tape = new ArrayList<>();
     private final List<Timed> taps = new ArrayList<>();
     private final int[] banks = new int[16];
@@ -138,8 +147,9 @@ final class KeyboardRuntime {
         }
         this.browser = browser;
         PacketDistributor.sendToPlayer(player, new KeyboardPackets.Open(host.target(), token, browser));
-        listeners.add(player);
-        send(player, true, keys.snapshot());
+        var routing = routing(SableCompat.eye(player, 1));
+        listeners.put(player, routing);
+        send(player, true, keys.snapshot(), routing);
     }
 
     void play(ServerPlayer player, int receivedToken, List<KeyboardMidi> events) {
@@ -318,8 +328,7 @@ final class KeyboardRuntime {
         if (record && powered()) record(events);
         if (events.stream().anyMatch(event -> event.command() == PROGRAM
                 || event.command() == CONTROL && event.key() == 7)) host.changed(false);
-        var update = new KeyboardPackets.Update(host.target(), host.frame(), view(), false, events);
-        listeners.forEach(player -> PacketDistributor.sendToPlayer(player, update));
+        broadcast(events);
     }
 
     void tick() {
@@ -356,42 +365,72 @@ final class KeyboardRuntime {
             stopPlayback();
             changed();
         }
-        if (now % 10 != 0) return;
+        if (now % Streams.RELAY_TICKS != 0) return;
+        pruneSpeakers(now);
         if (owner != null || metro || playingAt >= 0 || keys.active() || now - lastEvent < 60) {
             refresh();
-            var update = new KeyboardPackets.Update(host.target(), host.frame(), view(), false, List.of());
-            listeners.forEach(player -> PacketDistributor.sendToPlayer(player, update));
+            broadcast(List.of());
         } else if (!listeners.isEmpty()) {
-            listeners.forEach(player -> end(player, 0));
+            listeners.keySet().forEach(player -> end(player, 0));
             listeners.clear();
         }
+    }
+
+    void heardThrough(Output output, long now) {
+        speakers.put(output.pos(), new Heard(output, now));
+    }
+
+    private void pruneSpeakers(long now) {
+        speakers.values().removeIf(heard -> now - heard.lastRelay() > 2 * Streams.RELAY_TICKS
+                || !host.world().isLoaded(heard.output().pos()));
+    }
+
+    private Routing routing(Vec3 ear) {
+        if (speakers.isEmpty()) return Routing.INTERNAL;
+        var level = host.world();
+        var outputs = speakers.values().stream().map(Heard::output)
+                .filter(output -> output.volume() > 0 && EmitterRange.DEFAULT.hears(level, output.pos(),
+                        output.sound().origin(), ear, EmitterRange.DROP_MARGIN))
+                .sorted(Comparator.comparingDouble((Output output) ->
+                                SableCompat.toWorld(level, output.pos(), output.sound().origin()).distanceToSqr(ear))
+                        .thenComparingLong(output -> output.pos().asLong()))
+                .limit(KeyboardPackets.MAX_SPEAKERS).toList();
+        return new Routing(true, outputs);
     }
 
     private void refresh() {
         var level = host.world();
         var position = host.frame().centre();
-        listeners.removeIf(player -> {
-            if (player.isRemoved() || player.level() != level) return true;
-            if (SableCompat.eye(player, 1).distanceToSqr(position) <= RANGE * RANGE) return false;
-            end(player, 0);
-            return true;
-        });
+        long now = level.getGameTime();
+        pruneSpeakers(now);
+        listeners.keySet().removeIf(player -> player.isRemoved() || player.level() != level);
         for (ServerPlayer player : level.players()) {
-            if (SableCompat.eye(player, 1).distanceToSqr(position) <= RANGE * RANGE && listeners.add(player)) {
-                send(player, true, keys.snapshot());
+            var ear = SableCompat.eye(player, 1);
+            var routing = routing(ear);
+            if (ear.distanceToSqr(position) <= RANGE * RANGE || !routing.outputs().isEmpty()) {
+                if (listeners.put(player, routing) == null) send(player, true, keys.snapshot(), routing);
+            } else if (listeners.remove(player) != null) {
+                end(player, 0);
             }
         }
     }
 
-    private void send(ServerPlayer player, boolean snapshot, List<KeyboardMidi> events) {
-        PacketDistributor.sendToPlayer(player, new KeyboardPackets.Update(host.target(), host.frame(), view(), snapshot, events));
+    private void send(ServerPlayer player, boolean snapshot, List<KeyboardMidi> events, Routing routing) {
+        PacketDistributor.sendToPlayer(player, new KeyboardPackets.Update(host.target(), host.frame(), view(), snapshot, events, routing));
+    }
+
+    private void broadcast(List<KeyboardMidi> events) {
+        if (listeners.isEmpty()) return;
+        var target = host.target();
+        var frame = host.frame();
+        var view = view();
+        listeners.forEach((player, routing) ->
+                PacketDistributor.sendToPlayer(player, new KeyboardPackets.Update(target, frame, view, false, events, routing)));
     }
 
     private void changed() {
         host.changed(true);
-        if (listeners.isEmpty()) return;
-        var update = new KeyboardPackets.Update(host.target(), host.frame(), view(), false, List.of());
-        listeners.forEach(player -> PacketDistributor.sendToPlayer(player, update));
+        broadcast(List.of());
     }
 
     private void end(ServerPlayer player, int token) {
@@ -432,7 +471,7 @@ final class KeyboardRuntime {
 
     void removed() {
         if (owner != null && host.world().getPlayerByUUID(owner) instanceof ServerPlayer player) end(player, token);
-        listeners.forEach(player -> end(player, 0));
+        listeners.keySet().forEach(player -> end(player, 0));
         listeners.clear();
         owner = null;
     }

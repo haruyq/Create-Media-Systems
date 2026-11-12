@@ -12,10 +12,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.stream.Streams;
 import org.jetbrains.annotations.Nullable;
 
 public final class KeyboardPackets {
     public static final int BATCH = 96;
+    static final int MAX_SPEAKERS = 8;
     private static final StreamCodec<ByteBuf, List<KeyboardMidi>> INPUT = KeyboardMidi.CODEC.apply(ByteBufCodecs.list(BATCH));
     private static final StreamCodec<ByteBuf, List<KeyboardMidi>> STATE = KeyboardMidi.CODEC.apply(ByteBufCodecs.list(4300));
     private static final StreamCodec<ByteBuf, Vec3> VEC = StreamCodec.composite(
@@ -51,6 +53,19 @@ public final class KeyboardPackets {
         public Vec3 centre() { return left.lerp(right, .5); }
     }
 
+    public record Output(BlockPos pos, Streams.Sound sound, float volume) {
+        static final StreamCodec<ByteBuf, Output> CODEC = StreamCodec.composite(
+                BlockPos.STREAM_CODEC, Output::pos, Streams.Sound.CODEC, Output::sound,
+                ByteBufCodecs.FLOAT, Output::volume, Output::new);
+    }
+
+    public record Routing(boolean external, List<Output> outputs) {
+        public static final Routing INTERNAL = new Routing(false, List.of());
+        static final StreamCodec<ByteBuf, Routing> CODEC = StreamCodec.composite(
+                ByteBufCodecs.BOOL, Routing::external, Output.CODEC.apply(ByteBufCodecs.list(MAX_SPEAKERS)),
+                Routing::outputs, Routing::new);
+    }
+
     public record Open(Target target, int token, boolean browser) implements CustomPacketPayload {
         static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("keyboard_open"));
         static final StreamCodec<ByteBuf, Open> CODEC = StreamCodec.composite(Target.CODEC, Open::target,
@@ -58,12 +73,12 @@ public final class KeyboardPackets {
         @Override public Type<Open> type() { return TYPE; }
     }
 
-    public record Update(Target target, Frame frame, CompoundTag view, boolean snapshot, List<KeyboardMidi> events)
+    public record Update(Target target, Frame frame, CompoundTag view, boolean snapshot, List<KeyboardMidi> events, Routing routing)
             implements CustomPacketPayload {
         static final Type<Update> TYPE = new Type<>(CreateMediaSystems.id("keyboard_update"));
         static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(Target.CODEC, Update::target,
                 Frame.CODEC, Update::frame, ByteBufCodecs.COMPOUND_TAG, Update::view, ByteBufCodecs.BOOL, Update::snapshot,
-                STATE, Update::events, Update::new);
+                STATE, Update::events, Routing.CODEC, Update::routing, Update::new);
         @Override public Type<Update> type() { return TYPE; }
     }
 

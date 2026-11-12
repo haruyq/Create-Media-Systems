@@ -2,8 +2,11 @@ package org.haruyq.createmediasystems.pxs1100.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayDeque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import javax.sound.sampled.AudioFormat;
@@ -17,20 +20,28 @@ import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.client.sounds.SoundBufferLibrary;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
+import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.pxs1100.KeyboardBlockEntity;
 import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
 import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Frame;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Output;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Routing;
 import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
 import org.haruyq.createmediasystems.playback.CmsStream;
+import org.haruyq.createmediasystems.stream.EmitterRange;
+import org.haruyq.createmediasystems.stream.Streams.Channel;
+import org.jetbrains.annotations.Nullable;
 
 final class KeyboardAudio implements AutoCloseable {
     private static final int FRAMES = KeyboardSynth.RATE / 50, BYTES = FRAMES * 2, SLOTS = 16;
     private static final AudioFormat MONO = new AudioFormat(KeyboardSynth.RATE, 16, 1, true, false);
 
     private record Change(KeyboardSettings settings, boolean reset, List<KeyboardMidi> events) {}
+    private record SpeakerKey(@Nullable BlockPos pos, Channel channel) {}
 
     private static final class StereoStart {
         final long cursor;
@@ -49,11 +60,11 @@ final class KeyboardAudio implements AutoCloseable {
     private final int polyphony;
     private final byte[][] stereo = new byte[SLOTS][BYTES * 2];
     private final ArrayDeque<Change> changes = new ArrayDeque<>();
+    private final Map<SpeakerKey, Speaker> speakers = new LinkedHashMap<>();
     private volatile KeyboardSynth synth;
     private volatile boolean closed;
-    private Speaker left, right;
     private Frame frame;
-    private int retry, volume;
+    private int volume;
     private long rendered;
 
     KeyboardAudio(KeyboardSettings settings, Frame frame) {
@@ -87,24 +98,45 @@ final class KeyboardAudio implements AutoCloseable {
         }
     }
 
-    void tick(Minecraft mc, Frame frame) {
+    void tick(Minecraft mc, Frame frame, Routing routing) {
         this.frame = frame;
-        if (closed || synth == null || retry-- > 0) return;
+        if (closed || synth == null) return;
         var sounds = mc.getSoundManager();
-        if (left != null && right != null && sounds.isActive(left) && sounds.isActive(right)) return;
-        retry = 19;
-        if (mc.options.getSoundSourceVolume(SoundSource.RECORDS) == 0 || mc.options.getSoundSourceVolume(SoundSource.MASTER) == 0) return;
-        stop();
+        if (mc.options.getSoundSourceVolume(SoundSource.RECORDS) == 0 || mc.options.getSoundSourceVolume(SoundSource.MASTER) == 0) {
+            stop();
+            return;
+        }
+        Map<SpeakerKey, Output> desired = new LinkedHashMap<>();
+        if (routing.external()) {
+            for (var output : routing.outputs()) desired.put(new SpeakerKey(output.pos(), output.sound().channel()), output);
+        } else {
+            desired.put(new SpeakerKey(null, Channel.LEFT), null);
+            desired.put(new SpeakerKey(null, Channel.RIGHT), null);
+        }
+        speakers.entrySet().removeIf(entry -> {
+            if (desired.containsKey(entry.getKey())) return false;
+            sounds.stop(entry.getValue());
+            return true;
+        });
+
+        long now = System.nanoTime();
         var start = new StereoStart(cursor());
-        left = new Speaker(0, start);
-        right = new Speaker(1, start);
-        sounds.play(left);
-        sounds.play(right);
+        desired.forEach((key, output) -> {
+            var speaker = speakers.get(key);
+            if (speaker != null && (sounds.isActive(speaker) || now - speaker.started < 1_000_000_000)) {
+                speaker.output = output;
+                return;
+            }
+            if (speaker != null) sounds.stop(speaker);
+            var next = new Speaker(key.channel(), output, start, now);
+            speakers.put(key, next);
+            sounds.play(next);
+        });
     }
 
     private synchronized long cursor() { return rendered; }
 
-    private synchronized void read(int channel, Mono pcm) throws IOException {
+    private synchronized void read(Channel channel, Mono pcm) throws IOException {
         var out = pcm.samples;
         out.clear();
         if (closed || pcm.closed) {
@@ -120,17 +152,27 @@ final class KeyboardAudio implements AutoCloseable {
                 rendered++;
             }
             byte[] chunk = stereo[(int) (index % SLOTS)];
-            for (int i = channel * 2; i < chunk.length; i += 4) out.put(chunk[i]).put(chunk[i + 1]);
+            if (channel == Channel.MIX) {
+                for (int i = 0; i < chunk.length; i += 4) {
+                    int left = sample(chunk, i), right = sample(chunk, i + 2);
+                    out.putShort((short) ((left + right) / 2));
+                }
+            } else {
+                for (int i = channel == Channel.LEFT ? 0 : 2; i < chunk.length; i += 4) out.put(chunk[i]).put(chunk[i + 1]);
+            }
             pcm.cursor = index + 1;
         }
         out.flip();
     }
 
+    private static short sample(byte[] chunk, int offset) {
+        return (short) ((chunk[offset] & 255) | chunk[offset + 1] << 8);
+    }
+
     private void stop() {
         var sounds = Minecraft.getInstance().getSoundManager();
-        if (left != null) sounds.stop(left);
-        if (right != null) sounds.stop(right);
-        left = right = null;
+        speakers.values().forEach(sounds::stop);
+        speakers.clear();
     }
 
     @Override public void close() {
@@ -144,13 +186,17 @@ final class KeyboardAudio implements AutoCloseable {
     }
 
     private final class Speaker extends AbstractTickableSoundInstance {
-        private final int channel;
+        private final Channel channel;
         private final StereoStart start;
+        private final long started;
+        @Nullable private Output output;
 
-        Speaker(int channel, StereoStart start) {
+        Speaker(Channel channel, @Nullable Output output, StereoStart start, long started) {
             super(PxS1100Feature.SYNTH.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
             this.channel = channel;
+            this.output = output;
             this.start = start;
+            this.started = started;
             attenuation = Attenuation.NONE;
             tick();
         }
@@ -172,14 +218,25 @@ final class KeyboardAudio implements AutoCloseable {
                 stop();
                 return;
             }
-            var at = channel == 0 ? frame.left() : frame.right();
+            var mc = Minecraft.getInstance();
+            Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
+            Vec3 at;
+            double gain;
+            if (output != null && mc.level != null) {
+                var emitter = output.sound();
+                var local = SableCompat.toRenderBlockSpace(mc.level, output.pos(), ear);
+                at = SableCompat.toRenderWorld(mc.level, output.pos(), emitter.origin());
+                gain = EmitterRange.at(output.volume()).gain(output.pos(), emitter.origin(), local) * emitter.directivity(local);
+            } else {
+                at = channel == Channel.LEFT ? frame.left() : frame.right();
+                double distance = at.distanceTo(ear);
+                double edge = Math.clamp((KeyboardBlockEntity.AUDIBLE_RANGE - distance) / 8, 0, 1);
+                gain = .78 * edge / (1 + distance * distance / 144);
+            }
             x = at.x;
             y = at.y;
             z = at.z;
-            Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-            double distance = at.distanceTo(ear);
-            double edge = Math.clamp((KeyboardBlockEntity.AUDIBLE_RANGE - distance) / 8, 0, 1);
-            volume = (float) (KeyboardAudio.this.volume / 127.0 * .78 * edge / (1 + distance * distance / 144));
+            volume = (float) (KeyboardAudio.this.volume / 127.0 * gain);
         }
 
         @Override public CompletableFuture<AudioStream> getStream(SoundBufferLibrary buffers, Sound sound, boolean looping) {
@@ -188,13 +245,13 @@ final class KeyboardAudio implements AutoCloseable {
     }
 
     private final class Mono implements CmsStream {
-        private final int channel;
+        private final Channel channel;
         private final StereoStart start;
-        private final ByteBuffer samples = ByteBuffer.allocateDirect(BYTES);
+        private final ByteBuffer samples = ByteBuffer.allocateDirect(BYTES).order(ByteOrder.LITTLE_ENDIAN);
         private long cursor;
         private boolean closed;
 
-        Mono(int channel, StereoStart start) {
+        Mono(Channel channel, StereoStart start) {
             this.channel = channel;
             this.start = start;
             this.cursor = start.cursor;

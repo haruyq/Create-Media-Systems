@@ -34,7 +34,7 @@ public final class CreateMediaSystems {
     public static final String LEGACY_ID = "disksb";
     public static final String COMMAND = "cms";
     /** Bumped whenever a payload's format changes, so a client and server that differ refuse each other. */
-    private static final String PROTOCOL = "27";
+    private static final String PROTOCOL = "28";
 
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);

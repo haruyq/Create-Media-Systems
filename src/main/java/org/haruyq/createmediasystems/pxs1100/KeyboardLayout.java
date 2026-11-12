@@ -24,6 +24,7 @@ public final class KeyboardLayout {
     public final List<Key> keys;
     public final List<Vec3> speakers;
     public final Vec3 power, knob;
+    public final Vec3 dcIn, usbMidi, lineLeft, lineRight;
     public final float tilt, tabletop, powerTravel;
     public final Map<String, Hit> panel;
 
@@ -58,6 +59,11 @@ public final class KeyboardLayout {
         var audio = new ArrayList<Vec3>();
         layout.getAsJsonArray("speakers").forEach(point -> audio.add(vec(point.getAsJsonArray())));
         speakers = List.copyOf(audio);
+        var jacks = layout.getAsJsonObject("jacks");
+        dcIn = vec(jacks.getAsJsonArray("dc_in"));
+        usbMidi = vec(jacks.getAsJsonArray("usb_b"));
+        lineLeft = vec(jacks.getAsJsonArray("line_out_l"));
+        lineRight = vec(jacks.getAsJsonArray("line_out_r"));
         var controls = layout.getAsJsonObject("controls");
         var p = controls.getAsJsonObject("power_button");
         var n = controls.getAsJsonObject("volume_knob");

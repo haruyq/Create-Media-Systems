@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
+import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.IEventBus;
@@ -15,6 +17,7 @@ import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.pxs1100.KeyboardBlock;
 import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
@@ -23,11 +26,12 @@ import org.haruyq.createmediasystems.pxs1100.KeyboardMidi;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Action;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Frame;
+import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Routing;
 import org.haruyq.createmediasystems.pxs1100.KeyboardSettings;
 import org.haruyq.createmediasystems.pxs1100.KeyboardPackets.Target;
 
-public final class PxS1100Client implements KeyboardPackets.Client {
-    private static final PxS1100Client INSTANCE = new PxS1100Client();
+public final class PxS1100Client implements ClientFeature, KeyboardPackets.Client {
+    public static final PxS1100Client INSTANCE = new PxS1100Client();
     private final Map<Target, Instrument> instruments = new HashMap<>();
     private Instrument local;
 
@@ -37,6 +41,7 @@ public final class PxS1100Client implements KeyboardPackets.Client {
         CompoundTag view = new CompoundTag();
         KeyboardSettings settings = new KeyboardSettings();
         Frame frame;
+        Routing routing = Routing.INTERNAL;
         KeyboardAudio audio;
         int token;
         long received;
@@ -51,12 +56,18 @@ public final class PxS1100Client implements KeyboardPackets.Client {
 
     private PxS1100Client() {}
 
-    public static void register(IEventBus bus) {
-        KeyboardPackets.client(INSTANCE);
+    @Override
+    public void register(IEventBus bus) {
+        KeyboardPackets.client(this);
         KeyboardRenderer.register(bus);
-        WorldEvents.onLevelChanged(INSTANCE::clear);
-        NeoForge.EVENT_BUS.addListener(INSTANCE::tick);
-        NeoForge.EVENT_BUS.addListener(INSTANCE::scrollKnob);
+        WorldEvents.onLevelChanged(this::clear);
+        NeoForge.EVENT_BUS.addListener(this::tick);
+        NeoForge.EVENT_BUS.addListener(this::scrollKnob);
+    }
+
+    @Override
+    public void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
+        PxS1100Ponder.register(helper);
     }
 
     static Instrument instrument(Target target) { return INSTANCE.instruments.get(target); }
@@ -81,6 +92,7 @@ public final class PxS1100Client implements KeyboardPackets.Client {
         if (mc.level == null) return;
         var instrument = instruments.computeIfAbsent(packet.target(), Instrument::new);
         instrument.frame = packet.frame();
+        instrument.routing = packet.routing();
         instrument.received = mc.level.getGameTime();
         instrument.view = packet.view();
         instrument.settings = KeyboardSettings.load(packet.view().getCompound("Settings"));
@@ -99,7 +111,7 @@ public final class PxS1100Client implements KeyboardPackets.Client {
             instrument.audio = new KeyboardAudio(instrument.settings, packet.frame());
         }
         instrument.audio.update(instrument.settings, packet.snapshot() || reopen, packet.events(), instrument.keys::snapshot);
-        instrument.audio.tick(mc, frame(mc, instrument));
+        instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
     }
 
     @Override public void end(KeyboardPackets.End packet) {
@@ -143,6 +155,7 @@ public final class PxS1100Client implements KeyboardPackets.Client {
 
     private void tick(ClientTickEvent.Post event) {
         var mc = Minecraft.getInstance();
+        PxS1100Ponder.tick(mc);
         if (mc.level == null) return;
         long now = mc.level.getGameTime();
         if (local != null && now - local.received > 80) closeScreen();
@@ -151,7 +164,9 @@ public final class PxS1100Client implements KeyboardPackets.Client {
                 instrument.stopAudio();
                 return true;
             }
-            if (instrument.audio != null && instrument.frame != null) instrument.audio.tick(mc, frame(mc, instrument));
+            if (instrument.audio != null && instrument.frame != null) {
+                instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
+            }
             return false;
         });
     }

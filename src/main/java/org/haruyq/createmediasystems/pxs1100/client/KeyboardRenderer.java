@@ -67,10 +67,12 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
 
     @Override public void render(KeyboardBlockEntity keyboard, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         var state = keyboard.state();
-        var instrument = PxS1100Client.instrument(keyboard.target());
-        var view = instrument == null ? keyboard.clientView() : instrument.view;
-        var settings = instrument == null ? KeyboardSettings.load(view.getCompound("Settings")) : instrument.settings;
-        var keys = instrument == null ? REST : instrument.keys;
+        var demo = PxS1100Ponder.demo(keyboard);
+        var instrument = demo == null ? PxS1100Client.instrument(keyboard.target()) : null;
+        var view = demo != null ? demo.view : instrument == null ? keyboard.clientView() : instrument.view;
+        var settings = demo != null ? demo.settings
+                : instrument == null ? KeyboardSettings.load(view.getCompound("Settings")) : instrument.settings;
+        var keys = demo != null ? demo.keys : instrument == null ? REST : instrument.keys;
         var motion = motions.computeIfAbsent(keyboard, ignored -> new Motion());
         boolean stand = state.getValue(KeyboardBlock.STAND), rack = state.getValue(KeyboardBlock.RACK);
         boolean powered = view.getBoolean("Powered");
