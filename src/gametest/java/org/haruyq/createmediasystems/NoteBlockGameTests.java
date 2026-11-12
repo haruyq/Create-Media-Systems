@@ -10,6 +10,11 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.NoteBlock;
@@ -60,6 +65,38 @@ public class NoteBlockGameTests {
         } finally {
             NeoForge.EVENT_BUS.unregister(listener);
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void lockedTuningYieldsOnlyToWhoLockedIt(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 2, 2);
+        helper.setBlock(pos, Blocks.NOTE_BLOCK);
+        Player owner = helper.makeMockPlayer(GameType.SURVIVAL);
+        Player other = helper.makeMockPlayer(GameType.SURVIVAL);
+
+        helper.useBlock(pos, other);
+        owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.HONEYCOMB));
+        helper.useBlock(pos, owner);
+        helper.assertTrue(owner.getMainHandItem().isEmpty(), "Locking did not use up the honeycomb");
+        helper.useBlock(pos, owner);
+        other.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_AXE));
+        helper.useBlock(pos, other);
+        helper.useBlock(pos, other);
+        helper.assertBlockProperty(pos, NoteBlock.NOTE, 1);
+
+        owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_AXE));
+        helper.useBlock(pos, owner);
+        helper.assertBlockProperty(pos, NoteBlock.NOTE, 1);
+        helper.useBlock(pos, other);
+        helper.assertBlockProperty(pos, NoteBlock.NOTE, 2);
+
+        owner.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.HONEYCOMB));
+        helper.useBlock(pos, owner);
+        helper.setBlock(pos, Blocks.AIR);
+        helper.setBlock(pos, Blocks.NOTE_BLOCK);
+        helper.useBlock(pos, other);
+        helper.assertBlockProperty(pos, NoteBlock.NOTE, 1);
         helper.succeed();
     }
 
