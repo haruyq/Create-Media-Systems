@@ -18,6 +18,8 @@ USB MIDIキーボードをPCにつなぐと、演奏画面に入力機器が表�
 
 マルチプレイでは同じバージョンのModを入れた周囲のプレイヤーにも演奏が届きます。ピアノはPCの既定の音声出力を使い、Minecraftの全体音量と「レコード」の音量設定に従います。
 
+CreateのからくりやSableの船に載せたまま、右クリックで演奏できます。ピアノの部位はまとめて連結され、音は移動中の響板の位置から聞こえます。組み立てや分解をすると演奏画面が閉じます。大屋根の開閉状態は引き継がれます。
+
 音源はAlexander Holmの [Salamander Grand Piano V3](https://github.com/sfzinstruments/SalamanderGrandPiano/tree/3382bf9496bba2486f5ab0de55a264d1dfc38404)（[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)）を加工して同梱しています。
 
 ## ビルド

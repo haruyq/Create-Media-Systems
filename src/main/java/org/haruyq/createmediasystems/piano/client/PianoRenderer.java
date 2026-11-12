@@ -4,7 +4,6 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -21,6 +20,8 @@ import org.haruyq.createmediasystems.piano.GrandPianoBlock;
 import org.haruyq.createmediasystems.piano.PianoBlockEntity;
 import org.haruyq.createmediasystems.piano.PianoFeature;
 import org.haruyq.createmediasystems.piano.PianoState;
+import org.joml.Matrix3f;
+import org.joml.Quaternionf;
 
 final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
     private static final float OPEN_ANGLE = 43;
@@ -57,20 +58,26 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
 
     @Override
     public void render(PianoBlockEntity piano, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        var state = piano.getBlockState();
+        var state = piano.renderedState();
         float target = state.getValue(GrandPianoBlock.OPEN) ? OPEN_ANGLE : 0;
         float lid = lids.computeIfAbsent(piano, key -> new Lid(target)).move(target);
         pose.pushPose();
-        pose.translate(.5, 0, .5);
-        pose.mulPose(Axis.YP.rotationDegrees(180 - state.getValue(GrandPianoBlock.FACING).toYRot()));
-        pose.translate(-.5, 0, -.5);
-        new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.getBlockPos()), lid);
+        var right = GrandPianoBlock.right(state);
+        var up = GrandPianoBlock.up(state);
+        var back = state.getValue(GrandPianoBlock.FACING).getOpposite();
+        pose.translate(.5, .5, .5);
+        pose.mulPose(new Quaternionf().setFromNormalized(new Matrix3f(
+                right.getStepX(), right.getStepY(), right.getStepZ(),
+                up.getStepX(), up.getStepY(), up.getStepZ(),
+                back.getStepX(), back.getStepY(), back.getStepZ())));
+        pose.translate(-.5, -.5, -.5);
+        new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.target()), lid);
         pose.popPose();
     }
 
     @Override
     public AABB getRenderBoundingBox(PianoBlockEntity piano) {
-        return new AABB(piano.getBlockPos()).inflate(2.5, 1.25, 2.5);
+        return new AABB(piano.getBlockPos()).inflate(2.5);
     }
 
     private static final class Lid {

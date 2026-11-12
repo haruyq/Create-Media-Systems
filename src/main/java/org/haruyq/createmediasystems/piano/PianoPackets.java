@@ -30,39 +30,52 @@ public final class PianoPackets {
 
     public static void client(Client handler) { client = handler; }
 
-    public record Open(BlockPos pos, int session, Vec3 origin) implements CustomPacketPayload {
+    public record Target(int carrier, BlockPos pos) {
+        public static final StreamCodec<ByteBuf, Target> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, Target::carrier, BlockPos.STREAM_CODEC, Target::pos, Target::new);
+
+        public static Target placed(BlockPos pos) { return new Target(-1, pos); }
+        public boolean mounted() { return carrier >= 0; }
+    }
+
+    public record Frame(Vec3 origin, boolean lidOpen) {
+        static final StreamCodec<ByteBuf, Frame> CODEC = StreamCodec.composite(
+                POSITION, Frame::origin, ByteBufCodecs.BOOL, Frame::lidOpen, Frame::new);
+    }
+
+    public record Open(Target target, int session, Frame frame) implements CustomPacketPayload {
         static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("piano_open"));
-        static final StreamCodec<ByteBuf, Open> CODEC = StreamCodec.composite(BlockPos.STREAM_CODEC, Open::pos,
-                ByteBufCodecs.VAR_INT, Open::session, POSITION, Open::origin, Open::new);
+        static final StreamCodec<ByteBuf, Open> CODEC = StreamCodec.composite(Target.CODEC, Open::target,
+                ByteBufCodecs.VAR_INT, Open::session, Frame.CODEC, Open::frame, Open::new);
         @Override public Type<Open> type() { return TYPE; }
     }
 
-    public record Play(BlockPos pos, int session, List<PianoEvent> events) implements CustomPacketPayload {
+    public record Play(Target target, int session, List<PianoEvent> events) implements CustomPacketPayload {
         static final Type<Play> TYPE = new Type<>(CreateMediaSystems.id("piano_play"));
-        static final StreamCodec<ByteBuf, Play> CODEC = StreamCodec.composite(BlockPos.STREAM_CODEC, Play::pos,
+        static final StreamCodec<ByteBuf, Play> CODEC = StreamCodec.composite(Target.CODEC, Play::target,
                 ByteBufCodecs.VAR_INT, Play::session, EVENTS, Play::events, Play::new);
         @Override public Type<Play> type() { return TYPE; }
     }
 
-    public record Update(BlockPos pos, int session, Vec3 origin, boolean snapshot, List<PianoEvent> events)
+    public record Update(Target target, int session, Frame frame, boolean snapshot, List<PianoEvent> events)
             implements CustomPacketPayload {
         static final Type<Update> TYPE = new Type<>(CreateMediaSystems.id("piano_update"));
-        static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(BlockPos.STREAM_CODEC, Update::pos,
-                ByteBufCodecs.VAR_INT, Update::session, POSITION, Update::origin, ByteBufCodecs.BOOL, Update::snapshot,
+        static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(Target.CODEC, Update::target,
+                ByteBufCodecs.VAR_INT, Update::session, Frame.CODEC, Update::frame, ByteBufCodecs.BOOL, Update::snapshot,
                 EVENTS, Update::events, Update::new);
         @Override public Type<Update> type() { return TYPE; }
     }
 
-    public record Command(BlockPos pos, int session, boolean toggleLid) implements CustomPacketPayload {
+    public record Command(Target target, int session, boolean toggleLid) implements CustomPacketPayload {
         static final Type<Command> TYPE = new Type<>(CreateMediaSystems.id("piano_command"));
-        static final StreamCodec<ByteBuf, Command> CODEC = StreamCodec.composite(BlockPos.STREAM_CODEC, Command::pos,
+        static final StreamCodec<ByteBuf, Command> CODEC = StreamCodec.composite(Target.CODEC, Command::target,
                 ByteBufCodecs.VAR_INT, Command::session, ByteBufCodecs.BOOL, Command::toggleLid, Command::new);
         @Override public Type<Command> type() { return TYPE; }
     }
 
-    public record End(BlockPos pos, int session) implements CustomPacketPayload {
+    public record End(Target target, int session) implements CustomPacketPayload {
         static final Type<End> TYPE = new Type<>(CreateMediaSystems.id("piano_end"));
-        static final StreamCodec<ByteBuf, End> CODEC = StreamCodec.composite(BlockPos.STREAM_CODEC, End::pos,
+        static final StreamCodec<ByteBuf, End> CODEC = StreamCodec.composite(Target.CODEC, End::target,
                 ByteBufCodecs.VAR_INT, End::session, End::new);
         @Override public Type<End> type() { return TYPE; }
     }
@@ -72,20 +85,26 @@ public final class PianoPackets {
         registrar.playToClient(Update.TYPE, Update.CODEC, (packet, context) -> { if (client != null) client.update(packet); });
         registrar.playToClient(End.TYPE, End.CODEC, (packet, context) -> { if (client != null) client.end(packet); });
         registrar.playToServer(Play.TYPE, Play.CODEC, (packet, context) -> {
-            if (context.player() instanceof ServerPlayer player && find(player, packet.pos) instanceof PianoBlockEntity piano) {
-                piano.play(player, packet.session, packet.events);
+            if (context.player() instanceof ServerPlayer player) {
+                var piano = find(player, packet.target);
+                if (piano != null) piano.play(player, packet.session, packet.events);
             }
         });
         registrar.playToServer(Command.TYPE, Command.CODEC, (packet, context) -> {
-            if (context.player() instanceof ServerPlayer player && find(player, packet.pos) instanceof PianoBlockEntity piano) {
-                piano.command(player, packet.session, packet.toggleLid);
+            if (context.player() instanceof ServerPlayer player) {
+                var piano = find(player, packet.target);
+                if (piano != null) piano.command(player, packet.session, packet.toggleLid);
             }
         });
     }
 
     @Nullable
-    private static net.minecraft.world.level.block.entity.BlockEntity find(ServerPlayer player, BlockPos pos) {
+    private static PianoSession find(ServerPlayer player, Target target) {
         var level = player.serverLevel();
-        return level.isLoaded(pos) ? level.getBlockEntity(pos) : null;
+        if (target.mounted()) return MountedPiano.session(level, target);
+        if (level.isLoaded(target.pos()) && level.getBlockEntity(target.pos()) instanceof PianoBlockEntity piano) {
+            return piano.session();
+        }
+        return null;
     }
 }
