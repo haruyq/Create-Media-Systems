@@ -9,20 +9,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
-import org.haruyq.createmediasystems.ContraptionSurface;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.broadcast.BroadcastOcclusion;
 import org.haruyq.createmediasystems.broadcast.MovingBroadcastPackets;
 import org.haruyq.createmediasystems.broadcast.MovingBroadcastPackets.Frame;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.StreamSound;
 import org.haruyq.createmediasystems.playback.StreamSpec;
-import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -128,8 +125,8 @@ final class MovingBroadcastAudio implements MovingBroadcastPackets.Client {
 
         void start() {
             startedAt = level.getGameTime();
-            var emitter = new StreamSpec.Emitter(() -> origin, () -> origin, this::present,
-                    this::present, () -> gain, null);
+            var emitter = new StreamSpec.Emitter(() -> origin, null, this::present,
+                    this::present, () -> gain, null, false);
             var signal = play.signal();
             var spec = new StreamSpec(signal.url(), positionSeconds(), play.channel(), SoundSource.RECORDS, emitter,
                     length -> Minecraft.getInstance().execute(() -> {
@@ -164,14 +161,10 @@ final class MovingBroadcastAudio implements MovingBroadcastPackets.Client {
             double distance = camera.distanceTo(origin);
             boolean blocked = path.obstructed();
             if (mc.player != null && (level.getGameTime() % 5 == 0 || path.metres() == 0)) {
-                Vec3 end = camera.add(origin.subtract(camera).normalize().scale(Math.clamp(distance - .9, 0, 96)));
-                blocked = level.clip(new ClipContext(camera, end, ClipContext.Block.COLLIDER,
-                        ClipContext.Fluid.NONE, mc.player)).getType() != HitResult.Type.MISS
-                        || ContraptionSurface.nearest(mc.player, camera, end) != null;
+                blocked = BroadcastOcclusion.obstructed(mc.player, camera, origin);
             }
             path = new BroadcastAudioStream.Path(distance, blocked);
-            gain = new EmitterRange(java.util.Optional.empty(), volume, play.profile().reach)
-                    .gain(current.head(), origin, camera) * play.profile().gain(current.towards(camera)) * (blocked ? .58 : 1);
+            gain = volume * play.profile().gain(current.towards(camera)) * path.transmission();
         }
     }
 }
