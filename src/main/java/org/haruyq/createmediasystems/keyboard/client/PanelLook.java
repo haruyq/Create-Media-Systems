@@ -70,8 +70,9 @@ record PanelLook(Panel panel, int padsDown, @Nullable Controller controller) {
         return panel.bank() % 8 != light ? -1 : panel.bank() < 8 ? WHITE : RED;
     }
 
-    /** {@code color} at {@code share} (0..1) of its brightness. */
+    /** {@code color} at {@code share} of its brightness: dimmer below 1, brighter above. */
     static int dim(int color, float share) {
-        return (int) ((color >> 16 & 255) * share) << 16 | (int) ((color >> 8 & 255) * share) << 8 | (int) ((color & 255) * share);
+        return Math.min(255, (int) ((color >> 16 & 255) * share)) << 16 | Math.min(255, (int) ((color >> 8 & 255) * share)) << 8
+                | Math.min(255, (int) ((color & 255) * share));
     }
 }
