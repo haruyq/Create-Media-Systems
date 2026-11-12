@@ -59,6 +59,7 @@ public final class YtDlp {
                 String.format(Locale.ROOT, SINGLE_FILE, height)));
         JsonObject info = JsonParser.parseString(out).getAsJsonObject();
         foundTitle(page, info);
+        awaitAvailable(info);
         return prepare(info, maxHeight);
     }
 
@@ -70,7 +71,18 @@ public final class YtDlp {
         JsonObject info = JsonParser.parseString(run(page, TIMEOUT_SECONDS, "-J", "-f",
                 "ba[protocol^=m3u8]/ba[protocol=https]/ba/b")).getAsJsonObject();
         foundTitle(page, info);
+        awaitAvailable(info);
         return audio(info);
+    }
+
+    /** Waits out the pre-roll ad (see NativeMediaResolver#awaitAvailable): on each picked format when it picks two. */
+    private static void awaitAvailable(JsonObject info) throws IOException, InterruptedException {
+        List<JsonObject> parts = new ArrayList<>(List.of(info));
+        if (info.has("requested_formats") && !info.get("requested_formats").isJsonNull()) {
+            info.getAsJsonArray("requested_formats").forEach(part -> parts.add(part.getAsJsonObject()));
+        }
+        NativeMediaResolver.awaitAvailable(parts.stream().mapToDouble(part -> part.has("available_at")
+                && part.get("available_at").isJsonPrimitive() ? part.get("available_at").getAsDouble() : 0).max().orElse(0));
     }
 
     private static void foundTitle(URI page, JsonObject info) {

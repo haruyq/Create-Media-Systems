@@ -182,11 +182,7 @@ final class NativeMediaResolver {
             chosen.add(response.getAsJsonArray("audio").get(0));
             response.add("audio", chosen);
         }
-        if (response.has("available_at")) {
-            long waitMillis = Math.round(response.get("available_at").getAsDouble() * 1000) - System.currentTimeMillis();
-            if (waitMillis > 30_000) throw new IOException("The origin stream is not available yet");
-            if (waitMillis > 0) Thread.sleep(waitMillis);
-        }
+        if (response.has("available_at")) awaitAvailable(response.get("available_at").getAsDouble());
         List<JsonObject> tracks = NativeMedia.tracks(response);
         List<String> options = new ArrayList<>(NativeMedia.httpOptions(tracks));
         boolean live = response.has("live") && response.get("live").getAsBoolean();
@@ -213,6 +209,17 @@ final class NativeMediaResolver {
         double duration = !live && response.has("duration") && response.get("duration").isJsonPrimitive()
                 ? response.get("duration").getAsDouble() : 0;
         return Prepared.of(media, live, download, Double.isFinite(duration) && duration > 0 ? duration : 0, options);
+    }
+
+    /**
+     * Waits until {@code availableAt} (Unix seconds; 0 for now): YouTube serves a page's media only once its pre-roll
+     * ad would have played, and VLC opening it before then stalled silent for good. Within what the server waits for
+     * its listeners to load a track (see Streams#MAX_LOAD_TICKS), leaving room to open it.
+     */
+    static void awaitAvailable(double availableAt) throws IOException, InterruptedException {
+        long waitMillis = Math.round(availableAt * 1000) - System.currentTimeMillis();
+        if (waitMillis > 60_000) throw new IOException("The origin stream is not available yet");
+        if (waitMillis > 0) Thread.sleep(waitMillis);
     }
 
     private static URI manifest(String content, String suffix) throws IOException {
