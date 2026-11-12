@@ -32,6 +32,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -87,6 +88,14 @@ public final class P2pClient {
         P2pOverlay.register(modBus);
         NeoForge.EVENT_BUS.addListener(P2pClient::registerCommands);
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> logout());
+        // Fetches native WebRTC at startup, so a first session needn't wait for it; a session tries again if this fails.
+        modBus.addListener((FMLClientSetupEvent event) -> Thread.ofPlatform().daemon().name("CMS WebRTC loader").start(() -> {
+            try {
+                Transport.loadNatives(ClientFiles.DIR.resolve("webrtc"));
+            } catch (IOException | LinkageError e) {
+                com.mojang.logging.LogUtils.getLogger().warn("Native WebRTC could not be set up; direct P2P will try again: {}", e.toString());
+            }
+        }));
     }
 
     /** This client's session in {@code host}'s room (its own, if it is the host), for what sends or receives over it; null if none. */

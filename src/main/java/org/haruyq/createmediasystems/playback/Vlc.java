@@ -89,6 +89,13 @@ final class Vlc {
         retry = false;
         try {
             Lib lib = load();
+            // The computer's own VLC may be VLC 4, whose calls differ from these.
+            String version = lib.libvlc_get_version();
+            if (version == null || !version.startsWith("3.")) {
+                LogUtils.getLogger().warn("VLC {} is installed, not VLC 3", version);
+                missing = "CMS needs VLC 3, not VLC " + version + " (videolan.org)";
+                return;
+            }
             Pointer instance = lib.libvlc_new(ARGS.length, ARGS);
             if (instance == null) {
                 missing = "VLC could not start";
@@ -225,6 +232,9 @@ final class Vlc {
     interface Lib extends Library {
         /** libvlc_state_t */
         int PLAYING = 3, PAUSED = 4, STOPPED = 5, ENDED = 6, ERROR = 7;
+
+        /** "3.0.24 Vetinari" and the like. */
+        String libvlc_get_version();
 
         Pointer libvlc_new(int argc, String[] argv);
 

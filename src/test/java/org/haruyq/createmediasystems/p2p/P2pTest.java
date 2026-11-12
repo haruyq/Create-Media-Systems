@@ -82,4 +82,27 @@ class P2pTest {
         assertEquals(java.util.List.of(), Transport.loadable(japanese, java.nio.charset.StandardCharsets.US_ASCII,
                 java.util.List.of(java.nio.file.Path.of("C:/Users/藤井/AppData/Local"))));
     }
+
+    @Test
+    void namesWebrtcJavasNativeBuildForEachComputer() {
+        assertEquals("windows-x86_64", Transport.platform("Windows 11", "amd64"));
+        assertEquals("windows-aarch64", Transport.platform("Windows 11", "aarch64"));
+        assertEquals("macos-aarch64", Transport.platform("Mac OS X", "aarch64"));
+        assertEquals("macos-x86_64", Transport.platform("Mac OS X", "x86_64"));
+        assertEquals("linux-x86_64", Transport.platform("Linux", "amd64"));
+        assertEquals("linux-aarch32", Transport.platform("Linux", "arm"));
+        assertEquals(null, Transport.platform("Windows 10", "x86"));
+        assertEquals(null, Transport.platform("FreeBSD", "amd64"));
+    }
+
+    @Test
+    void downloadsTheWebrtcNativesOfTheVersionItIsBuiltWith() throws Exception {
+        java.util.Properties pom = new java.util.Properties();
+        try (var in = dev.onvoid.webrtc.PeerConnectionFactory.class.getResourceAsStream(
+                "/META-INF/maven/dev.onvoid.webrtc/webrtc-java/pom.properties")) {
+            pom.load(in);
+        }
+        assertEquals(pom.getProperty("version"), Transport.WEBRTC_VERSION,
+                "update Transport.WEBRTC_VERSION and its SHA-256s with webrtc_version");
+    }
 }

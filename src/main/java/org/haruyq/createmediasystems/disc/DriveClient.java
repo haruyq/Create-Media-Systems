@@ -337,8 +337,19 @@ public final class DriveClient {
                         roots.add(root.toPath());
                     }
                 }
+            } else if (Platform.isLinux()) {
+                List<String> devices;
+                try (var dev = Files.list(Path.of("/dev"))) {
+                    devices = dev.map(device -> device.getFileName().toString()).sorted().toList();
+                }
+                roots.addAll(linuxDrives(Files.readAllLines(Path.of("/proc/mounts")), devices));
+            } else if (Platform.isMac()) {
+                // macOS mounts every disc under /Volumes (an audio CD as AIFF files); what is on one tells its kind.
+                try (var volumes = Files.list(Path.of("/Volumes"))) {
+                    volumes.filter(volume -> !Files.isSymbolicLink(volume)).sorted().forEach(roots::add);
+                }
             }
-        } catch (RuntimeException | LinkageError unknown) {
+        } catch (IOException | RuntimeException | LinkageError unknown) {
             // No drive it can tell of.
         }
         drive = !roots.isEmpty();
@@ -393,6 +404,21 @@ public final class DriveClient {
     /** Opens the tray of the real drive at {@code root}; a folder's disc stays where it is. */
     private static void open(Path root) {
         try {
+            if (Platform.isLinux()) {
+                String device = linuxDevice(root, Files.readAllLines(Path.of("/proc/mounts")));
+                if (device != null) {
+                    // eject (util-linux) unmounts the disc first; the kernel's own eject refuses a mounted one.
+                    run("eject", device);
+                }
+                return;
+            }
+            if (Platform.isMac()) {
+                if (Path.of("/Volumes").equals(root.toAbsolutePath().getParent())
+                        && run("diskutil", "info", root.toString()).contains("Optical")) {
+                    run("diskutil", "eject", root.toString());
+                }
+                return;
+            }
             WinNT.HANDLE handle = device(root);
             if (handle != null) {
                 try {
@@ -402,9 +428,63 @@ public final class DriveClient {
                     Kernel32.INSTANCE.CloseHandle(handle);
                 }
             }
-        } catch (RuntimeException | LinkageError unknown) {
+        } catch (IOException | RuntimeException | LinkageError unknown) {
             // No drive it can tell.
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+    }
+
+    /** What {@code command} prints, once it is done (at most 30 s). */
+    private static String run(String... command) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        byte[] said = process.getInputStream().readNBytes(64 * 1024);
+        if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+        }
+        return new String(said, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Linux's optical drives, from its mounts ({@code /proc/mounts}' lines) and {@code /dev}'s names: where each disc
+     * in one is mounted, then each drive itself ({@code /dev/srN}), as an audio CD has nothing to mount.
+     */
+    static List<Path> linuxDrives(List<String> mounts, List<String> devices) {
+        List<Path> roots = new ArrayList<>();
+        for (String line : mounts) {
+            String[] fields = line.split(" ");
+            if (fields.length > 2 && (fields[0].matches("/dev/sr[0-9]+") || fields[2].equals("iso9660") || fields[2].equals("udf"))) {
+                roots.add(Path.of(unescape(fields[1])));
+            }
+        }
+        for (String device : devices) {
+            if (device.matches("sr[0-9]+")) {
+                roots.add(Path.of("/dev", device));
+            }
+        }
+        return roots;
+    }
+
+    /** The optical drive ({@code /dev/srN}) {@code root} is, or has its disc mounted at; null if neither. */
+    @Nullable
+    static String linuxDevice(Path root, List<String> mounts) {
+        String path = root.toString().replace('\\', '/');
+        if (path.matches("/dev/sr[0-9]+")) {
+            return path;
+        }
+        for (String line : mounts) {
+            String[] fields = line.split(" ");
+            if (fields.length > 1 && fields[0].matches("/dev/sr[0-9]+") && unescape(fields[1]).equals(path)) {
+                return fields[0];
+            }
+        }
+        return null;
+    }
+
+    /** A path as /proc/mounts writes it, with a space as \040 and so on. */
+    private static String unescape(String path) {
+        return java.util.regex.Pattern.compile("\\\\([0-7]{3})").matcher(path).replaceAll(octal ->
+                java.util.regex.Matcher.quoteReplacement(String.valueOf((char) Integer.parseInt(octal.group(1), 8))));
     }
 
     /**

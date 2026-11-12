@@ -1,7 +1,6 @@
 package org.haruyq.createmediasystems.p2p;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -94,7 +93,17 @@ public final class Transport implements AutoCloseable {
     private static final int PROBE_FRAME = 16 * 1024;
     private static final int PROBE_BUFFER = 512 * 1024;
     private static final Pattern CANDIDATE_TYPE = Pattern.compile(" typ (\\S+)");
-    private static final String LIBRARY = "webrtc-java-windows-x86_64.dll";
+    /** webrtc-java's version, as gradle.properties' webrtc_version (P2pTest checks the jar's own). */
+    static final String WEBRTC_VERSION = "1.0.0";
+    /** The SHA-256 of each of its native jars on Maven Central (as published beside them), by platform. */
+    private static final Map<String, String> NATIVES = Map.of(
+            "windows-x86_64", "52861d929f7e3a597c8a8b9649baf2f861422aa3b4638592ff87db45c202eff9",
+            "windows-aarch64", "03409015e7cfe6920315ccf65c3daa80b893f4bcadc1c1a5e38939ddafd93422",
+            "linux-x86_64", "bcb5111397dd72cc257a2587dbc82cf330e7d11810d51947a16f61deeed52d0f",
+            "linux-aarch64", "63dafd0694d376af88a1bb2811c7370e8c32e1189fb8196a445a17e46fb7dcb7",
+            "linux-aarch32", "054e5bce4c051a2b14189b56430214fd19b97fb9451e5a13b474fc1a75e87adb",
+            "macos-x86_64", "254e8363e370d89ec7d8a56d11c9cd1eec957bfe7e9356d4365346c3868aa601",
+            "macos-aarch64", "bfe8a806603bd6cf7e547c728b7885b7c189c16c02b0e73011f0e3548afddc91");
     private static final Logger LOGGER = LoggerFactory.getLogger(Transport.class);
 
     public enum State {
@@ -162,20 +171,17 @@ public final class Transport implements AutoCloseable {
     }
 
     /**
-     * Unpacks the bundled native WebRTC into {@code dir} (unless it already is) for webrtc-java to load from there,
-     * or into another folder if this Java can't pass {@code dir}'s path to Windows (see {@link #loadable}). Call
-     * before the first session; never on a dedicated server.
+     * Downloads webrtc-java's native library for this computer from Maven Central into {@code dir} (unless it already
+     * is there) for webrtc-java to load from, or into another folder if this Java can't pass {@code dir}'s path to
+     * Windows (see {@link #loadable}). Call before the first session, off the game thread; never on a dedicated server.
      */
     public static synchronized void loadNatives(Path dir) throws IOException {
-        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        String arch = System.getProperty("os.arch").toLowerCase(Locale.ROOT);
-        if (!os.startsWith("windows") || !(arch.equals("amd64") || arch.equals("x86_64"))) {
-            throw new IOException("Direct P2P comes with native WebRTC for 64-bit Windows only so far");
+        String platform = platform(System.getProperty("os.name"), System.getProperty("os.arch"));
+        if (platform == null) {
+            throw new IOException("Direct P2P has no native WebRTC for " + System.getProperty("os.name") + " on "
+                    + System.getProperty("os.arch"));
         }
-        String version;
-        try (InputStream in = resource("version")) {
-            version = new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
-        }
+        String library = System.mapLibraryName("webrtc-java-" + platform);
         Charset ansi;
         try {
             ansi = Charset.forName(System.getProperty("sun.jnu.encoding", "UTF-8"));
@@ -191,10 +197,16 @@ public final class Transport implements AutoCloseable {
         }
         fallbacks.add(Path.of(System.getProperty("java.io.tmpdir"), "create_media_systems", "webrtc"));
         IOException failed = null;
+        byte[] jar = null;
         for (Path base : loadable(dir, ansi, fallbacks)) {
-            Path target = base.resolve(version);
+            Path target = base.resolve(WEBRTC_VERSION);
             try {
-                unpack(target);
+                if (!Files.isRegularFile(target.resolve(library))) {
+                    if (jar == null) {
+                        jar = download(platform);
+                    }
+                    unpack(jar, target, library);
+                }
             } catch (IOException e) {
                 failed = e;
                 continue;
@@ -224,27 +236,83 @@ public final class Transport implements AutoCloseable {
         return loadable;
     }
 
-    private static void unpack(Path target) throws IOException {
-        Path library = target.resolve(LIBRARY);
-        if (Files.isRegularFile(library)) {
-            return;
+    /**
+     * webrtc-java's name for this computer's native build ({@code windows-x86_64} and so on), as its jars on Maven
+     * Central are classified; null where it has none.
+     */
+    @org.jetbrains.annotations.Nullable
+    static String platform(String osName, String osArch) {
+        String os = osName.toLowerCase(Locale.ROOT), arch = osArch.toLowerCase(Locale.ROOT);
+        String family = os.startsWith("windows") ? "windows" : os.startsWith("mac") ? "macos" : os.startsWith("linux") ? "linux" : null;
+        String bits = switch (arch) {
+            case "amd64", "x86_64" -> "x86_64";
+            case "aarch64", "arm64" -> "aarch64";
+            case "arm", "aarch32" -> "aarch32";
+            default -> null;
+        };
+        String platform = family == null || bits == null ? null : family + "-" + bits;
+        return platform != null && NATIVES.containsKey(platform) ? platform : null;
+    }
+
+    /** webrtc-java's jar of natives for {@code platform}, checked against the SHA-256 pinned in {@link #NATIVES}. */
+    private static byte[] download(String platform) throws IOException {
+        URI uri = URI.create("https://repo1.maven.org/maven2/dev/onvoid/webrtc/webrtc-java/" + WEBRTC_VERSION
+                + "/webrtc-java-" + WEBRTC_VERSION + "-" + platform + ".jar");
+        LOGGER.info("Downloading native WebRTC from {}", uri);
+        java.net.http.HttpResponse<byte[]> response;
+        try {
+            response = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build().send(
+                    java.net.http.HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(5)).build(),
+                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted", e);
         }
+        if (response.statusCode() != 200) {
+            throw new IOException("Native WebRTC could not be downloaded (HTTP " + response.statusCode() + ")");
+        }
+        try {
+            String sha256 = java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(response.body()));
+            if (!sha256.equals(NATIVES.get(platform))) {
+                throw new IOException("The native WebRTC download does not match its SHA-256");
+            }
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        return response.body();
+    }
+
+    /** The library and its licenses (META-INF/LICENSE, NOTICE, licenses/) out of {@code jar}, into {@code target}. */
+    private static void unpack(byte[] jar, Path target, String library) throws IOException {
         Files.createDirectories(target);
-        Path partial = Files.createTempFile(target, LIBRARY, ".part");
-        try (InputStream in = resource(LIBRARY)) {
-            Files.copy(in, partial, StandardCopyOption.REPLACE_EXISTING);
-            Files.move(partial, library, StandardCopyOption.ATOMIC_MOVE);
+        Path partial = Files.createTempFile(target, library, ".part");
+        try (java.util.zip.ZipInputStream zip = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(jar))) {
+            boolean found = false;
+            for (java.util.zip.ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
+                String name = entry.getName();
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                if (name.equals(library)) {
+                    Files.copy(zip, partial, StandardCopyOption.REPLACE_EXISTING);
+                    found = true;
+                } else if (name.equals("META-INF/LICENSE") || name.equals("META-INF/NOTICE") || name.startsWith("META-INF/licenses/")) {
+                    Path license = target.resolve(name.substring("META-INF/".length())).normalize();
+                    if (license.startsWith(target)) {
+                        Files.createDirectories(license.getParent());
+                        Files.copy(zip, license, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
+            if (!found) {
+                throw new IOException("The native WebRTC download has no " + library);
+            }
+            // The library last, so one that is there was unpacked whole.
+            Files.move(partial, target.resolve(library), StandardCopyOption.ATOMIC_MOVE);
         } finally {
             Files.deleteIfExists(partial);
         }
-    }
-
-    private static InputStream resource(String name) throws IOException {
-        InputStream in = Transport.class.getResourceAsStream("/create_media_systems/webrtc/" + name);
-        if (in == null) {
-            throw new IOException("This Create: Media Systems jar has no bundled WebRTC");
-        }
-        return in;
     }
 
     public State state() {

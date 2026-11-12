@@ -86,7 +86,6 @@ neoForge {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
-    webrtcNatives
 }
 
 dependencies {
@@ -117,7 +116,6 @@ dependencies {
         version { strictly "[${webrtc_version}]" }
         transitive = false
     }
-    webrtcNatives("dev.onvoid.webrtc:webrtc-java:${webrtc_version}:windows-x86_64") { transitive = false }
 
     if (sableTests) {
         implementation('maven.modrinth:sable:2.0.6+mc1.21.1') { transitive = false }
@@ -320,22 +318,6 @@ var downloadNoteSounds = tasks.register('downloadNoteSounds') {
     }
 }
 sourceSets.main.resources.srcDir(files(noteResources).builtBy(downloadNoteSounds))
-
-// webrtc-java's native library for 64-bit Windows (from Maven Central, checked by Gradle's dependency resolution)
-// and its licenses, which the client unpacks into create_media_systems/webrtc/<version> (see p2p/Transport).
-def webrtcResources = layout.buildDirectory.dir('generated/webrtc')
-var bundleWebrtc = tasks.register('bundleWebrtc', Sync) {
-    from({ zipTree(configurations.webrtcNatives.singleFile) }) {
-        include 'webrtc-java-windows-x86_64.dll', 'META-INF/LICENSE', 'META-INF/NOTICE', 'META-INF/licenses/**'
-        eachFile { it.path = it.path.replaceFirst('^META-INF/', '') }
-    }
-    includeEmptyDirs = false
-    into webrtcResources.map { it.dir('create_media_systems/webrtc') }
-    doLast {
-        new File(destinationDir, 'version').text = webrtc_version
-    }
-}
-sourceSets.main.resources.srcDir(files(webrtcResources).builtBy(bundleWebrtc))
 
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     var replaceProperties = [
