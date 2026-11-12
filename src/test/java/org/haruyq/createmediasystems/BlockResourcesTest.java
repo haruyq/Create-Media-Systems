@@ -50,6 +50,7 @@ class BlockResourcesTest {
             Map.entry("disc_reader", new Row(Tool.AXE, false, true)),
             Map.entry("display", new Row(Tool.PICKAXE, false, true)),
             Map.entry("equalizer", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("grand_piano", new Row(Tool.AXE, false, true)),
             Map.entry("hifi_speaker", new Row(Tool.PICKAXE, false, true)),
             // Drops its units as it is removed; it has no item of its own.
             Map.entry("hifi_stack", new Row(Tool.PICKAXE, false, false)),

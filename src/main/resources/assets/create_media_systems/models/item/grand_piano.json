@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:builtin/entity",
+  "textures": { "particle": "minecraft:block/dark_oak_planks" },
+  "display": {
+    "gui": { "rotation": [27, 150, 0], "translation": [0, -1.6, 0], "scale": [0.91, 0.91, 0.91] },
+    "ground": { "translation": [0, 2, 0], "scale": [0.42, 0.42, 0.42] },
+    "fixed": { "rotation": [20, 155, 0], "scale": [0.86, 0.86, 0.86] },
+    "firstperson_righthand": { "rotation": [10, -52, 0], "translation": [1, 1, 0], "scale": [0.53, 0.53, 0.53] },
+    "firstperson_lefthand": { "rotation": [10, 52, 0], "translation": [1, 1, 0], "scale": [0.53, 0.53, 0.53] },
+    "thirdperson_righthand": { "rotation": [40, -25, 0], "translation": [0, 3, 0], "scale": [0.52, 0.52, 0.52] }
+  }
+}
