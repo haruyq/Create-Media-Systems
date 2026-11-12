@@ -632,8 +632,12 @@ public final class Streams {
     public static <E extends BlockEntity & Emitter> void relay(ServerLevel level, E emitter, Optional<BlockPos> link,
             Vec3 origin, Optional<Direction> facing, Channel channel, float volume, BroadcastProfile profile) {
         BlockPos source = link.orElse(emitter.getBlockPos());
-        float sourceGain = level.isLoaded(source) && level.getBlockEntity(source) instanceof MediaSource media
-                ? media.gain() : 1;
+        BlockEntity linked = level.isLoaded(source) ? level.getBlockEntity(source) : null;
+        if (linked instanceof LiveSource live) {
+            // It has no track: the relay below only stops what the emitter played before it was linked here.
+            live.heardThrough(level, emitter.getBlockPos(), origin, facing, channel, volume);
+        }
+        float sourceGain = linked instanceof MediaSource media ? media.gain() : 1;
         boolean givenWay = emitter.givesWay() && RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey() != emitter
                 && relays(entry, level, source) && !(entry.getKey() instanceof Emitter other && other.givesWay()));
         relay(level, emitter, new Sound(origin, facing, channel, source, profile),

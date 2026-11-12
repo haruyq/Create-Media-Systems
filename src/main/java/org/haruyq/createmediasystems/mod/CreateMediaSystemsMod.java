@@ -13,6 +13,7 @@ import org.haruyq.createmediasystems.broadcast.BroadcastFeature;
 import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.display.DisplayFeature;
 import org.haruyq.createmediasystems.hifi.HifiFeature;
+import org.haruyq.createmediasystems.keyboard.KeyboardFeature;
 import org.haruyq.createmediasystems.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.megaphone.MegaphoneFeature;
@@ -36,7 +37,8 @@ public final class CreateMediaSystemsMod {
     /** Making each loads its registry entries. */
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
-            new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature());
+            new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
+            new KeyboardFeature());
 
     private static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -63,6 +65,8 @@ public final class CreateMediaSystemsMod {
         // Hi-Fi
         order.addAll(HifiFeature.hifiUnits());
         order.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
+                // Instruments
+                KeyboardFeature.KEYBOARD_ITEM,
                 // Video
                 VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM, VideoFeature.EQUALIZER_ITEM,
                 DisplayFeature.DISPLAY_ITEM, DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL,
