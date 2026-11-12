@@ -29,7 +29,7 @@ public final class MidiPort implements AutoCloseable {
     private final Consumer<ShortMessage> receive;
     private final Runnable disconnected;
     private final AtomicBoolean scanning = new AtomicBoolean();
-    private volatile Status status = new Status(List.of(), "", "piano.midi_scanning");
+    private volatile Status status = new Status(List.of(), "", "keyboard.midi_scanning");
     private volatile String requested;
     private volatile boolean closed;
     private volatile long generation;
@@ -62,24 +62,24 @@ public final class MidiPort implements AutoCloseable {
                 var selected = inputs.stream().filter(input -> input.id().equals(chosen)).findFirst().orElse(null);
                 if (selected == null) {
                     disconnect();
-                    status = new Status(inputs, chosen, "".equals(requested) ? "piano.midi_none" : "piano.midi_missing");
+                    status = new Status(inputs, chosen, "".equals(requested) ? "keyboard.midi_none" : "keyboard.midi_missing");
                     return;
                 }
                 if (chosen.equals(connected) && device != null && device.isOpen()) {
-                    status = new Status(inputs, chosen, "piano.midi_connected");
+                    status = new Status(inputs, chosen, "keyboard.midi_connected");
                     return;
                 }
                 disconnect();
                 try {
                     connect(selected);
-                    status = new Status(inputs, chosen, "piano.midi_connected");
+                    status = new Status(inputs, chosen, "keyboard.midi_connected");
                 } catch (MidiUnavailableException | IllegalArgumentException | SecurityException error) {
                     disconnect();
-                    status = new Status(inputs, chosen, "piano.midi_error");
+                    status = new Status(inputs, chosen, "keyboard.midi_error");
                 }
             } catch (RuntimeException | LinkageError error) {
                 disconnect();
-                status = new Status(List.of(), "", "piano.midi_error");
+                status = new Status(List.of(), "", "keyboard.midi_error");
             } finally {
                 scanning.set(false);
             }

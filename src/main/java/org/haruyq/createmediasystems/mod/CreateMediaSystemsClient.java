@@ -40,9 +40,10 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 public final class CreateMediaSystemsClient {
     /** In the order their listeners are added, which is the order they hear an event in. */
     private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT, LauncherClient::register, PartyBoxClient::register,
-            MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(), new DisplayClient(),
+            MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(),
+            PxS1100Client.INSTANCE, new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
-            DiscClient::register, BroadcastClient::register, new KeyboardClient(), PxS1100Client.INSTANCE);
+            DiscClient::register, BroadcastClient::register, new KeyboardClient());
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

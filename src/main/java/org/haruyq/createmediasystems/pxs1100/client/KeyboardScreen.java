@@ -169,9 +169,9 @@ final class KeyboardScreen extends Screen {
         int start = left + 10, each = (panel - 28) / 3;
         int middle = start + each + 4, end = middle + each + 4;
         device = label(start, 52, each * 2 + 4, () -> Component.empty(), this::nextInput, "device_help");
-        label(end, 52, each, () -> Component.translatable("piano.refresh"), midi::scan, null);
-        label(start, 75, each, () -> preferredChannel < 0 ? Component.translatable("piano.all_channels")
-                : Component.translatable("piano.channel", preferredChannel + 1), () -> {
+        label(end, 52, each, () -> Component.translatable("keyboard.refresh"), midi::scan, null);
+        label(start, 75, each, () -> preferredChannel < 0 ? Component.translatable("keyboard.all_channels")
+                : Component.translatable("keyboard.channel", preferredChannel + 1), () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
             requestMidiReset();
         }, null);
@@ -190,7 +190,7 @@ final class KeyboardScreen extends Screen {
                 () -> action(Action.POLYPHONY, settings().polyphony >= 256 ? 32 : (settings().polyphony / 32 + 1) * 32), null);
         slider(start, 144, each, "reverb", 0, 127, () -> settings().reverb, n -> action(Action.REVERB, n));
         slider(middle, 144, each, "chorus", 0, 127, () -> settings().chorus, n -> action(Action.CHORUS, n));
-        label(end, 144, each, () -> Component.translatable("piano.panic"), this::panic, null);
+        label(end, 144, each, () -> Component.translatable("keyboard.panic"), this::panic, null);
         slider(start, 167, each, "bpm", 20, 300, () -> settings().bpm, n -> action(Action.BPM, n));
         slider(middle, 167, each, "beats", 1, 12, () -> settings().beats, n -> action(Action.BEATS, n));
         label(end, 167, each, () -> t("sf2", settings().font), this::nextFont, "font_help");
@@ -287,7 +287,7 @@ final class KeyboardScreen extends Screen {
         if (device != null) {
             var status = midi.status();
             var name = status.inputs().stream().filter(input -> input.id().equals(status.selected())).map(MidiPort.Input::name).findFirst();
-            device.setMessage(fit(name.isPresent() && status.message().equals("piano.midi_connected")
+            device.setMessage(fit(name.isPresent() && status.message().equals("keyboard.midi_connected")
                     ? Component.literal(name.get()) : Component.translatable(status.message()), device.getWidth() - 8));
         }
         if (!Minecraft.getInstance().isWindowActive()) releaseComputer();

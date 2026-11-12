@@ -4,6 +4,7 @@
     "create_media_systems:blu_ray_player",
     "create_media_systems:disc_drive_emulator",
     "create_media_systems:disc_reader",
+    "create_media_systems:px_s1100",
     "create_media_systems:train_disc_reader",
     "create_media_systems:disc_cell_charger",
     "create_media_systems:stage_light",
@@ -11,7 +12,6 @@
     "create_media_systems:lighting_console",
     "create_media_systems:lighting_monitor",
     "create_media_systems:hifi_stack",
-    "create_media_systems:hifi_speaker",
-    "create_media_systems:px_s1100"
+    "create_media_systems:hifi_speaker"
   ]
 }

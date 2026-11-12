@@ -282,7 +282,7 @@ final class KeyboardRuntime {
 
     private boolean available(ServerPlayer player) {
         if (owner == null || owner.equals(player.getUUID())) return true;
-        player.displayClientMessage(Component.translatable("piano.busy"), true);
+        player.displayClientMessage(Component.translatable("keyboard.busy"), true);
         return false;
     }
 

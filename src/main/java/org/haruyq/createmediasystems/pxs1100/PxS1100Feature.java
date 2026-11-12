@@ -73,7 +73,9 @@ public final class PxS1100Feature implements Feature {
         }));
     }
 
-    @Override public void registerPayloads(PayloadRegistrar registrar) { KeyboardPackets.register(registrar); }
+    @Override public void registerPayloads(PayloadRegistrar registrar) {
+        KeyboardPackets.register(registrar.versioned("2"));
+    }
 
     private record EnergyPort(KeyboardBlockEntity keyboard) implements IEnergyStorage {
         @Override public int receiveEnergy(int maxReceive, boolean simulate) {
