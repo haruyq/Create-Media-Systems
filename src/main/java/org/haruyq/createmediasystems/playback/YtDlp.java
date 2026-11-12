@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.haruyq.createmediasystems.stream.ProviderUrls;
+import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -56,7 +57,9 @@ public final class YtDlp {
         String out = run(page, TIMEOUT_SECONDS, "-J", "-f", String.format(Locale.ROOT, FORMAT, height,
                 String.format(Locale.ROOT, SEPARATE_VIDEO, height), SEPARATE_AUDIO,
                 String.format(Locale.ROOT, SINGLE_FILE, height)));
-        return prepare(JsonParser.parseString(out).getAsJsonObject(), maxHeight);
+        JsonObject info = JsonParser.parseString(out).getAsJsonObject();
+        foundTitle(page, info);
+        return prepare(info, maxHeight);
     }
 
     /**
@@ -64,8 +67,15 @@ public final class YtDlp {
      * first, as for a display (see the class comment); fails with yt-dlp's reason.
      */
     static NativeMediaResolver.Prepared resolveAudio(URI page) throws IOException, InterruptedException {
-        return audio(JsonParser.parseString(run(page, TIMEOUT_SECONDS, "-J", "-f",
-                "ba[protocol^=m3u8]/ba[protocol=https]/ba/b")).getAsJsonObject());
+        JsonObject info = JsonParser.parseString(run(page, TIMEOUT_SECONDS, "-J", "-f",
+                "ba[protocol^=m3u8]/ba[protocol=https]/ba/b")).getAsJsonObject();
+        foundTitle(page, info);
+        return audio(info);
+    }
+
+    private static void foundTitle(URI page, JsonObject info) {
+        JsonElement title = info.get("title");
+        Streams.foundTitle(page.toString(), title == null || !title.isJsonPrimitive() ? null : title.getAsString());
     }
 
     /** What VLC opens for the one format yt-dlp's {@code -J} output picked as a page's audio: that format itself. */
@@ -92,12 +102,27 @@ public final class YtDlp {
         }
     }
 
-    /** The first {@code max} (at least 1) video links of the playlist at {@code page}; fails with yt-dlp's reason. */
+    /**
+     * The first {@code max} (at least 1) video links of the playlist at {@code page}, whose titles it passes on (see
+     * Streams#foundTitle); fails with yt-dlp's reason.
+     */
     public static List<String> playlist(String page, int max) throws IOException, InterruptedException {
         // --yes-playlist overrides run's --no-playlist, so a video in a playlist gives the playlist, not the video.
-        return run(URI.create(page.strip()), TIMEOUT_SECONDS, "--yes-playlist", "--flat-playlist", "--print", "url",
-                "--playlist-items", "1:" + Math.max(1, max)).lines().map(String::strip).filter(l -> !l.isEmpty())
-                .toList();
+        return videos(run(URI.create(page.strip()), TIMEOUT_SECONDS, "--yes-playlist", "--flat-playlist", "--print",
+                "%(url)s\t%(title)s", "--playlist-items", "1:" + Math.max(1, max)));
+    }
+
+    /** The links in what playlist has yt-dlp print (a link and its title or NA, a line each); titles passed on. */
+    static List<String> videos(String printed) {
+        List<String> links = new ArrayList<>();
+        for (String line : printed.lines().toList()) {
+            String[] video = line.split("\t", 2);
+            if (!video[0].isBlank()) {
+                links.add(video[0].strip());
+                Streams.foundTitle(video[0], video.length < 2 || video[1].strip().equals("NA") ? null : video[1]);
+            }
+        }
+        return links;
     }
 
     /**

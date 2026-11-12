@@ -117,4 +117,13 @@ class YtDlpTest {
                 YtDlp.fill(java.util.List.of(" a ", list, "", "b"), videos, 4), "room is kept for the other rows");
         assertEquals(java.util.List.of("a", "b"), YtDlp.fill(java.util.List.of("a", list, "b"), videos, 2));
     }
+
+    @Test
+    void aPlaylistsVideosTitlesAreKept() {
+        String a = "https://www.youtube.com/watch?v=titled", b = "https://www.youtube.com/watch?v=untitled";
+        assertEquals(java.util.List.of(a, b), YtDlp.videos(a + "\tFirst video\n" + b + "\tNA\n\n"));
+        assertEquals("First video", org.haruyq.createmediasystems.stream.Streams.title(a).getString());
+        // No API here: one without a title is asked about, and shows as its link meanwhile.
+        assertEquals(null, org.haruyq.createmediasystems.stream.Streams.title(b));
+    }
 }

@@ -639,6 +639,59 @@ public final class Streams {
         return Math.max(0, duration > 0 ? Math.min(to, (long) (duration * second) - second) : to);
     }
 
+    /**
+     * Client: each link's title from the API's /title, or none (an unknown source); a failed ask is dropped, to be
+     * asked again after INFO_RETRY_SECONDS.
+     */
+    // ponytail: never evicted, one entry per distinct link shown or resolved since start; add an LRU if that grows.
+    private static final Map<String, CompletableFuture<Optional<String>>> TITLES = new ConcurrentHashMap<>();
+
+    /** Client: {@code url}'s title, or that it is an unknown source; null while the API is asked, or if it can't be. */
+    @Nullable
+    public static Component title(String url) {
+        Optional<String> title = TITLES.computeIfAbsent(url.strip(), Streams::askTitle).getNow(null);
+        return title == null ? null : title.<Component>map(Component::literal)
+                .orElseGet(() -> Component.translatable("create_media_systems.disc.unknown_source"));
+    }
+
+    private static CompletableFuture<Optional<String>> askTitle(String url) {
+        MediaKind kind = MediaKind.of(url);
+        if (kind == null || kind.title != null) {
+            return CompletableFuture.completedFuture(Optional.ofNullable(kind == null ? null : kind.title));
+        }
+        return CompletableFuture.completedFuture(url).thenCompose(link -> HTTP.sendAsync(
+                        HttpRequest.newBuilder(titleUri(link)).timeout(Duration.ofSeconds(120)).build(),
+                        HttpResponse.BodyHandlers.ofString()))
+                .thenApply(response -> switch (response.statusCode()) {
+                    case 200 -> Optional.ofNullable(optional(JsonParser.parseString(response.body()).getAsJsonObject(),
+                            "title", JsonElement::getAsString));
+                    case 403 -> Optional.<String>empty(); // a host the API doesn't play
+                    default -> throw new CompletionException(new IOException("HTTP " + response.statusCode()));
+                })
+                .exceptionally(error -> {
+                    CompletableFuture.delayedExecutor(INFO_RETRY_SECONDS, TimeUnit.SECONDS).execute(() -> TITLES.remove(url));
+                    return null;
+                });
+    }
+
+    /** Client: the title this computer's yt-dlp found for {@code url}, shown here and kept by the API for the others. */
+    public static void foundTitle(String url, @Nullable String title) {
+        if (title == null || title.isBlank() || MediaKind.of(url) != MediaKind.WEB) {
+            return;
+        }
+        TITLES.put(url.strip(), CompletableFuture.completedFuture(Optional.of(title.strip())));
+        JsonObject body = new JsonObject();
+        body.addProperty("title", title.strip());
+        CompletableFuture.completedFuture(url).thenCompose(link -> HTTP.sendAsync(HttpRequest.newBuilder(titleUri(link))
+                .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build(), HttpResponse.BodyHandlers.discarding()));
+    }
+
+    private static URI titleUri(String url) {
+        return URI.create(ApiHttp.endpoint(ServerConfig.API_URL.get(), "title",
+                ProviderUrls.canonical(URI.create(url.strip())).toString()));
+    }
+
     /** Track length in seconds from the API; negative while loading or for live/unknown streams. */
     public static double duration(String url) {
         Double cached = DURATIONS.putIfAbsent(url, UNKNOWN);

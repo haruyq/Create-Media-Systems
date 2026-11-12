@@ -5,12 +5,9 @@ import org.haruyq.createmediasystems.audio.AudioFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.audio.SpeakerBlock;
-import org.haruyq.createmediasystems.disc.PlaylistItem;
-import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
@@ -35,7 +32,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -98,23 +94,6 @@ public class VideoPlayerGameTests {
             level.removePlayerImmediately(listener, Entity.RemovalReason.DISCARDED);
         }
         helper.succeed();
-    }
-
-    /**
-     * A saved playlist gets each link's title from the API, and an empty one (shown as an unknown source) for a link the
-     * API can't tell about: here every web link, as the game tests' API isn't there.
-     */
-    @GameTest(template = "empty")
-    public static void aSavedPlaylistGetsItsTitles(GameTestHelper helper) {
-        ServerPlayer writer = new FakePlayer(helper.getLevel(), new GameProfile(UUID.randomUUID(), "writer"));
-        writer.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(DiscFeature.BLU_RAY.get()));
-        String disc = new DiscUrl(writer.getUUID(), UUID.randomUUID()).toString();
-        String web = "https://www.youtube.com/watch?v=title";
-        PlaylistItem.writePlaylist(writer, List.of(disc, web, disc));
-        helper.succeedWhen(() -> {
-            Map<String, String> titles = writer.getMainHandItem().get(DiscFeature.PLAYLIST_TITLES.get());
-            helper.assertTrue(Map.of(disc, "DVD / Blu-ray", web, "").equals(titles), "titles: " + titles);
-        });
     }
 
     /**

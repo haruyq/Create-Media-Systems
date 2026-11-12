@@ -7,9 +7,7 @@ import static org.haruyq.createmediasystems.CreateMediaSystems.ITEMS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.SOUNDS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.id;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.Feature;
@@ -35,10 +33,6 @@ public final class DiscFeature implements Feature {
     public static final Supplier<DataComponentType<List<String>>> PLAYLIST = COMPONENTS.registerComponentType("playlist",
             b -> b.persistent(Codec.STRING.listOf())
                     .networkSynchronized(ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list())));
-    /** Each link's title from the API, shown on the disc instead of the link; empty for one the API doesn't know. */
-    public static final Supplier<DataComponentType<Map<String, String>>> PLAYLIST_TITLES = COMPONENTS.registerComponentType("playlist_titles",
-            b -> b.persistent(Codec.unboundedMap(Codec.STRING, Codec.STRING))
-                    .networkSynchronized(ByteBufCodecs.map(HashMap::new, ByteBufCodecs.STRING_UTF8, ByteBufCodecs.STRING_UTF8)));
 
     public static final DeferredItem<PlaylistItem> DVD = ITEMS.register("dvd",
             () -> new PlaylistItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON), DiscKind.DVD));

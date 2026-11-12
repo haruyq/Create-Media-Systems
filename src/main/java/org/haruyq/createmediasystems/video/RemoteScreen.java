@@ -6,6 +6,7 @@ import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.client.PlaybackSeekBar;
 import org.haruyq.createmediasystems.partybox.PartyBoxEntity;
 import org.haruyq.createmediasystems.stream.Remotable;
+import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -182,7 +183,9 @@ final class RemoteScreen extends Screen {
         graphics.drawCenteredString(font, box == null ? title : box.getName(), width / 2, top - 36, 0xFFFFFF);
         graphics.drawCenteredString(font, status, width / 2, top - 22, 0xF0C040);
         if (url != null) {
-            graphics.drawCenteredString(font, font.plainSubstrByWidth(url, 300), width / 2, top - 11, 0x909090);
+            Component shown = Streams.title(url);
+            graphics.drawCenteredString(font, font.plainSubstrByWidth(shown == null ? url : shown.getString(), 300),
+                    width / 2, top - 11, 0x909090);
         }
     }
 
