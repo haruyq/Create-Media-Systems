@@ -18,6 +18,7 @@
     "create_media_systems:lighting_console",
     "create_media_systems:lighting_monitor",
     "create_media_systems:hifi_stack",
-    "create_media_systems:hifi_speaker"
+    "create_media_systems:hifi_speaker",
+    "create_media_systems:midi_keyboard"
   ]
 }

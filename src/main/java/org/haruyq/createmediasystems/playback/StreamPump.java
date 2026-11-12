@@ -14,9 +14,12 @@ import com.mojang.blaze3d.audio.Channel;
  */
 public final class StreamPump {
     private static final long PERIOD_MILLIS = 20;
+    /** How often instead while a live stream plays (see {@link #live}): it keeps only a few milliseconds queued. */
+    private static final long LIVE_PERIOD_MILLIS = 2;
     /** How long a queued pass may wait before another is queued anyway: the engine drops its queue as it reloads. */
     private static final long STALE_NANOS = 1_000_000_000L;
     private static final Set<Channel> CHANNELS = ConcurrentHashMap.newKeySet();
+    private static final Set<Runnable> LIVE = ConcurrentHashMap.newKeySet();
     /** When the pass waiting on the sound thread was queued (System.nanoTime); 0 for none. */
     private static final AtomicLong POSTED_AT = new AtomicLong();
 
@@ -36,10 +39,22 @@ public final class StreamPump {
         CHANNELS.remove(channel);
     }
 
+    /**
+     * A stream played as it is made (an instrument) is open: until it {@link #ended}, the channels are refilled every
+     * {@link #LIVE_PERIOD_MILLIS}, and {@code afterRefill} runs after each refill, on the sound thread.
+     */
+    public static void live(Runnable afterRefill) {
+        LIVE.add(afterRefill);
+    }
+
+    public static void ended(Runnable afterRefill) {
+        LIVE.remove(afterRefill);
+    }
+
     private static void run() {
         try {
             while (true) {
-                Thread.sleep(PERIOD_MILLIS);
+                Thread.sleep(LIVE.isEmpty() ? PERIOD_MILLIS : LIVE_PERIOD_MILLIS);
                 long posted = POSTED_AT.get();
                 // One pass queued at a time: a pass that takes longer than the period, queued every period anyway,
                 // piled up on the sound thread without end, and every sound the game played (each waits on that
@@ -50,6 +65,7 @@ public final class StreamPump {
                     SoundChannels.execute(() -> {
                         try {
                             CHANNELS.forEach(Channel::updateStream);
+                            LIVE.forEach(Runnable::run);
                         } finally {
                             POSTED_AT.set(0);
                         }
