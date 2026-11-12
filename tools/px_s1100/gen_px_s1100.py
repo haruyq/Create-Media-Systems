@@ -285,15 +285,7 @@ def build_keys():
     return keys
 
 
-def key_elements(frame, k):
-    if k["black"]:
-        cx = k["cx"]
-        side = ksw("b_side")
-        return [
-            box(frame, cx - BLACK_W / 2, cx + BLACK_W / 2, BLACK_Y0, BLACK_Y1, BLACK_Z0, KEY_Z1,
-                {"front": ksw("b_front"), "back": side, "left": side, "right": side,
-                 "top": ksw("b_top"), "bottom": side}),
-        ]
+def white_key_elements(frame, k):
     side = ksw("w_side")
     return [
         box(frame, k["x0"] + GAP, k["x1"] - GAP, WHITE_Y0, WHITE_Y1, KEY_Z0, KEY_ZSPLIT,
@@ -302,6 +294,90 @@ def key_elements(frame, k):
         box(frame, k["rl"], k["rr"], WHITE_Y0, WHITE_Y1, KEY_ZSPLIT, KEY_Z1,
             {"top": ("swatch", "keys", (1, 1, 15, 31)), "left": side, "right": side}),
     ]
+
+
+def black_key_faces(frame, cx):
+    """A flat front ramp and tapered sides, like the concert grand's black keys."""
+    ramp_length, taper = 12.0, 1.2
+    half = BLACK_W / 2
+    height = BLACK_Y1 - BLACK_Y0
+    pivot_x, pivot_y, pivot_z = (r4(value) for value in frame.to_model(cx, PIVOT_Y, PIVOT_Z))
+    profile = [(BLACK_Z0, WHITE_Y1 + 1.0), (BLACK_Z0 + ramp_length, BLACK_Y1), (KEY_Z1, BLACK_Y1)]
+
+    def ring(top):
+        top_half = half - taper * (top - BLACK_Y0) / height
+        return [(-half, BLACK_Y0), (half, BLACK_Y0), (top_half, top), (-top_half, top)]
+
+    def vertex(section, corner, swatch, normal):
+        z, top = profile[section]
+        x, y = ring(top)[corner]
+        point = ((pivot_x + x * S) / 16, (pivot_y + (y - PIVOT_Y) * S) / 16,
+                 (pivot_z + (z - PIVOT_Z) * S) / 16)
+        u = (x + half) / BLACK_W
+        v = (BLACK_Y1 - y) / height
+        depth = (z - BLACK_Z0) / (KEY_Z1 - BLACK_Z0)
+        if swatch == "b_top":
+            u = min(1.0, max(0.0, (x + half - taper) / (BLACK_W - 2 * taper)))
+            v = depth
+        elif swatch == "b_side":
+            u = depth
+        u0, v0, u1, v1 = KSW[swatch]
+        uv = ((u0 + (u1 - u0) * u) / TEX["keys"][1], (v0 + (v1 - v0) * v) / TEX["keys"][2])
+        length = math.sqrt(sum(value * value for value in normal))
+        return point, uv, tuple(value / length for value in normal)
+
+    for section in range(len(profile) - 1):
+        z0, y0 = profile[section]
+        z1, y1 = profile[section + 1]
+        edges = [(0, -1, 0), (height, taper, 0), (0, z1 - z0, y0 - y1), (-height, taper, 0)]
+        for edge, normal in enumerate(edges):
+            next_edge = (edge + 1) % 4
+            corners = [(section, edge), (section, next_edge), (section + 1, next_edge), (section + 1, edge)]
+            swatch = "b_top" if edge == 2 else "b_side"
+            yield [vertex(row, corner, swatch, normal) for row, corner in corners]
+
+    yield [vertex(0, corner, "b_front", (0, 0, -1)) for corner in reversed(range(4))]
+    yield [vertex(len(profile) - 1, corner, "b_side", (0, 0, 1)) for corner in range(4)]
+
+
+def write_black_obj(path, frame, keys):
+    positions, texcoords, normals = {}, {}, {}
+
+    def index(values, point):
+        point = tuple(round(value, 8) + 0.0 for value in point)
+        return str(values.setdefault(point, len(values) + 1))
+
+    faces = []
+    for key in keys:
+        for face in black_key_faces(frame, key["cx"]):
+            faces.append("f " + " ".join("/".join((index(positions, pos), index(texcoords, uv), index(normals, normal)))
+                                        for pos, uv, normal in face))
+    with open(path, "w", newline="\n") as file:
+        file.write("# Generated PX-S1100WE black keys\nmtllib black_keys.mtl\n")
+        for prefix, values in [("v", positions), ("vt", texcoords), ("vn", normals)]:
+            for point in values:
+                file.write(prefix + " " + " ".join(format(value, ".8g") for value in point) + "\n")
+        file.write("usemtl black_keys\n")
+        file.write("\n".join(faces) + "\n")
+    return len(faces)
+
+
+def black_obj_model(ns, name, offset=(0, 0, 0)):
+    obj = {"parent": "minecraft:block/block", "ambientocclusion": False,
+           "textures": {"particle": ns + ":block/px_s1100/keys"},
+           "loader": "neoforge:obj", "model": f"{ns}:models/block/px_s1100/{name}.obj",
+           "automatic_culling": False, "emissive_ambient": False}
+    if any(offset):
+        obj["transform"] = {"translation": [round(value / 16, 8) for value in offset]}
+    return obj
+
+
+def with_black_keys(ns, solid, offset=(0, 0, 0)):
+    result = {key: value for key, value in solid.items() if key != "elements"}
+    result["loader"] = "neoforge:composite"
+    result["children"] = {"solid": {key: value for key, value in solid.items() if key != "display"},
+                          "black_keys": black_obj_model(ns, "black_keys", offset)}
+    return result
 
 
 # --------------------------------------------------------------------------- body parts
@@ -784,9 +860,14 @@ def main():
     paint_keys().save(os.path.join(tdir, "keys.png"))
 
     keys = build_keys()
+    black_keys = [key for key in keys if key["black"]]
+    white_keys = [key for key in keys if not key["black"]]
     table = Frame()                       # piano resting on y = 0
     base = table.raised(STAND_H)          # default: piano on its stand
     cut = {"render_type": "minecraft:cutout"}
+    black_faces = write_black_obj(os.path.join(mdir, "black_keys.obj"), base, black_keys)
+    with open(os.path.join(mdir, "black_keys.mtl"), "w", newline="\n") as material:
+        material.write(f"newmtl black_keys\nKd 1 1 1\nmap_Kd {ns}:block/px_s1100/keys\n")
 
     def dump(name, m, d=mdir):
         with open(os.path.join(d, name + ".json"), "w", newline="\n") as fp:
@@ -794,8 +875,8 @@ def main():
 
     def assembled(fr, with_stand, with_music_stand=True):
         els = body_elements(fr)
-        for k in keys:
-            els += key_elements(fr, k)
+        for k in white_keys:
+            els += white_key_elements(fr, k)
         els += knob_elements(fr) + power_elements(fr)
         if with_music_stand:
             els += music_stand_elements(fr)
@@ -807,11 +888,11 @@ def main():
     dump("body", model(ns, body_elements(base)))
     dump("stand", model(ns, stand_elements(table), particle="shell"))
     dump("music_stand", model(ns, music_stand_elements(base)))
-    dump("keys_static", model(ns, [e for k in keys for e in key_elements(base, k)]))
-    dump("full", model(ns, assembled(base, True)))
+    dump("keys_static", with_black_keys(ns, model(ns, [e for k in white_keys for e in white_key_elements(base, k)])))
+    dump("full", with_black_keys(ns, model(ns, assembled(base, True))))
     # table-top variants (no stand, piano on y = 0)
     dump("body_tabletop", model(ns, body_elements(table)))
-    dump("full_tabletop", model(ns, assembled(table, False)))
+    dump("full_tabletop", with_black_keys(ns, model(ns, assembled(table, False)), (0, -STAND_H * S, 0)))
 
     # animated partials, authored around their pivot (model origin = pivot)
     shapes = {}
@@ -819,7 +900,11 @@ def main():
         if k["shape"] not in shapes:
             shapes[k["shape"]] = k
             fr = Frame((k["cx"], PIVOT_Y, PIVOT_Z), (0.0, 0.0, 0.0))
-            dump(k["shape"], model(ns, key_elements(fr, k)))
+            if k["black"]:
+                write_black_obj(os.path.join(mdir, "key_black.obj"), fr, [k])
+                dump(k["shape"], black_obj_model(ns, "key_black"))
+            else:
+                dump(k["shape"], model(ns, white_key_elements(fr, k)))
     dump("volume_knob", model(ns, knob_elements(Frame((KNOB_C[0], H, KNOB_C[1]), (0, 0, 0)))))
     dump("power_button", model(ns, power_elements(Frame((POWER_C[0], H, POWER_C[1]), (0, 0, 0)))))
     dump("pedal", model(ns, pedal_elements(Frame((0, 0, 0), (0, 0, 0))), particle="shell"))
@@ -831,8 +916,8 @@ def main():
     item_frame = Frame(model_off=(8.0, STAND_H * S + 1.5, 8.0))
     item_table = Frame(model_off=(8.0, 1.5, 8.0))
     iels = body_elements(item_frame)
-    for k in keys:
-        iels += key_elements(item_frame, k)
+    for k in white_keys:
+        iels += white_key_elements(item_frame, k)
     iels += knob_elements(item_frame) + power_elements(item_frame) + stand_elements(item_table)
     item = model(ns, iels)
     item["display"] = {
@@ -845,7 +930,7 @@ def main():
         "firstperson_lefthand": {"rotation": [0, 200, 0], "translation": [2, 1, 0], "scale": [0.4, 0.4, 0.4]},
         "head": {"translation": [0, 4, 0], "scale": [1, 1, 1]},
     }
-    dump("px_s1100", item, idir)
+    dump("px_s1100", with_black_keys(ns, item, tuple(a - b for a, b in zip(item_frame.mo, base.mo))), idir)
 
     # ----- layout data for the implementation side
     def mp(x, y, z):
@@ -908,8 +993,8 @@ def main():
     with open(os.path.join(layout_dir, "layout.json"), "w", newline="\n") as fp:
         json.dump(layout, fp, indent=1)
 
-    n = sum(len(key_elements(base, k)) for k in keys)
-    print("keys:", len(keys), "key elements:", n, "full elements:", len(assembled(base, True)))
+    n = sum(len(white_key_elements(base, k)) for k in white_keys)
+    print("keys:", len(keys), "white-key elements:", n, "black-key mesh faces:", black_faces)
     print("body aabb:", layout["body_aabb"])
 
 

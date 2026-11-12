@@ -10,10 +10,10 @@ files = sorted((models / "block" / "px_s1100").glob("*.json")) + [models / "item
 bad = 0
 for file in files:
     model = json.loads(file.read_text(encoding="utf-8"))
-    errors = validate(model, file.name)
+    errors = validate(model, file.name, res)
     bad += len(errors)
     for error in errors[:5]:
         print(error)
-    print(f"{file.name}: {len(model['elements'])} elements, {len(errors)} errors")
+    print(f"{file.name}: {len(errors)} errors")
 print("TOTAL ERRORS", bad)
 sys.exit(bool(bad))

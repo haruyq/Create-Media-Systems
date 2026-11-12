@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.keyboard.client;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.model.CompositeModel;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.keyboard.KeyboardBlock;
@@ -45,8 +47,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
     private static final Map<String, ModelResourceLocation> MODELS = new java.util.HashMap<>();
     private final Map<KeyboardBlockEntity, Motion> motions = new WeakHashMap<>();
     private BakedModel staticKeys;
-    private List<BakedQuad> restingQuads = List.of();
-    private final int[] offsets = new int[89];
+    private List<List<BakedQuad>> restingQuads = List.of();
 
     static void register(IEventBus bus) {
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
@@ -152,8 +153,8 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         for (int i = 0; i < MODEL.keys.size(); i++) {
             float amount = motion.amount[i];
             if (amount == 0 && !restingQuads.isEmpty()) {
-                for (int q = offsets[i]; q < offsets[i + 1]; q++) {
-                    out.putBulkData(pose.last(), restingQuads.get(q), 1, 1, 1, 1, light, overlay);
+                for (var quad : restingQuads.get(i)) {
+                    out.putBulkData(pose.last(), quad, 1, 1, 1, 1, light, overlay);
                 }
                 continue;
             }
@@ -170,12 +171,28 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         var model = model("keys_static");
         if (model == staticKeys) return;
         staticKeys = model;
+        restingQuads = List.of();
+        if (!(model instanceof CompositeModel.Baked parts)) return;
+        var white = parts.getPart("solid");
+        var black = parts.getPart("black_keys");
+        if (white == null || black == null) return;
         var random = RandomSource.create(42);
-        var quads = model.getQuads(null, null, random, ModelData.EMPTY, null);
-        for (int i = 0; i < MODEL.keys.size(); i++) {
-            offsets[i + 1] = offsets[i] + model(MODEL.keys.get(i).model()).getQuads(null, null, random, ModelData.EMPTY, null).size();
+        var groups = List.of(white.getQuads(null, null, random, ModelData.EMPTY, null),
+                black.getQuads(null, null, random, ModelData.EMPTY, null));
+        var slices = new ArrayList<List<BakedQuad>>(MODEL.keys.size());
+        int[] offsets = {0, 0};
+        for (var key : MODEL.keys) {
+            int group = key.black() ? 1 : 0;
+            var quads = groups.get(group);
+            int start = offsets[group];
+            int end = start + model(key.model()).getQuads(null, null, random, ModelData.EMPTY, null).size();
+            if (end > quads.size()) return;
+            slices.add(quads.subList(start, end));
+            offsets[group] = end;
         }
-        restingQuads = quads.size() == offsets[MODEL.keys.size()] ? quads : List.of();
+        if (offsets[0] == groups.get(0).size() && offsets[1] == groups.get(1).size()) {
+            restingQuads = List.copyOf(slices);
+        }
     }
 
     private static BakedModel model(String name) {
