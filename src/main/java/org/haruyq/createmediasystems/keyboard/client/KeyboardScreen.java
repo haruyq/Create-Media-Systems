@@ -494,8 +494,9 @@ final class KeyboardScreen extends Screen {
     }
     private int whites() { return TOTAL_WHITE / zoom; }
     private int xAt(int white) { return keyLeft + Math.floorDiv((white - firstWhite) * keyWidth, whites()); }
-    private int blackWidth() { return Math.max(2, keyWidth * 6 / (whites() * 10)); }
-    private int blackHeight() { return keyHeight * 62 / 100; }
+    private int blackWidth() { return Math.max(2, keyWidth * 62 / (whites() * 100)); }
+    private int blackHeight() { return keyHeight * 37 / 61; }
+    private int blackLeft(int white) { return xAt(white) - blackWidth() / 2; }
     private static boolean black(int note) { return KeyboardLayout.PX.keys.get(note - KeyboardLayout.FIRST).black(); }
 
     private int keyAt(double x, double y) {
@@ -503,7 +504,8 @@ final class KeyboardScreen extends Screen {
         int white = 0, result = -1;
         for (int note = KeyboardLayout.FIRST; note <= KeyboardLayout.LAST; note++) {
             if (black(note)) {
-                if (y < keyTop + blackHeight() && Math.abs(x - xAt(white)) <= blackWidth() / 2.0) return note;
+                int a = blackLeft(white);
+                if (y < keyTop + blackHeight() && x >= a && x < a + blackWidth()) return note;
             } else {
                 int a = xAt(white++);
                 if (x >= a && x < xAt(white)) result = note;
@@ -538,20 +540,20 @@ final class KeyboardScreen extends Screen {
         int white = 0;
         for (int n = KeyboardLayout.FIRST; n <= KeyboardLayout.LAST; n++) {
             if (black(n)) continue;
-            int a = xAt(white), b = xAt(++white);
+            int a = xAt(white), b = xAt(++white) - 1;
             boolean held = instrument.keys.pressed(n) || pcHolds(n);
-            int tone = held ? ACCENT : hover == n ? 0xFFFFFFFF : 0xFFEBF2F5;
-            g.fillGradient(a, keyTop, Math.max(a + 1, b - 1), keyTop + keyHeight, tone, held ? 0xFF4FB5AC : 0xFFB0BDC7);
+            int tone = held ? 0xFFE4B45D : hover == n ? 0xFFFFF5CE : 0xFFF3F0E5;
+            g.fillGradient(a, keyTop, Math.max(a + 1, b), keyTop + keyHeight, tone, 0xFFCAC2B1);
             if (n % 12 == 0) {
                 var octave = "C" + (n / 12 - 1);
                 int labelWidth = font.width(octave);
-                float scale = .72f;
-                if (labelWidth * scale <= b - a - 1) {
+                float scale = Math.min(1f, (b - a) / (float) labelWidth);
+                if (scale >= .72f) {
                     var pose = g.pose();
                     pose.pushPose();
-                    pose.translate((a + b - labelWidth * scale) / 2, keyTop + keyHeight - 10, 0);
+                    pose.translate((a + b - labelWidth * scale) / 2, keyTop + keyHeight - 12, 0);
                     pose.scale(scale, scale, 1);
-                    g.drawString(font, octave, 0, 0, 0xFF293B48, false);
+                    g.drawString(font, octave, 0, 0, 0xFF433925, true);
                     pose.popPose();
                 }
             }
@@ -562,10 +564,10 @@ final class KeyboardScreen extends Screen {
                 white++;
                 continue;
             }
-            int a = xAt(white) - blackWidth() / 2;
+            int a = blackLeft(white);
             boolean held = instrument.keys.pressed(n) || pcHolds(n);
-            g.fillGradient(a, keyTop, a + blackWidth(), keyTop + blackHeight(),
-                    held ? 0xFF58BAAB : hover == n ? 0xFF667D8B : 0xFF253642, held ? 0xFF247C74 : 0xFF0A1018);
+            int tone = held ? 0xFFC18A38 : hover == n ? 0xFF54545F : 0xFF26272E;
+            g.fillGradient(a, keyTop, a + blackWidth(), keyTop + blackHeight(), tone, 0xFF0A0A0D);
         }
         g.disableScissor();
         int track = keyTop + keyHeight + 4;
