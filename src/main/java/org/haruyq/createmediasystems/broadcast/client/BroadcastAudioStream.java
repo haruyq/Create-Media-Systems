@@ -13,7 +13,11 @@ import org.haruyq.createmediasystems.playback.CmsStream;
 /** Speaker bandwidth, propagation and reflections applied only to a tower's own audio. */
 public final class BroadcastAudioStream extends CmsStream.Wrapper {
     public static final double METRES_PER_SECOND = 343;
-    public record Path(double metres, boolean obstructed) {}
+    public record Path(double metres, boolean obstructed) {
+        public double transmission() {
+            return obstructed ? .58 : 1;
+        }
+    }
 
     private final Supplier<Path> path;
     private final boolean horn;

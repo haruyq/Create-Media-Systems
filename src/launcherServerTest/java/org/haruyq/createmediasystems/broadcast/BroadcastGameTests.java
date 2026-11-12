@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -48,6 +49,20 @@ public final class BroadcastGameTests {
         disc.set(AudioFeature.URL.get(), new DiscUrl(UUID.randomUUID(), UUID.randomUUID()).toString());
         station.source.insert(disc, null);
         station.tower.configure(h.getLevel(), station.source.getBlockPos(), 1, Streams.Channel.MIX);
+    }
+
+    @GameTest(template = "empty")
+    public static void soundPassesAroundAMastAndAContinuousWallStillMufflesIt(GameTestHelper h) {
+        var station = station(h, BroadcastFeature.ARRAY.get());
+        var listener = h.makeMockPlayer(GameType.SURVIVAL);
+        var ear = station.base.getBlockPos().below().getCenter();
+        var mouth = MovingBroadcastPackets.Frame.mouth(station.tower.getBlockPos());
+        h.assertTrue(!BroadcastOcclusion.obstructed(listener, ear, mouth), "The mast leaves clear paths around the pole");
+        h.getLevel().setBlockAndUpdate(station.mast.east(), Blocks.STONE.defaultBlockState());
+        h.assertTrue(!BroadcastOcclusion.obstructed(listener, ear, mouth), "The other side can still carry sound");
+        h.getLevel().setBlockAndUpdate(station.mast.west(), Blocks.STONE.defaultBlockState());
+        h.assertTrue(BroadcastOcclusion.obstructed(listener, ear, mouth), "A barrier covering both sides muffles the sound");
+        h.succeed();
     }
 
     @GameTest(template = "empty")

@@ -37,10 +37,15 @@ public record StreamSpec(String track, double startSeconds, Streams.Channel chan
      * when {@code present} turns false after having been true (disc taken out, block gone), and once either that or
      * {@code nearby} has been false for a second, fading out meanwhile. Volume follows {@code gain} every tick
      * (OpenAL's own falloff is off), fading to it; {@code pitch}, if any, is a moving emitter's Doppler pitch.
+     * Emitters with their own acoustic simulation can disable the extra Sound Physics pass.
      */
     public record Emitter(@Nullable Supplier<Vec3> position, @Nullable Supplier<Vec3> tracedFrom,
                           BooleanSupplier present, BooleanSupplier nearby, DoubleSupplier gain,
-                          @Nullable DoubleSupplier pitch) {
+                          @Nullable DoubleSupplier pitch, boolean useSoundPhysics) {
+        public Emitter(@Nullable Supplier<Vec3> position, @Nullable Supplier<Vec3> tracedFrom,
+                BooleanSupplier present, BooleanSupplier nearby, DoubleSupplier gain, @Nullable DoubleSupplier pitch) {
+            this(position, tracedFrom, present, nearby, gain, pitch, true);
+        }
     }
 
     /**
