@@ -373,7 +373,8 @@ public final class ClientStreams {
             }
         });
         modBus.addListener((FMLClientSetupEvent event) -> {
-            Vlc.preload();
+            // Loading Vlc downloads it the first time, so its class is first touched on a thread of its own.
+            Thread.ofPlatform().daemon().name("CMS VLC loader").start(Vlc::preload);
             Tools.preload();
             if (ClientConfig.YOUTUBE_COOKIES.get()) {
                 CookieReceiver.start();

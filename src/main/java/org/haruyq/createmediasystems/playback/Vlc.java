@@ -1,11 +1,17 @@
 package org.haruyq.createmediasystems.playback;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -23,14 +29,16 @@ import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
 /**
- * libvlc 3, bound with JNA (which Minecraft ships). On 64-bit Windows it is VideoLAN's own VLC build bundled in the
- * jar (see build.gradle), unpacked once into the game folder; elsewhere it is the computer's own VLC 3.
+ * libvlc 3, bound with JNA (which Minecraft ships). On 64-bit Windows it is VideoLAN's own VLC build, downloaded once
+ * into the game folder at startup (see {@link #unpack}); elsewhere it is the computer's own VLC 3.
  */
 final class Vlc {
     /** The VLC options every player shares; each media adds its own (see NativeMediaResolver.Prepared). */
     private static final String[] ARGS = {
             "--quiet", "--no-video-title-show", "--no-snapshot-preview", "--no-osd", "--no-stats",
             "--no-metadata-network-access", "--http-reconnect"};
+    private static final String VERSION = "3.0.24";
+    private static final String SHA256 = "fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323";
 
     @Nullable
     static final Lib LIB;
@@ -71,13 +79,11 @@ final class Vlc {
         return LIB == null ? null : LIB.libvlc_new(args.length, args);
     }
 
-    /** Loads VLC now, off the thread that would first need it (it unpacks the first time). */
+    /** Loads VLC (calling it is what loads it: it downloads the first time, so call it off the game's threads). */
     static void preload() {
-        Thread.ofPlatform().daemon().name("CMS VLC loader").start(() -> {
-            if (MISSING == null) {
-                LogUtils.getLogger().info("VLC is ready");
-            }
-        });
+        if (MISSING == null) {
+            LogUtils.getLogger().info("VLC is ready");
+        }
     }
 
     private static Lib load() throws IOException {
@@ -98,42 +104,74 @@ final class Vlc {
         return Native.load("vlc", Lib.class, options);
     }
 
-    /** The bundled VLC, unpacked into {@code create_media_systems/vlc/<version>} unless it already is. */
+    /**
+     * VideoLAN's own VLC for 64-bit Windows, downloaded once into {@code create_media_systems/vlc/<version>} and checked
+     * against VideoLAN's published SHA-256; the parts playback and lighting analysis don't use (its interfaces,
+     * scripting, network output) are left out.
+     */
     private static Path unpack() throws IOException {
-        String version;
-        try (InputStream in = resource("version")) {
-            version = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
-        }
-        Path dir = ClientFiles.DIR.resolve("vlc").resolve(version);
+        Path dir = ClientFiles.DIR.resolve("vlc").resolve(VERSION);
         Path done = dir.resolve(".unpacked");
         if (Files.exists(done)) {
             return dir;
         }
-        LogUtils.getLogger().info("Unpacking VLC {} into {}", version, dir);
-        try (ZipInputStream zip = new ZipInputStream(resource("win-x64.zip"))) {
+        String url = "https://download.videolan.org/pub/videolan/vlc/" + VERSION + "/win64/vlc-" + VERSION + "-win64.zip";
+        LogUtils.getLogger().info("Downloading VLC {} into {}", VERSION, dir);
+        byte[] bytes;
+        try {
+            HttpResponse<byte[]> response = NativeMediaResolver.HTTP.send(HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofMinutes(10)).build(), HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != 200) {
+                throw new IOException("HTTP " + response.statusCode() + " for " + url);
+            }
+            bytes = response.body();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted", e);
+        }
+        if (!SHA256.equalsIgnoreCase(AudioCache.sha256(bytes))) {
+            throw new IOException("The VLC download does not match VideoLAN's SHA-256");
+        }
+        String root = "vlc-" + VERSION + "/";
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
             for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
-                Path target = dir.resolve(entry.getName()).normalize();
+                String name = entry.getName().replace('\\', '/');
+                if (entry.isDirectory() || !name.startsWith(root) || !Parts.kept(name.substring(root.length()))) {
+                    continue;
+                }
+                Path target = dir.resolve(name.substring(root.length())).normalize();
                 if (!target.startsWith(dir)) {
-                    throw new IOException("Bad entry in the bundled VLC: " + entry.getName());
+                    throw new IOException("Bad entry in the VLC download: " + name);
                 }
-                if (entry.isDirectory()) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.createDirectories(target.getParent());
-                    Files.copy(zip, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                }
+                Files.createDirectories(target.getParent());
+                Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING);
             }
         }
-        Files.writeString(done, version);
+        Files.writeString(done, VERSION);
         return dir;
     }
 
-    private static InputStream resource(String name) throws IOException {
-        InputStream in = Vlc.class.getResourceAsStream("/create_media_systems/vlc/" + name);
-        if (in == null) {
-            throw new IOException("This Create: Media Systems jar has no bundled VLC");
+    /** The parts of VLC CMS keeps (a class of its own, so checking them doesn't load VLC). */
+    static final class Parts {
+        private static final Set<String> LEFT_OUT = Set.of("gui", "visualization", "lua", "access_output", "mux",
+                "services_discovery", "control", "video_splitter");
+        private static final Set<String> STREAM_OUT = Set.of("libstream_out_smem_plugin.dll",
+                "libstream_out_transcode_plugin.dll");
+
+        /** Whether CMS keeps this file of VLC's (its path inside the VLC folder). */
+        static boolean kept(String path) {
+            if (path.equals("libvlc.dll") || path.equals("libvlccore.dll") || path.equals("COPYING.txt")) {
+                return true;
+            }
+            if (!path.startsWith("plugins/")) {
+                return false;
+            }
+            String[] parts = path.split("/");
+            if (parts.length > 2 && parts[1].equals("stream_out")) {
+                return STREAM_OUT.contains(parts[parts.length - 1]);
+            }
+            return parts.length <= 2 || !LEFT_OUT.contains(parts[1]);
         }
-        return in;
     }
 
     private interface LibC extends Library {

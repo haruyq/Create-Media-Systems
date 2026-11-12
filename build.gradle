@@ -321,52 +321,6 @@ var downloadNoteSounds = tasks.register('downloadNoteSounds') {
 }
 sourceSets.main.resources.srcDir(files(noteResources).builtBy(downloadNoteSounds))
 
-// VideoLAN's own VLC for 64-bit Windows, bundled so CMS plays media with nothing else installed (see Vlc.java).
-// Downloaded once into Gradle's cache, checked against VideoLAN's published SHA-256, and left without the parts
-// playback and lighting analysis don't use (its interfaces, scripting, network output). Other systems use their own VLC 3.
-def vlcVersion = '3.0.24'
-def vlcSha256 = 'fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323'
-def vlcDownload = file("${gradle.gradleUserHomeDir}/caches/create_media_systems/vlc-${vlcVersion}-win64.zip")
-def vlcResources = layout.buildDirectory.dir('generated/vlc')
-var downloadVlc = tasks.register('downloadVlc') {
-    outputs.file vlcDownload
-    doLast {
-        def sha256 = { File f -> f.bytes.sha256() }
-        if (vlcDownload.exists() && sha256(vlcDownload) == vlcSha256) return
-        vlcDownload.parentFile.mkdirs()
-        def url = "https://download.videolan.org/pub/videolan/vlc/${vlcVersion}/win64/vlc-${vlcVersion}-win64.zip"
-        logger.lifecycle("Downloading ${url}")
-        vlcDownload.bytes = new URL(url).bytes
-        if (sha256(vlcDownload) != vlcSha256) {
-            vlcDownload.delete()
-            throw new GradleException("The VLC download does not match VideoLAN's SHA-256")
-        }
-    }
-}
-def vlcLeftOut = ['gui', 'visualization', 'lua', 'access_output', 'mux', 'services_discovery', 'control', 'video_splitter']
-def vlcStreamOut = ['libstream_out_smem_plugin.dll', 'libstream_out_transcode_plugin.dll']
-// Names what is bundled, so a client unpacks it anew (see Vlc.java) whenever the version or the parts left out change.
-def vlcStamp = "${vlcVersion}-" + "${vlcLeftOut}${vlcStreamOut}".bytes.sha256().take(8)
-var bundleVlc = tasks.register('bundleVlc', Zip) {
-    dependsOn downloadVlc
-    inputs.property 'stamp', vlcStamp
-    def root = "vlc-${vlcVersion}/"
-    from({ zipTree(vlcDownload) }) {
-        include "${root}libvlc.dll", "${root}libvlccore.dll", "${root}COPYING.txt", "${root}plugins/**"
-        exclude(vlcLeftOut.collect { "${root}plugins/${it}/**" })
-        exclude { entry -> entry.path.startsWith("${root}plugins/stream_out/") && !entry.directory
-                && !vlcStreamOut.contains(entry.name) }
-        eachFile { it.path = it.path.substring(root.length()) }
-    }
-    includeEmptyDirs = false
-    archiveFileName = 'win-x64.zip'
-    destinationDirectory = vlcResources.map { it.dir('create_media_systems/vlc') }
-    doLast {
-        new File(destinationDirectory.get().asFile, 'version').text = vlcStamp
-    }
-}
-sourceSets.main.resources.srcDir(files(vlcResources).builtBy(bundleVlc))
-
 // webrtc-java's native library for 64-bit Windows (from Maven Central, checked by Gradle's dependency resolution)
 // and its licenses, which the client unpacks into create_media_systems/webrtc/<version> (see p2p/Transport).
 def webrtcResources = layout.buildDirectory.dir('generated/webrtc')
