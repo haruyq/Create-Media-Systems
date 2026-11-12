@@ -4,7 +4,10 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
+import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.piano.PianoState;
 
@@ -22,6 +25,9 @@ final class PianoMesh {
     private static final float BLACK_HALF_WIDTH = .0067f, BLACK_TAPER = .00135f;
     private static final int IVORY = 0xF1EDE6, IVORY_SIDE = 0xDED8CE;
     private static final int EBONY_KEY = 0x222126, EBONY_KEY_SIDE = 0x151419;
+    private static final float FALLBOARD_LEFT = KEY_LEFT - .003f, FALLBOARD_RIGHT = KEY_RIGHT + .003f;
+    private static final RenderType FALLBOARD_SURFACE = RenderType.entityCutoutNoCull(
+            CreateMediaSystems.id("textures/block/grand_piano_fallboard.png"));
     private static final float[][] FALLBOARD = {
         {KEY_BACK + .010f, .856f}, {.310f, .868f}, {.327f, .885f},
         {.357f, .904f}, {.408f, .920f}, {.487f, .930f}, {.604f, .934f}
@@ -48,11 +54,13 @@ final class PianoMesh {
     }
 
     private final PoseStack pose;
+    private final MultiBufferSource buffers;
     private final VertexConsumer mesh;
     private final int light;
 
     PianoMesh(PoseStack pose, MultiBufferSource buffers, int light) {
         this.pose = pose;
+        this.buffers = buffers;
         mesh = buffers.getBuffer(Mesh.solid());
         this.light = light;
     }
@@ -67,6 +75,7 @@ final class PianoMesh {
         if (lidAngle > .3f) interior();
         musicDesk(lidAngle / 43);
         lid(lidAngle);
+        fallboardSurface(buffers.getBuffer(FALLBOARD_SURFACE));
     }
 
     private void casework() {
@@ -96,15 +105,29 @@ final class PianoMesh {
     }
 
     private void fallboard() {
-        float left = KEY_LEFT - .003f, right = KEY_RIGHT + .003f;
         float[] front = FALLBOARD[0], rear = FALLBOARD[FALLBOARD.length - 1];
         for (int i = 0; i + 1 < FALLBOARD.length; i++) {
             float[] a = FALLBOARD[i], b = FALLBOARD[i + 1];
-            keyRun(left, right, a[0], b[0], a[1], b[1], 0, 0x27262C, 0x1B1A20);
+            keySides(FALLBOARD_LEFT, FALLBOARD_RIGHT, a[0], b[0], a[1], b[1], 0, 0x1B1A20);
         }
-        keyEnd(left, right, front[0], front[1], 0, -1, 0x201F25);
-        keyEnd(left, right, rear[0], rear[1], 0, 1, EBONY);
+        keyEnd(FALLBOARD_LEFT, FALLBOARD_RIGHT, front[0], front[1], 0, -1, 0x201F25);
+        keyEnd(FALLBOARD_LEFT, FALLBOARD_RIGHT, rear[0], rear[1], 0, 1, EBONY);
         box(.851f, .844f, front[0] - .001f, .969f, .847f, front[0], 0xAC8648);
+    }
+
+    private void fallboardSurface(VertexConsumer surface) {
+        // The logo is part of the lacquer texture, so its surface has no overlapping faces.
+        float back = FALLBOARD[FALLBOARD.length - 1][0], length = back - FALLBOARD[0][0];
+        for (int i = 0; i + 1 < FALLBOARD.length; i++) {
+            float[] a = FALLBOARD[i], b = FALLBOARD[i + 1];
+            float slope = (b[1] - a[1]) / (b[0] - a[0]);
+            float ny = Mth.invSqrt(1 + slope * slope), nz = -slope * ny;
+            float vFront = (back - a[0]) / length, vBack = (back - b[0]) / length;
+            Mesh.vertex(pose, surface, FALLBOARD_RIGHT, b[1], b[0], 0, vBack, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
+            Mesh.vertex(pose, surface, FALLBOARD_RIGHT, a[1], a[0], 0, vFront, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
+            Mesh.vertex(pose, surface, FALLBOARD_LEFT, a[1], a[0], 1, vFront, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
+            Mesh.vertex(pose, surface, FALLBOARD_LEFT, b[1], b[0], 1, vBack, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
+        }
     }
 
     private void keyboard(PianoState state) {
@@ -189,6 +212,11 @@ final class PianoMesh {
         float normal = Mth.invSqrt(1 + slope * slope);
         quad(left + taper, frontY, frontZ, right - taper, frontY, frontZ, right - taper, backY, backZ,
                 left + taper, backY, backZ, 0, normal, -slope * normal, topColor);
+        keySides(left, right, frontZ, backZ, frontY, backY, taper, sideColor);
+    }
+
+    private void keySides(float left, float right, float frontZ, float backZ, float frontY, float backY,
+            float taper, int sideColor) {
         quad(left, KEY_BOTTOM, frontZ, left, KEY_BOTTOM, backZ, left + taper, backY, backZ,
                 left + taper, frontY, frontZ, -1, 0, 0, sideColor);
         quad(right, KEY_BOTTOM, backZ, right, KEY_BOTTOM, frontZ, right - taper, frontY, frontZ,
