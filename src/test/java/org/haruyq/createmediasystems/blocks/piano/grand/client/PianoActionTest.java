@@ -43,11 +43,14 @@ class PianoActionTest {
         play(press(72, 40), 0);
         play(release(72, 0), 3);
         float highest = 0;
+        float deepest = 0;
         for (int ms = 4; ms <= 300; ms += 2) {
             action.advance(keys, START + ms * MS);
             highest = Math.max(highest, action.hammer(72));
+            deepest = Math.max(deepest, action.key(72));
         }
         assertTrue(highest > .95f, "the hammer reached " + highest);
+        assertEquals(1, deepest);
         assertEquals(0, action.hammer(72));
         assertEquals(0, action.key(72));
     }

@@ -20,18 +20,17 @@ final class PianoMesh {
     private static final int EBONY = 0x1D1C21, EDGE = 0x3B3A42, INSET = 0x0E0D10;
     private static final int BRASS = 0xBF9450, GOLD = 0xDDB972, FELT = 0x701C32;
     private static final float KEY_PITCH = (KEY_RIGHT - KEY_LEFT) / 52, KEY_GAP = .00055f;
-    private static final float KEY_FRONT = .109f, KEY_SHOULDER = .185f, KEY_BACK = .291f;
+    private static final float KEY_FRONT = .130f, KEY_SHOULDER = .187f, KEY_BACK = .282f;
     private static final float KEY_BOTTOM = .808f, WHITE_TOP = .833f, BLACK_TOP = .846f;
     private static final float BLACK_HALF_WIDTH = .0067f, BLACK_TAPER = .00135f;
     private static final int IVORY = 0xF1EDE6, IVORY_SIDE = 0xDED8CE;
     private static final int EBONY_KEY = 0x222126, EBONY_KEY_SIDE = 0x151419;
     private static final float FALLBOARD_LEFT = KEY_LEFT - .003f, FALLBOARD_RIGHT = KEY_RIGHT + .003f;
+    private static final float FALLBOARD_PIVOT_Y = .873f, FALLBOARD_PIVOT_Z = .303f;
+    private static final float FALLBOARD_FRONT = KEY_FRONT - .009f - FALLBOARD_PIVOT_Z;
+    private static final float FALLBOARD_BOTTOM = -.006f, FALLBOARD_BACK = .007f;
     private static final RenderType FALLBOARD_SURFACE = RenderType.entityCutoutNoCull(
             CreateMediaSystems.id("textures/block/piano/grand/grand_piano_fallboard.png"));
-    private static final float[][] FALLBOARD = {
-        {KEY_BACK + .010f, .856f}, {.310f, .868f}, {.327f, .885f},
-        {.357f, .904f}, {.408f, .920f}, {.487f, .930f}, {.604f, .934f}
-    };
     private static final int SECTIONS = 56;
     // Keyboard at z=0, straight bass rim on the left, bentside and rounded tail on the right.
     private static final float[][] PROFILE = {
@@ -95,7 +94,7 @@ final class PianoMesh {
         this.light = light;
     }
 
-    void draw(PianoAction action, float lidAngle) {
+    void draw(PianoAction action, float lidAngle, float fallboardAngle) {
         casework();
         keyboard(action);
         leg(.265f, .430f, .082f);
@@ -105,7 +104,7 @@ final class PianoMesh {
         if (lidAngle > .3f) interior(action);
         musicDesk(lidAngle / 43);
         lid(lidAngle);
-        fallboardSurface(buffers.getBuffer(FALLBOARD_SURFACE));
+        fallboard(fallboardAngle);
     }
 
     private void casework() {
@@ -118,46 +117,42 @@ final class PianoMesh {
         band(.061f, .995f, .064f, .817f, 0x534037);
         band(.013f, .997f, .018f, 1.007f, 0x151319);
         panel(.013f, .717f, -1, 0x161518);
-        box(.104f, .695f, .085f, 1.717f, .778f, .597f, EBONY);
-        box(.107f, .778f, .098f, 1.713f, KEY_BOTTOM, .595f, 0x2C2B31);
-        keyCheek(.100f, KEY_LEFT - .001f);
-        keyCheek(KEY_RIGHT + .001f, 1.720f);
+        box(.104f, .695f, .107f, 1.717f, .778f, .597f, EBONY);
+        box(.107f, .778f, .115f, 1.713f, KEY_BOTTOM, .595f, 0x2C2B31);
+        keyCheek(.100f, KEY_LEFT - .004f);
+        keyCheek(KEY_RIGHT + .004f, 1.720f);
 
         // A recessed keybed keeps the hairline gaps legible without high-contrast speckle at a distance.
         box(KEY_LEFT, KEY_BOTTOM, KEY_FRONT + .004f, KEY_RIGHT, .817f, KEY_BACK, 0xC5BEB3);
-        box(KEY_LEFT, KEY_BOTTOM, KEY_BACK + .001f, KEY_RIGHT, .833f, FALLBOARD[0][0], FELT);
-        fallboard();
+        box(KEY_LEFT, KEY_BOTTOM, KEY_BACK + .001f, KEY_RIGHT, .833f, FALLBOARD_PIVOT_Z, FELT);
+        box(FALLBOARD_LEFT, .817f, .306f, FALLBOARD_RIGHT, .856f, .577f, INSET);
+        box(.104f, .856f, .387f, 1.716f, .914f, .586f, EBONY);
+        box(.109f, .914f, .400f, 1.711f, .921f, .581f, 0x2C2D33);
+        for (float x : new float[] {FALLBOARD_LEFT, FALLBOARD_RIGHT}) {
+            rod(x - .022f, FALLBOARD_PIVOT_Y, FALLBOARD_PIVOT_Z,
+                    x + .019f, FALLBOARD_PIVOT_Y, FALLBOARD_PIVOT_Z, .008f, .008f, BRASS, 8);
+        }
     }
 
     private void keyCheek(float left, float right) {
-        box(left, .780f, KEY_FRONT - .004f, right, .839f, .597f, EBONY);
-        box(left + .005f, .839f, KEY_FRONT + .004f, right - .005f, .848f, .591f, 0x2F2E34);
+        box(left, .780f, KEY_FRONT - .019f, right, .853f, .597f, EBONY);
+        box(left + .005f, .853f, KEY_FRONT - .011f, right - .005f, .862f, .591f, 0x2F2E34);
     }
 
-    private void fallboard() {
-        float[] front = FALLBOARD[0], rear = FALLBOARD[FALLBOARD.length - 1];
-        for (int i = 0; i + 1 < FALLBOARD.length; i++) {
-            float[] a = FALLBOARD[i], b = FALLBOARD[i + 1];
-            keySides(FALLBOARD_LEFT, FALLBOARD_RIGHT, a[0], b[0], a[1], b[1], 0, 0x1B1A20);
-        }
-        keyEnd(FALLBOARD_LEFT, FALLBOARD_RIGHT, front[0], front[1], 0, -1, 0x201F25);
-        keyEnd(FALLBOARD_LEFT, FALLBOARD_RIGHT, rear[0], rear[1], 0, 1, EBONY);
-        box(.851f, .844f, front[0] - .001f, .969f, .847f, front[0], 0xAC8648);
-    }
-
-    private void fallboardSurface(VertexConsumer surface) {
-        // The logo is part of the lacquer texture, so its surface has no overlapping faces.
-        float back = FALLBOARD[FALLBOARD.length - 1][0], length = back - FALLBOARD[0][0];
-        for (int i = 0; i + 1 < FALLBOARD.length; i++) {
-            float[] a = FALLBOARD[i], b = FALLBOARD[i + 1];
-            float slope = (b[1] - a[1]) / (b[0] - a[0]);
-            float ny = Mth.invSqrt(1 + slope * slope), nz = -slope * ny;
-            float vFront = (back - a[0]) / length, vBack = (back - b[0]) / length;
-            Mesh.vertex(pose, surface, FALLBOARD_RIGHT, b[1], b[0], 0, vBack, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
-            Mesh.vertex(pose, surface, FALLBOARD_RIGHT, a[1], a[0], 0, vFront, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
-            Mesh.vertex(pose, surface, FALLBOARD_LEFT, a[1], a[0], 1, vFront, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
-            Mesh.vertex(pose, surface, FALLBOARD_LEFT, b[1], b[0], 1, vBack, 0xFFFFFF, 0, ny, nz, light, OverlayTexture.NO_OVERLAY);
-        }
+    private void fallboard(float angle) {
+        pose.pushPose();
+        pose.translate(0, FALLBOARD_PIVOT_Y, FALLBOARD_PIVOT_Z);
+        pose.mulPose(Axis.XP.rotationDegrees(angle));
+        float left = FALLBOARD_LEFT, right = FALLBOARD_RIGHT, front = FALLBOARD_FRONT, back = FALLBOARD_BACK;
+        cap(left, FALLBOARD_BOTTOM, front, right, .017f, back, 0x22232A);
+        box(left + .0005f, -.055f, front - .003f, right - .0005f, .006f, front + .001f, 0x18191D);
+        box(.899f, -.009f, front - .004f, .921f, .001f, front - .0032f, BRASS);
+        var surface = buffers.getBuffer(FALLBOARD_SURFACE);
+        Mesh.vertex(pose, surface, right, FALLBOARD_BOTTOM, front, 0, .442f, 0xFFFFFF, 0, -1, 0, light, OverlayTexture.NO_OVERLAY);
+        Mesh.vertex(pose, surface, left, FALLBOARD_BOTTOM, front, 1, .442f, 0xFFFFFF, 0, -1, 0, light, OverlayTexture.NO_OVERLAY);
+        Mesh.vertex(pose, surface, left, FALLBOARD_BOTTOM, back, 1, 1, 0xFFFFFF, 0, -1, 0, light, OverlayTexture.NO_OVERLAY);
+        Mesh.vertex(pose, surface, right, FALLBOARD_BOTTOM, back, 0, 1, 0xFFFFFF, 0, -1, 0, light, OverlayTexture.NO_OVERLAY);
+        pose.popPose();
     }
 
     private void keyboard(PianoAction action) {

@@ -25,6 +25,7 @@ import org.haruyq.createmediasystems.blocks.piano.grand.PianoBlockEntity;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
 import org.jetbrains.annotations.Nullable;
 
@@ -103,7 +104,7 @@ public final class PianoClient implements PianoPackets.Client {
     @Override public void open(PianoPackets.Open packet) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;
-        if (local != null) command(local, false);
+        if (local != null) command(local, Action.CLOSE);
         var instrument = new Instrument(packet.target(), packet.session(), packet.frame(), mc.level.getGameTime());
         instruments.put(packet.target(), instrument);
         local = instrument;
@@ -149,13 +150,13 @@ public final class PianoClient implements PianoPackets.Client {
         }
     }
 
-    void command(Instrument instrument, boolean lid) {
+    void command(Instrument instrument, Action action) {
         if (instrument != local) return;
         var mc = Minecraft.getInstance();
         if (mc.getConnection() != null && mc.level != null) {
-            PacketDistributor.sendToServer(new PianoPackets.Command(instrument.target, instrument.session, lid));
+            PacketDistributor.sendToServer(new PianoPackets.Command(instrument.target, instrument.session, action));
         }
-        if (!lid) {
+        if (action == Action.CLOSE) {
             local = null;
             instruments.remove(instrument.target, instrument);
             audio(mc);

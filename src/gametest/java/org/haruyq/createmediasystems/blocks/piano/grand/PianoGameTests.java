@@ -35,6 +35,7 @@ public class PianoGameTests {
         BlockPos root = helper.absolutePos(new BlockPos(3, 4, 3));
         BlockPos deck = root.below(), bearingPos = deck.below();
         var state = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true)
+                .setValue(GrandPianoBlock.KEYBOARD_OPEN, false)
                 .setValue(GrandPianoBlock.FULL_SIZE, true);
         level.setBlockAndUpdate(bearingPos, AllBlocks.MECHANICAL_BEARING.getDefaultState()
                 .setValue(DirectionalBlock.FACING, Direction.UP));
@@ -63,8 +64,8 @@ public class PianoGameTests {
                 "The open instrument's soundboard did not rotate with the bearing");
         bearing.disassemble();
         var landed = level.getBlockState(landedRoot);
-        helper.assertTrue(landed.is(PianoFeature.PIANO.get()) && landed.getValue(GrandPianoBlock.OPEN),
-                "The disassembled piano did not retain its open lid");
+        helper.assertTrue(landed.is(PianoFeature.PIANO.get()) && landed.getValue(GrandPianoBlock.OPEN)
+                && !landed.getValue(GrandPianoBlock.KEYBOARD_OPEN), "Disassembly did not retain both lids");
         for (var part : GrandPianoBlock.parts(landed)) {
             var pos = part.at(landedRoot, landed);
             var restored = level.getBlockState(pos);
@@ -139,6 +140,15 @@ public class PianoGameTests {
         piano.toggleLid();
         helper.assertTrue(level.getBlockState(root).getValue(GrandPianoBlock.OPEN) && level.getBlockEntity(root) == piano,
                 "Toggling the lid did not keep the piano");
+        var open = level.getBlockState(root);
+        player.setShiftKeyDown(true);
+        var close = GrandPianoBlock.interaction(player, GrandPianoBlock.Part.KEYBOARD, open);
+        var closed = GrandPianoBlock.moveLid(open, close);
+        helper.assertTrue(!closed.getValue(GrandPianoBlock.KEYBOARD_OPEN) && closed.getValue(GrandPianoBlock.OPEN),
+                "Closing the keyboard also moved the roof");
+        player.setShiftKeyDown(false);
+        var reopen = GrandPianoBlock.interaction(player, GrandPianoBlock.Part.KEYBOARD, closed);
+        helper.assertTrue(GrandPianoBlock.moveLid(closed, reopen).equals(open), "Right-click did not reopen the keyboard");
         level.destroyBlock(tail, true, player);
         for (var part : GrandPianoBlock.parts(placement)) {
             helper.assertTrue(level.getBlockState(part.at(root, placement)).isAir(), "Orphaned piano part " + part);

@@ -14,6 +14,7 @@ final class PianoAction {
     /** The share of its blow distance at which the backcheck holds a hammer while its key stays down. */
     static final float CHECK = .56f;
     private static final float REBOUND = .05f, FALL = .11f, KEY_RISE = .075f;
+    private static final long KEY_HOLD = 24_000_000;
     private static final int[] PEDALS = {SOFT, SOSTENUTO, DAMPER};
     /** An action nothing has touched: the item, and a piano nobody is playing. */
     static final PianoAction REST = new PianoAction();
@@ -21,6 +22,9 @@ final class PianoAction {
     private final float[] key = new float[KEYS], hammer = new float[KEYS], damper = new float[KEYS], ring = new float[KEYS];
     private final float[] force = new float[KEYS], pedal = new float[PEDALS.length];
     private final long[] struck = new long[KEYS], released = new long[KEYS];
+    private final long[] keyStarted = new long[KEYS], keyRelease = new long[KEYS];
+    private final long[] keyAttack = new long[KEYS];
+    private final boolean[] keyMoving = new boolean[KEYS];
     private final boolean[] thrown = new boolean[KEYS], held = new boolean[KEYS], sounding = new boolean[KEYS];
     private long last;
     private boolean started;
@@ -48,6 +52,10 @@ final class PianoAction {
                 int i = event.number() - FIRST_NOTE;
                 struck[i] = now;
                 force[i] = Mth.clamp(event.value() / (float) MAX_VELOCITY, .02f, 1);
+                float before = keyTravel(i, now);
+                keyAttack[i] = (long) (Math.max(.012f, flight(force[i]) * .8f) * 1_000_000_000);
+                keyStarted[i] = now - Math.round(before * keyAttack[i]);
+                keyMoving[i] = true;
                 thrown[i] = held[i] = true;
                 sounding[i] = false;
             }
@@ -64,6 +72,7 @@ final class PianoAction {
         if (!held[i]) return;
         held[i] = false;
         released[i] = now;
+        keyRelease[i] = Math.max(now, keyStarted[i] + keyAttack[i] + KEY_HOLD);
     }
 
     /** Moves every part on to {@code now}. The keys and pedals follow {@code state}; the hammers follow their strikes. */
@@ -78,8 +87,9 @@ final class PianoAction {
         float feathered = Mth.clamp((state.pedal(DAMPER) - 24) / 40f, 0, 1) * .45f;
         for (int i = 0; i < KEYS; i++) {
             int note = FIRST_NOTE + i;
-            boolean down = state.pressed(note), free = state.rings(note);
-            key[i] = Mth.approach(key[i], down ? 1 : 0, dt / (down ? Math.max(.012f, flight(force[i]) * .8f) : KEY_RISE));
+            boolean free = state.rings(note);
+            key[i] = keyTravel(i, now);
+            if (!held[i] && key[i] == 0) keyMoving[i] = false;
             float lifted = free ? 1 : feathered;
             damper[i] = Mth.approach(damper[i], lifted, dt / (lifted > damper[i] ? .03f : .07f));
             if (thrown[i] && !sounding[i] && (now - struck[i]) * 1e-9f >= flight(force[i])) {
@@ -94,6 +104,14 @@ final class PianoAction {
                 if (ring[i] < .004f) ring[i] = 0;
             }
         }
+    }
+
+    private float keyTravel(int i, long now) {
+        if (!keyMoving[i]) return 0;
+        if (!held[i] && now >= keyRelease[i]) {
+            return Mth.clamp(1 - (now - keyRelease[i]) * 1e-9f / KEY_RISE, 0, 1);
+        }
+        return Mth.clamp((now - keyStarted[i]) / (float) keyAttack[i], 0, 1);
     }
 
     private float travel(int i, long now) {

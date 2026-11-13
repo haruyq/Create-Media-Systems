@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import net.minecraft.network.chat.Component;
@@ -13,6 +14,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.jetbrains.annotations.Nullable;
 
 final class PianoSession {
@@ -25,29 +27,29 @@ final class PianoSession {
     private final ServerLevel level;
     private final PianoPackets.Target target;
     private final Supplier<PianoPackets.Frame> currentFrame;
-    private final Runnable toggleLid;
+    private final Consumer<Action> moveLid;
     private final Set<ServerPlayer> listeners = new HashSet<>();
     @Nullable private UUID performer;
     private PianoState keys = new PianoState();
     private int session, eventsThisTick;
     private long budgetTick = Long.MIN_VALUE;
 
-    PianoSession(ServerLevel level, PianoPackets.Target target, Supplier<PianoPackets.Frame> currentFrame, Runnable toggleLid) {
+    PianoSession(ServerLevel level, PianoPackets.Target target, Supplier<PianoPackets.Frame> currentFrame, Consumer<Action> moveLid) {
         this.level = level;
         this.target = target;
         this.currentFrame = currentFrame;
-        this.toggleLid = toggleLid;
+        this.moveLid = moveLid;
     }
 
-    void interact(ServerPlayer player, boolean lid) {
+    void interact(ServerPlayer player, Action action) {
         var frame = currentFrame.get();
         if (!inReach(player, frame.origin())) return;
         if (performer != null && !performer.equals(player.getUUID())) {
             player.displayClientMessage(Component.translatable("piano.busy"), true);
             return;
         }
-        if (lid) {
-            toggleLid.run();
+        if (action != Action.PLAY) {
+            toggle(action);
             return;
         }
         close();
@@ -82,10 +84,18 @@ final class PianoSession {
         listeners.forEach(listener -> PacketDistributor.sendToPlayer(listener, update));
     }
 
-    void command(ServerPlayer player, int session, boolean lid) {
+    void command(ServerPlayer player, int session, Action action) {
         if (this.session != session || !player.getUUID().equals(performer)) return;
-        if (lid && inReach(player, currentFrame.get().origin())) toggleLid.run();
-        else close();
+        if (action == Action.CLOSE || !inReach(player, currentFrame.get().origin())) {
+            close();
+        } else {
+            toggle(action);
+        }
+    }
+
+    private void toggle(Action action) {
+        moveLid.accept(action);
+        if (action == Action.KEYBOARD_LID) close();
     }
 
     void tick() {

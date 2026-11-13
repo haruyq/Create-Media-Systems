@@ -37,6 +37,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.haruyq.createmediasystems.blocks.piano.PianoPlacement;
 import org.jetbrains.annotations.Nullable;
 
@@ -45,6 +46,7 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
     public static final DirectionProperty FACING = BlockStateProperties.FACING;
     private static final DirectionProperty UP = DirectionProperty.create("up");
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
+    public static final BooleanProperty KEYBOARD_OPEN = BooleanProperty.create("keyboard_open");
     public static final BooleanProperty FULL_SIZE = BooleanProperty.create("full_size");
     public static final EnumProperty<Part> PART = EnumProperty.create("part", Part.class);
     public static final float KEY_LEFT = .275f, KEY_RIGHT = 1.545f;
@@ -78,8 +80,14 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
     private static final List<Part> COMPACT_PARTS = List.of(Part.KEYBOARD, Part.RIGHT, Part.BODY, Part.BEND, Part.TAIL, Part.TIP);
     private static final List<Part> COMPACT_SUPPORTS = List.of(Part.KEYBOARD, Part.RIGHT, Part.TAIL);
     private static final List<Part> FULL_SUPPORTS = List.of(Part.LEFT_LEG, Part.RIGHT_LEG, Part.TAIL_LEG);
-    private static final VoxelShape[][][] COMPACT_SHAPES = createShapes(false);
-    private static final VoxelShape[][][] FULL_SHAPES = createShapes(true);
+    private static final double[] CLOSED_COVER_BOUNDS = {.272, .818, .118, 1.548, .891, .310};
+    private static final double[] OPEN_COVER_BOUNDS = {.272, .856, .284, 1.548, 1.062, .387};
+    private static final VoxelShape[][][] COMPACT_SHAPES = createShapes(false, null);
+    private static final VoxelShape[][][] FULL_SHAPES = createShapes(true, null);
+    private static final VoxelShape[][][] COMPACT_CLOSED = createShapes(false, CLOSED_COVER_BOUNDS);
+    private static final VoxelShape[][][] FULL_CLOSED = createShapes(true, CLOSED_COVER_BOUNDS);
+    private static final VoxelShape[][][] COMPACT_OPEN = createShapes(false, OPEN_COVER_BOUNDS);
+    private static final VoxelShape[][][] FULL_OPEN = createShapes(true, OPEN_COVER_BOUNDS);
     private static final List<Part> FULL_PARTS = Arrays.stream(Part.values())
             .filter(part -> part == Part.KEYBOARD || !FULL_SHAPES[part.ordinal()][Direction.NORTH.ordinal()][Direction.UP.ordinal()].isEmpty())
             .toList();
@@ -88,14 +96,14 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
         super(properties);
         // Saves with no full_size property still load as the original six-part grand.
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(PART, Part.KEYBOARD)
-                .setValue(UP, Direction.UP).setValue(OPEN, false).setValue(FULL_SIZE, false));
+                .setValue(UP, Direction.UP).setValue(OPEN, false).setValue(KEYBOARD_OPEN, true).setValue(FULL_SIZE, false));
     }
 
     @Override protected MapCodec<GrandPianoBlock> codec() { return CODEC; }
     @Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.INVISIBLE; }
 
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> states) {
-        states.add(FACING, UP, PART, OPEN, FULL_SIZE);
+        states.add(FACING, UP, PART, OPEN, KEYBOARD_OPEN, FULL_SIZE);
     }
 
     @Override @Nullable
@@ -193,9 +201,20 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (player instanceof ServerPlayer server && level.getBlockEntity(root(pos, state)) instanceof PianoBlockEntity piano) {
-            piano.interact(server, player.isShiftKeyDown());
+            piano.interact(server, interaction(player, state.getValue(PART), piano.getBlockState()));
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    static Action interaction(Player player, Part part, BlockState root) {
+        if (player.isShiftKeyDown()) {
+            return part.z == 0 ? Action.KEYBOARD_LID : Action.ROOF;
+        }
+        return root.getValue(KEYBOARD_OPEN) ? Action.PLAY : Action.KEYBOARD_LID;
+    }
+
+    static BlockState moveLid(BlockState state, Action action) {
+        return state.cycle(action == Action.ROOF ? OPEN : KEYBOARD_OPEN);
     }
 
     @Override
@@ -240,11 +259,20 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
     }
 
     @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return shape(state);
+        var part = state.getValue(PART);
+        if (part.z != 0) return shape(state);
+        var main = level.getBlockState(root(pos, state));
+        if (!isPart(main, Part.KEYBOARD, state)) return shape(state);
+        boolean full = state.getValue(FULL_SIZE), open = main.getValue(KEYBOARD_OPEN);
+        var shapes = full ? (open ? FULL_OPEN : FULL_CLOSED) : (open ? COMPACT_OPEN : COMPACT_CLOSED);
+        return shape(state, shapes);
     }
 
     private static VoxelShape shape(BlockState state) {
-        var shapes = state.getValue(FULL_SIZE) ? FULL_SHAPES : COMPACT_SHAPES;
+        return shape(state, state.getValue(FULL_SIZE) ? FULL_SHAPES : COMPACT_SHAPES);
+    }
+
+    private static VoxelShape shape(BlockState state, VoxelShape[][][] shapes) {
         return shapes[state.getValue(PART).ordinal()][state.getValue(FACING).ordinal()][up(state).ordinal()];
     }
 
@@ -265,7 +293,7 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
 
     private static double scaleX(double x) { return CENTRE + (x - CENTRE) * FULL_SCALE; }
 
-    private static VoxelShape[][][] createShapes(boolean fullSize) {
+    private static VoxelShape[][][] createShapes(boolean fullSize, @Nullable double[] cover) {
         // Case, keyboard, the three legs and the pedal lyre, clipped to each occupied block.
         double[][] bounds = {
             {.10, .67, .08, 1.72, .85, .64},
@@ -279,6 +307,10 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
             {.40, .02, 2.43, .58, .76, 2.62},
             {.73, .06, .55, 1.10, .65, .76}
         };
+        if (cover != null) {
+            bounds = Arrays.copyOf(bounds, bounds.length + 1);
+            bounds[bounds.length - 1] = cover.clone();
+        }
         if (fullSize) {
             for (var box : bounds) {
                 box[0] = scaleX(box[0]);

@@ -7,6 +7,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.jetbrains.annotations.Nullable;
 
 public final class PianoBlockEntity extends BlockEntity {
@@ -29,10 +30,10 @@ public final class PianoBlockEntity extends BlockEntity {
         mountedState = state;
     }
 
-    void interact(ServerPlayer player, boolean lid) {
+    void interact(ServerPlayer player, Action action) {
         if (!(level instanceof ServerLevel server)) return;
-        if (session == null) session = new PianoSession(server, target, this::frame, this::toggleLid);
-        session.interact(player, lid);
+        if (session == null) session = new PianoSession(server, target, this::frame, this::moveLid);
+        session.interact(player, action);
     }
 
     PianoPackets.Frame frame() {
@@ -42,8 +43,12 @@ public final class PianoBlockEntity extends BlockEntity {
     }
 
     public void toggleLid() {
+        moveLid(Action.ROOF);
+    }
+
+    private void moveLid(Action action) {
         if (level instanceof ServerLevel) {
-            level.setBlock(worldPosition, getBlockState().cycle(GrandPianoBlock.OPEN), Block.UPDATE_ALL);
+            level.setBlock(worldPosition, GrandPianoBlock.moveLid(getBlockState(), action), Block.UPDATE_ALL);
         }
     }
 

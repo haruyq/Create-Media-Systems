@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate.StructureBlockInfo;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.jetbrains.annotations.Nullable;
 
 final class MountedPiano implements MovementBehaviour {
@@ -78,18 +79,21 @@ final class MountedPiano implements MovementBehaviour {
             var root = GrandPianoBlock.root(pos, block.state());
             var context = keyboardAt(carrier, root);
             if (context == null) return false;
+            var rootBlock = carrier.getContraption().getBlocks().get(root);
+            if (rootBlock == null) return false;
             if (!(context.temporaryData instanceof PianoSession)) {
                 context.temporaryData = new PianoSession(server.serverLevel(), new PianoPackets.Target(carrier.getId(), root),
                         () -> frame(carrier, root, carrier.getContraption().getBlocks().get(root).state()),
-                        () -> toggle(carrier, root));
+                        action -> toggle(carrier, root, action));
             }
-            ((PianoSession) context.temporaryData).interact(server, player.isShiftKeyDown());
+            var action = GrandPianoBlock.interaction(player, block.state().getValue(GrandPianoBlock.PART), rootBlock.state());
+            ((PianoSession) context.temporaryData).interact(server, action);
             return true;
         }
 
-        private void toggle(AbstractContraptionEntity carrier, BlockPos pos) {
+        private void toggle(AbstractContraptionEntity carrier, BlockPos pos, Action action) {
             var block = carrier.getContraption().getBlocks().get(pos);
-            carrier.setBlock(pos, new StructureBlockInfo(pos, block.state().cycle(GrandPianoBlock.OPEN), block.nbt()));
+            carrier.setBlock(pos, new StructureBlockInfo(pos, GrandPianoBlock.moveLid(block.state(), action), block.nbt()));
         }
     }
 }
