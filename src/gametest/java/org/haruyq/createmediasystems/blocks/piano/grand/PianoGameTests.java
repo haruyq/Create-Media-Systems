@@ -24,6 +24,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -33,7 +34,8 @@ public class PianoGameTests {
         var level = helper.getLevel();
         BlockPos root = helper.absolutePos(new BlockPos(3, 4, 3));
         BlockPos deck = root.below(), bearingPos = deck.below();
-        var state = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true);
+        var state = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true)
+                .setValue(GrandPianoBlock.FULL_SIZE, true);
         level.setBlockAndUpdate(bearingPos, AllBlocks.MECHANICAL_BEARING.getDefaultState()
                 .setValue(DirectionalBlock.FACING, Direction.UP));
         level.setBlockAndUpdate(deck, Blocks.IRON_BLOCK.defaultBlockState());
@@ -43,11 +45,11 @@ public class PianoGameTests {
         var bearing = (MechanicalBearingBlockEntity) level.getBlockEntity(bearingPos);
         bearing.assemble();
         var carrier = bearing.getMovedContraption();
-        helper.assertTrue(carrier != null && carrier.getContraption().getBlocks().size() == 7,
+        helper.assertTrue(carrier != null && carrier.getContraption().getBlocks().size() == GrandPianoBlock.parts(state).size() + 1,
                 "One glued piano part must bring the whole instrument onto the bearing");
         var local = root.subtract(deck);
         var before = MountedPiano.frame(carrier, local, state);
-        for (var part : GrandPianoBlock.Part.values()) {
+        for (var part : GrandPianoBlock.parts(state)) {
             var pos = part.at(root, state);
             helper.assertTrue(level.getBlockState(pos).isAir(), "A piano part was left behind: " + part);
             var captured = carrier.getContraption().getBlocks().get(pos.subtract(deck));
@@ -63,7 +65,7 @@ public class PianoGameTests {
         var landed = level.getBlockState(landedRoot);
         helper.assertTrue(landed.is(PianoFeature.PIANO.get()) && landed.getValue(GrandPianoBlock.OPEN),
                 "The disassembled piano did not retain its open lid");
-        for (var part : GrandPianoBlock.Part.values()) {
+        for (var part : GrandPianoBlock.parts(landed)) {
             var pos = part.at(landedRoot, landed);
             var restored = level.getBlockState(pos);
             helper.assertTrue(restored.is(PianoFeature.PIANO.get()) && restored.getValue(GrandPianoBlock.PART) == part
@@ -76,13 +78,13 @@ public class PianoGameTests {
 
     @GameTest(template = "empty")
     public static void sidewaysDisassemblyRotatesAllPartsAndTheSoundboard(GameTestHelper helper) {
-        var upright = PianoFeature.PIANO.get().defaultBlockState();
+        var upright = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.FULL_SIZE, true);
         var offset = new BlockPos(2, 4, -3);
         for (var axis : Direction.Axis.values()) {
             var transform = new StructureTransform(offset, axis, Rotation.CLOCKWISE_90, Mirror.NONE);
             var rotated = transform.apply(upright);
             var root = transform.apply(BlockPos.ZERO);
-            for (var part : GrandPianoBlock.Part.values()) {
+            for (var part : GrandPianoBlock.parts(upright)) {
                 var original = part.at(BlockPos.ZERO, upright);
                 var landed = transform.apply(original);
                 var state = transform.apply(upright.setValue(GrandPianoBlock.PART, part));
@@ -99,20 +101,21 @@ public class PianoGameTests {
     @GameTest(template = "empty")
     public static void grandPianoPlacesAndDropsAsOneInstrument(GameTestHelper helper) {
         var level = helper.getLevel();
-        var root = helper.absolutePos(new BlockPos(2, 2, 2));
+        var root = helper.absolutePos(new BlockPos(7, 2, 5));
         var item = PianoFeature.PIANO_ITEM.get();
         var player = helper.makeMockPlayer(GameType.SURVIVAL);
         player.setYRot(90);
-        player.setPos(root.getX() + 2.5, root.getY(), root.getZ() + .5);
+        player.setPos(root.getX() + 3.5, root.getY(), root.getZ() + .5);
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item));
         Direction facing = player.getDirection().getOpposite();
-        var placement = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.FACING, facing);
-        for (var part : GrandPianoBlock.Part.values()) {
-            level.setBlockAndUpdate(part.at(root, placement).below(), Blocks.SMOOTH_STONE.defaultBlockState());
+        var placement = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.FACING, facing)
+                .setValue(GrandPianoBlock.FULL_SIZE, true);
+        for (var part : GrandPianoBlock.parts(placement)) {
+            if (part.y == 0) level.setBlockAndUpdate(part.at(root, placement).below(), Blocks.SMOOTH_STONE.defaultBlockState());
         }
         var hit = new BlockHitResult(Vec3.atCenterOf(root.below()).add(0, .5, 0), Direction.UP, root.below(), false);
         var context = new BlockPlaceContext(new UseOnContext(player, InteractionHand.MAIN_HAND, hit));
-        var tail = GrandPianoBlock.Part.TAIL.at(root, placement);
+        var tail = GrandPianoBlock.Part.TOP_C5.at(root, placement);
         level.setBlockAndUpdate(tail, Blocks.STONE.defaultBlockState());
         helper.assertFalse(item.place(context).consumesAction(), "The occupied tail should prevent placement");
         helper.assertTrue(level.getBlockState(root).isAir() && player.getMainHandItem().is(item),
@@ -120,7 +123,11 @@ public class PianoGameTests {
         level.removeBlock(tail, false);
         helper.assertTrue(item.place(context).consumesAction() && player.getMainHandItem().isEmpty(),
                 "The item did not place the full piano");
-        for (var part : GrandPianoBlock.Part.values()) {
+        double left = GrandPianoBlock.modelToLocal(new Vec3(GrandPianoBlock.KEY_LEFT, 0, 0), true).x;
+        double right = GrandPianoBlock.modelToLocal(new Vec3(GrandPianoBlock.KEY_RIGHT, 0, 0), true).x;
+        helper.assertTrue(Math.abs(right - left - (Layout.KEYS_RIGHT - Layout.KEYS_LEFT) / 16) < .00001,
+                "The installed keybed must match Koland");
+        for (var part : GrandPianoBlock.parts(placement)) {
             var pos = part.at(root, placement);
             var state = level.getBlockState(pos);
             helper.assertTrue(state.is(PianoFeature.PIANO.get()) && GrandPianoBlock.root(pos, state).equals(root),
@@ -133,7 +140,7 @@ public class PianoGameTests {
         helper.assertTrue(level.getBlockState(root).getValue(GrandPianoBlock.OPEN) && level.getBlockEntity(root) == piano,
                 "Toggling the lid did not keep the piano");
         level.destroyBlock(tail, true, player);
-        for (var part : GrandPianoBlock.Part.values()) {
+        for (var part : GrandPianoBlock.parts(placement)) {
             helper.assertTrue(level.getBlockState(part.at(root, placement)).isAir(), "Orphaned piano part " + part);
         }
         var drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(root).inflate(4),
@@ -143,5 +150,29 @@ public class PianoGameTests {
                 .filter(recipe -> recipe.value().getResultItem(level.registryAccess()).is(item)).isPresent(),
                 "The shaped recipe is missing");
         helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void compactGrandExpandsWithoutResettingItsLid(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var root = helper.absolutePos(new BlockPos(4, 2, 2));
+        var compact = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true);
+        var full = compact.setValue(GrandPianoBlock.FULL_SIZE, true);
+        for (var part : GrandPianoBlock.parts(full)) {
+            if (part.y == 0) level.setBlockAndUpdate(part.at(root, full).below(), Blocks.STONE.defaultBlockState());
+        }
+        helper.assertTrue(GrandPianoBlock.placeParts(level, root, compact), "Compact piano fixture did not fit");
+        var piano = level.getBlockEntity(root);
+        helper.runAfterDelay(25, () -> {
+            var state = level.getBlockState(root);
+            helper.assertTrue(piano != null && piano == level.getBlockEntity(root) && state.getValue(GrandPianoBlock.FULL_SIZE)
+                    && state.getValue(GrandPianoBlock.OPEN), "Upgrade replaced the grand or reset its lid");
+            for (var part : GrandPianoBlock.parts(full)) {
+                var at = part.at(root, full);
+                helper.assertTrue(level.getBlockState(at).is(PianoFeature.PIANO.get()), "Upgrade missed " + part);
+            }
+            helper.assertTrue(level.getBlockState(GrandPianoBlock.Part.TAIL.at(root, compact)).isAir(), "A compact tail was left behind");
+            helper.succeed();
+        });
     }
 }

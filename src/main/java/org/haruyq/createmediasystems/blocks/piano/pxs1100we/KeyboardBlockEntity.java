@@ -62,11 +62,7 @@ public final class KeyboardBlockEntity extends BlockEntity implements KeyboardRu
 
     @Override public void decorations(boolean stand, boolean rack) {
         var state = getBlockState();
-        var pos = KeyboardBlock.bass(worldPosition, state);
-        var bass = level.getBlockState(pos);
-        if (!KeyboardBlock.part(bass, KeyboardBlock.Part.BASS, state)) return;
-        level.setBlock(worldPosition, decorated(state, stand, rack), Block.UPDATE_ALL);
-        level.setBlock(pos, decorated(bass, stand, rack), Block.UPDATE_ALL);
+        KeyboardBlock.change(level, worldPosition, state, decorated(state, stand, rack), null);
     }
 
     static BlockState decorated(BlockState state, boolean stand, boolean rack) {

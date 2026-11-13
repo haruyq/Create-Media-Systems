@@ -33,8 +33,8 @@ public final class CreateMediaSystems {
     /** The mod's id before it was renamed: worlds from then name its blocks, items and data with it. */
     public static final String LEGACY_ID = "disksb";
     public static final String COMMAND = "cms";
-    /** Bumped whenever a payload's format changes, so a client and server that differ refuse each other. */
-    private static final String PROTOCOL = "26";
+    /** Bumped for incompatible payload or block-state changes. */
+    private static final String PROTOCOL = "27";
 
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);

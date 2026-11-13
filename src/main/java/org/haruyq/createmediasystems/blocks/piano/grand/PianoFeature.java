@@ -43,6 +43,8 @@ public final class PianoFeature implements Feature {
             var piano = PIANO.get();
             MovementBehaviour.REGISTRY.register(piano, new MountedPiano());
             MovingInteractionBehaviour.REGISTRY.register(piano, new MountedPiano.Interaction());
+            BlockMovementChecks.registerMovementNecessaryCheck((state, level, pos) ->
+                    state.is(piano) ? CheckResult.SUCCESS : CheckResult.PASS);
             BlockMovementChecks.registerMovementAllowedCheck((state, level, pos) ->
                     state.is(piano) ? CheckResult.SUCCESS : CheckResult.PASS);
             BlockMovementChecks.registerAttachedCheck((state, level, pos, direction) -> {

@@ -51,7 +51,7 @@ abstract class ChannelMixin {
     private void create_media_systems$attach(AudioStream stream, CallbackInfo ci) {
         if (stream instanceof CmsStream cms) {
             create_media_systems$startAt = cms.attach(source, DeviceClock.now());
-            StreamPump.add((Channel) (Object) this);
+            StreamPump.add((Channel) (Object) this, cms.needsFastRefill());
         } else {
             create_media_systems$startAt = 0;
         }

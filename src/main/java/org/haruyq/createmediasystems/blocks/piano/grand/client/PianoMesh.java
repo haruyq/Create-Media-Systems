@@ -12,13 +12,14 @@ import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
+import static org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock.KEY_LEFT;
+import static org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock.KEY_RIGHT;
 
 final class PianoMesh {
     private static final float HINGE = .115f, LID_Y = 1.006f;
     private static final float FRONT = .595f, TAIL = 2.827f, CENTER = .91f;
     private static final int EBONY = 0x1D1C21, EDGE = 0x3B3A42, INSET = 0x0E0D10;
     private static final int BRASS = 0xBF9450, GOLD = 0xDDB972, FELT = 0x701C32;
-    private static final float KEY_LEFT = .275f, KEY_RIGHT = 1.545f;
     private static final float KEY_PITCH = (KEY_RIGHT - KEY_LEFT) / 52, KEY_GAP = .00055f;
     private static final float KEY_FRONT = .109f, KEY_SHOULDER = .185f, KEY_BACK = .291f;
     private static final float KEY_BOTTOM = .808f, WHITE_TOP = .833f, BLACK_TOP = .846f;

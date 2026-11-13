@@ -10,7 +10,7 @@ import org.lwjgl.openal.AL10;
  * What an OpenAL source is heard playing now, rather than where its decoder has read ahead to: each buffer handed to
  * it, from when it is heard (see DeviceClock#presentationTime). Written on the sound thread, read from any.
  */
-final class AudibleTimeline {
+public final class AudibleTimeline {
     /** Buffers kept: more than the engine ever keeps queued on a source. */
     private static final int KEPT = 32;
     /** How long past its end a buffer still counts as heard: the next one is that late at most, unless it ran dry. */
@@ -34,19 +34,19 @@ final class AudibleTimeline {
     private boolean closed;
 
     /** For audio of {@code rate} frames a second. */
-    AudibleTimeline(float rate) {
+    public AudibleTimeline(float rate) {
         this.rate = rate;
     }
 
     /** It plays on the OpenAL {@code source} from scratch, starting at {@code startAt} (device clock; 0: at once). */
-    synchronized void attach(int source, long startAt) {
+    public synchronized void attach(int source, long startAt) {
         this.source = source;
         this.startAt = startAt;
         queued.clear();
     }
 
     /** On the sound thread: the source was handed {@code frames} frames of media from {@code seconds} on (see Heard). */
-    synchronized void queue(double seconds, int frames) {
+    public synchronized void queue(double seconds, int frames) {
         if (source == 0 || frames <= 0 || closed) {
             return;
         }
@@ -81,12 +81,12 @@ final class AudibleTimeline {
     }
 
     /** Where in the media what is heard at {@code now} is (s); -1 if nothing, or silence, is. */
-    double seconds(long now) {
+    public double seconds(long now) {
         Heard heard = at(now);
         return heard == null || heard.seconds < 0 ? -1 : heard.secondsAt(now);
     }
 
-    synchronized void close() {
+    public synchronized void close() {
         closed = true;
         queued.clear();
     }

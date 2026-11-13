@@ -29,6 +29,7 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -50,22 +51,34 @@ public final class KeyboardGameTests {
         player.setPos(root.getX() + 2.5, root.getY(), root.getZ() + .5);
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item));
         var facing = player.getDirection().getOpposite();
-        var placed = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FACING, facing);
-        var bass = KeyboardBlock.bass(root, placed);
-        for (var half : List.of(root, bass)) level.setBlockAndUpdate(half.below(), Blocks.STONE.defaultBlockState());
+        var placed = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FACING, facing)
+                .setValue(KeyboardBlock.FULL_SIZE, true);
+        for (var part : KeyboardBlock.parts(placed)) {
+            if (part.y == 0) level.setBlockAndUpdate(part.at(root, placed).below(), Blocks.STONE.defaultBlockState());
+        }
+        var treble = KeyboardBlock.Part.TOP_TREBLE.at(root, placed);
+        var dcIn = KeyboardBlock.dcInput(placed).at(root, placed);
         var hit = new BlockHitResult(root.below().getCenter().add(0, .5, 0), Direction.UP, root.below(), false);
         var context = new BlockPlaceContext(new UseOnContext(player, InteractionHand.MAIN_HAND, hit));
-        level.setBlockAndUpdate(bass, Blocks.STONE.defaultBlockState());
+        level.setBlockAndUpdate(treble, Blocks.STONE.defaultBlockState());
         test.assertFalse(item.place(context).consumesAction() || !level.getBlockState(root).isAir(),
                 "An obstruction allowed partial placement");
-        level.removeBlock(bass, false);
+        level.removeBlock(treble, false);
         test.assertTrue(item.place(context).consumesAction() && player.getMainHandItem().isEmpty(),
                 "The recipe output did not place the instrument");
         var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
-        test.assertTrue(keyboard != null && KeyboardBlock.part(level.getBlockState(bass), KeyboardBlock.Part.BASS, placed)
-                && level.getBlockEntity(bass) == null, "The second half did not share the root block entity");
-        var port = level.getCapability(Capabilities.EnergyStorage.BLOCK, bass, facing.getOpposite());
-        test.assertTrue(port != null && level.getCapability(Capabilities.EnergyStorage.BLOCK, bass, facing) == null
+        test.assertTrue(keyboard != null && KeyboardBlock.part(level.getBlockState(treble), KeyboardBlock.Part.TOP_TREBLE, placed)
+                && level.getBlockEntity(treble) == null, "The upper treble part did not share the root block entity");
+        var model = KeyboardLayout.PX;
+        var low = model.keys.getFirst().hits().getFirst();
+        var high = model.keys.getLast().hits().getFirst();
+        var a = KeyboardBlock.point(root, placed, new Vec3(low.maxX(), low.y(), low.minZ()));
+        var b = KeyboardBlock.point(root, placed, new Vec3(high.minX(), low.y(), low.minZ()));
+        test.assertTrue(Math.abs(a.distanceTo(b) - (Layout.KEYS_RIGHT - Layout.KEYS_LEFT) / 16) < .00001
+                && KeyboardBlock.local(root, placed, a).distanceTo(new Vec3(low.maxX(), low.y(), low.minZ())) < .00001,
+                "The installed keybed must match Koland and preserve hit coordinates");
+        var port = level.getCapability(Capabilities.EnergyStorage.BLOCK, dcIn, facing.getOpposite());
+        test.assertTrue(port != null && level.getCapability(Capabilities.EnergyStorage.BLOCK, dcIn, facing) == null
                 && level.getCapability(Capabilities.EnergyStorage.BLOCK, root, facing.getOpposite()) == null,
                 "The DC input must face the back of the bass half");
         test.assertTrue(port.receiveEnergy(4000, true) == 2048 && port.getEnergyStored() == 0
@@ -77,30 +90,37 @@ public final class KeyboardGameTests {
         keyboard.runtime().tick();
         test.assertTrue(port.getEnergyStored() == 190 && port.extractEnergy(100, false) == 0, "Wrong power draw");
         keyboard.decorations(false, false);
-        test.assertFalse(level.getBlockState(root).getValue(KeyboardBlock.STAND)
-                || level.getBlockState(bass).getValue(KeyboardBlock.RACK), "The decorations did not update both halves");
-        var rotated = KeyboardBlock.bass(root, placed.setValue(KeyboardBlock.FACING, Rotation.CLOCKWISE_90.rotate(facing)));
-        level.setBlockAndUpdate(rotated.below(), Blocks.STONE.defaultBlockState());
+        var bass = KeyboardBlock.Part.BASS.at(root, placed);
+        test.assertFalse(keyboard.state().getValue(KeyboardBlock.STAND) || level.getBlockState(bass).getValue(KeyboardBlock.RACK)
+                || !level.getBlockState(dcIn).isAir() || !level.getBlockState(treble).isAir(), "Tabletop mode left stand parts");
+        test.assertTrue(!port.canReceive() && level.getCapability(Capabilities.EnergyStorage.BLOCK, bass, facing.getOpposite()) != null,
+                "Tabletop mode did not move the DC input down to the case");
+        var rotated = keyboard.state().setValue(KeyboardBlock.FACING, Rotation.CLOCKWISE_90.rotate(facing));
+        for (var part : KeyboardBlock.parts(rotated)) {
+            level.setBlockAndUpdate(part.at(root, rotated).below(), Blocks.STONE.defaultBlockState());
+        }
         var wrenchHit = new BlockHitResult(root.getCenter(), Direction.UP, root, false);
         test.assertTrue(PxS1100Feature.BLOCK.get().onWrenched(keyboard.state(),
                 new UseOnContext(player, InteractionHand.MAIN_HAND, wrenchHit)).consumesAction()
                 && level.getBlockState(bass).isAir() && level.getBlockEntity(root) == keyboard
                 && keyboard.runtime().energy() == 190, "Wrench rotation misplaced a half or reset the keyboard");
-        bass = rotated;
+        bass = KeyboardBlock.Part.BASS.at(root, rotated);
         level.destroyBlock(bass, true, player);
-        test.assertTrue(level.getBlockState(root).isAir() && level.getBlockState(bass).isAir(), "Breaking the bass half left a block");
+        for (var part : KeyboardBlock.parts(rotated)) {
+            test.assertTrue(level.getBlockState(part.at(root, rotated)).isAir(), "Breaking the bass part left " + part);
+        }
         var drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(root).inflate(3), drop -> drop.getItem().is(item));
         test.assertTrue(drops.size() == 1 && drops.getFirst().getItem().getCount() == 1, "Expected exactly one keyboard drop");
         test.succeed();
     }
 
     @GameTest(template = "empty")
-    public static void keyboardCarriesPowerAndBothHalvesOnCreate(GameTestHelper test) {
+    public static void keyboardCarriesPowerAndAllPartsOnCreate(GameTestHelper test) {
         var level = test.getLevel();
         var root = test.absolutePos(new BlockPos(3, 4, 3));
         var deck = root.below();
         var bearingPos = deck.below();
-        var state = PxS1100Feature.BLOCK.get().defaultBlockState();
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FULL_SIZE, true);
         level.setBlockAndUpdate(bearingPos, AllBlocks.MECHANICAL_BEARING.getDefaultState().setValue(DirectionalBlock.FACING, Direction.UP));
         level.setBlockAndUpdate(deck, Blocks.IRON_BLOCK.defaultBlockState());
         test.assertTrue(KeyboardBlock.place(level, root, state), "Fixture placement failed");
@@ -115,8 +135,11 @@ public final class KeyboardGameTests {
         var bearing = (MechanicalBearingBlockEntity) level.getBlockEntity(bearingPos);
         bearing.assemble();
         var carrier = bearing.getMovedContraption();
-        test.assertTrue(carrier != null && carrier.getContraption().getBlocks().size() == 3
-                && level.getBlockState(KeyboardBlock.bass(root, state)).isAir(), "Create left a keyboard half behind");
+        test.assertTrue(carrier != null && carrier.getContraption().getBlocks().size() == KeyboardBlock.parts(state).size() + 1,
+                "Create did not pick up the whole keyboard");
+        for (var part : KeyboardBlock.parts(state)) {
+            test.assertTrue(level.getBlockState(part.at(root, state)).isAir(), "Create left behind " + part);
+        }
         var local = root.subtract(deck);
         var target = new KeyboardPackets.Target(carrier.getId(), local);
         var runtime = MountedKeyboard.find(level, target);
@@ -128,9 +151,37 @@ public final class KeyboardGameTests {
         var landed = (KeyboardBlockEntity) level.getBlockEntity(landedPos);
         test.assertTrue(landed != null && landed.runtime().energy() == 1850 && landed.runtime().view().getInt("Events") == 2
                 && !landed.state().getValue(KeyboardBlock.RACK), "Disassembly lost power or the rack setting");
-        var bass = KeyboardBlock.bass(landedPos, landed.state());
-        test.assertTrue(KeyboardBlock.part(level.getBlockState(bass), KeyboardBlock.Part.BASS, landed.state()),
-                "The rotated bass half was not restored");
+        for (var part : KeyboardBlock.parts(state)) {
+            test.assertTrue(KeyboardBlock.part(level.getBlockState(part.at(landedPos, landed.state())), part, landed.state()),
+                    "Create did not restore " + part);
+        }
         test.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void compactKeyboardExpandsWhenItsNewFootprintIsClear(GameTestHelper test) {
+        var level = test.getLevel();
+        var root = test.absolutePos(new BlockPos(3, 2, 3));
+        var compact = PxS1100Feature.BLOCK.get().defaultBlockState();
+        var full = compact.setValue(KeyboardBlock.FULL_SIZE, true);
+        for (var part : KeyboardBlock.parts(full)) {
+            if (part.y == 0) level.setBlockAndUpdate(part.at(root, full).below(), Blocks.STONE.defaultBlockState());
+        }
+        test.assertTrue(KeyboardBlock.place(level, root, compact), "Compact keyboard fixture did not fit");
+        var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
+        keyboard.runtime().charge(640, false);
+        var blocked = KeyboardBlock.Part.TOP_TREBLE.at(root, full);
+        level.setBlockAndUpdate(blocked, Blocks.STONE.defaultBlockState());
+        test.runAfterDelay(25, () -> {
+            test.assertFalse(keyboard.state().getValue(KeyboardBlock.FULL_SIZE), "Upgrade overwrote an occupied block");
+            level.removeBlock(blocked, false);
+        });
+        test.runAfterDelay(50, () -> {
+            test.assertTrue(keyboard == level.getBlockEntity(root) && keyboard.state().getValue(KeyboardBlock.FULL_SIZE)
+                    && keyboard.runtime().energy() == 640
+                    && KeyboardBlock.part(level.getBlockState(blocked), KeyboardBlock.Part.TOP_TREBLE, full),
+                    "Upgrade did not expand the existing charged keyboard");
+            test.succeed();
+        });
     }
 }

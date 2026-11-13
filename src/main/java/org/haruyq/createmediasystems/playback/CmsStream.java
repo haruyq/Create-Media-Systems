@@ -23,6 +23,11 @@ public interface CmsStream extends AudioStream {
         return vanillaBytes;
     }
 
+    /** Whether to refill between ticks at the shorter cadence used by live instruments. */
+    default boolean needsFastRefill() {
+        return false;
+    }
+
     /** Whether what it plays moves on while the game is paused, so a resumed channel starts over from it. */
     default boolean advancesWhilePaused() {
         return false;
@@ -49,6 +54,11 @@ public interface CmsStream extends AudioStream {
         @Override
         public int bufferBytes(int vanillaBytes) {
             return source instanceof CmsStream cms ? cms.bufferBytes(vanillaBytes) : vanillaBytes;
+        }
+
+        @Override
+        public boolean needsFastRefill() {
+            return source instanceof CmsStream cms && cms.needsFastRefill();
         }
 
         @Override

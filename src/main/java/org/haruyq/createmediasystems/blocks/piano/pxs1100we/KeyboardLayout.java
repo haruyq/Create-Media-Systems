@@ -13,6 +13,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 
 public final class KeyboardLayout {
     public static final int FIRST = 21, LAST = 108;
@@ -20,12 +21,14 @@ public final class KeyboardLayout {
     static final AABB PEDAL_BOX = new AABB(.893, 0, .201, .987, .038, .289);
     public static final KeyboardLayout PX = new KeyboardLayout();
     public final AABB body;
+    public final AABB rack;
     public final List<AABB> stand;
     public final List<Key> keys;
     public final List<Vec3> speakers;
     public final Vec3 power, knob;
     public final Vec3 dcIn, usbMidi, lineLeft, lineRight;
     public final float tilt, tabletop, powerTravel;
+    public final float fullScale;
     public final Map<String, Hit> panel;
 
     public record Key(int note, boolean black, String model, Vec3 pivot, List<Hit> hits) {}
@@ -39,14 +42,10 @@ public final class KeyboardLayout {
     private KeyboardLayout() {
         var layout = read("piano/pxs1100we/layout.json");
         body = box(layout.getAsJsonObject("body_aabb"));
+        rack = modelBoxes("music_stand").stream().reduce(AABB::minmax).orElseThrow();
         tabletop = layout.get("tabletop_dy_px").getAsFloat() / 16;
         tilt = layout.getAsJsonObject("key").get("press_deg").getAsFloat();
-        var legs = new ArrayList<AABB>();
-        read("models/block/piano/pxs1100we/stand.json").getAsJsonArray("elements").forEach(element -> {
-            var b = box(element.getAsJsonObject());
-            if (b.getXsize() > .0001 && b.getYsize() > .0001 && b.getZsize() > .0001) legs.add(b);
-        });
-        stand = List.copyOf(legs);
+        stand = modelBoxes("stand");
         var keyboard = new ArrayList<Key>();
         layout.getAsJsonArray("keys").forEach(element -> {
             var k = element.getAsJsonObject();
@@ -56,6 +55,9 @@ public final class KeyboardLayout {
                     k.get("model").getAsString(), vec(k.getAsJsonArray("pivot")), List.copyOf(hits)));
         });
         keys = List.copyOf(keyboard);
+        // Match the pitch of all 52 white keys to the Koland keybed, excluding the case.
+        double span = keys.getFirst().hits().getFirst().maxX() - keys.getLast().hits().getFirst().minX();
+        fullScale = (float) ((Layout.KEYS_RIGHT - Layout.KEYS_LEFT) / (16 * span));
         var audio = new ArrayList<Vec3>();
         layout.getAsJsonArray("speakers").forEach(point -> audio.add(vec(point.getAsJsonArray())));
         speakers = List.copyOf(audio);
@@ -96,6 +98,15 @@ public final class KeyboardLayout {
 
     private static AABB box(JsonObject j) {
         return new AABB(vec(j.getAsJsonArray("from")), vec(j.getAsJsonArray("to")));
+    }
+
+    private static List<AABB> modelBoxes(String name) {
+        var boxes = new ArrayList<AABB>();
+        read("models/block/piano/pxs1100we/" + name + ".json").getAsJsonArray("elements").forEach(element -> {
+            var b = box(element.getAsJsonObject());
+            if (b.getXsize() > .0001 && b.getYsize() > .0001 && b.getZsize() > .0001) boxes.add(b);
+        });
+        return List.copyOf(boxes);
     }
 
     private static Hit hit(JsonObject j) {

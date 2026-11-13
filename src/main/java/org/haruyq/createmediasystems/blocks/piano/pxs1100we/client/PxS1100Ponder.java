@@ -21,6 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
@@ -47,15 +48,17 @@ import static org.haruyq.createmediasystems.client.PonderScenes.say;
 final class PxS1100Ponder {
     private static final KeyboardLayout MODEL = KeyboardLayout.PX;
     private static final Map<PonderScene, Demo> DEMOS = new WeakHashMap<>();
+    private static final int AUDIO_TAIL_TICKS = 18;
     private record Shot(float scale, float offset, float pitch, float yaw) {}
 
-    private static final Shot STAGE = new Shot(1.23f, 0, -35, 145);
-    private static final Shot KEYS = new Shot(10.25f, -.70f, -49, 174);
+    private static final Shot STAGE = new Shot(1.23f, -.35f, -35, 145);
+    private static final Shot KEYS = new Shot(10.25f, -.70f - .72f * (MODEL.fullScale - 1), -49, 174);
     private static final float KEYS_SCREEN_FRACTION = .78f;
 
     private static PonderScene active;
     private static KeyboardAudio audio;
-    private static int time, revision, still;
+    private static int time, still;
+    private static boolean muted;
 
     private PxS1100Ponder() {}
 
@@ -79,26 +82,25 @@ final class PxS1100Ponder {
         });
         var scene = plate(builder, "px_s1100", "Performing with the Hayacio PX-S1100WE");
         scene.scaleSceneView(STAGE.scale());
+        scene.setSceneOffsetY(STAGE.offset());
         var root = util.grid().at(2, 1, 2);
-        var state = PxS1100Feature.BLOCK.get().defaultBlockState();
-        var bass = KeyboardBlock.bass(root, state);
-        var centre = new Vec3(-.5, 0, 0);
-        var keys = KeyboardBlock.point(root, state, new Vec3(1, .72, .43)).add(centre);
-        var power = KeyboardBlock.point(root, state, MODEL.power).add(centre);
-        var dcIn = KeyboardBlock.point(root, state, MODEL.dcIn).add(centre);
-        var usb = KeyboardBlock.point(root, state, MODEL.usbMidi).add(centre);
-        var lineLeft = KeyboardBlock.point(root, state, MODEL.lineLeft).add(centre);
-        var lineRight = KeyboardBlock.point(root, state, MODEL.lineRight).add(centre);
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FULL_SIZE, true);
+        var keys = KeyboardBlock.point(root, state, new Vec3(1, .72, .43));
+        var power = KeyboardBlock.point(root, state, MODEL.power);
+        var dcIn = KeyboardBlock.point(root, state, MODEL.dcIn);
+        var usb = KeyboardBlock.point(root, state, MODEL.usbMidi);
+        var lineLeft = KeyboardBlock.point(root, state, MODEL.lineLeft);
+        var lineRight = KeyboardBlock.point(root, state, MODEL.lineRight);
 
         scene.world().setBlocks(util.select().fromTo(0, 0, 0, 4, 0, 4), Blocks.POLISHED_DEEPSLATE.defaultBlockState(), false);
         scene.world().setBlocks(util.select().fromTo(1, 0, 1, 4, 0, 3), Blocks.DARK_OAK_PLANKS.defaultBlockState(), false);
-        var rug = util.select().fromTo(2, 1, 1, 3, 1, 1);
+        var rug = util.select().fromTo(1, 1, 1, 3, 1, 1);
         scene.world().setBlocks(rug, Blocks.RED_CARPET.defaultBlockState(), false);
         scene.world().showSection(rug, Direction.DOWN);
-        scene.world().setBlock(root, state, false);
-        scene.world().setBlock(bass, state.setValue(KeyboardBlock.PART, KeyboardBlock.Part.BASS), false);
-        var instrument = scene.world().showIndependentSection(util.select().fromTo(root, bass), Direction.DOWN);
-        scene.world().moveSection(instrument, centre, 1);
+        for (var part : KeyboardBlock.parts(state)) {
+            scene.world().setBlock(part.at(root, state), state.setValue(KeyboardBlock.PART, part), false);
+        }
+        scene.world().showSection(util.select().fromTo(root.offset(-1, 0, 0), root.offset(1, 1, 0)), Direction.DOWN);
         scene.special().movePointOfInterest(keys);
         scene.idle(16);
 
@@ -120,12 +122,12 @@ final class PxS1100Ponder {
         scene.effects().indicateSuccess(root);
         scene.overlay().showControls(keys, Pointing.DOWN, 28).rightClick();
         say(scene, 70, keys, "Right-click to play with the mouse, computer keyboard, or MIDI. Space works the damper.");
-        scene.addInstruction(ignored -> demo.apply(List.of(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 103))));
+        scene.addInstruction(ignored -> demo.keys.apply(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 103)));
         scene.idle(10);
-        scene.addInstruction(ignored -> demo.apply(List.of(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 0))));
+        scene.addInstruction(ignored -> demo.keys.apply(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 0)));
 
         var left = util.grid().at(4, 1, 3);
-        var right = util.grid().at(1, 1, 3);
+        var right = util.grid().at(0, 1, 3);
         var speaker = AudioFeature.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, Direction.NORTH);
         var quill = new ItemStack(AudioFeature.RANGE_QUILL.get());
         scene.world().setBlock(left, speaker, false);
@@ -142,9 +144,9 @@ final class PxS1100Ponder {
         say(scene, 85, keys, PonderPalette.GREEN, "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.");
         scene.overlay().showText(75).attachKeyFrame().pointAt(keys).placeNearTarget()
                 .text("U.N. Owen Was Her? (MIDI © chishige 2016)");
-        playScore(scene, demo, PonderScore.load(), List.of(SpeakerBlock.mouth(left, Direction.NORTH),
+        playScore(scene, demo, List.of(SpeakerBlock.mouth(left, Direction.NORTH),
                 SpeakerBlock.mouth(right, Direction.NORTH)));
-        scene.idle(18);
+        scene.idle(AUDIO_TAIL_TICKS);
         scene.addInstruction(ignored -> demo.view.putBoolean("Powered", false));
         scene.markAsFinished();
     }
@@ -171,8 +173,8 @@ final class PxS1100Ponder {
                 float smooth = progress * progress * (3 - 2 * progress);
                 var camera = ponder.builder();
                 var window = Minecraft.getInstance().getWindow();
-                float fitted = Math.min(KEYS.scale(), KEYS_SCREEN_FRACTION * window.getGuiScaledWidth()
-                        / (30 * (float) MODEL.body.getXsize()));
+                float fitted = Math.min(KEYS.scale() / MODEL.fullScale, KEYS_SCREEN_FRACTION * window.getGuiScaledWidth()
+                        / (30 * (float) MODEL.body.getXsize() * MODEL.fullScale));
                 float fromScale = from == KEYS ? Math.max(STAGE.scale(), fitted) : from.scale();
                 float toScale = to == KEYS ? Math.max(STAGE.scale(), fitted) : to.scale();
                 camera.scaleSceneView(Mth.lerp(smooth, fromScale, toScale));
@@ -181,63 +183,71 @@ final class PxS1100Ponder {
         });
     }
 
-    private static void playScore(CreateSceneBuilder scene, Demo demo, PonderScore score, List<Vec3> mouths) {
+    private static void playScore(CreateSceneBuilder scene, Demo demo, List<Vec3> mouths) {
+        scene.addInstruction(ponder -> {
+            demo.start = ponder.getCurrentTime();
+            demo.settings.volume = demo.score.cues().stream().flatMap(cue -> cue.events().stream())
+                    .filter(event -> event.command() == KeyboardMidi.CONTROL && event.key() == 7 && event.channel() == 0)
+                    .mapToInt(KeyboardMidi::value).findFirst().orElse(demo.settings.volume);
+        });
         int time = 0, lastPulse = -20;
-        int cutToKeys = 70, pullBack = score.duration() - 130;
-        boolean closeUp = false, wide = false;
-        for (var cue : score.cues()) {
+        int cutToKeys = 48, pullBack = demo.score.duration() + 2;
+        boolean closeUp = false;
+        for (var cue : demo.score.cues()) {
             if (time < cue.tick()) scene.idle(cue.tick() - time);
             time = cue.tick();
             if (pullBack > cutToKeys && !closeUp && time >= cutToKeys) {
                 zoom(scene, STAGE, KEYS, 24);
                 closeUp = true;
             }
-            if (closeUp && !wide && time >= pullBack) {
-                zoom(scene, KEYS, STAGE, 27);
-                wide = true;
-            }
-            scene.addInstruction(ignored -> demo.apply(cue.events()));
             if (time - lastPulse >= 8 && cue.events().stream().anyMatch(event -> event.command() == KeyboardMidi.ON && event.value() > 0)) {
                 for (var mouth : mouths) notes(scene, mouth.add(0, .11, 0), 2);
                 lastPulse = time;
             }
         }
-        if (time < score.duration()) scene.idle(score.duration() - time);
+        if (time < pullBack) scene.idle(pullBack - time);
+        if (closeUp) zoom(scene, KEYS, STAGE, AUDIO_TAIL_TICKS);
     }
 
     static void tick(Minecraft mc) {
         PonderScene scene = mc.screen instanceof PonderUI ponder ? ponder.getActiveScene() : null;
         Demo demo = scene == null ? null : DEMOS.get(scene);
-        if (demo == null) {
+        if (demo == null || !demo.view.getBoolean("Powered") || scene.isFinished() || demo.start < 0) {
             close();
             active = null;
             return;
         }
-        if (!demo.view.getBoolean("Powered") || scene.isFinished()) {
-            close();
-            return;
-        }
         int now = scene.getCurrentTime();
-        if (active == scene && now == time) {
+        var options = mc.options;
+        boolean silent = options.getSoundSourceVolume(SoundSource.RECORDS) == 0 || options.getSoundSourceVolume(SoundSource.MASTER) == 0;
+        boolean sameScene = active == scene;
+        if (sameScene && now == time && silent == muted) {
             if (++still >= 3) close();
             return;
         }
-        boolean reset = audio == null || active != scene || now != time + 1;
+        boolean jumped = !sameScene || now != time + 1;
+        boolean reset = jumped || silent != muted || !silent && audio == null;
+        boolean resume = sameScene && !jumped && !muted && still >= 3;
         active = scene;
         time = now;
         still = 0;
+        muted = silent;
+        if (silent) {
+            close();
+            int frame = (now - demo.start) * PonderScore.FRAMES_PER_TICK;
+            if (reset) demo.seek(frame);
+            else demo.advance(frame);
+            return;
+        }
         var camera = mc.gameRenderer.getMainCamera();
         var ear = camera.getPosition();
         var pan = Vec3.directionFromRotation(0, camera.getYRot() - 90).scale(demo.external ? 3.4 : .9);
         var frame = new Frame(ear.add(pan), ear.subtract(pan));
-        if (reset || demo.revision != revision) {
-            var settings = KeyboardSettings.load(demo.settings.save());
-            if (reset) {
-                close();
-                audio = new KeyboardAudio(settings, frame);
-            }
-            audio.update(settings, reset, reset ? List.of() : demo.events, demo.keys::snapshot);
-            revision = demo.revision;
+        if (reset) {
+            close();
+            int startFrame = resume ? demo.visibleFrame + 1 : (now - demo.start) * PonderScore.FRAMES_PER_TICK;
+            demo.seek(startFrame - 1);
+            audio = new KeyboardAudio(demo.settings, frame, demo.score, startFrame);
         }
         audio.tick(mc, frame, Routing.INTERNAL);
     }
@@ -249,10 +259,11 @@ final class PxS1100Ponder {
 
     static final class Demo {
         final CompoundTag view = new CompoundTag();
+        final PonderScore score = PonderScore.load();
         KeyboardKeys keys;
         KeyboardSettings settings;
-        List<KeyboardMidi> events = List.of();
-        int revision;
+        PonderScore.Cursor cursor;
+        int start, visibleFrame;
         boolean external;
 
         Demo() { reset(); }
@@ -264,20 +275,29 @@ final class PxS1100Ponder {
             settings = new KeyboardSettings();
             settings.volume = 82;
             settings.polyphony = 64;
-            keys = new KeyboardKeys();
+            start = -1;
+            seek(-1);
             external = false;
-            apply(List.of());
         }
 
-        void apply(List<KeyboardMidi> events) {
-            for (var event : events) {
-                keys.apply(event);
-                if (event.command() == KeyboardMidi.CONTROL && event.key() == 7 && event.channel() == 0) {
-                    settings.volume = event.value();
-                }
+        void seek(int frame) {
+            keys = new KeyboardKeys();
+            cursor = score.cursor();
+            visibleFrame = -1;
+            advance(frame);
+        }
+
+        void advance(int frame) {
+            if (frame <= visibleFrame) return;
+            visibleFrame = frame;
+            cursor.advance(frame, events -> events.forEach(keys::apply));
+        }
+
+        KeyboardKeys keys() {
+            if (active != null && DEMOS.get(active) == this && audio != null) {
+                advance(audio.audibleFrame(System.nanoTime()));
             }
-            this.events = events;
-            revision++;
+            return keys;
         }
     }
 }

@@ -12,6 +12,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
@@ -71,13 +72,23 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
                 up.getStepX(), up.getStepY(), up.getStepZ(),
                 back.getStepX(), back.getStepY(), back.getStepZ())));
         pose.translate(-.5, -.5, -.5);
+        if (state.getValue(GrandPianoBlock.FULL_SIZE)) {
+            var origin = GrandPianoBlock.modelToLocal(Vec3.ZERO, true);
+            pose.translate(origin.x, origin.y, origin.z);
+            float scale = GrandPianoBlock.FULL_SCALE;
+            pose.scale(scale, scale, scale);
+        }
         new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.target()), lid);
         pose.popPose();
     }
 
     @Override
     public AABB getRenderBoundingBox(PianoBlockEntity piano) {
-        return new AABB(piano.getBlockPos()).inflate(2.5);
+        var pos = piano.getBlockPos();
+        var state = piano.renderedState();
+        var bounds = new AABB(pos);
+        for (var part : GrandPianoBlock.parts(state)) bounds = bounds.minmax(new AABB(part.at(pos, state)));
+        return bounds.inflate(state.getValue(GrandPianoBlock.FULL_SIZE) ? 2.2 : 1.1);
     }
 
     private static final class Lid {

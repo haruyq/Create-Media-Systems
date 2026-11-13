@@ -1,6 +1,9 @@
 package org.haruyq.createmediasystems.blocks.piano.pxs1100we;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.mojang.serialization.MapCodec;
@@ -40,27 +43,44 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.piano.PianoPlacement;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Target;
 import org.haruyq.createmediasystems.items.power.BatteryItem;
 import org.jetbrains.annotations.Nullable;
 
 public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable, TransformableBlock, SableCompat.SilentAssemblyRemoval {
     public enum Part implements StringRepresentable {
-        MAIN, BASS;
-        @Override public String getSerializedName() { return this == MAIN ? "main" : "bass"; }
+        MAIN(0, 0), BASS(1, 0), TREBLE(-1, 0), TOP(0, 1), TOP_BASS(1, 1), TOP_TREBLE(-1, 1);
+
+        final int x, y;
+
+        Part(int x, int y) { this.x = x; this.y = y; }
+
+        @Override public String getSerializedName() { return name().toLowerCase(java.util.Locale.ROOT); }
+
+        public BlockPos at(BlockPos root, BlockState state) {
+            return root.relative(right(state), x).relative(up(state), y);
+        }
     }
 
+    private static final List<Part> COMPACT_PARTS = List.of(Part.MAIN, Part.BASS);
+    private static final List<Part> TABLETOP_PARTS = List.of(Part.MAIN, Part.BASS, Part.TREBLE);
+    private static final List<Part> STAND_PARTS = List.of(Part.values());
+    private static final Vec3 MODEL_CENTRE = new Vec3(1, 0, .5);
+    private static final Vec3 CENTRE = new Vec3(.5, 0, .5);
     public static final DirectionProperty FACING = BlockStateProperties.FACING;
     public static final DirectionProperty UP = DirectionProperty.create("up");
     public static final EnumProperty<Part> PART = EnumProperty.create("part", Part.class);
     public static final BooleanProperty STAND = BooleanProperty.create("stand"), RACK = BooleanProperty.create("rack");
+    public static final BooleanProperty FULL_SIZE = BooleanProperty.create("full_size");
     private static final MapCodec<KeyboardBlock> CODEC = simpleCodec(KeyboardBlock::new);
     private static final Map<BlockState, VoxelShape> COLLISION = new java.util.concurrent.ConcurrentHashMap<>();
 
     KeyboardBlock(Properties properties) {
         super(properties);
+        // Saves with no full_size property still load as the original two-part keyboard.
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(UP, Direction.UP)
-                .setValue(PART, Part.MAIN).setValue(STAND, true).setValue(RACK, true));
+                .setValue(PART, Part.MAIN).setValue(STAND, true).setValue(RACK, true).setValue(FULL_SIZE, false));
     }
 
     @Override protected MapCodec<KeyboardBlock> codec() { return CODEC; }
@@ -68,25 +88,37 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING, UP, PART, STAND, RACK);
+        builder.add(FACING, UP, PART, STAND, RACK, FULL_SIZE);
     }
 
-    public static BlockPos bass(BlockPos root, BlockState state) { return root.relative(right(state)); }
+    public static List<Part> parts(BlockState state) {
+        if (!state.getValue(FULL_SIZE)) return COMPACT_PARTS;
+        return state.getValue(STAND) ? STAND_PARTS : TABLETOP_PARTS;
+    }
 
     public static BlockPos root(BlockPos pos, BlockState state) {
-        return state.getValue(PART) == Part.MAIN ? pos : pos.relative(right(state).getOpposite());
+        var part = state.getValue(PART);
+        return pos.relative(right(state), -part.x).relative(up(state), -part.y);
     }
 
     public static Vec3 point(BlockPos root, BlockState state, Vec3 local) {
-        return root.getCenter().relative(right(state), local.x - .5)
-                .relative(up(state), local.y - .5)
+        return orient(root, state, modelToLocal(state, local));
+    }
+
+    public static Vec3 modelToLocal(BlockState state, Vec3 model) {
+        return state.getValue(FULL_SIZE) ? model.subtract(MODEL_CENTRE).scale(KeyboardLayout.PX.fullScale).add(CENTRE) : model;
+    }
+
+    private static Vec3 orient(BlockPos pos, BlockState state, Vec3 local) {
+        return pos.getCenter().relative(right(state), local.x - .5).relative(up(state), local.y - .5)
                 .relative(state.getValue(FACING).getOpposite(), local.z - .5);
     }
 
     static Vec3 local(BlockPos root, BlockState state, Vec3 point) {
         var d = point.subtract(root.getCenter());
-        return new Vec3(.5 + dot(d, right(state)), .5 + dot(d, up(state)),
+        var local = new Vec3(.5 + dot(d, right(state)), .5 + dot(d, up(state)),
                 .5 + dot(d, state.getValue(FACING).getOpposite()));
+        return state.getValue(FULL_SIZE) ? local.subtract(CENTRE).scale(1.0 / KeyboardLayout.PX.fullScale).add(MODEL_CENTRE) : local;
     }
 
     public static Direction up(BlockState state) {
@@ -110,32 +142,64 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
         return point(root, state, layout.speakers.get(index).add(0, state.getValue(STAND) ? 0 : layout.tabletop, 0));
     }
 
-    @Override
-    public @Nullable BlockState getStateForPlacement(BlockPlaceContext context) {
-        var state = defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
-        var root = context.getClickedPos();
-        var level = context.getLevel();
-        if (!canPlace(level, root, root, state, context.getPlayer())
-                || !canPlace(level, root, bass(root, state), state.setValue(PART, Part.BASS), context.getPlayer())) return null;
-        return state;
+    public static Part dcInput(BlockState state) {
+        if (!state.getValue(FULL_SIZE)) return Part.BASS;
+        var layout = KeyboardLayout.PX;
+        var at = modelToLocal(state, layout.dcIn.add(0, state.getValue(STAND) ? 0 : layout.tabletop, 0));
+        return at.y >= 1 ? Part.TOP_BASS : Part.BASS;
     }
 
-    private static boolean canPlace(Level level, BlockPos root, BlockPos pos, BlockState state, @Nullable Player player) {
-        var at = BlockPos.containing(SableCompat.toWorld(level, pos, pos.getCenter()));
-        return SableCompat.sameSubLevel(level, root, pos) && level.isInWorldBounds(at) && level.getWorldBorder().isWithinBounds(at)
-                && (player == null || SableCompat.mayInteract(level, player, pos))
-                && level.getBlockState(pos).canBeReplaced() && level.getFluidState(pos).isEmpty()
-                && level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)
-                && level.isUnobstructed(null, shape(state).move(pos.getX(), pos.getY(), pos.getZ()));
+    @Override
+    public @Nullable BlockState getStateForPlacement(BlockPlaceContext context) {
+        var state = defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite()).setValue(FULL_SIZE, true);
+        var root = context.getClickedPos();
+        var level = context.getLevel();
+        return supported(level, root, state) && canChange(level, root, null, state, context.getPlayer()) ? state : null;
+    }
+
+    private static boolean supported(Level level, BlockPos root, BlockState state) {
+        return parts(state).stream().filter(part -> part.y == 0)
+                .allMatch(part -> PianoPlacement.supported(level, part.at(root, state), up(state)));
+    }
+
+    private static boolean canChange(Level level, BlockPos root, @Nullable BlockState before, BlockState after, @Nullable Player player) {
+        for (var part : parts(after)) {
+            var pos = part.at(root, after);
+            if (!PianoPlacement.fits(level, root, pos, shape(after.setValue(PART, part)), player)) return false;
+            var current = level.getBlockState(pos);
+            if (!(before != null && sameInstrument(pos, current, root, before))
+                    && (!current.canBeReplaced() || !level.getFluidState(pos).isEmpty())) return false;
+        }
+        if (before != null) {
+            for (var part : parts(before)) {
+                var pos = part.at(root, before);
+                if (!level.isLoaded(pos) || player != null && !SableCompat.mayInteract(level, player, pos)) return false;
+            }
+        }
+        return true;
     }
 
     static boolean place(Level level, BlockPos root, BlockState state) {
-        var bass = bass(root, state);
-        var before = level.getBlockState(root);
-        if (!before.canBeReplaced() || !level.getBlockState(bass).canBeReplaced() || !level.setBlock(root, state, Block.UPDATE_ALL)) return false;
-        if (level.setBlock(bass, state.setValue(PART, Part.BASS), Block.UPDATE_ALL)) return true;
-        level.setBlock(root, before, Block.UPDATE_ALL | Block.UPDATE_MOVE_BY_PISTON);
-        return false;
+        return change(level, root, null, state, null);
+    }
+
+    static boolean change(Level level, BlockPos root, @Nullable BlockState before, BlockState after, @Nullable Player player) {
+        if (after.equals(before)) return true;
+        if (!canChange(level, root, before, after, player)) return false;
+        Map<BlockPos, BlockState> target = new LinkedHashMap<>();
+        for (var part : parts(after)) target.put(part.at(root, after), after.setValue(PART, part));
+        if (!PianoPlacement.install(level, target)) return false;
+        if (before != null) {
+            for (var part : parts(before)) {
+                var pos = part.at(root, before);
+                if (!target.containsKey(pos) && sameInstrument(pos, level.getBlockState(pos), root, before)) {
+                    level.removeBlock(pos, true);
+                }
+            }
+            level.invalidateCapabilities(dcInput(before).at(root, before));
+        }
+        level.invalidateCapabilities(dcInput(after).at(root, after));
+        return true;
     }
 
     @Override
@@ -203,18 +267,10 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
         var main = level.getBlockState(root);
         if (!main.is(this)) return InteractionResult.PASS;
         var rotated = rotate(main, Rotation.CLOCKWISE_90);
-        var next = bass(root, rotated);
-        if (!canPlace(level, root, next, rotated.setValue(PART, Part.BASS), context.getPlayer())) return InteractionResult.FAIL;
-        if (!level.isClientSide) {
-            var previous = level.getBlockState(next);
-            if (!level.setBlock(next, rotated.setValue(PART, Part.BASS), Block.UPDATE_ALL)) return InteractionResult.FAIL;
-            if (!level.setBlock(root, rotated, Block.UPDATE_ALL)) {
-                level.setBlock(next, previous, Block.UPDATE_ALL | Block.UPDATE_MOVE_BY_PISTON);
-                return InteractionResult.FAIL;
-            }
-            level.removeBlock(bass(root, main), true);
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        if (!supported(level, root, rotated)) return InteractionResult.FAIL;
+        boolean rotatedOk = level.isClientSide ? canChange(level, root, main, rotated, context.getPlayer())
+                : change(level, root, main, rotated, context.getPlayer());
+        return rotatedOk ? InteractionResult.sidedSuccess(level.isClientSide) : InteractionResult.FAIL;
     }
 
     @Override
@@ -227,7 +283,7 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
 
     @Override
     public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
-        if (!level.isClientSide && player.isCreative() && state.getValue(PART) == Part.BASS) {
+        if (!level.isClientSide && player.isCreative() && state.getValue(PART) != Part.MAIN) {
             var root = root(pos, state);
             if (part(level.getBlockState(root), Part.MAIN, state)) level.destroyBlock(root, false);
         }
@@ -238,8 +294,11 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState next, boolean moved) {
         if (!level.isClientSide && !moved && !next.is(this)) {
             if (state.getValue(PART) == Part.MAIN) {
-                var bass = bass(pos, state);
-                if (part(level.getBlockState(bass), Part.BASS, state)) level.removeBlock(bass, true);
+                for (var part : parts(state)) {
+                    if (part == Part.MAIN) continue;
+                    var at = part.at(pos, state);
+                    if (part(level.getBlockState(at), part, state)) level.removeBlock(at, true);
+                }
             } else {
                 var root = root(pos, state);
                 if (part(level.getBlockState(root), Part.MAIN, state)) level.destroyBlock(root, true);
@@ -251,7 +310,13 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
     static boolean part(BlockState candidate, Part part, BlockState reference) {
         return candidate.is(PxS1100Feature.BLOCK.get()) && candidate.getValue(PART) == part
                 && candidate.getValue(FACING) == reference.getValue(FACING)
+                && candidate.getValue(FULL_SIZE).equals(reference.getValue(FULL_SIZE))
                 && up(candidate) == up(reference);
+    }
+
+    private static boolean sameInstrument(BlockPos pos, BlockState candidate, BlockPos root, BlockState reference) {
+        return candidate.is(reference.getBlock()) && root(pos, candidate).equals(root)
+                && part(candidate, candidate.getValue(PART), reference);
     }
 
     @Override protected BlockState rotate(BlockState state, Rotation rotation) {
@@ -270,20 +335,26 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
     private static VoxelShape shape(BlockState state) {
         return COLLISION.computeIfAbsent(state, block -> {
             var layout = KeyboardLayout.PX;
-            var boxes = new java.util.ArrayList<AABB>();
+            var boxes = new ArrayList<AABB>();
             boolean onStand = block.getValue(STAND);
             boxes.add(layout.body.move(0, onStand ? 0 : layout.tabletop, 0));
             if (onStand) {
                 boxes.addAll(layout.stand);
                 boxes.add(KeyboardLayout.PEDAL_BOX);
             }
-            int offset = block.getValue(PART) == Part.MAIN ? 0 : 1;
+            if (block.getValue(FULL_SIZE) && block.getValue(RACK)) {
+                boxes.add(layout.rack.move(0, onStand ? 0 : layout.tabletop, 0));
+            }
+            var part = block.getValue(PART);
             VoxelShape result = Shapes.empty();
             for (AABB box : boxes) {
-                double min = Math.max(offset, box.minX), max = Math.min(offset + 1, box.maxX);
-                if (min >= max) continue;
-                var a = point(BlockPos.ZERO, block, new Vec3(min - offset, box.minY, box.minZ));
-                var b = point(BlockPos.ZERO, block, new Vec3(max - offset, box.maxY, box.maxZ));
+                var min = modelToLocal(block, new Vec3(box.minX, box.minY, box.minZ));
+                var max = modelToLocal(block, new Vec3(box.maxX, box.maxY, box.maxZ));
+                var start = new Vec3(Math.max(0, min.x - part.x), Math.max(0, min.y - part.y), min.z);
+                var end = new Vec3(Math.min(1, max.x - part.x), Math.min(1, max.y - part.y), max.z);
+                if (start.x >= end.x || start.y >= end.y) continue;
+                var a = orient(BlockPos.ZERO, block, start);
+                var b = orient(BlockPos.ZERO, block, end);
                 result = Shapes.or(result, Shapes.create(new AABB(a, b)));
             }
             return result;
@@ -295,7 +366,26 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
     }
 
     @Override public @Nullable <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        if (level.isClientSide || state.getValue(PART) == Part.BASS) return null;
-        return createTickerHelper(type, PxS1100Feature.ENTITY.get(), (world, pos, block, keyboard) -> keyboard.runtime().tick());
+        if (level.isClientSide || state.getValue(PART) != Part.MAIN) return null;
+        return createTickerHelper(type, PxS1100Feature.ENTITY.get(), (world, pos, block, keyboard) -> {
+            if (!block.getValue(FULL_SIZE) && world.getGameTime() % 20 == 0 && !SableCompat.inPlotGrid(world, pos)) {
+                upgrade(world, pos, block);
+            }
+            keyboard.runtime().tick();
+        });
+    }
+
+    private static void upgrade(Level level, BlockPos root, BlockState before) {
+        var bass = Part.BASS.at(root, before);
+        if (!level.isLoaded(bass) || !part(level.getBlockState(bass), Part.BASS, before)) return;
+        var expanded = before.setValue(FULL_SIZE, true);
+        if (!supported(level, root, expanded)) return;
+        for (var part : parts(expanded)) {
+            var at = part.at(root, expanded);
+            if (!level.isLoaded(at)) return;
+            var current = level.getBlockState(at);
+            if (!current.isAir() && !sameInstrument(at, current, root, before)) return;
+        }
+        change(level, root, before, expanded, null);
     }
 }
