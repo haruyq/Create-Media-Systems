@@ -2,7 +2,7 @@
   "parent": "minecraft:builtin/entity",
   "gui_light": "side",
   "textures": {
-    "particle": "create_media_systems:item/disc_launcher_icon"
+    "particle": "create_media_systems:item/launcher/disc_launcher_icon"
   },
   "display": {
     "ground": {

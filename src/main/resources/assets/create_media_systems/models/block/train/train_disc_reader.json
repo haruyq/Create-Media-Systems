@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_top",
+  "textures": {
+    "side": "create_media_systems:block/train/train_disc_reader_side",
+    "top": "create_media_systems:block/train/train_disc_reader_top"
+  }
+}

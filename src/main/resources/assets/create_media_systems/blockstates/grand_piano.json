@@ -1,5 +1,5 @@
 {
   "variants": {
-    "": { "model": "create_media_systems:block/grand_piano" }
+    "": { "model": "create_media_systems:block/piano/grand/grand_piano" }
   }
 }

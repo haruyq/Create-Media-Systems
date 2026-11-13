@@ -4,8 +4,8 @@ import static org.haruyq.createmediasystems.client.PonderScenes.plate;
 import static org.haruyq.createmediasystems.client.PonderScenes.say;
 
 import org.haruyq.createmediasystems.client.ClientFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.blocks.video.VideoFeature;
+import org.haruyq.createmediasystems.blocks.video.VideoPlayerBlock;
 
 import com.simibubi.create.Create;
 import com.simibubi.create.foundation.ponder.CreateSceneBuilder;

@@ -1,7 +1,7 @@
 {
   "variants": {
     "": {
-      "model": "create_media_systems:block/disc_reader"
+      "model": "create_media_systems:block/audio/disc_reader"
     }
   }
 }

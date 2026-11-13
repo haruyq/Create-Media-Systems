@@ -1,0 +1,340 @@
+package org.haruyq.createmediasystems.items.launcher.client;
+
+import org.haruyq.createmediasystems.client.ArmPoses;
+import org.haruyq.createmediasystems.client.PointLights;
+import org.haruyq.createmediasystems.items.power.ChargeableItem;
+import org.haruyq.createmediasystems.client.mesh.CellLight;
+import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.items.launcher.LauncherFeature;
+import org.haruyq.createmediasystems.items.launcher.LauncherTimeline;
+import org.haruyq.createmediasystems.items.launcher.DiscLauncherReloadPacket;
+import org.haruyq.createmediasystems.items.launcher.DiscCellItem;
+import org.haruyq.createmediasystems.items.launcher.LauncherMagazine;
+import org.haruyq.createmediasystems.items.launcher.LauncherMechanics;
+import org.haruyq.createmediasystems.items.launcher.CellLighting;
+import org.haruyq.createmediasystems.items.launcher.DiscLauncherTrigger;
+import org.haruyq.createmediasystems.items.launcher.LauncherFeedback;
+import org.haruyq.createmediasystems.items.launcher.DiscProjectile;
+import org.haruyq.createmediasystems.playback.EmitterAudioManager;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.math.Axis;
+
+import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import org.haruyq.createmediasystems.items.launcher.DiscLauncherItem;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderHandEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.settings.KeyConflictContext;
+import org.lwjgl.glfw.GLFW;
+
+/** Holds only client-side render hooks. Common/server classes never load client code. */
+public final class LauncherClient {
+    private static final float MAX_AIM_TURN_PER_TICK = 12;
+
+    private LauncherClient() {}
+    public static final ModConfigSpec.EnumValue<LauncherDamageDisplay.Mode> DAMAGE_NUMBERS = ClientConfig.BUILDER
+            .comment("Weapon damage numbers: STACKING combines recent hits on the same target, FLOATING shows individual hits, BOTH shows both, OFF hides numbers.")
+            .defineEnum("launcherDamageNumbers", LauncherDamageDisplay.Mode.STACKING);
+    public static final ModConfigSpec.EnumValue<LauncherDamageDisplay.Crosshair> CROSSHAIR_FEEDBACK = ClientConfig.BUILDER
+            .comment("X_WITH_SHIELD shows a confirmed-hit X plus Minecraft absorption shield feedback; X shows only the X; OFF hides both.")
+            .defineEnum("launcherCrosshairFeedback", LauncherDamageDisplay.Crosshair.X_WITH_SHIELD);
+    private static final LauncherGunMotion MOTION=new LauncherGunMotion();
+    private static final LauncherDamageDisplay DAMAGE=new LauncherDamageDisplay();
+    private static LauncherFeedback.Lock lock = LauncherFeedback.Lock.NONE;
+    private static Vec3 viewAimPoint;
+    public static LauncherDamageDisplay damageDisplay(){return DAMAGE;}
+    private static boolean triggerDown;
+    private static Object currentPlayer;
+    private static long hitAt,lastShot=Long.MIN_VALUE;
+    private static boolean headHit,killed;
+    private static float hitDamage,cameraKick;
+    private static int confirmedShots,confirmedHits,confirmedHeadshots;
+    private static java.util.function.BooleanSupplier additionalInputActive=()->false;
+    /** Lets {@code active} count as input focus besides the game window's (a harness driving the client). */
+    public static void additionalInput(java.util.function.BooleanSupplier active){additionalInputActive=active;}
+    public record Diagnostics(int confirmedShots,int confirmedHits,int confirmedHeadshots,float hitDamage,boolean reticleDrawn) {}
+    public static Diagnostics diagnostics(){return new Diagnostics(confirmedShots,confirmedHits,confirmedHeadshots,hitDamage,LauncherHud.reticleDrawn);}
+    public static float aim(float partial){return MOTION.aim(partial);}
+    public static float kick(float partial){return MOTION.kick(partial);}
+    public static float hitAge(){return (System.nanoTime()-hitAt)/1_000_000_000f;}
+    public static boolean headHit(){return headHit;}
+    public static boolean killed(){return killed;}
+
+    static Entity lockedPart(Minecraft mc) {
+        if (mc.level == null || mc.player == null || lock.target() < 0 || !mc.player.isUsingItem()
+                || !mc.options.keyUse.isDown() || !DiscLauncherItem.hasAimModule(mc.player.getMainHandItem())) return null;
+        Entity target = mc.level.getEntity(lock.target());
+        if (target == null || !target.isAlive()) return null;
+        if (target instanceof EnderDragon dragon && lock.part() >= 0 && lock.part() < dragon.getSubEntities().length) {
+            return dragon.getSubEntities()[lock.part()];
+        }
+        return target;
+    }
+
+    static Vec3 lockedPoint(Minecraft mc) {
+        return lockedPart(mc) == null ? null : viewAimPoint;
+    }
+
+    private static void steerView(LocalPlayer player, Vec3 point) {
+        Vec3 offset = point.subtract(player.getEyePosition());
+        if (offset.lengthSqr() < 1e-8) return;
+        float wantedYaw = (float) Math.toDegrees(Math.atan2(-offset.x, offset.z));
+        float wantedPitch = (float) -Math.toDegrees(Math.atan2(offset.y, offset.horizontalDistance()));
+        float yaw = Mth.approachDegrees(player.getYRot(), wantedYaw, MAX_AIM_TURN_PER_TICK);
+        float pitch = Mth.approach(player.getXRot(), wantedPitch, MAX_AIM_TURN_PER_TICK);
+        player.setYRot(yaw);
+        player.setYHeadRot(yaw);
+        player.setXRot(pitch);
+        // Keep the rendered view and the next trigger packet on the same rotation.
+        player.yRotO = yaw;
+        player.yHeadRotO = yaw;
+        player.xRotO = pitch;
+    }
+    private static final KeyMapping RELOAD_KEY = new KeyMapping(
+            "key.create_media_systems.disc_launcher_reload",
+            KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_R,
+            "key.categories.create_media_systems");
+
+    /** Both arms up to a launcher in the main hand: the trigger hand at the grip, the other one under the barrel. */
+    private static void poseArms(net.minecraft.client.model.HumanoidModel<?> model,net.minecraft.world.entity.player.Player p,float yaw,float pitch) {
+        if(!p.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))return;
+        boolean right=p.getMainArm()==HumanoidArm.RIGHT,reloading=LauncherMagazine.reloading(p.getMainHandItem());
+        var trigger=right?model.rightArm:model.leftArm;var support=right?model.leftArm:model.rightArm;
+        trigger.xRot=-1.42f+model.head.xRot;trigger.yRot=model.head.yRot+(right?-.12f:.12f);trigger.zRot=0;
+        support.xRot=(reloading?-.85f:-1.40f)+model.head.xRot;support.yRot=model.head.yRot+(right?.42f:-.42f);support.zRot=right?-.10f:.10f;
+    }
+
+    public static void register(IEventBus modBus) {
+        ArmPoses.add(LauncherClient::poseArms);
+        modBus.addListener(LauncherClient::registerExtensions);
+        modBus.addListener(LauncherClient::registerRenderers);
+        modBus.addListener(LauncherClient::registerKeys);
+        modBus.addListener((RegisterMenuScreensEvent event) -> event.register(LauncherFeature.DISC_CELL_MENU.get(), DiscCellScreen::new));
+        NeoForge.EVENT_BUS.addListener(LauncherClient::onClientTick);
+        NeoForge.EVENT_BUS.addListener(LauncherClient::supportHand);
+        NeoForge.EVENT_BUS.addListener(LauncherClient::input);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ComputeFovModifierEvent event)->{
+            if(event.getPlayer()==Minecraft.getInstance().player && event.getPlayer().getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()))
+                event.setNewFovModifier(event.getNewFovModifier()*(1-.18f*aim(1)));
+        });
+        LauncherHud.register(modBus);
+        PointLights.add(new CellLights());
+        EmitterAudioManager.add(DiscEmitter::near);
+    }
+
+    /** The server fired this player's launcher: recoil once per shot. */
+    public static void shot(LauncherFeedback.Shot shot) {
+        var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
+        lastShot=shot.tick();confirmedShots++;MOTION.shot();
+        if (lockedPoint(mc) == null) {
+            float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
+        }
+    }
+
+    /** This player's shot hit: the hit marker, damage numbers and sound. */
+    public static void hit(LauncherFeedback.Hit hit) {
+        hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();hitDamage=hit.damage();
+        DAMAGE.hit(new LauncherDamageDisplay.Entry(hit.target(),hit.health(),hit.shield(),hit.headshot(),hit.killed(),hit.shieldBroken(),hit.x(),hit.y(),hit.z(),hitAt/1_000_000_000.0));
+        confirmedHits++;if(headHit)confirmedHeadshots++;
+        var mc=Minecraft.getInstance();
+        mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
+    }
+
+    /** The server locked, or released, this player's aim-module target. */
+    public static void lock(LauncherFeedback.Lock feedback) {
+        if (lock.target() != feedback.target() || lock.part() != feedback.part()) viewAimPoint = null;
+        lock = feedback;
+    }
+
+    private static void registerKeys(RegisterKeyMappingsEvent event) {
+        event.register(RELOAD_KEY);
+    }
+
+    private static void onClientTick(ClientTickEvent.Post event) {
+        var mc=Minecraft.getInstance();var player=mc.player;
+        if(mc.level!=null)for(var entity:mc.level.entitiesForRendering())if(entity instanceof DiscProjectile disc)disc.refreshAttachedPose();
+        if(currentPlayer!=player){currentPlayer=player;triggerDown=false;lastShot=Long.MIN_VALUE;MOTION.reset();DAMAGE.reset();cameraKick=0;lock=LauncherFeedback.Lock.NONE;}
+        boolean holding=player!=null && player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()) && !player.isSpectator() && player.isAlive();
+        boolean active=holding && mc.screen==null && mc.getOverlay()==null
+                && (mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed() || additionalInputActive.getAsBoolean());
+        boolean wantsAim=active && mc.options.keyUse.isDown() && !LauncherMagazine.reloading(player.getMainHandItem());
+        if(holding) {
+            if(wantsAim && !player.isUsingItem() && mc.gameMode!=null)mc.gameMode.useItem(player,InteractionHand.MAIN_HAND);
+            if(!wantsAim && player.isUsingItem() && player.getUseItem().is(LauncherFeature.DISC_LAUNCHER.get()) && mc.gameMode!=null)
+                mc.gameMode.releaseUsingItem(player);
+            if(wantsAim)player.setSprinting(false);
+        }
+        MOTION.tick(wantsAim);
+        if (!wantsAim) lock = LauncherFeedback.Lock.NONE;
+        viewAimPoint = wantsAim && lockedPart(mc) != null ? lock.point() : null;
+        if (viewAimPoint != null) {
+            steerView(player, viewAimPoint);
+            cameraKick = 0;
+        } else if(player!=null && cameraKick>.0001f) {
+            float returned=cameraKick*.30f;cameraKick-=returned;player.setXRot(Math.min(90,player.getXRot()+returned));
+        }
+        boolean fire=active && mc.options.keyAttack.isDown();
+        if(player!=null && mc.getConnection()!=null && (fire || triggerDown))
+            PacketDistributor.sendToServer(new DiscLauncherTrigger.Input(fire,player.getYRot(),player.getXRot()));
+        triggerDown=fire;
+        while (RELOAD_KEY.consumeClick()) {
+            if (active) {
+                PacketDistributor.sendToServer(DiscLauncherReloadPacket.INSTANCE);
+            }
+        }
+    }
+
+    private static void input(net.neoforged.neoforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
+        var mc=Minecraft.getInstance();
+        if(mc.player!=null && mc.player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get())
+                && (event.isAttack() || event.isUseItem())) {event.setCanceled(true);event.setSwingHand(false);}
+    }
+
+    public record CellVisual(ItemStack stack, LauncherTimeline.Frame motion, LauncherMechanics.CellPose pose, int color, float strength) {}
+
+    public static CellVisual cellVisual(ItemStack gun, Level level, float partial) {
+        float age = LauncherTimeline.reloadAge(gun, level, partial);
+        var motion = LauncherTimeline.sample(age, LauncherTimeline.shotAge(gun, level, partial));
+        var path = LauncherMechanics.cellPose(age, motion);
+        ItemStack cell = path.incoming() ? LauncherMagazine.ejecting(gun) ? ItemStack.EMPTY : LauncherMagazine.pending(gun)
+                : LauncherMagazine.cell(gun);
+        if (!(cell.getItem() instanceof DiscCellItem item)) return new CellVisual(cell, motion, path, 0x82949E, 0);
+        return new CellVisual(cell, motion, path, item.tier.color, CellLighting.strength(ChargeableItem.charge(cell)));
+    }
+
+    private static void registerExtensions(RegisterClientExtensionsEvent event) {
+        event.registerItem(new IClientItemExtensions() {
+            private DiscCellRenderer renderer;
+            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (renderer == null) renderer = new DiscCellRenderer();
+                return renderer;
+            }
+        }, LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
+        event.registerItem(new IClientItemExtensions() {
+            private LauncherRenderer renderer;
+
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (renderer == null) renderer = new LauncherRenderer();
+                return renderer;
+            }
+
+            @Override
+            public boolean applyForgeHandTransform(PoseStack pose, LocalPlayer player, HumanoidArm arm,
+                                                    ItemStack held, float partial, float equip, float swing) {
+                weaponPose(pose, LauncherTimeline.sample(held, player.level(), partial), arm == HumanoidArm.RIGHT ? 1f : -1f, equip, bob(player, partial));
+                return true;
+            }
+        }, LauncherFeature.DISC_LAUNCHER.get());
+    }
+
+    private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(LauncherFeature.DISC_PROJECTILE.get(), DiscProjectileRenderer::new);
+        event.registerBlockEntityRenderer(LauncherFeature.DISC_CELL_CHARGER_ENTITY.get(), DiscCellChargerRenderer::new);
+    }
+
+    /** The gun's idle sway in first person. */
+    static float bob(net.minecraft.world.entity.player.Player player, float partial) {
+        return (float) Math.sin((player.tickCount + partial) * 0.055f) * 0.0025f;
+    }
+
+    /** The first-person gun model's space, in its 1/16 units' frame: the hand pose, then ItemRenderer's centring. */
+    static void gunSpace(PoseStack pose, LauncherTimeline.Frame f, float hand, float bob) {
+        weaponPose(pose, f, hand, 0, bob);
+        pose.translate(-.5f, -.5f, -.5f);
+    }
+
+    private static CellLight spill(PoseStack pose, CellVisual visual, float strength) {
+        var path = visual.pose();
+        return new CellLight(pose.last().pose(), path.x() / 16, path.y() / 16, path.z() / 16, 18f / 16, visual.color(),
+                visual.strength() * strength);
+    }
+
+    static void weaponPose(PoseStack pose, LauncherTimeline.Frame f, float hand, float equip, float bob) {
+        float partial=Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+        var p=LauncherGunPose.sample(f,hand,aim(partial),kick(partial),bob);
+        // Deliberately independent of vanilla equip/attack height: energy sync cannot stow a firearm.
+        pose.translate(p.x(),p.y(),p.z());
+        pose.mulPose(Axis.YP.rotationDegrees(p.yaw()));pose.mulPose(Axis.XP.rotationDegrees(p.pitch()));
+        pose.mulPose(Axis.ZP.rotationDegrees(p.roll()));pose.scale(p.scale(),p.scale(),p.scale());
+    }
+
+    private static void supportHand(RenderHandEvent event) {
+        var mc = Minecraft.getInstance();
+        var player = mc.player;
+        if (player == null) return;
+        ItemStack launcher = player.getMainHandItem();
+        if (!launcher.is(LauncherFeature.DISC_LAUNCHER.get())) return;
+        if(event.getHand()==InteractionHand.MAIN_HAND){gripHand(event,launcher,true);return;}
+        event.setCanceled(true);
+        if(!LauncherMagazine.reloading(launcher)){gripHand(event,launcher,false);return;}
+        float age = LauncherTimeline.reloadAge(launcher, player.level(), event.getPartialTick());
+        if (age < LauncherTimeline.HAND_IN.start() || age >= LauncherTimeline.HAND_OUT.end()
+                || LauncherMagazine.ejecting(launcher) && age >= LauncherTimeline.INCOMING_AT) return;
+        float hand = player.getMainArm() == HumanoidArm.RIGHT ? 1 : -1;
+        var visual = cellVisual(launcher, player.level(), event.getPartialTick());
+        if (visual.stack().isEmpty()) return;
+        var motion = visual.motion();
+        var pose = event.getPoseStack();
+        var buffers = event.getMultiBufferSource();
+        pose.pushPose();
+        // ItemRenderer centers the weapon after the hand transform; use the same origin for the cell and hand.
+        gunSpace(pose, motion, hand, 0);
+        var path = visual.pose();
+        CellLight spill = spill(pose, visual, 1.8f);
+        float withdraw = 1 - motion.supportHand();
+        pose.translate(-hand * withdraw * .4f, -withdraw * .3f, withdraw * .15f);
+        // Only the receiver draws the cell, at the same scale throughout.
+        pose.translate(path.x() / 16, (path.y() + LauncherMechanics.CELL_BOTTOM - .25f) / 16, path.z() / 16);
+        pose.mulPose(Axis.YP.rotationDegrees(hand * 10));
+        pose.scale(.85f, .85f, .85f);
+        pose.translate(hand > 0 ? -.375f : .375f, -.75f, 0);
+        var renderer = (net.minecraft.client.renderer.entity.player.PlayerRenderer) mc.getEntityRenderDispatcher().getRenderer(player);
+        if (hand > 0) renderer.renderLeftHand(pose, spill.wrap(buffers), event.getPackedLight(), player);
+        else renderer.renderRightHand(pose, spill.wrap(buffers), event.getPackedLight(), player);
+        pose.popPose();
+    }
+
+    private static void gripHand(RenderHandEvent event,ItemStack launcher,boolean primary) {
+        var mc=Minecraft.getInstance();var player=mc.player;
+        float hand=player.getMainArm()==HumanoidArm.RIGHT?1:-1;
+        var pose=event.getPoseStack();pose.pushPose();
+        var visual=cellVisual(launcher,player.level(),event.getPartialTick());
+        gunSpace(pose,visual.motion(),hand,0);
+        var spill=spill(pose,visual,1.4f);
+        pose.translate(.5f,(primary?4:7)/16f,(primary?17.4f:4.8f)/16f);
+        pose.mulPose(Axis.YP.rotationDegrees(hand*(primary?-12:15)));
+        pose.scale(.82f,.82f,.82f);
+        boolean right=(player.getMainArm()==HumanoidArm.RIGHT)==primary;
+        pose.translate(right?-.375f:.375f,-.75f,0);
+        var renderer=(net.minecraft.client.renderer.entity.player.PlayerRenderer)mc.getEntityRenderDispatcher().getRenderer(player);
+        if(right)renderer.renderRightHand(pose,spill.wrap(event.getMultiBufferSource()),event.getPackedLight(),player);
+        else renderer.renderLeftHand(pose,spill.wrap(event.getMultiBufferSource()),event.getPackedLight(),player);
+        pose.popPose();
+    }
+}

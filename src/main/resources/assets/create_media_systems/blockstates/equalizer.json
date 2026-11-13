@@ -1,18 +1,18 @@
 {
   "variants": {
     "facing=north": {
-      "model": "create_media_systems:block/equalizer"
+      "model": "create_media_systems:block/video/equalizer"
     },
     "facing=east": {
-      "model": "create_media_systems:block/equalizer",
+      "model": "create_media_systems:block/video/equalizer",
       "y": 90
     },
     "facing=south": {
-      "model": "create_media_systems:block/equalizer",
+      "model": "create_media_systems:block/video/equalizer",
       "y": 180
     },
     "facing=west": {
-      "model": "create_media_systems:block/equalizer",
+      "model": "create_media_systems:block/video/equalizer",
       "y": 270
     }
   }

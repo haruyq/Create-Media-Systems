@@ -4,7 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.haruyq.createmediasystems.stream.UrlPolicy;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 

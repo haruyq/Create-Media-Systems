@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import org.haruyq.createmediasystems.display.DisplayBlock;
+import org.haruyq.createmediasystems.blocks.display.DisplayBlock;
 
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import net.minecraft.core.BlockPos;

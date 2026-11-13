@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "create_media_systems:item/blu_ray"
+    "layer0": "create_media_systems:item/disc/blu_ray"
   }
 }

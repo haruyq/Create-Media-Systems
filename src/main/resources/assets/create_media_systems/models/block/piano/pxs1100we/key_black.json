@@ -1,0 +1,1 @@
+{"parent":"minecraft:block/block","ambientocclusion":false,"textures":{"particle":"create_media_systems:block/piano/pxs1100we/keys"},"loader":"neoforge:obj","model":"create_media_systems:models/block/piano/pxs1100we/key_black.obj","automatic_culling":false,"emissive_ambient":false}

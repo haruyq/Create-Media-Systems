@@ -46,7 +46,7 @@
     "subtitle": "subtitles.create_media_systems.disc_fire",
     "sounds": [
       {
-        "name": "create_media_systems:disc_fire"
+        "name": "create_media_systems:launcher/disc_fire"
       }
     ]
   },
@@ -54,7 +54,7 @@
     "subtitle": "subtitles.create_media_systems.disc_latch",
     "sounds": [
       {
-        "name": "create_media_systems:disc_latch"
+        "name": "create_media_systems:launcher/disc_latch"
       }
     ]
   },
@@ -62,7 +62,7 @@
     "subtitle": "subtitles.create_media_systems.disc_insert",
     "sounds": [
       {
-        "name": "create_media_systems:disc_insert"
+        "name": "create_media_systems:launcher/disc_insert"
       }
     ]
   },
@@ -70,31 +70,31 @@
     "subtitle": "subtitles.create_media_systems.disc_charge",
     "sounds": [
       {
-        "name": "create_media_systems:disc_charge"
+        "name": "create_media_systems:launcher/disc_charge"
       }
     ]
   },
   "disc_hit": {
     "sounds": [
-      "create_media_systems:disc_hit"
+      "create_media_systems:launcher/disc_hit"
     ]
   },
   "disc_headshot": {
     "sounds": [
-      "create_media_systems:disc_headshot"
+      "create_media_systems:launcher/disc_headshot"
     ]
   },
   "drive_spin": {
     "subtitle": "subtitles.create_media_systems.drive_spin",
     "sounds": [
-      "create_media_systems:drive_spin"
+      "create_media_systems:disc/drive_spin"
     ]
   },
   "drive_tray": {
     "subtitle": "subtitles.create_media_systems.drive_tray",
     "sounds": [
       {
-        "name": "create_media_systems:drive_tray",
+        "name": "create_media_systems:disc/drive_tray",
         "attenuation_distance": 12
       }
     ]
@@ -103,7 +103,7 @@
     "subtitle": "subtitles.create_media_systems.drive_tray",
     "sounds": [
       {
-        "name": "create_media_systems:drive_tray_open",
+        "name": "create_media_systems:disc/drive_tray_open",
         "attenuation_distance": 12
       }
     ]
@@ -112,7 +112,7 @@
     "subtitle": "subtitles.create_media_systems.drive_seek",
     "sounds": [
       {
-        "name": "create_media_systems:drive_seek",
+        "name": "create_media_systems:disc/drive_seek",
         "attenuation_distance": 10
       }
     ]

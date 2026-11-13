@@ -6,7 +6,7 @@ from render_preview import validate
 
 res, ns = sys.argv[1], sys.argv[2]
 models = Path(res) / "assets" / ns / "models"
-files = sorted((models / "block" / "px_s1100").glob("*.json")) + [models / "item" / "px_s1100.json"]
+files = sorted((models / "block" / "piano" / "pxs1100we").glob("*.json")) + [models / "item" / "px_s1100.json"]
 bad = 0
 for file in files:
     model = json.loads(file.read_text(encoding="utf-8"))

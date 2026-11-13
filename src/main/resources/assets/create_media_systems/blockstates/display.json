@@ -1,8 +1,8 @@
 {
   "variants": {
-    "facing=north": { "model": "create_media_systems:block/display" },
-    "facing=east": { "model": "create_media_systems:block/display", "y": 90 },
-    "facing=south": { "model": "create_media_systems:block/display", "y": 180 },
-    "facing=west": { "model": "create_media_systems:block/display", "y": 270 }
+    "facing=north": { "model": "create_media_systems:block/display/display" },
+    "facing=east": { "model": "create_media_systems:block/display/display", "y": 90 },
+    "facing=south": { "model": "create_media_systems:block/display/display", "y": 180 },
+    "facing=west": { "model": "create_media_systems:block/display/display", "y": 270 }
   }
 }

@@ -1,7 +1,7 @@
 {
   "variants": {
     "": {
-      "model": "create_media_systems:block/hifi_stack"
+      "model": "create_media_systems:block/component/m700/hifi_stack"
     }
   }
 }

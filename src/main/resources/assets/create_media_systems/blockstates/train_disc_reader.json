@@ -1,5 +1,5 @@
 {
   "variants": {
-    "": { "model": "create_media_systems:block/train_disc_reader" }
+    "": { "model": "create_media_systems:block/train/train_disc_reader" }
   }
 }

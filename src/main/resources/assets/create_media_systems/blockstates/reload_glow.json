@@ -1,7 +1,7 @@
 {
   "variants": {
     "": {
-      "model": "create_media_systems:block/reload_glow"
+      "model": "create_media_systems:block/launcher/reload_glow"
     }
   }
 }

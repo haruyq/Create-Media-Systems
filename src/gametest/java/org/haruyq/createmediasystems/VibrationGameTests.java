@@ -1,6 +1,6 @@
 package org.haruyq.createmediasystems;
 
-import org.haruyq.createmediasystems.audio.AudioFeature;
+import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;

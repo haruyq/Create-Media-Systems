@@ -1,10 +1,10 @@
 {
   "variants": {
     "powered=false": {
-      "model": "create_media_systems:block/train_signal_receiver"
+      "model": "create_media_systems:block/train/train_signal_receiver"
     },
     "powered=true": {
-      "model": "create_media_systems:block/train_signal_receiver_on"
+      "model": "create_media_systems:block/train/train_signal_receiver_on"
     }
   }
 }

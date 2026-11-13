@@ -26,7 +26,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.haruyq.createmediasystems.ApiHttp;
-import org.haruyq.createmediasystems.broadcast.BroadcastProfile;
+import org.haruyq.createmediasystems.blocks.broadcast.BroadcastProfile;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.ServerConfig;
 

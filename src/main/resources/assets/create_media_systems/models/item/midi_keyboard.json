@@ -2,7 +2,7 @@
   "parent": "minecraft:builtin/entity",
   "gui_light": "side",
   "textures": {
-    "particle": "create_media_systems:block/hifi_case"
+    "particle": "create_media_systems:block/component/m700/hifi_case"
   },
   "display": {
     "gui": {

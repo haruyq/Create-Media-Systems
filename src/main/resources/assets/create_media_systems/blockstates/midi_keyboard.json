@@ -1,7 +1,7 @@
 {
   "variants": {
     "": {
-      "model": "create_media_systems:block/midi_keyboard"
+      "model": "create_media_systems:block/keyboard/a88mkii/midi_keyboard"
     }
   }
 }

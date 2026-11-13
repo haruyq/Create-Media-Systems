@@ -1,1 +1,1 @@
-{ "parent": "create_media_systems:block/image_viewer" }
+{ "parent": "create_media_systems:block/display/image_viewer" }

@@ -8,9 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.broadcast.BroadcastOcclusion;
-import org.haruyq.createmediasystems.broadcast.BroadcastProfile;
-import org.haruyq.createmediasystems.broadcast.client.BroadcastAudioStream;
+import org.haruyq.createmediasystems.blocks.broadcast.BroadcastOcclusion;
+import org.haruyq.createmediasystems.blocks.broadcast.BroadcastProfile;
+import org.haruyq.createmediasystems.blocks.broadcast.client.BroadcastAudioStream;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.Reports;
 import org.haruyq.createmediasystems.stream.EmitterRange;

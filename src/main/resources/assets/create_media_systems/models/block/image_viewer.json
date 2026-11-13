@@ -1,6 +1,0 @@
-{
-  "parent": "create_media_systems:block/display",
-  "textures": {
-    "front": "minecraft:block/item_frame"
-  }
-}

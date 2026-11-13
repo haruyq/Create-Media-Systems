@@ -1,7 +1,7 @@
 {
   "variants": {
     "": {
-      "model": "create_media_systems:block/broadcast_array"
+      "model": "create_media_systems:block/broadcast/broadcast_array"
     }
   }
 }

@@ -1,0 +1,355 @@
+package org.haruyq.createmediasystems.blocks.video;
+
+import org.haruyq.createmediasystems.stream.MediaSource;
+
+import java.util.List;
+
+import org.haruyq.createmediasystems.ItemSlot;
+import org.haruyq.createmediasystems.PercentSetting;
+import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock;
+import org.haruyq.createmediasystems.stream.DiscDrive;
+import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.DiscTransport;
+import org.haruyq.createmediasystems.stream.Downloads;
+import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Remotable;
+import org.haruyq.createmediasystems.stream.Tone;
+import org.haruyq.createmediasystems.stream.VideoSource;
+import org.haruyq.createmediasystems.stream.Streams;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.mojang.serialization.MapCodec;
+import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
+import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
+import com.simibubi.create.foundation.blockEntity.behaviour.BehaviourType;
+import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
+import com.simibubi.create.foundation.blockEntity.behaviour.CenteredSideValueBoxTransform;
+import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollValueBehaviour;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.phys.BlockHitResult;
+
+/** Plays a disc's playlist for its linked displays and speakers. */
+public class VideoPlayerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
+        SableCompat.SilentAssemblyRemoval {
+    private static final MapCodec<VideoPlayerBlock> CODEC = simpleCodec(VideoPlayerBlock::new);
+
+    public VideoPlayerBlock(Properties properties) {
+        super(properties);
+        registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH));
+    }
+
+    @Override
+    protected MapCodec<VideoPlayerBlock> codec() {
+        return CODEC;
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        builder.add(FACING);
+    }
+
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+    }
+
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+                                              Player player, InteractionHand hand, BlockHitResult hit) {
+        return ItemSlot.useItemOn(stack, level, pos, player, hand);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                               BlockHitResult hit) {
+        return ItemSlot.useWithoutItem(level, pos, player);
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        ItemSlot.onRemove(this, state, level, pos, newState);
+        super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return new Entity(pos, state);
+    }
+
+    @Override
+    @Nullable
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
+        // Both sides: Create's value box lives on the client too.
+        return type != VideoFeature.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
+    }
+
+    /** A block entity keeps one behaviour per type, and lighting has the default one. */
+    private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
+
+    public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable, MediaSource.Captured,
+            DiscDrive.Fed, DiscTransport.Deck, ItemSlot.Holder {
+        private static final DiscTransport.Keys KEYS = new DiscTransport.Keys("Index", "Playing", "Paused", "From", "Ticks");
+        private final ItemSlot cd = new ItemSlot("Cd", stack -> MediaItem.fits(stack, DiscKind.Slot.PICTURE));
+        private final DiscTransport transport = new DiscTransport(this, false, new PlaybackClock());
+        private ScrollValueBehaviour volume;
+        private ScrollValueBehaviour lighting;
+        /** How much of the video playing its listeners have downloaded. Not saved. */
+        private final Downloads downloads = new Downloads();
+
+        public Entity(BlockPos pos, BlockState state) {
+            super(VideoFeature.VIDEO_PLAYER_ENTITY.get(), pos, state);
+        }
+
+        @Override
+        public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
+            volume = PercentSetting.create(this, "create_media_systems.video_player.volume",
+                    new CenteredSideValueBoxTransform((state, side) -> side == Direction.UP), VOLUME, "Volume");
+            lighting = PercentSetting.create(this, "create_media_systems.video_player.lighting",
+                    new CenteredSideValueBoxTransform((state, side) -> side == state.getValue(FACING)));
+            volume.withCallback(percent -> soundChanged());
+            lighting.withCallback(percent -> soundChanged());
+            behaviours.add(volume);
+            behaviours.add(lighting);
+        }
+
+        @Nullable
+        private DiscDrive drive() {
+            return cd.isEmpty() && level != null ? DiscDrive.feeding(level, worldPosition, this) : null;
+        }
+
+        @Override
+        public List<String> playlist() {
+            DiscDrive drive = drive();
+            return drive != null ? List.of(drive.link()) : MediaItem.linksOf(cd.get());
+        }
+
+        @Override
+        public boolean plays(DiscKind kind) {
+            return kind.fits(DiscKind.Slot.PICTURE);
+        }
+
+        @Override
+        public void driveChanged(@Nullable Player by) {
+            if (cd.isEmpty()) {
+                insert(ItemStack.EMPTY, by);
+            }
+        }
+
+        @Override
+        public void driveRelinked(@Nullable Player by) {
+            if (cd.isEmpty() && level != null) {
+                // A seek to where it is: every listener loads the new link there, and they start together.
+                transport.control(Action.SEEK_BY, 0, by, level.getGameTime());
+            }
+        }
+
+        @Override
+        public int index() {
+            return transport.index();
+        }
+
+        public DiscTransport transport() {
+            return transport;
+        }
+
+        @Override
+        public void tickCaptured(long now) {
+            transport.clock().tick(now);
+            transport.advance(now);
+        }
+
+        @Override
+        public float volume() {
+            return volume == null ? 1 : volume.getValue() / 100f;
+        }
+
+        /** How brightly its displays light their surroundings, 0..1 (0: not at all); the same for everyone. */
+        @Override
+        public float lighting() {
+            return lighting == null ? 1 : lighting.getValue() / 100f;
+        }
+
+        @Override
+        public Tone tone() {
+            return level == null ? Tone.FLAT : new Tone(EqualizerBlock.bands(level, worldPosition), 1);
+        }
+
+        private void soundChanged() {
+            changed();
+            if (level instanceof ServerLevel server) {
+                Streams.changed(server, worldPosition);
+            }
+        }
+
+        @Override
+        @Nullable
+        public Streams.Source nowPlaying() {
+            DiscDrive drive = drive();
+            DiscKind kind = drive != null ? drive.ready() : MediaItem.kindOf(cd.get());
+            return kind == null ? null : transport.source(worldPosition, kind);
+        }
+
+        @Override
+        public ItemSlot slot() {
+            return cd;
+        }
+
+        @Override
+        public void insert(ItemStack stack, @Nullable Player by) {
+            cd.set(stack);
+            transport.insert(by);
+        }
+
+        /** Every listener loads the entry from where it now is, and they start together (see Streams#loading). */
+        @Override
+        public void started(@Nullable Player by, boolean sought) {
+            if (!sought) {
+                downloads.clear();
+            }
+            if (level != null) {
+                Streams.loading(this, by, transport.clock(), level.getGameTime());
+            }
+        }
+
+        /** {@code action} from {@code by}'s remote; {@code value} is the entry (from 1) to select, or the volume in percent. */
+        @Override
+        public void control(Action action, int value, @Nullable Player by) {
+            if (action == Action.VOLUME) {
+                volume.setValue(Mth.clamp(value, 0, 100));
+            } else if (level != null) {
+                transport.control(action, value, by, level.getGameTime());
+            }
+        }
+
+        @Override
+        public void tick() {
+            super.tick();
+            if (level == null || level.isClientSide) {
+                return;
+            }
+            long now = level.getGameTime();
+            Streams.tick(this, transport.clock(), now);
+            transport.advance(now);
+            if (transport.clock().running()) {
+                setChanged();
+            }
+        }
+
+        @Override
+        public void downloaded(ServerPlayer player, String url, float fraction) {
+            List<String> playlist = playlist();
+            if (transport.playing() && transport.index() < playlist.size() && playlist.get(transport.index()).equals(url)
+                    && downloads.told(player, fraction)) {
+                changed();
+            }
+        }
+
+        @Override
+        public void changed() {
+            setChanged();
+            if (level != null && !level.isClientSide) {
+                sendData();
+            }
+        }
+
+        @Override
+        public Component state() {
+            return transport.state();
+        }
+
+        @Override
+        public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+            tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
+            List<String> playlist = playlist();
+            boolean playing = transport.playing();
+            tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
+                    : !playing ? ChatFormatting.RED : transport.paused() ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
+            DriveEmulatorBlock.Entity beside = cd.isEmpty() ? DriveEmulatorBlock.beside(level, worldPosition) : null;
+            if (beside != null) {
+                beside.describe(tooltip);
+                tooltip.add(Component.empty());
+            } else if (!playlist.isEmpty()) {
+                tooltip.add(Component.literal("     ").append(track()).withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("     " + shorten(playlist.get(shownIndex())))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                tooltip.add(Component.empty());
+            }
+            if (playing && !transport.paused() && level != null && level.isClientSide) {
+                NativeAudio.Playback playback = NativeAudio.playback(worldPosition);
+                NativeAudio.Progress progress = playback == null ? null : playback.progress();
+                if (progress != null) {
+                    tooltip.add(Component.literal("     ").append(progress.loading()
+                            ? Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW)
+                            : Component.translatable("create_media_systems.video_player.position", value(PlaybackClock.format(progress.seconds())
+                            + (progress.length() > 0 ? " / " + PlaybackClock.format(progress.length()) : ""), ChatFormatting.WHITE)))
+                            .withStyle(ChatFormatting.GRAY));
+                }
+            }
+            if (playing) {
+                downloads.addTo(tooltip, "     ");
+            }
+            tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.volume_value",
+                    value(volume.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.lighting_value",
+                    value(lighting.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
+            return true;
+        }
+
+        private static Component value(Object value, ChatFormatting color) {
+            return Component.literal(String.valueOf(value)).withStyle(color);
+        }
+
+        private static String shorten(String url) {
+            return url.length() > 40 ? url.substring(0, 39) + "…" : url;
+        }
+
+        @Override
+        protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+            super.write(tag, registries, clientPacket);
+            cd.save(tag, registries);
+            transport.save(tag, KEYS);
+            if (clientPacket) {
+                downloads.write(tag);
+            }
+        }
+
+        @Override
+        protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+            super.read(tag, registries, clientPacket);
+            cd.load(tag, registries);
+            transport.load(tag, KEYS);
+            if (clientPacket) {
+                downloads.read(tag);
+            }
+        }
+    }
+}

@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "org.haruyq.createmediasystems.audio.mixin",
+  "package": "org.haruyq.createmediasystems.blocks.audio.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "JukeboxBlockEntityMixin",

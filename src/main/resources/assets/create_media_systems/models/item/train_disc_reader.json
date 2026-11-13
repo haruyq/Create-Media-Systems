@@ -1,1 +1,1 @@
-{ "parent": "create_media_systems:block/train_disc_reader" }
+{ "parent": "create_media_systems:block/train/train_disc_reader" }

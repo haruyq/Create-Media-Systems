@@ -1,11 +1,11 @@
 package org.haruyq.createmediasystems;
 
-import org.haruyq.createmediasystems.display.DisplayFeature;
+import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.haruyq.createmediasystems.display.DisplayBlock;
+import org.haruyq.createmediasystems.blocks.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingRaycast;
 
 import net.minecraft.core.BlockPos;

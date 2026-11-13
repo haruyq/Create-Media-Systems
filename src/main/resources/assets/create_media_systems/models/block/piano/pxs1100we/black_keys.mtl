@@ -1,0 +1,3 @@
+newmtl black_keys
+Kd 1 1 1
+map_Kd create_media_systems:block/piano/pxs1100we/keys
