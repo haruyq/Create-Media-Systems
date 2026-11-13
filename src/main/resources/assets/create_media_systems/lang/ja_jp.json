@@ -97,6 +97,8 @@
   "create_media_systems.lighting.label.spread": "広がり角度",
   "create_media_systems.lighting.label.speed": "動く速さ",
   "create_media_systems.lighting.label.strobe": "ストロボ",
+  "create_media_systems.lighting.label.chase": "ランダム点灯",
+  "create_media_systems.lighting.chase": "ランダム%s灯",
   "create_media_systems.lighting.label.aim": "方向",
   "create_media_systems.lighting.label.enabled": "点灯",
   "create_media_systems.lighting.label.cycle": "色の順送り",

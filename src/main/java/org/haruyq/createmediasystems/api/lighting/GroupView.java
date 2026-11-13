@@ -59,6 +59,9 @@ public interface GroupView {
     /** How many times a second its lights flash; 0 for a steady light. */
     float strobe();
 
+    /** How many of its lights are lit at once, chosen again at random on each beat; 0 for all of them. */
+    int chase();
+
     /** The player its lights follow (Motion.TRACK); null for none. */
     @Nullable
     UUID target();

@@ -281,14 +281,31 @@ public final class LightingPackets {
                 return Math.abs(change.value) == 1 || Math.abs(change.value) == LightingSettings.FAST_RANGE_STEP;
             }
         },
-        /** Value: flashes a second, 0 for none. A step past either end comes round to the other. */
+        /**
+         * Value: flashes a second, 0 for none. Its row steps on past 10 Hz to lighting one, then three, at random on
+         * the beat (see CHASE), and from there round to off.
+         */
         STROBE(25, "strobe", Press.STEP,
-                (s, g, i, step, fine) -> Math.floorMod(Math.round(g.strobe) + step, (int) LightingSettings.STROBE.max() + 1),
-                view -> view.group().strobe <= 0 ? LightingText.on(false)
+                (s, g, i, step, fine) -> flash(g, step).value(),
+                view -> view.group().chase > 0 ? LightingText.message(LightingText.NUMBER, "chase", view.group().chase)
+                        : view.group().strobe <= 0 ? LightingText.on(false)
                         : LightingText.number(Math.round(view.group().strobe) + " Hz"),
-                (console, s, g, change, value, player) -> set(() -> g.strobe = change.value));
+                (console, s, g, change, value, player) -> set(() -> {
+                    g.strobe = change.value;
+                    if (g.strobe > 0) {
+                        g.chase = 0;
+                    }
+                })),
+        /** Value: how many of the group's lights are lit at once, at random on each beat; 0 for all. Not with a strobe. */
+        CHASE(26, "chase", Press.NONE, null, view -> LightingText.number(view.group().chase),
+                (console, s, g, change, value, player) -> set(() -> {
+                    g.chase = value;
+                    if (value > 0) {
+                        g.strobe = 0;
+                    }
+                }));
 
-        private static final Control[] BY_ID = new Control[26];
+        private static final Control[] BY_ID = new Control[27];
 
         static {
             for (Control control : values()) {
@@ -335,10 +352,25 @@ public final class LightingPackets {
          * index on the wire and its value, as {@code settings} are now.
          */
         public Stepped step(LightingSettings settings, int index, int step, boolean fine) {
-            Control control = this == COLOR ? SLOT : this;
             Group group = settings.selected();
+            if (this == STROBE) {
+                return flash(group, step);
+            }
+            Control control = this == COLOR ? SLOT : this;
             return new Stepped(control, control == RGB ? index + settings.selectedColor * 3 : index,
                     control.step.next(settings, group, index, step, fine));
+        }
+
+        /** The strobe row's step: off, 1 to 10 Hz, one at random on the beat, three, and round. */
+        private static Stepped flash(Group group, int step) {
+            int strobes = (int) LightingSettings.STROBE.max();
+            int[] chases = {1, 3};
+            int at = group.chase > 0 ? strobes + (group.chase == 1 ? 1 : 2) : Math.round(group.strobe);
+            int next = Math.floorMod(at + step, strobes + 1 + chases.length);
+            if (next > strobes) {
+                return new Stepped(CHASE, 0, chases[next - strobes - 1]);
+            }
+            return new Stepped(next == 0 && group.chase > 0 ? CHASE : STROBE, 0, next);
         }
 
         public Component format(View view) {
