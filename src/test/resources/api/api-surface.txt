@@ -103,6 +103,8 @@ org/haruyq/createmediasystems/api/lighting/ConsoleView abstract track (ILjava/ut
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract video (J)Lorg/haruyq/createmediasystems/api/lighting/AudioLevels;
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract videoSource ()Lnet/minecraft/core/BlockPos;
 org/haruyq/createmediasystems/api/lighting/ConsoleView class 512
+org/haruyq/createmediasystems/api/lighting/Consoles class 16
+org/haruyq/createmediasystems/api/lighting/Consoles static onTick (Ljava/util/function/Consumer;)V
 org/haruyq/createmediasystems/api/lighting/GroupView abstract audio ()Z
 org/haruyq/createmediasystems/api/lighting/GroupView abstract audioBand ()Lorg/haruyq/createmediasystems/api/lighting/GroupView$Band;
 org/haruyq/createmediasystems/api/lighting/GroupView abstract brightness ()F
@@ -210,6 +212,32 @@ org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract block (
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract normal ()Lnet/minecraft/world/phys/Vec3;
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract point ()Lnet/minecraft/world/phys/Vec3;
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit class 512
+org/haruyq/createmediasystems/api/media/MediaSources class 16
+org/haruyq/createmediasystems/api/media/MediaSources static playing (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lorg/haruyq/createmediasystems/api/media/MediaSources$Track;
+org/haruyq/createmediasystems/api/media/MediaSources$Track <init> (Ljava/lang/String;JIJ)V
+org/haruyq/createmediasystems/api/media/MediaSources$Track class 16
+org/haruyq/createmediasystems/api/media/MediaSources$Track equals (Ljava/lang/Object;)Z
+org/haruyq/createmediasystems/api/media/MediaSources$Track hashCode ()I
+org/haruyq/createmediasystems/api/media/MediaSources$Track load ()J
+org/haruyq/createmediasystems/api/media/MediaSources$Track millis ()J
+org/haruyq/createmediasystems/api/media/MediaSources$Track toString ()Ljava/lang/String;
+org/haruyq/createmediasystems/api/media/MediaSources$Track url ()Ljava/lang/String;
+org/haruyq/createmediasystems/api/media/MediaSources$Track videoHeight ()I
+org/haruyq/createmediasystems/api/media/client/MediaListener class 512
+org/haruyq/createmediasystems/api/media/client/MediaListener picture (IILjava/util/function/IntUnaryOperator;J)V
+org/haruyq/createmediasystems/api/media/client/MediaListener restarted ()V
+org/haruyq/createmediasystems/api/media/client/MediaListener sound ([BIIJ)V
+org/haruyq/createmediasystems/api/media/client/MediaListener static SAMPLE_RATE I
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks class 16
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks static decodeAhead (Ljava/lang/String;IJLorg/haruyq/createmediasystems/api/media/client/MediaListener;)Ljava/util/concurrent/CompletableFuture;
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks static follow (Lnet/minecraft/core/BlockPos;Ljava/lang/String;Lorg/haruyq/createmediasystems/api/media/client/MediaListener;)Lorg/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position;
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position <init> (JJ)V
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position class 16
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position equals (Ljava/lang/Object;)Z
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position hashCode ()I
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position micros ()J
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position millis ()J
+org/haruyq/createmediasystems/api/media/client/MediaPlaybacks$Position toString ()Ljava/lang/String;
 org/haruyq/createmediasystems/api/sublevel/SubLevels class 16
 org/haruyq/createmediasystems/api/sublevel/SubLevels static distance (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos;)D
 org/haruyq/createmediasystems/api/sublevel/SubLevels static eye (Lnet/minecraft/world/entity/Entity;F)Lnet/minecraft/world/phys/Vec3;

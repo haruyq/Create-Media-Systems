@@ -59,7 +59,7 @@ public final class MediaTaps {
         }
     }
 
-    private final Map<Class<?>, Demand> taps = new ConcurrentHashMap<>();
+    private final Map<Object, Demand> taps = new ConcurrentHashMap<>();
     private final LongSupplier now;
 
     /** Taps of a playback whose clock reads {@code now} (µs), having offered every tap what is heard up to then. */
@@ -69,9 +69,14 @@ public final class MediaTaps {
 
     /** Its tap of {@code kind}, made by {@code create} the first time; asking keeps it offered what plays a while. */
     public <T extends MediaTap> T get(Class<T> kind, Supplier<T> create) {
-        Demand demand = taps.computeIfAbsent(kind, ignored -> new Demand(create.get()));
+        return kind.cast(keyed(kind, create));
+    }
+
+    /** Its tap kept under {@code key}, as with get: for taps of one kind that each follow it for something else. */
+    public MediaTap keyed(Object key, Supplier<? extends MediaTap> create) {
+        Demand demand = taps.computeIfAbsent(key, ignored -> new Demand(create.get()));
         demand.until = System.nanoTime() + DEMAND_NANOS;
-        return kind.cast(demand.tap);
+        return demand.tap;
     }
 
     /** Now on the playback's clock (µs), what is heard up to it offered: what to ask a tap for what is heard now. */
