@@ -9,9 +9,6 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
-import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
-import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
-import org.jetbrains.annotations.Nullable;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 import static org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock.KEY_LEFT;
@@ -46,6 +43,36 @@ final class PianoMesh {
     };
     private static final float[] LEFT = new float[SECTIONS + 1], RIGHT = new float[SECTIONS + 1];
 
+    // The action. The wound bass strings cross above the rest, so their hammers and dampers stand taller.
+    private static final int BASS_NOTES = 20, DAMPED_NOTES = 89 - FIRST_NOTE;
+    private static final float TREBLE_Y = .875f, BASS_Y = .900f;
+    /** The gap between pin block and belly rail through which the hammers rise. */
+    private static final float WELL_FRONT = .846f, WELL_BACK = .932f, WELL_FLOOR = .752f;
+    private static final float WELL_LEFT = .160f, WELL_RIGHT = 1.660f;
+    /** Each hammer swings on a flange under the pin block and meets its string on the strike line. */
+    private static final float FLANGE_Y = .823f, FLANGE_Z = .770f, STRIKE = .888f, SHANK = STRIKE - FLANGE_Z;
+    private static final float BLOW = .046f, HAMMER_REST = (float) Math.toDegrees(Math.asin(BLOW / SHANK));
+    private static final float DAMPER_Z = .968f, DAMPER_LIFT = .0062f;
+    /** The una corda pedal slides keyboard and hammers towards the treble. */
+    private static final float SHIFT = .0026f;
+    private static final int PLATE = 0xA88442, FELT_WHITE = 0xECE6D7, FELT_SHADE = 0xD8D1BF;
+    /** Per note: x and z at the tuning pin, x and z at the bridge, and the height of the string. */
+    private static final float[][] STRINGS = new float[KEYS][];
+
+    static {
+        for (int i = 0; i < KEYS; i++) {
+            if (i < BASS_NOTES) {
+                float t = i / (BASS_NOTES - 1f);
+                STRINGS[i] = new float[] {Mth.lerp(t, .180f, .392f), .764f, Mth.lerp(t, .664f, .954f),
+                    Mth.lerp(t, 2.619f, 1.815f), BASS_Y};
+            } else {
+                float t = (i - BASS_NOTES) / (KEYS - BASS_NOTES - 1f);
+                STRINGS[i] = new float[] {Mth.lerp(t, .480f, 1.589f), .778f, Mth.lerp(t, .486f, 1.496f),
+                    Mth.lerp(t, 2.514f, 1.090f), TREBLE_Y};
+            }
+        }
+    }
+
     static {
         int j = 0;
         for (int i = 0; i <= SECTIONS; i++) {
@@ -68,18 +95,14 @@ final class PianoMesh {
         this.light = light;
     }
 
-    void draw(PianoState state, float lidAngle) {
-        draw(state, lidAngle, null);
-    }
-
-    void draw(PianoState state, float lidAngle, @Nullable KeyMotion motion) {
+    void draw(PianoAction action, float lidAngle) {
         casework();
-        keyboard(state, motion);
+        keyboard(action);
         leg(.265f, .430f, .082f);
         leg(1.555f, .430f, .082f);
         leg(.495f, 2.525f, .070f);
-        lyre(state);
-        if (lidAngle > .3f) interior();
+        lyre(action);
+        if (lidAngle > .3f) interior(action);
         musicDesk(lidAngle / 43);
         lid(lidAngle);
         fallboardSurface(buffers.getBuffer(FALLBOARD_SURFACE));
@@ -137,19 +160,20 @@ final class PianoMesh {
         }
     }
 
-    private void keyboard(PianoState state, @Nullable KeyMotion motion) {
+    private void keyboard(PianoAction action) {
         int white = 0;
         boolean previousWhitePressed = false;
-        long now = System.nanoTime();
+        pose.pushPose();
+        pose.translate(action.pedal(SOFT) * SHIFT, 0, 0);
         for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
             float seam = KEY_LEFT + KEY_PITCH * white;
             boolean accidental = black(note);
-            float travel = motion == null ? (state.pressed(note) ? 1 : 0) : motion.travel(note, now);
-            boolean pressed = travel > 0;
+            float dip = action.key(note);
+            boolean pressed = dip > .004f;
             if (pressed) {
                 pose.pushPose();
                 pose.translate(0, KEY_BOTTOM, .425f);
-                pose.mulPose(Axis.XN.rotationDegrees((accidental ? 2.25f : 1.75f) * travel));
+                pose.mulPose(Axis.XN.rotationDegrees((accidental ? 2.25f : 1.75f) * dip));
                 pose.translate(0, -KEY_BOTTOM, -.425f);
             }
             if (accidental) {
@@ -170,6 +194,7 @@ final class PianoMesh {
             }
             if (pressed) pose.popPose();
         }
+        pose.popPose();
     }
 
     private void restingSeam(float center, float back) {
@@ -242,7 +267,7 @@ final class PianoMesh {
         rod(x - .042f, .045f, z, x + .042f, .045f, z, .020f, .020f, GOLD, 12);
     }
 
-    private void lyre(PianoState state) {
+    private void lyre(PianoAction action) {
         box(.720f, .652f, .572f, 1.103f, .708f, .778f, EBONY);
         for (float x : new float[] {.771f, 1.053f}) {
             rod(x, .141f, .638f, x, .668f, .712f, .029f, .036f, EBONY, 4);
@@ -250,51 +275,110 @@ final class PianoMesh {
         }
         box(.738f, .093f, .600f, 1.087f, .163f, .777f, EBONY);
         box(.741f, .158f, .603f, 1.084f, .174f, .773f, EDGE);
-        pedal(.816f, state.pedal(SOFT));
-        pedal(.912f, state.pedal(SOSTENUTO));
-        pedal(1.008f, state.pedal(DAMPER));
+        pedal(.816f, action.pedal(SOFT));
+        pedal(.912f, action.pedal(SOSTENUTO));
+        pedal(1.008f, action.pedal(DAMPER));
     }
 
-    private void pedal(float x, int value) {
+    private void pedal(float x, float travel) {
         pose.pushPose();
         pose.translate(x, .111, .645);
-        pose.mulPose(Axis.XN.rotationDegrees(value * 8f / 127));
+        pose.mulPose(Axis.XN.rotationDegrees(travel * 8));
         rod(0, 0, -.185f, 0, .017f, -.022f, .018f, .013f, BRASS, 8);
         box(-.030f, -.007f, -.207f, .030f, .008f, -.151f, BRASS);
         rod(0, .001f, -.209f, 0, .001f, -.196f, .021f, .029f, GOLD, 8);
         pose.popPose();
     }
 
-    private void interior() {
-        // Spruce strips, raised cast plate, bridges and a two-plane cross-strung scale.
-        panel(.065f, .820f, 1, 0xB99162);
+    private void interior(PianoAction action) {
+        // Spruce strips behind the belly rail, the cast plate over the pin block, and the well between them.
+        panel(.065f, .820f, 1, 0xB99162, WELL_BACK);
+        quad(WELL_LEFT, .820f, .660f, WELL_RIGHT, .820f, .660f, WELL_RIGHT, .820f, WELL_FRONT,
+                WELL_LEFT, .820f, WELL_FRONT, 0, 1, 0, PLATE);
+        well();
         band(.067f, .821f, .078f, .858f, 0x9E7137);
         band(.078f, .858f, .137f, .858f, 0xCBA45E);
         band(.137f, .858f, .145f, .840f, 0x83612F);
-        box(.198f, .831f, .704f, 1.602f, .866f, .833f, 0xAD843F);
-        box(.210f, .869f, .774f, 1.585f, .879f, .833f, 0x671E2C);
-        rod(.218f, .862f, .908f, 1.551f, .862f, 1.002f, .021f, .024f, 0xBC9348, 4);
+        box(.168f, .831f, .704f, 1.602f, .866f, .833f, 0xAD843F);
+        box(.168f, .866f, .742f, .412f, BASS_Y - .010f, .792f, PLATE);
+        box(.430f, .869f, .774f, 1.585f, .879f, .833f, 0x671E2C);
+        // The capo bar holds the plain strings down just ahead of the strike line.
+        rod(.452f, .884f, .838f, 1.606f, .884f, .838f, .0075f, .0075f, 0xB68D46, 6);
         rod(.350f, .857f, 1.233f, .556f, .857f, 2.643f, .021f, .027f, 0xC2A065, 4);
         rod(.422f, .866f, 2.310f, 1.574f, .866f, 1.119f, .012f, .015f, 0x775032, 6);
-        rod(.645f, .889f, 2.519f, .974f, .889f, 1.720f, .012f, .015f, 0x78472A, 6);
-        for (int i = 0; i < 68; i++) {
-            float t = i / 67f;
-            float x0 = Mth.lerp(t, .480f, 1.589f), x1 = Mth.lerp(t, .486f, 1.496f);
-            float z1 = Mth.lerp(t, 2.514f, 1.090f);
-            string(x0, .875f, .778f, x1, z1, .0023f, i % 3 == 0 ? 0xB6AC94 : 0xA59B87);
-            if (i % 2 == 0) box(x0 - .009f, .878f, .950f, x0 + .009f, .899f, 1.026f, 0x3E2B28);
-        }
-        for (int i = 0; i < 20; i++) {
-            float t = i / 19f;
-            string(Mth.lerp(t, .211f, .461f), .913f, .764f, Mth.lerp(t, .664f, .954f),
-                    Mth.lerp(t, 2.619f, 1.815f), .0038f, i % 2 == 0 ? 0xC3936D : 0xB17D5B);
+        rod(.645f, .884f, 2.519f, .974f, .884f, 1.720f, .012f, .015f, 0x78472A, 6);
+        // One string, hammer and damper to a note. A two-plane cross-strung scale: the bass passes over the tenor.
+        float shift = action.pedal(SOFT) * SHIFT;
+        for (int i = 0; i < KEYS; i++) {
+            int note = FIRST_NOTE + i;
+            float[] line = STRINGS[i];
+            boolean bass = i < BASS_NOTES;
+            float ring = action.ring(note);
+            float gauge = bass ? .0034f : .0021f;
+            int wire = bass ? (i % 2 == 0 ? 0xC3936D : 0xB17D5B) : (i % 3 == 0 ? 0xB6AC94 : 0xA59B87);
+            string(line[0], line[4], line[1], line[2], line[3], gauge, gauge + ring * .0012f,
+                    ring > 0 ? blend(wire, 0xFFF3D2, ring * .6f) : wire);
+            hammer(along(line, STRIKE) + shift, line[4], action.hammer(note), bass);
+            if (i < DAMPED_NOTES) damper(along(line, DAMPER_Z), line[4], action.damper(note), bass);
         }
     }
 
-    private void string(float x0, float y, float z0, float x1, float z1, float width, int color) {
+    private void well() {
+        quad(WELL_LEFT, WELL_FLOOR, WELL_FRONT, WELL_RIGHT, WELL_FLOOR, WELL_FRONT, WELL_RIGHT, WELL_FLOOR, WELL_BACK,
+                WELL_LEFT, WELL_FLOOR, WELL_BACK, 0, 1, 0, 0x0D0C0E);
+        quad(WELL_LEFT, WELL_FLOOR, WELL_FRONT, WELL_RIGHT, WELL_FLOOR, WELL_FRONT, WELL_RIGHT, .820f, WELL_FRONT,
+                WELL_LEFT, .820f, WELL_FRONT, 0, 0, 1, 0x241B17);
+        quad(WELL_LEFT, WELL_FLOOR, WELL_BACK, WELL_RIGHT, WELL_FLOOR, WELL_BACK, WELL_RIGHT, .820f, WELL_BACK,
+                WELL_LEFT, .820f, WELL_BACK, 0, 0, -1, 0x7A5A38);
+        quad(WELL_LEFT, WELL_FLOOR, WELL_FRONT, WELL_LEFT, WELL_FLOOR, WELL_BACK, WELL_LEFT, .820f, WELL_BACK,
+                WELL_LEFT, .820f, WELL_FRONT, 1, 0, 0, 0x1A1719);
+        quad(WELL_RIGHT, WELL_FLOOR, WELL_FRONT, WELL_RIGHT, WELL_FLOOR, WELL_BACK, WELL_RIGHT, .820f, WELL_BACK,
+                WELL_RIGHT, .820f, WELL_FRONT, -1, 0, 0, 0x1A1719);
+        // The felted rail the shanks rest on.
+        box(.196f, .772f, .851f, 1.618f, .7805f, .868f, FELT);
+    }
+
+    /** Where a string is across the piano as it passes {@code z}. */
+    private static float along(float[] line, float z) {
+        return line[0] + (line[2] - line[0]) * (z - line[1]) / (line[3] - line[1]);
+    }
+
+    private void string(float x0, float y, float z0, float x1, float z1, float gauge, float width, int color) {
         quad(x0 - width, y, z0, x0 + width, y, z0, x1 + width, y, z1, x1 - width, y, z1, 0, 1, 0, color);
-        box(x0 - width, y - .006f, z0 - .006f, x0 + width, y + .015f, z0 + .006f, GOLD);
-        box(x1 - width, y - .013f, z1 - .005f, x1 + width, y + .005f, z1 + .005f, 0xAC874B);
+        cap(x0 - gauge, y - .006f, z0 - .006f, x0 + gauge, y + .015f, z0 + .006f, GOLD);
+        cap(x1 - gauge, y - .013f, z1 - .005f, x1 + gauge, y + .005f, z1 + .005f, 0xAC874B);
+    }
+
+    /** A hammer at {@code travel} of the way from its rest rail to its string: maple shank, wooden core, wedge of felt. */
+    private void hammer(float x, float stringY, float travel, boolean bass) {
+        float half = bass ? .0042f : .0048f, head = stringY - .0012f - FLANGE_Y;
+        pose.pushPose();
+        pose.translate(x, FLANGE_Y, FLANGE_Z);
+        pose.mulPose(Axis.XP.rotationDegrees(HAMMER_REST * (1 - travel)));
+        cap(-.0026f, -.003f, 0, .0026f, .003f, SHANK - .005f, 0xC9AB7A);
+        cap(-half * .8f, -.013f, SHANK - .006f, half * .8f, head * .5f, SHANK + .006f, 0x8A6238);
+        float low = head * .34f, wide = .0115f, crown = .0034f;
+        float slope = (wide - crown) / (head - low), nz = Mth.invSqrt(1 + slope * slope), ny = slope * nz;
+        quad(-half, low, SHANK - wide, half, low, SHANK - wide, half, head, SHANK - crown, -half, head, SHANK - crown,
+                0, ny, -nz, FELT_WHITE);
+        quad(-half, low, SHANK + wide, half, low, SHANK + wide, half, head, SHANK + crown, -half, head, SHANK + crown,
+                0, ny, nz, FELT_WHITE);
+        for (int side = -1; side <= 1; side += 2) {
+            float at = side * half;
+            quad(at, low, SHANK - wide, at, low, SHANK + wide, at, head, SHANK + crown, at, head, SHANK - crown,
+                    side, 0, 0, FELT_SHADE);
+        }
+        quad(-half, head, SHANK - crown, half, head, SHANK - crown, half, head, SHANK + crown, -half, head, SHANK + crown,
+                0, 1, 0, 0xF5F0E4);
+        pose.popPose();
+    }
+
+    /** A damper {@code lift} of the way off its string: lacquered block, felt pad, and the wire that raises it. */
+    private void damper(float x, float stringY, float lift, boolean bass) {
+        float half = bass ? .0046f : .0056f, y = stringY + lift * DAMPER_LIFT;
+        cap(x - half, y + .003f, DAMPER_Z - .022f, x + half, y + .0145f, DAMPER_Z + .022f, 0x17161A);
+        skirt(x - half * .85f, y, DAMPER_Z - .020f, x + half * .85f, y + .003f, DAMPER_Z + .020f, FELT_WHITE);
+        skirt(x - .0012f, .822f, DAMPER_Z + .0165f, x + .0012f, y + .004f, DAMPER_Z + .019f, 0x8E8676);
     }
 
     private void musicDesk(float opening) {
@@ -351,12 +435,23 @@ final class PianoMesh {
 
     private static float atX(float x, float inset) { return Mth.lerp(inset / .84f, x, CENTER); }
 
-    private void panel(float inset, float y, int normal, int color) {
+    private void panel(float inset, float y, int normal, int color) { panel(inset, y, normal, color, 0); }
+
+    /** The part of a panel behind {@code from}. */
+    private void panel(float inset, float y, int normal, int color, float from) {
         for (int i = 0; i < SECTIONS; i++) {
             float a = atZ(i, inset), b = atZ(i + 1, inset);
+            if (b <= from) continue;
+            float leftA = atX(LEFT[i], inset), rightA = atX(RIGHT[i], inset);
+            float leftB = atX(LEFT[i + 1], inset), rightB = atX(RIGHT[i + 1], inset);
+            if (a < from) {
+                float t = (from - a) / (b - a);
+                leftA = Mth.lerp(t, leftA, leftB);
+                rightA = Mth.lerp(t, rightA, rightB);
+                a = from;
+            }
             float tone = color == 0xB99162 ? .88f + (i * 29 % 13) * .01f : .93f + .14f * Mth.sin(i / 17f);
-            quad(atX(LEFT[i], inset), y, a, atX(RIGHT[i], inset), y, a, atX(RIGHT[i + 1], inset), y, b,
-                    atX(LEFT[i + 1], inset), y, b, 0, normal, 0, tint(color, tone));
+            quad(leftA, y, a, rightA, y, a, rightB, y, b, leftB, y, b, 0, normal, 0, tint(color, tone));
         }
     }
 
@@ -410,9 +505,30 @@ final class PianoMesh {
         Mesh.box(pose, mesh, x0, y0, z0, x1, y1, z1, color, light);
     }
 
+    /** A cuboid standing on something: every face but the hidden underside. */
+    private void cap(float x0, float y0, float z0, float x1, float y1, float z1, int color) {
+        quad(x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1, 0, 1, 0, color);
+        skirt(x0, y0, z0, x1, y1, z1, color);
+    }
+
+    /** The four upright faces of a cuboid. */
+    private void skirt(float x0, float y0, float z0, float x1, float y1, float z1, int color) {
+        quad(x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0, 0, 0, -1, color);
+        quad(x1, y0, z1, x0, y0, z1, x0, y1, z1, x1, y1, z1, 0, 0, 1, color);
+        quad(x1, y0, z0, x1, y0, z1, x1, y1, z1, x1, y1, z0, 1, 0, 0, color);
+        quad(x0, y0, z1, x0, y0, z0, x0, y1, z0, x0, y1, z1, -1, 0, 0, color);
+    }
+
     private void quad(float ax, float ay, float az, float bx, float by, float bz, float cx, float cy, float cz,
             float dx, float dy, float dz, float nx, float ny, float nz, int color) {
         Mesh.quad(pose, mesh, ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, nx, ny, nz, color, light);
+    }
+
+    private static int blend(int from, int to, float amount) {
+        int r = (int) Mth.lerp(amount, from >> 16 & 255, to >> 16 & 255);
+        int g = (int) Mth.lerp(amount, from >> 8 & 255, to >> 8 & 255);
+        int b = (int) Mth.lerp(amount, from & 255, to & 255);
+        return r << 16 | g << 8 | b;
     }
 
     private static int tint(int rgb, float amount) {

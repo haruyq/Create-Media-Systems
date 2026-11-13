@@ -20,13 +20,11 @@ import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsE
 import org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoBlockEntity;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
-import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 
 final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
     private static final float OPEN_ANGLE = 43;
-    private static final PianoState REST = new PianoState();
     private final Map<PianoBlockEntity, Lid> lids = new WeakHashMap<>();
 
     static void register(IEventBus bus) {
@@ -47,7 +45,7 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
                             pose.pushPose();
                             pose.translate(.19, .26, .025);
                             pose.scale(.34f, .34f, .34f);
-                            new PianoMesh(pose, buffers, light).draw(REST, lid);
+                            new PianoMesh(pose, buffers, light).draw(PianoAction.REST, lid);
                             pose.popPose();
                         }
                     };
@@ -78,7 +76,9 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
             float scale = GrandPianoBlock.FULL_SCALE;
             pose.scale(scale, scale, scale);
         }
-        new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.target()), lid, PianoClient.motion(piano.target()));
+        var action = PianoClient.action(piano.target());
+        if (action != PianoAction.REST) action.advance(PianoClient.keys(piano.target()), System.nanoTime());
+        new PianoMesh(pose, buffers, light).draw(action, lid);
         pose.popPose();
     }
 
