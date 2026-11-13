@@ -60,7 +60,7 @@ public final class LightingSettings {
     /** How much of each flash's time a strobing light is lit. */
     private static final double STROBE_DUTY = 0.4;
     /** How many of a group's lights are lit at once, chosen again on each beat; 0 for all. Not with a strobe. */
-    public static final Setting CHASE = new Setting("Chase", 0, 0, 3, 1);
+    public static final Setting CHASE = new Setting("Chase", 0, 0, 16, 1);
 
     /** One of a few ways a group does something, shown by its own lang key. Saved and sent as its ordinal. */
     public interface Mode {

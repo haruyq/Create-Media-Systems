@@ -289,9 +289,9 @@ class LightingSettingsTest {
         LightingSettings.Group restored = new LightingSettings.Group();
         restored.load(group.save());
         assertEquals(3, restored.chase);
-        group.chase = 9;
+        group.chase = 99;
         group.normalize();
-        assertEquals(3, group.chase);
+        assertEquals(16, group.chase);
         group.preset(LightingSettings.Preset.SWEEP, null);
         assertEquals(0, group.chase);
     }
@@ -300,7 +300,7 @@ class LightingSettingsTest {
     void aBeatLightsAsManyAtRandomAndAnotherBeatOthers() {
         java.util.Set<String> picks = new java.util.HashSet<>();
         for (long beat = 0; beat < 50; beat++) {
-            for (int chase : new int[]{1, 3}) {
+            for (int chase : new int[]{1, 3, 5}) {
                 StringBuilder lit = new StringBuilder();
                 for (int order = 0; order < 8; order++) {
                     if (LightingSettings.chaseLit(chase, order, 8, beat)) {

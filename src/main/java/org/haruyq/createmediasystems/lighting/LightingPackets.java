@@ -282,8 +282,8 @@ public final class LightingPackets {
             }
         },
         /**
-         * Value: flashes a second, 0 for none. Its row steps on past 10 Hz to lighting one, then three, at random on
-         * the beat (see CHASE), and from there round to off.
+         * Value: flashes a second, 0 for none. Its row steps on past 10 Hz to lighting one, three, five, then eight
+         * at random on the beat (see CHASE), and from there round to off.
          */
         STROBE(25, "strobe", Press.STEP,
                 (s, g, i, step, fine) -> flash(g, step).value(),
@@ -361,11 +361,18 @@ public final class LightingPackets {
                     control.step.next(settings, group, index, step, fine));
         }
 
-        /** The strobe row's step: off, 1 to 10 Hz, one at random on the beat, three, and round. */
+        /** The strobe row's step: off, 1 to 10 Hz, one at random on the beat, three, five, eight, and round. */
         private static Stepped flash(Group group, int step) {
             int strobes = (int) LightingSettings.STROBE.max();
-            int[] chases = {1, 3};
-            int at = group.chase > 0 ? strobes + (group.chase == 1 ? 1 : 2) : Math.round(group.strobe);
+            int[] chases = {1, 3, 5, 8};
+            int at = Math.round(group.strobe);
+            if (group.chase > 0) {
+                // The row's place of its chase, or the next above it (a mod may set any).
+                at = strobes + chases.length;
+                for (int i = chases.length - 1; i >= 0; i--) {
+                    at = chases[i] >= group.chase ? strobes + 1 + i : at;
+                }
+            }
             int next = Math.floorMod(at + step, strobes + 1 + chases.length);
             if (next > strobes) {
                 return new Stepped(CHASE, 0, chases[next - strobes - 1]);
