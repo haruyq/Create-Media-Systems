@@ -25,12 +25,14 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlockEntity;
+import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardKeys;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Frame;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Output;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Routing;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
+import org.haruyq.createmediasystems.playback.AudibleTimeline;
 import org.haruyq.createmediasystems.playback.CmsStream;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams.Channel;
@@ -61,6 +63,10 @@ final class KeyboardAudio implements AutoCloseable {
     private final byte[][] stereo = new byte[SLOTS][BYTES * 2];
     private final ArrayDeque<Change> changes = new ArrayDeque<>();
     private final Map<SpeakerKey, Speaker> speakers = new LinkedHashMap<>();
+    @Nullable private final PonderScore.Cursor score;
+    @Nullable private final AudibleTimeline audible;
+    private final KeyboardSettings scoreSettings;
+    private final int scoreStart;
     private volatile KeyboardSynth synth;
     private volatile boolean closed;
     private Frame frame;
@@ -68,9 +74,18 @@ final class KeyboardAudio implements AutoCloseable {
     private long rendered;
 
     KeyboardAudio(KeyboardSettings settings, Frame frame) {
+        this(settings, frame, null, 0);
+    }
+
+    KeyboardAudio(KeyboardSettings settings, Frame frame, @Nullable PonderScore score, int startFrame) {
         font = settings.font;
         polyphony = settings.polyphony;
         this.frame = frame;
+        this.score = score == null ? null : score.cursor();
+        audible = score == null ? null : new AudibleTimeline(KeyboardSynth.RATE);
+        scoreSettings = settings;
+        scoreStart = startFrame;
+        volume = settings.volume;
         KeyboardSoundbank.synth(font, polyphony).whenComplete((loaded, error) -> {
             if (error != null) {
                 LogUtils.getLogger().warn("Could not start keyboard audio", error);
@@ -136,6 +151,29 @@ final class KeyboardAudio implements AutoCloseable {
 
     private synchronized long cursor() { return rendered; }
 
+    int audibleFrame(long now) {
+        double seconds = audible == null ? -1 : audible.seconds(now);
+        return seconds < 0 ? -1 : (int) (seconds * KeyboardSynth.RATE + 1e-6);
+    }
+
+    private void readScore(byte[] buffer) throws IOException {
+        int frame = scoreStart + (int) (rendered * FRAMES);
+        if (rendered == 0 && scoreStart > 0) {
+            var held = new KeyboardKeys();
+            score.advance(scoreStart - 1, events -> events.forEach(held::apply));
+            synth.apply(scoreSettings, true, held.snapshot());
+        }
+        int end = frame + FRAMES, offset = 0;
+        while (frame < end) {
+            score.advance(frame, events -> synth.apply(scoreSettings, false, events));
+            int next = Math.min(end, score.nextFrame());
+            int length = (next - frame) * 4;
+            synth.read(buffer, offset, length);
+            offset += length;
+            frame = next;
+        }
+    }
+
     private synchronized void read(Channel channel, Mono pcm) throws IOException {
         var out = pcm.samples;
         out.clear();
@@ -148,8 +186,13 @@ final class KeyboardAudio implements AutoCloseable {
                     var next = changes.removeFirst();
                     synth.apply(next.settings, next.reset, next.events);
                 }
-                synth.read(stereo[(int) (rendered % SLOTS)]);
+                var buffer = stereo[(int) (rendered % SLOTS)];
+                if (score == null) synth.read(buffer);
+                else readScore(buffer);
                 rendered++;
+            }
+            if (audible != null && channel == Channel.LEFT) {
+                audible.queue((scoreStart + index * FRAMES) / (double) KeyboardSynth.RATE, FRAMES);
             }
             byte[] chunk = stereo[(int) (index % SLOTS)];
             if (channel == Channel.MIX) {
@@ -180,6 +223,7 @@ final class KeyboardAudio implements AutoCloseable {
             if (closed) return;
             closed = true;
             changes.clear();
+            if (audible != null) audible.close();
             if (synth != null) synth.close();
         }
         stop();
@@ -257,8 +301,13 @@ final class KeyboardAudio implements AutoCloseable {
             this.cursor = start.cursor;
         }
         @Override public AudioFormat getFormat() { return MONO; }
-        @Override public long attach(int source, long now) { return start.attach(now); }
+        @Override public long attach(int source, long now) {
+            long at = start.attach(now);
+            if (audible != null && channel == Channel.LEFT) audible.attach(source, at);
+            return at;
+        }
         @Override public int bufferBytes(int vanillaBytes) { return BYTES; }
+        @Override public boolean needsFastRefill() { return score != null; }
         @Override public ByteBuffer read(int size) throws IOException {
             KeyboardAudio.this.read(channel, this);
             return samples;

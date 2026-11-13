@@ -111,11 +111,15 @@ final class MountedKeyboard implements MovementBehaviour {
 
         @Override public void decorations(boolean stand, boolean rack) {
             var root = target.pos();
-            var bass = KeyboardBlock.bass(root, state());
-            var other = context.contraption.getBlocks().get(bass);
-            if (other == null || !KeyboardBlock.part(other.state(), KeyboardBlock.Part.BASS, state())) return;
-            decorate(root, stand, rack);
-            decorate(bass, stand, rack);
+            var state = state();
+            var decorated = KeyboardBlockEntity.decorated(state, stand, rack);
+            var parts = KeyboardBlock.parts(state);
+            if (!parts.equals(KeyboardBlock.parts(decorated))) return;
+            for (var part : parts) {
+                var other = context.contraption.getBlocks().get(part.at(root, state));
+                if (other == null || !KeyboardBlock.part(other.state(), part, state)) return;
+            }
+            for (var part : parts) decorate(part.at(root, state), stand, rack);
         }
 
         private void decorate(BlockPos pos, boolean stand, boolean rack) {

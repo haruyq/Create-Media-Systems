@@ -6,6 +6,8 @@ import com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour;
 import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
 import com.simibubi.create.api.contraption.BlockMovementChecks;
 import com.simibubi.create.api.contraption.BlockMovementChecks.CheckResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -25,6 +27,7 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Feature;
+import org.jetbrains.annotations.Nullable;
 
 import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock.FACING;
 
@@ -47,12 +50,12 @@ public final class PxS1100Feature implements Feature {
     @Override public void register(IEventBus modBus) {
         modBus.addListener((RegisterCapabilitiesEvent event) ->
                 event.registerBlock(Capabilities.EnergyStorage.BLOCK, (level, pos, state, entity, side) -> {
-                    if (level.isClientSide || state.getValue(KeyboardBlock.PART) != KeyboardBlock.Part.BASS
+                    if (level.isClientSide || state.getValue(KeyboardBlock.PART) != KeyboardBlock.dcInput(state)
                             || side != null && side != state.getValue(FACING).getOpposite()) return null;
                     var root = KeyboardBlock.root(pos, state);
                     if (!(level.getBlockEntity(root) instanceof KeyboardBlockEntity keyboard)
                             || !KeyboardBlock.part(keyboard.getBlockState(), KeyboardBlock.Part.MAIN, state)) return null;
-                    return new EnergyPort(keyboard);
+                    return new EnergyPort(keyboard, pos, side);
                 }, BLOCK.get()));
         modBus.addListener((FMLCommonSetupEvent event) -> event.enqueueWork(() -> {
             var block = BLOCK.get();
@@ -64,9 +67,7 @@ public final class PxS1100Feature implements Feature {
                 if (!state.is(block)) return CheckResult.PASS;
                 var next = pos.relative(direction);
                 var other = level.getBlockState(next);
-                var part = state.getValue(KeyboardBlock.PART) == KeyboardBlock.Part.MAIN
-                        ? KeyboardBlock.Part.BASS : KeyboardBlock.Part.MAIN;
-                return KeyboardBlock.part(other, part, state)
+                return other.is(block) && KeyboardBlock.part(other, other.getValue(KeyboardBlock.PART), state)
                         && KeyboardBlock.root(pos, state).equals(KeyboardBlock.root(next, other))
                         ? CheckResult.SUCCESS : CheckResult.PASS;
             });
@@ -77,14 +78,19 @@ public final class PxS1100Feature implements Feature {
         KeyboardPackets.register(registrar.versioned("2"));
     }
 
-    private record EnergyPort(KeyboardBlockEntity keyboard) implements IEnergyStorage {
+    private record EnergyPort(KeyboardBlockEntity keyboard, BlockPos pos, @Nullable Direction side) implements IEnergyStorage {
         @Override public int receiveEnergy(int maxReceive, boolean simulate) {
-            return keyboard.isRemoved() ? 0 : keyboard.runtime().charge(maxReceive, simulate);
+            return canReceive() ? keyboard.runtime().charge(maxReceive, simulate) : 0;
         }
         @Override public int extractEnergy(int maxExtract, boolean simulate) { return 0; }
         @Override public int getEnergyStored() { return keyboard.isRemoved() ? 0 : keyboard.runtime().energy(); }
         @Override public int getMaxEnergyStored() { return KeyboardRuntime.CAPACITY; }
         @Override public boolean canExtract() { return false; }
-        @Override public boolean canReceive() { return !keyboard.isRemoved(); }
+        @Override public boolean canReceive() {
+            if (keyboard.isRemoved()) return false;
+            var state = keyboard.getBlockState();
+            return KeyboardBlock.dcInput(state).at(keyboard.getBlockPos(), state).equals(pos)
+                    && (side == null || side == state.getValue(FACING).getOpposite());
+        }
     }
 }

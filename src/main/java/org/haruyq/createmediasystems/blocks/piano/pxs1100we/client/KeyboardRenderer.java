@@ -22,6 +22,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
@@ -72,7 +73,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         var view = demo != null ? demo.view : instrument == null ? keyboard.clientView() : instrument.view;
         var settings = demo != null ? demo.settings
                 : instrument == null ? KeyboardSettings.load(view.getCompound("Settings")) : instrument.settings;
-        var keys = demo != null ? demo.keys : instrument == null ? REST : instrument.keys;
+        var keys = demo != null ? demo.keys() : instrument == null ? REST : instrument.keys;
         var motion = motions.computeIfAbsent(keyboard, ignored -> new Motion());
         boolean stand = state.getValue(KeyboardBlock.STAND), rack = state.getValue(KeyboardBlock.RACK);
         boolean powered = view.getBoolean("Powered");
@@ -94,6 +95,11 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
                 up.getStepX(), up.getStepY(), up.getStepZ(),
                 back.getStepX(), back.getStepY(), back.getStepZ())));
         pose.translate(-.5, -.5, -.5);
+        if (state.getValue(KeyboardBlock.FULL_SIZE)) {
+            var origin = KeyboardBlock.modelToLocal(state, Vec3.ZERO);
+            pose.translate(origin.x, origin.y, origin.z);
+            pose.scale(MODEL.fullScale, MODEL.fullScale, MODEL.fullScale);
+        }
         if (rack && distance > 24 * 24) {
             draw(stand ? "full" : "full_tabletop", pose, out, light, overlay);
             pose.popPose();
@@ -207,7 +213,11 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
     }
 
     @Override public AABB getRenderBoundingBox(KeyboardBlockEntity keyboard) {
-        return new AABB(keyboard.getBlockPos()).minmax(new AABB(KeyboardBlock.bass(keyboard.getBlockPos(), keyboard.state()))).inflate(.15);
+        var pos = keyboard.getBlockPos();
+        var state = keyboard.state();
+        var bounds = new AABB(pos);
+        for (var part : KeyboardBlock.parts(state)) bounds = bounds.minmax(new AABB(part.at(pos, state)));
+        return bounds.inflate(.15);
     }
 
     private static final class Motion {
@@ -220,7 +230,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
             last = now;
             boolean moving = false;
             for (int i = 0; i < amount.length; i++) {
-                boolean pressed = keys.pressed(KeyboardLayout.FIRST + i);
+                boolean pressed = keys.pressed(MODEL.keys.get(i).note());
                 amount[i] = Mth.approach(amount[i], pressed ? 1 : 0, elapsed / (pressed ? .04f : .07f));
                 moving |= amount[i] != 0;
             }

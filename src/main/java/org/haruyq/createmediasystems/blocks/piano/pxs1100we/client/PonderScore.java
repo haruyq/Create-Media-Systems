@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MetaMessage;
 import javax.sound.midi.MidiEvent;
@@ -18,8 +19,26 @@ import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 
 record PonderScore(List<Cue> cues, int duration) {
     private static final String ASSET = "/assets/create_media_systems/piano/pxs1100we/un_owen_sabi_piano_only.mid";
+    static final int FRAMES_PER_TICK = KeyboardSynth.RATE / 20;
 
-    record Cue(int tick, List<KeyboardMidi> events) {}
+    record Cue(int frame, List<KeyboardMidi> events) {
+        int tick() { return Math.round(frame / (float) FRAMES_PER_TICK); }
+    }
+
+    Cursor cursor() { return new Cursor(cues); }
+
+    static final class Cursor {
+        private final List<Cue> cues;
+        private int next;
+
+        Cursor(List<Cue> cues) { this.cues = cues; }
+
+        int nextFrame() { return next < cues.size() ? cues.get(next).frame() : Integer.MAX_VALUE; }
+
+        void advance(int frame, Consumer<List<KeyboardMidi>> apply) {
+            while (next < cues.size() && cues.get(next).frame() <= frame) apply.accept(cues.get(next++).events());
+        }
+    }
 
     static PonderScore load() {
         try (var input = PonderScore.class.getResourceAsStream(ASSET)) {
@@ -39,7 +58,7 @@ record PonderScore(List<Cue> cues, int duration) {
         }
         midi.sort(Comparator.comparingLong(MidiEvent::getTick));
         var cues = new TreeMap<Integer, List<KeyboardMidi>>();
-        long last = 0, elapsed = 0, unitsPerTick = 50_000L * sequence.getResolution();
+        long last = 0, elapsed = 0, unitsPerSecond = 1_000_000L * sequence.getResolution();
         int tempo = 500_000;
         for (var event : midi) {
             elapsed += (event.getTick() - last) * tempo;
@@ -51,16 +70,16 @@ record PonderScore(List<Cue> cues, int duration) {
             } else if (event.getMessage() instanceof ShortMessage message) {
                 var note = new KeyboardMidi(message.getStatus(), message.getData1(), message.getData2());
                 if (note.valid() && !note.metronome()) {
-                    int tick = gameTicks(elapsed, unitsPerTick);
-                    cues.computeIfAbsent(tick, ignored -> new ArrayList<>()).add(note);
+                    int frame = frame(elapsed, unitsPerSecond);
+                    cues.computeIfAbsent(frame, ignored -> new ArrayList<>()).add(note);
                 }
             }
         }
         var score = cues.entrySet().stream().map(cue -> new Cue(cue.getKey(), List.copyOf(cue.getValue()))).toList();
-        return new PonderScore(score, gameTicks(elapsed, unitsPerTick));
+        return new PonderScore(score, (int) Math.ceil(frame(elapsed, unitsPerSecond) / (double) FRAMES_PER_TICK));
     }
 
-    private static int gameTicks(long elapsed, long unitsPerTick) {
-        return Math.toIntExact((elapsed + unitsPerTick / 2) / unitsPerTick);
+    private static int frame(long elapsed, long unitsPerSecond) {
+        return Math.toIntExact(Math.round(elapsed * (double) KeyboardSynth.RATE / unitsPerSecond));
     }
 }

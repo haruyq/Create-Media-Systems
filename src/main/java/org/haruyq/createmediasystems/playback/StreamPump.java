@@ -19,6 +19,7 @@ public final class StreamPump {
     /** How long a queued pass may wait before another is queued anyway: the engine drops its queue as it reloads. */
     private static final long STALE_NANOS = 1_000_000_000L;
     private static final Set<Channel> CHANNELS = ConcurrentHashMap.newKeySet();
+    private static final Set<Channel> FAST = ConcurrentHashMap.newKeySet();
     private static final Set<Runnable> LIVE = ConcurrentHashMap.newKeySet();
     /** When the pass waiting on the sound thread was queued (System.nanoTime); 0 for none. */
     private static final AtomicLong POSTED_AT = new AtomicLong();
@@ -31,12 +32,15 @@ public final class StreamPump {
     }
 
     /** {@code channel} plays a {@link CmsStream}; until it is destroyed. */
-    public static void add(Channel channel) {
+    public static void add(Channel channel, boolean fast) {
         CHANNELS.add(channel);
+        if (fast) FAST.add(channel);
+        else FAST.remove(channel);
     }
 
     public static void remove(Channel channel) {
         CHANNELS.remove(channel);
+        FAST.remove(channel);
     }
 
     /**
@@ -54,7 +58,7 @@ public final class StreamPump {
     private static void run() {
         try {
             while (true) {
-                Thread.sleep(LIVE.isEmpty() ? PERIOD_MILLIS : LIVE_PERIOD_MILLIS);
+                Thread.sleep(LIVE.isEmpty() && FAST.isEmpty() ? PERIOD_MILLIS : LIVE_PERIOD_MILLIS);
                 long posted = POSTED_AT.get();
                 // One pass queued at a time: a pass that takes longer than the period, queued every period anyway,
                 // piled up on the sound thread without end, and every sound the game played (each waits on that

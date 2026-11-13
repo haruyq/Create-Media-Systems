@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.blocks.piano.grand;
 
-import java.util.Arrays;
 import java.util.List;
 
 import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
@@ -24,11 +23,12 @@ public class PianoSableGameTests {
     public static void shipCarriesAllPianoPartsAndTheSoundboard(GameTestHelper helper) {
         var level = helper.getLevel();
         var root = helper.absolutePos(new BlockPos(3, 4, 3));
-        var state = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true);
+        var state = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true)
+                .setValue(GrandPianoBlock.FULL_SIZE, true);
         helper.assertTrue(GrandPianoBlock.placeParts(level, root, state), "Piano placement failed");
-        List<BlockPos> parts = Arrays.stream(GrandPianoBlock.Part.values()).map(part -> part.at(root, state)).toList();
+        List<BlockPos> parts = GrandPianoBlock.parts(state).stream().map(part -> part.at(root, state)).toList();
         var ship = SubLevelAssemblyHelper.assembleBlocks(level, root, parts, new BoundingBox3i(
-                root.getX(), root.getY(), root.getZ(), root.getX() + 1, root.getY(), root.getZ() + 2));
+                root.getX() - 1, root.getY(), root.getZ(), root.getX() + 2, root.getY() + 1, root.getZ() + 5));
         var plot = ship.getPlot().getCenterBlock();
         var mounted = (PianoBlockEntity) level.getBlockEntity(plot);
         helper.assertTrue(mounted != null && mounted.frame().lidOpen(), "The piano arrived on the plot with an open lid");
@@ -38,7 +38,7 @@ public class PianoSableGameTests {
         var expected = ship.logicalPose().transformPosition(GrandPianoBlock.soundboard(plot, state));
         helper.assertTrue(mounted.frame().origin().distanceTo(expected) < .001 && initial.distanceTo(expected) > 8,
                 "Soundboard position failed to follow the moved and turned ship");
-        for (var part : GrandPianoBlock.Part.values()) {
+        for (var part : GrandPianoBlock.parts(state)) {
             var onPlot = part.at(plot, state);
             var carried = level.getBlockState(onPlot);
             helper.assertTrue(carried.is(PianoFeature.PIANO.get()) && GrandPianoBlock.root(onPlot, carried).equals(plot)
@@ -55,7 +55,7 @@ public class PianoSableGameTests {
         var landed = level.getBlockState(landing);
         helper.assertTrue(landed.is(PianoFeature.PIANO.get()) && landed.getValue(GrandPianoBlock.OPEN),
                 "The piano did not retain its open lid after returning to world blocks");
-        for (var part : GrandPianoBlock.Part.values()) {
+        for (var part : GrandPianoBlock.parts(landed)) {
             var pos = part.at(landing, landed);
             var restored = level.getBlockState(pos);
             helper.assertTrue(restored.is(PianoFeature.PIANO.get()) && restored.getValue(GrandPianoBlock.PART) == part
