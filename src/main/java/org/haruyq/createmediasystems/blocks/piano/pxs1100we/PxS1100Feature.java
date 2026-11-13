@@ -50,12 +50,13 @@ public final class PxS1100Feature implements Feature {
     @Override public void register(IEventBus modBus) {
         modBus.addListener((RegisterCapabilitiesEvent event) ->
                 event.registerBlock(Capabilities.EnergyStorage.BLOCK, (level, pos, state, entity, side) -> {
-                    if (level.isClientSide || state.getValue(KeyboardBlock.PART) != KeyboardBlock.dcInput(state)
+                    var part = state.getValue(KeyboardBlock.PART);
+                    if (level.isClientSide || !KeyboardBlock.powerInput(state, part)
                             || side != null && side != state.getValue(FACING).getOpposite()) return null;
                     var root = KeyboardBlock.root(pos, state);
                     if (!(level.getBlockEntity(root) instanceof KeyboardBlockEntity keyboard)
                             || !KeyboardBlock.part(keyboard.getBlockState(), KeyboardBlock.Part.MAIN, state)) return null;
-                    return new EnergyPort(keyboard, pos, side);
+                    return new EnergyPort(keyboard, pos, part, side);
                 }, BLOCK.get()));
         modBus.addListener((FMLCommonSetupEvent event) -> event.enqueueWork(() -> {
             var block = BLOCK.get();
@@ -78,7 +79,8 @@ public final class PxS1100Feature implements Feature {
         KeyboardPackets.register(registrar.versioned("2"));
     }
 
-    private record EnergyPort(KeyboardBlockEntity keyboard, BlockPos pos, @Nullable Direction side) implements IEnergyStorage {
+    private record EnergyPort(KeyboardBlockEntity keyboard, BlockPos pos, KeyboardBlock.Part part, @Nullable Direction side)
+            implements IEnergyStorage {
         @Override public int receiveEnergy(int maxReceive, boolean simulate) {
             return canReceive() ? keyboard.runtime().charge(maxReceive, simulate) : 0;
         }
@@ -89,7 +91,7 @@ public final class PxS1100Feature implements Feature {
         @Override public boolean canReceive() {
             if (keyboard.isRemoved()) return false;
             var state = keyboard.getBlockState();
-            return KeyboardBlock.dcInput(state).at(keyboard.getBlockPos(), state).equals(pos)
+            return KeyboardBlock.powerInput(state, part) && part.at(keyboard.getBlockPos(), state).equals(pos)
                     && (side == null || side == state.getValue(FACING).getOpposite());
         }
     }

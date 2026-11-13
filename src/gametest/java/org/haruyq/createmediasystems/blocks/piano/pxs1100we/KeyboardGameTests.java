@@ -29,7 +29,11 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
+import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
+import org.haruyq.createmediasystems.stream.EmitterRange;
+import org.haruyq.createmediasystems.stream.Streams;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -169,7 +173,10 @@ public final class KeyboardGameTests {
         }
         test.assertTrue(KeyboardBlock.place(level, root, compact), "Compact keyboard fixture did not fit");
         var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
-        keyboard.runtime().charge(640, false);
+        var back = compact.getValue(KeyboardBlock.FACING).getOpposite();
+        var bass = KeyboardBlock.Part.BASS.at(root, compact);
+        var legacyPort = level.getCapability(Capabilities.EnergyStorage.BLOCK, bass, back);
+        test.assertTrue(legacyPort != null && legacyPort.receiveEnergy(640, false) == 640, "Compact keyboard did not accept FE");
         var blocked = KeyboardBlock.Part.TOP_TREBLE.at(root, full);
         level.setBlockAndUpdate(blocked, Blocks.STONE.defaultBlockState());
         test.runAfterDelay(25, () -> {
@@ -181,7 +188,37 @@ public final class KeyboardGameTests {
                     && keyboard.runtime().energy() == 640
                     && KeyboardBlock.part(level.getBlockState(blocked), KeyboardBlock.Part.TOP_TREBLE, full),
                     "Upgrade did not expand the existing charged keyboard");
+            var floorPort = level.getCapability(Capabilities.EnergyStorage.BLOCK, bass, back);
+            var dcPort = level.getCapability(Capabilities.EnergyStorage.BLOCK, KeyboardBlock.dcInput(full).at(root, full), back);
+            test.assertTrue(legacyPort.canReceive() && floorPort != null && floorPort.receiveEnergy(100, false) == 100
+                    && dcPort != null && dcPort.getEnergyStored() == 740
+                    && level.getCapability(Capabilities.EnergyStorage.BLOCK, bass, back.getOpposite()) == null,
+                    "Existing rear wiring stopped charging the same battery after expansion");
             test.succeed();
         });
+    }
+
+    @GameTest(template = "empty")
+    public static void keyboardUsesInternalSpeakersWhenLinkedOutputIsSilent(GameTestHelper test) {
+        var level = test.getLevel();
+        var root = test.absolutePos(new BlockPos(3, 2, 3));
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState();
+        test.assertTrue(KeyboardBlock.place(level, root, state), "Keyboard fixture did not fit");
+        var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
+        var ear = keyboard.frame().centre();
+        var speakerPos = root.north(2);
+        level.setBlockAndUpdate(speakerPos, AudioFeature.SPEAKER.get().defaultBlockState());
+        var speaker = (SpeakerBlock.Entity) level.getBlockEntity(speakerPos);
+        speaker.configure(level, root, .75f, Streams.Channel.MIX);
+        var routing = keyboard.runtime().routing(ear);
+        test.assertTrue(routing.external() && routing.outputs().size() == 1
+                && routing.outputs().getFirst().pos().equals(speakerPos), "An audible speaker must receive the instrument");
+        var origin = routing.outputs().getFirst().sound().origin();
+        test.assertTrue(keyboard.runtime().routing(origin.add(EmitterRange.DEFAULT_RANGE + 1, 0, 0))
+                .equals(KeyboardPackets.Routing.INTERNAL), "A speaker past its audible range took over the sound");
+        speaker.configure(level, root, 0, Streams.Channel.MIX);
+        test.assertTrue(keyboard.runtime().routing(ear).equals(KeyboardPackets.Routing.INTERNAL),
+                "A muted speaker silenced the internal speakers");
+        test.succeed();
     }
 }
