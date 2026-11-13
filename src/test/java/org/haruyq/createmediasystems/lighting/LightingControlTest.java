@@ -125,6 +125,17 @@ class LightingControlTest {
     }
 
     @Test
+    void fixturesComeLeftToRightAsTheConsolesPlayerSeesThemThenNearFirst() {
+        // Facing south, its player looks north: east is their right, and north further from them.
+        BlockPos left = new BlockPos(-3, 70, -10);
+        BlockPos right = new BlockPos(4, 64, -9);
+        assertTrue(ConsoleLayout.compareFixtures(Direction.SOUTH, left, right) < 0);
+        assertTrue(ConsoleLayout.compareFixtures(Direction.NORTH, left, right) > 0);
+        assertTrue(ConsoleLayout.compareFixtures(Direction.SOUTH, new BlockPos(0, 64, -5), new BlockPos(0, 64, -9)) < 0);
+        assertEquals(0, ConsoleLayout.compareFixtures(Direction.EAST, new BlockPos(5, 64, 2), new BlockPos(5, 80, 2)));
+    }
+
+    @Test
     void multiblockCoordinatesAndControlSurfacesAgreeForEveryFacing() {
         BlockPos origin = new BlockPos(19, -32, -47);
         assertEquals(origin.east(), ConsoleLayout.at(origin, Direction.SOUTH, 1, 0, 0));

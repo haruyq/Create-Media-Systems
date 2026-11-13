@@ -76,6 +76,19 @@ public final class ConsoleLayout {
         return origin.relative(facing.getCounterClockWise(), x).relative(facing.getOpposite(), z).above(y);
     }
 
+    /**
+     * Which of two fixtures, at {@code a} and {@code b}, comes first in their group on a console facing
+     * {@code facing}: the one further left as its player sees it, then, side by side, the nearer one; 0 for neither.
+     */
+    public static int compareFixtures(Direction facing, BlockPos a, BlockPos b) {
+        Direction right = facing.getCounterClockWise();
+        Direction back = facing.getOpposite();
+        int across = Integer.compare(a.getX() * right.getStepX() + a.getZ() * right.getStepZ(),
+                b.getX() * right.getStepX() + b.getZ() * right.getStepZ());
+        return across != 0 ? across : Integer.compare(a.getX() * back.getStepX() + a.getZ() * back.getStepZ(),
+                b.getX() * back.getStepX() + b.getZ() * back.getStepZ());
+    }
+
     /** {@code point} (in its level's block space) in console space, {@code origin} its front left desk. */
     public static Vec3 toLocal(BlockPos origin, Direction facing, Vec3 point) {
         Vec3 offset = point.subtract(Vec3.atCenterOf(origin));
