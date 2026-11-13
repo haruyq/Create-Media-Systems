@@ -49,6 +49,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
     private static final List<String> LEDS = List.of("power", "function", "sound_mode", "metronome", "play", "rec",
             "grand_piano", "elec_piano");
     private static final RenderType LAYER = RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS);
+    private static final float PONDER_BLACK_KEY_TILT = -7;
     private static final Map<String, ModelResourceLocation> MODELS = new HashMap<>();
     private final Map<KeyboardBlockEntity, Motion> motions = new WeakHashMap<>();
     private BakedModel staticKeys;
@@ -178,7 +179,10 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
             }
             pose.pushPose();
             pose.translate(key.pivot().x, key.pivot().y, key.pivot().z);
-            if (amount != 0) pose.mulPose(Axis.XP.rotationDegrees(MODEL.tilt * amount));
+            if (amount != 0) {
+                float tilt = demo != null && key.black() ? PONDER_BLACK_KEY_TILT : MODEL.tilt;
+                pose.mulPose(Axis.XP.rotationDegrees(tilt * amount));
+            }
             draw(key.model(), pose, out, light, overlay);
             pose.popPose();
         }

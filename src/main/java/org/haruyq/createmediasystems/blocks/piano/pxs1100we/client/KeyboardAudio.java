@@ -41,7 +41,7 @@ import org.haruyq.createmediasystems.stream.Streams.Channel;
 import org.jetbrains.annotations.Nullable;
 
 final class KeyboardAudio implements AutoCloseable {
-    private static final int FRAMES = KeyboardSynth.RATE / 50, BYTES = FRAMES * 2, SLOTS = 16;
+    private static final int LIVE_FRAMES = KeyboardSynth.RATE / 50, SCORE_FRAMES = KeyboardSynth.RATE / 20, SLOTS = 16;
     private static final AudioFormat MONO = new AudioFormat(KeyboardSynth.RATE, 16, 1, true, false);
 
     private record Change(KeyboardSettings settings, boolean reset, List<KeyboardMidi> events) {}
@@ -62,7 +62,8 @@ final class KeyboardAudio implements AutoCloseable {
 
     private final String font;
     private final int polyphony;
-    private final byte[][] stereo = new byte[SLOTS][BYTES * 2];
+    private final int framesPerBuffer;
+    private final byte[][] stereo;
     private final ArrayDeque<Change> changes = new ArrayDeque<>();
     private final Map<SpeakerKey, Speaker> speakers = new LinkedHashMap<>();
     @Nullable private final PonderScore.Cursor score;
@@ -86,6 +87,8 @@ final class KeyboardAudio implements AutoCloseable {
         this.frame = frame;
         this.score = score == null ? null : score.cursor();
         audible = score == null ? null : new AudibleTimeline(KeyboardSynth.RATE);
+        framesPerBuffer = score == null ? LIVE_FRAMES : SCORE_FRAMES;
+        stereo = new byte[SLOTS][framesPerBuffer * 4];
         scoreStart = startFrame;
         volume = score == null ? settings.volume : 127;
         if (score != null) return;
@@ -167,7 +170,7 @@ final class KeyboardAudio implements AutoCloseable {
     private boolean prepareGrand() {
         if (grand != null) return true;
         if (preparingGrand) return false;
-        var sampler = PianoClient.sampler(KeyboardSynth.RATE, FRAMES);
+        var sampler = PianoClient.sampler(KeyboardSynth.RATE, framesPerBuffer);
         if (sampler == null) return false;
         if (scoreStart == 0) {
             grand = sampler;
@@ -176,9 +179,9 @@ final class KeyboardAudio implements AutoCloseable {
         preparingGrand = true;
         CompletableFuture.runAsync(() -> {
             // Recreate the string and pedal state at a seek without adding any new strikes.
-            var scratch = new byte[BYTES * 2];
-            for (int frame = 0; frame < scoreStart && !closed; frame += FRAMES) {
-                renderScore(sampler, scratch, frame, Math.min(FRAMES, scoreStart - frame));
+            var scratch = new byte[framesPerBuffer * 4];
+            for (int frame = 0; frame < scoreStart && !closed; frame += framesPerBuffer) {
+                renderScore(sampler, scratch, frame, Math.min(framesPerBuffer, scoreStart - frame));
             }
             if (!closed) grand = sampler;
         }, Util.backgroundExecutor()).exceptionally(error -> {
@@ -204,7 +207,7 @@ final class KeyboardAudio implements AutoCloseable {
         var out = pcm.samples;
         out.clear();
         if (closed || pcm.closed) {
-            for (int i = 0; i < FRAMES; i++) out.putShort((short) 0);
+            for (int i = 0; i < framesPerBuffer; i++) out.putShort((short) 0);
         } else {
             long index = Math.max(pcm.cursor, rendered - SLOTS + 1);
             if (index >= rendered) {
@@ -216,12 +219,12 @@ final class KeyboardAudio implements AutoCloseable {
                     }
                     synth.read(buffer);
                 } else {
-                    renderScore(grand, buffer, scoreStart + (int) (rendered * FRAMES), FRAMES);
+                    renderScore(grand, buffer, scoreStart + (int) (rendered * framesPerBuffer), framesPerBuffer);
                 }
                 rendered++;
             }
             if (audible != null && channel == Channel.LEFT) {
-                audible.queue((scoreStart + index * FRAMES) / (double) KeyboardSynth.RATE, FRAMES);
+                audible.queue((scoreStart + index * framesPerBuffer) / (double) KeyboardSynth.RATE, framesPerBuffer);
             }
             byte[] chunk = stereo[(int) (index % SLOTS)];
             if (channel == Channel.MIX) {
@@ -320,7 +323,7 @@ final class KeyboardAudio implements AutoCloseable {
     private final class Mono implements CmsStream {
         private final Channel channel;
         private final StereoStart start;
-        private final ByteBuffer samples = ByteBuffer.allocateDirect(BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        private final ByteBuffer samples = ByteBuffer.allocateDirect(framesPerBuffer * 2).order(ByteOrder.LITTLE_ENDIAN);
         private long cursor;
         private boolean closed;
 
@@ -335,7 +338,7 @@ final class KeyboardAudio implements AutoCloseable {
             if (audible != null && channel == Channel.LEFT) audible.attach(source, at);
             return at;
         }
-        @Override public int bufferBytes(int vanillaBytes) { return BYTES; }
+        @Override public int bufferBytes(int vanillaBytes) { return samples.capacity(); }
         @Override public boolean needsFastRefill() { return score != null; }
         @Override public ByteBuffer read(int size) throws IOException {
             KeyboardAudio.this.read(channel, this);

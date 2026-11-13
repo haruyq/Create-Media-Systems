@@ -53,8 +53,8 @@ final class PxS1100Ponder {
     private record Shot(float scale, float offset, float pitch, float yaw) {}
 
     private static final Shot STAGE = new Shot(1.23f, -.35f, -35, 145);
-    private static final Shot KEYS = new Shot(10.25f, -.70f - .72f * (MODEL.fullScale - 1), -49, 174);
-    private static final float KEYS_SCREEN_FRACTION = .78f;
+    private static final Shot KEYS = new Shot(12.0f, -.70f - .72f * (MODEL.fullScale - 1), -36, 179);
+    private static final float KEYS_SCREEN_FRACTION = .92f;
 
     private static PonderScene active;
     private static KeyboardAudio audio;
@@ -143,7 +143,7 @@ final class PxS1100Ponder {
         connect(scene, util, root, right, lineRight, Channel.RIGHT, PonderPalette.BLUE, quill, "Right");
         scene.addInstruction(ignored -> demo.external = true);
         say(scene, 85, keys, PonderPalette.GREEN, "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.");
-        scene.overlay().showText(75).attachKeyFrame().pointAt(keys).placeNearTarget()
+        scene.overlay().showText(75).attachKeyFrame().pointAt(keys.add(0, .48, 0)).placeNearTarget()
                 .text("U.N. Owen Was Her? (MIDI © chishige 2016)");
         playScore(scene, demo);
         scene.idle(AUDIO_TAIL_TICKS);
@@ -184,7 +184,7 @@ final class PxS1100Ponder {
     }
 
     private static void playScore(CreateSceneBuilder scene, Demo demo) {
-        scene.idle(12);
+        scene.idle(40);
         scene.addInstruction(ponder -> demo.start = ponder.getCurrentTime());
         zoom(scene, STAGE, KEYS, 24);
         scene.idle(demo.score.duration() + AUDIO_END_PADDING_TICKS);
