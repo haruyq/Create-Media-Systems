@@ -53,6 +53,8 @@ final class LightingAnalyzer implements MediaTap {
     private double high;
     private double baseline;
     private float pulse;
+    /** Windows its pulse is still held whole for (see finish). */
+    private int held;
     private float bpm = AnalysisFrame.DEFAULT_BPM;
     private long beat;
     private float smoothedLevel;
@@ -118,13 +120,20 @@ final class LightingAnalyzer implements MediaTap {
 
     private void finish(long at) {
         double energy = Math.sqrt(bass / (WINDOW * 2));
-        pulse *= 0.85f;
+        if (held > 0) {
+            held--;
+        } else {
+            pulse *= 0.85f;
+        }
         if (energy > 0.035 && energy > baseline * 1.6 && (beat == 0 || at - beat >= 250_000)) {
             if (beat != 0 && at - beat <= 1_200_000) {
                 bpm += (60_000_000f / (at - beat) - bpm) * 0.25f;
             }
             beat = at;
             pulse = 1;
+            // Whole for a frame's interval before it decays: lights take a frame every INTERVAL, and one taken any
+            // time in it still sees the beat at its height.
+            held = AnalysisFrame.INTERVAL * 50 / 1000 - 1;
         }
         baseline += (energy - baseline) * 0.04;
         smoothedLevel = smooth(smoothedLevel, amplitude(level));
@@ -164,6 +173,7 @@ final class LightingAnalyzer implements MediaTap {
         samples = 0;
         start = beat = 0;
         level = bass = mid = high = baseline = 0;
+        held = 0;
         pulse = smoothedLevel = smoothedBass = smoothedMid = smoothedHigh = 0;
         bpm = AnalysisFrame.DEFAULT_BPM;
         for (Filter filter : low) {

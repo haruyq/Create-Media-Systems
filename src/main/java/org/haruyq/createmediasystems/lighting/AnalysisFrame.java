@@ -36,8 +36,9 @@ public record AnalysisFrame(long millis, float level, float bass, float mid, flo
         this(millis, level, bass, mid, high, pulse, bpm, left, right, audio, video, millis / 1000.0);
     }
 
+    /** How fast the lights' motion runs: with the level, and pushed on by each beat. */
     public double motionSpeed() {
-        return Math.clamp(0.35 + level * 0.65 + pulse * 0.3, 0.2, 1.2);
+        return Math.clamp(0.35 + level * 0.65 + pulse * 0.9, 0.2, 2);
     }
 
     public AnalysisFrame phase(double phase) {
@@ -56,16 +57,21 @@ public record AnalysisFrame(long millis, float level, float bass, float mid, flo
     }
 
     public AnalysisFrame at(long time) {
-        return new AnalysisFrame(time, level, bass, mid, high, pulse, bpm, left, right, audio, video,
+        return new AnalysisFrame(time, level, bass, mid, high, pulseAt(time), bpm, left, right, audio, video,
                 motionPhase + Math.max(0, time - millis) / 1000.0 * motionSpeed());
     }
 
     public AnalysisFrame blend(AnalysisFrame next, long time) {
         float amount = Math.clamp((float) (time - millis) / Math.max(1, next.millis - millis), 0, 1);
         return new AnalysisFrame(time, mix(level, next.level, amount), mix(bass, next.bass, amount),
-                mix(mid, next.mid, amount), mix(high, next.high, amount), mix(pulse, next.pulse, amount),
+                mix(mid, next.mid, amount), mix(high, next.high, amount), pulseAt(time),
                 mix(bpm, next.bpm, amount), Rgb.mix(left, next.left, amount), Rgb.mix(right, next.right, amount),
                 audio, video, motionPhase + (next.motionPhase - motionPhase) * amount);
+    }
+
+    /** Its pulse decayed to {@code time}, as the analyser decays it: a beat shows from its frame, not before. */
+    private float pulseAt(long time) {
+        return pulse * (float) Math.pow(0.85, Math.max(0, time - millis) / 20.0);
     }
 
     private static float mix(float a, float b, float amount) {
