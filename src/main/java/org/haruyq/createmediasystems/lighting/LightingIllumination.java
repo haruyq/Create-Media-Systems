@@ -28,6 +28,7 @@ import org.lwjgl.system.MemoryUtil;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -69,7 +70,10 @@ public final class LightingIllumination {
     private static final ArrayDeque<SurfaceScan> SCANS = new ArrayDeque<>();
     private static ShaderInstance shader;
     /** This frame's lit surfaces in the world, drawn with the beams (LightingRenderer.effects). */
-    private static final List<Runnable> SURFACES = new ArrayList<>();
+    private static final List<Beam> SURFACES = new ArrayList<>();
+    /** Under a shader pack, the frame whose beams packSurfaces holds; see surfaces. */
+    private static long packFrame = -1;
+    private static List<Beam> packSurfaces;
     /** Sections and chunk columns whose blocks changed since the last frame (see WorldEvents). */
     private static final LongOpenHashSet DIRTY_SECTIONS = new LongOpenHashSet();
     private static final LongOpenHashSet DIRTY_COLUMNS = new LongOpenHashSet();
@@ -203,6 +207,8 @@ public final class LightingIllumination {
         float drawTangent;
         float drawRange;
         float drawStrength;
+        Matrix4f drawModelView;
+        Matrix4f drawProjection;
         final RenderType type = SurfaceLight.type("create_media_systems_spot_light", () -> shader, this::setup);
 
         private void setup() {
@@ -338,13 +344,18 @@ public final class LightingIllumination {
         }
 
         /** Draws the lit faces, their vertices in the lamp's block space, with the lamp at {@code modelView}. */
-        void draw(Matrix4f modelView, Matrix4f projection) {
+        /** One of its two passes (spot_light.fsh): with {@code shade}, the faces give way to it; without, it is added. */
+        void draw(boolean shade) {
             if (buffer == null || (gpu ? !meshed : empty) || shader == null) {
                 return;
             }
             type.setupRenderState();
+            shader.safeGetUniform("Shade").set(shade ? 1 : 0);
+            if (shade) {
+                RenderSystem.blendFunc(GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            }
             buffer.bind();
-            buffer.drawWithShader(modelView, projection, shader);
+            buffer.drawWithShader(drawModelView, drawProjection, shader);
             VertexBuffer.unbind();
             type.clearRenderState();
         }
@@ -815,15 +826,35 @@ public final class LightingIllumination {
         beam.drawTangent = (float) beam.tangent;
         beam.drawRange = range;
         beam.drawStrength = strength;
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
-        Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        beam.drawModelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
+        beam.drawProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
         if (WorldEvents.isClientWorld(level)) {
-            Runnable draw = () -> beam.draw(modelView, projection);
-            if (!ScreenLight.afterPack(draw)) {
-                SURFACES.add(draw);
-            }
+            surfaces(frame).add(beam);
         } else {
-            beam.draw(modelView, projection);
+            draw(List.of(beam));
+        }
+    }
+
+    /**
+     * Where this frame's lit beams wait to be drawn together: SURFACES, or under a shader pack a list of the frame's
+     * own, drawn once the pack has finished it (ScreenLight.afterPack).
+     */
+    private static List<Beam> surfaces(long frame) {
+        if (packFrame != frame) {
+            packFrame = frame;
+            List<Beam> queued = new ArrayList<>();
+            packSurfaces = ScreenLight.afterPack(() -> draw(queued)) ? queued : null;
+        }
+        return packSurfaces != null ? packSurfaces : SURFACES;
+    }
+
+    /** Both passes of {@code beams}: every one's shade before any's light, so lights that overlap still add up. */
+    private static void draw(List<Beam> beams) {
+        for (Beam beam : beams) {
+            beam.draw(true);
+        }
+        for (Beam beam : beams) {
+            beam.draw(false);
         }
     }
 
@@ -952,7 +983,7 @@ public final class LightingIllumination {
 
     /** Draws this frame's lit surfaces; LightingRenderer.effects, with the beams. */
     public static void drawSurfaces() {
-        SURFACES.forEach(Runnable::run);
+        draw(SURFACES);
         SURFACES.clear();
     }
 

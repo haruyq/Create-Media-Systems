@@ -37,6 +37,10 @@ final class LightingGpu {
     static final double WASH_SOFTNESS = 1;
     /** How much of its range (a share, at least a block) it fades out over at its far end. */
     static final double END_FADE = 0.2;
+    /** How much of what a face shows gives way to a light at full strength on it, before the light is added. */
+    static final double SHADE = 0.6;
+    /** How much of a light shows on a face whatever the face's own colour. */
+    static final double LIFT = 0.25;
 
     // spot_light.vsh: the light a face's cells get, a texel a cell, a byte a corner (red first), four vertices a cell.
     static final int VISIBILITY_WIDTH = 256;

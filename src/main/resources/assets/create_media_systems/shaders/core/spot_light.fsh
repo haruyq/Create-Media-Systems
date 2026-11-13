@@ -17,6 +17,9 @@ uniform float Softness;
 uniform float Range;
 uniform float Strength;
 uniform vec3 LightColor;
+// Each light is drawn twice, every light's first pass before any's second. First, with Shade, what the face shows
+// gives way to the light: under the sun a light only added would turn white, and lose its colour. Then it is added.
+uniform int Shade;
 // With Shadowed, the light is traced here, a pixel at a time, through the blocks round the camera (LightingOcclusion):
 // a texel a block, a bit for each of its half-block corners a collision shape fills (bit x + 2y + 4z). Its unit is set
 // on the program itself; Minecraft only binds 2D samplers.
@@ -104,5 +107,10 @@ void main() {
     if (Shadowed != 0 && reaches(localPos + normalize(localNormal) * 0.02) <= 0.0) {
         discard;
     }
-    fragColor = vec4(texel.rgb * LightColor * tint.rgb, opacity);
+    if (Shade != 0) {
+        fragColor = vec4(0.0, 0.0, 0.0, opacity * 0.6);
+    } else {
+        // Some of the light shows whatever the face's own colour, so a dark face, or one of another colour, is seen lit.
+        fragColor = vec4(mix(texel.rgb * tint.rgb, vec3(1.0), 0.25) * LightColor, opacity);
+    }
 }
