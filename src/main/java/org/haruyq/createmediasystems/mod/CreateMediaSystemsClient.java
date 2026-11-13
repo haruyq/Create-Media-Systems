@@ -9,6 +9,7 @@ import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.PointLights;
 import org.haruyq.createmediasystems.client.ScreenLight;
+import org.haruyq.createmediasystems.client.TabSections;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.display.DisplayClient;
@@ -50,6 +51,7 @@ public final class CreateMediaSystemsClient {
         FEATURES.forEach(feature -> feature.register(modBus));
         ClientConfig.register(container);
         ScreenLight.register();
+        TabSections.register();
         WorldEvents.register();
         PointLights.register(modBus);
         modBus.addListener((FMLClientSetupEvent event) -> PonderIndex.addPlugin(new PonderPlugin() {

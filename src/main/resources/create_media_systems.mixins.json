@@ -11,7 +11,9 @@
     "defaultRequire": 1
   },
   "client": [
+    "CreativeModeInventoryScreenAccessor",
     "HumanoidModelMixin",
+    "ItemPickerMenuMixin",
     "LevelRendererMixin"
   ]
 }
