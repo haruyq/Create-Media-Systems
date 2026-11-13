@@ -9,13 +9,13 @@ import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 
-final class MidiDecoder {
+public final class MidiDecoder {
     private final boolean[][] held = new boolean[16][KEYS];
     private final int[][] pedals = new int[3][16];
     private final int[] velocityPrefix = new int[16];
     private int channel = -1;
 
-    MidiDecoder() { Arrays.fill(velocityPrefix, -1); }
+    public MidiDecoder() { Arrays.fill(velocityPrefix, -1); }
 
     synchronized void channel(int channel) {
         this.channel = channel;
@@ -28,7 +28,7 @@ final class MidiDecoder {
         Arrays.fill(velocityPrefix, -1);
     }
 
-    synchronized List<PianoEvent> decode(ShortMessage message) {
+    public synchronized List<PianoEvent> decode(ShortMessage message) {
         if (message.getStatus() == ShortMessage.SYSTEM_RESET) {
             clear();
             return List.of(control(ALL_SOUND_OFF, 0), control(RESET_CONTROLLERS, 0));

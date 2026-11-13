@@ -15,15 +15,14 @@ import javax.sound.midi.Sequence;
 import javax.sound.midi.ShortMessage;
 
 import com.mojang.logging.LogUtils;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
+import org.haruyq.createmediasystems.blocks.piano.grand.client.MidiDecoder;
 
 record PonderScore(List<Cue> cues, int duration) {
     private static final String ASSET = "/assets/create_media_systems/piano/pxs1100we/un_owen_sabi_piano_only.mid";
     static final int FRAMES_PER_TICK = KeyboardSynth.RATE / 20;
 
-    record Cue(int frame, List<KeyboardMidi> events) {
-        int tick() { return Math.round(frame / (float) FRAMES_PER_TICK); }
-    }
+    record Cue(int frame, List<PianoEvent> events) {}
 
     Cursor cursor() { return new Cursor(cues); }
 
@@ -35,8 +34,8 @@ record PonderScore(List<Cue> cues, int duration) {
 
         int nextFrame() { return next < cues.size() ? cues.get(next).frame() : Integer.MAX_VALUE; }
 
-        void advance(int frame, Consumer<List<KeyboardMidi>> apply) {
-            while (next < cues.size() && cues.get(next).frame() <= frame) apply.accept(cues.get(next++).events());
+        void advance(int frame, Consumer<Cue> apply) {
+            while (next < cues.size() && cues.get(next).frame() <= frame) apply.accept(cues.get(next++));
         }
     }
 
@@ -57,7 +56,8 @@ record PonderScore(List<Cue> cues, int duration) {
             for (int i = 0; i < track.size(); i++) midi.add(track.get(i));
         }
         midi.sort(Comparator.comparingLong(MidiEvent::getTick));
-        var cues = new TreeMap<Integer, List<KeyboardMidi>>();
+        var cues = new TreeMap<Integer, List<PianoEvent>>();
+        var decoder = new MidiDecoder();
         long last = 0, elapsed = 0, unitsPerSecond = 1_000_000L * sequence.getResolution();
         int tempo = 500_000;
         for (var event : midi) {
@@ -68,10 +68,10 @@ record PonderScore(List<Cue> cues, int duration) {
                 if (data.length != 3) throw new InvalidMidiDataException("Invalid tempo event");
                 tempo = (data[0] & 255) << 16 | (data[1] & 255) << 8 | data[2] & 255;
             } else if (event.getMessage() instanceof ShortMessage message) {
-                var note = new KeyboardMidi(message.getStatus(), message.getData1(), message.getData2());
-                if (note.valid() && !note.metronome()) {
+                var events = decoder.decode(message);
+                if (!events.isEmpty()) {
                     int frame = frame(elapsed, unitsPerSecond);
-                    cues.computeIfAbsent(frame, ignored -> new ArrayList<>()).add(note);
+                    cues.computeIfAbsent(frame, ignored -> new ArrayList<>()).addAll(events);
                 }
             }
         }

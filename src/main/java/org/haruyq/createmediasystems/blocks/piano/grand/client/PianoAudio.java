@@ -11,6 +11,7 @@ import javax.sound.sampled.SourceDataLine;
 
 import com.mojang.logging.LogUtils;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
+import org.jetbrains.annotations.Nullable;
 
 /** The game streams a second at a time. Live playing uses a single short-buffer stereo line instead. */
 final class PianoAudio {
@@ -50,6 +51,11 @@ final class PianoAudio {
     void samples(PianoSamples bank) {
         this.bank = bank;
         sampleError = bank == null;
+    }
+
+    @Nullable GrandPianoSampler sampler(int rate, int frames) {
+        var samples = bank;
+        return samples == null ? null : new GrandPianoSampler(samples, rate, frames);
     }
 
     String status() {
@@ -122,7 +128,7 @@ final class PianoAudio {
         }
     }
 
-    private static void write(byte[] bytes, int at, float value) {
+    static void write(byte[] bytes, int at, float value) {
         int sample = (int) (32767 * Math.tanh(value));
         bytes[at] = (byte) sample;
         bytes[at + 1] = (byte) (sample >>> 8);
