@@ -11,12 +11,12 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout.Control;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Panel;
+import org.haruyq.createmediasystems.client.KeysScreen;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
@@ -26,11 +26,8 @@ import net.minecraft.util.Mth;
  * MIDI keyboard plugged in plays. The controls are the pod's, laid out wide instead of deep; each zone's button names
  * its sound, which the real one has no display for. Open for as long as this player sits at the keyboard; closing it
  * gets them up.
- *
- * <p>It is drawn in the window's own pixels rather than the GUI's coarser ones, so its corners can be round and its
- * edges soft; everything is measured in those, the mouse brought into them as it comes in.
  */
-final class KeyboardScreen extends Screen {
+final class KeyboardScreen extends KeysScreen {
     private static final String KEY = "create_media_systems.keyboard.";
     /** The computer's keys that play notes, two rows of a piano each, from C: the row from Z, and the row from Q an octave up. */
     private static final int[] LOWER_ROW = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_C,
@@ -48,21 +45,11 @@ final class KeyboardScreen extends Screen {
     private static final String[] STEPS = {"1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T"};
     private static final String[] ORDERS = {"UP", "DOWN", "U&D", "RND"};
     private static final String[] CURVES = {"SUPER LIGHT", "LIGHT", "MEDIUM", "MEDIUM HEAVY", "HEAVY", "SUPER HEAVY"};
-    private static final int EDGE = 0xFF050506, LAMP = 0xFFFFE7B8, TEXT = 0xFFE6E6EA, FAINT = 0xFF85858D, INK = 0xFF151517;
-    /** Shaded faces, each lighter at the top than at the bottom: the body, a button idle, held and lit, a zone that is off. */
-    private static final int[] BODY = {0xF4242428, 0xF4151517}, BUTTON = {0xFF3D3D45, 0xFF2C2C32}, HELD = {0xFF5A5A63, 0xFF45454D},
-            LIT = {0xFFFFF1D2, 0xFFEFCF94}, OFF = {0xFF27272B, 0xFF212125};
-    /** The keys: a white one from its back to its front edge, the side and the top of a black one; and each held down. */
-    private static final int[] WHITE = {0xFFDAD7CF, 0xFFF8F6F0}, WHITE_DOWN = {0xFF6FA9EC, 0xFFABD2FF},
-            BLACK = {0xFF1E1E21, 0xFF08080A}, BLACK_TOP = {0xFF4A4A52, 0xFF2A2A2F},
-            BLACK_DOWN = {0xFF1B478C, 0xFF123469}, BLACK_TOP_DOWN = {0xFF4A8DEB, 0xFF2D6FD6};
-    private static final int LEFT = -1, MIDDLE = 0, RIGHT = 1;
-
     /** Where each control is on the strip: its left, top, right and bottom, as shares of the strip's width and height. */
     private static final float[][] PLACES = new float[Control.values().length][];
-    /** The strip's rows of buttons, and the top line that says how it is set. */
+    /** The strip's rows of buttons, under the top line that says how it is set. */
     private static final float[] ROWS = {0.13f, 0.34f, 0.55f, 0.79f};
-    private static final float ROW = 0.17f, HEADER = 0.11f;
+    private static final float ROW = 0.17f;
 
     static {
         put(Control.LEVER, 0.012f, ROWS[0], 0.072f, ROWS[3] + ROW);
@@ -101,14 +88,6 @@ final class KeyboardScreen extends Screen {
 
     final KeyboardClient.Playing playing;
     private final Controller controller;
-    /** How many of the window's pixels one of the GUI's is. */
-    private double pixel = 1;
-    /** The keys: their left edge and top, a white key's width and length. The strip of controls is as wide, above them. */
-    private int keysX, keysY, keyWidth, keysHeight;
-    private int stripY, stripWidth, stripHeight;
-    /** The gap between the strip and the keys, where the functions FUNC works are named; the felt along the keys' back is in it. */
-    private int deck, felt;
-    private float textScale;
     /** What the mouse holds: the note of a key (-1 for none), or a control. */
     private int mouseNote = -1;
     @Nullable
@@ -119,40 +98,9 @@ final class KeyboardScreen extends Screen {
     private final Map<Integer, Integer> typed = new HashMap<>();
 
     KeyboardScreen(KeyboardClient.Playing playing) {
-        super(Component.translatable("block.create_media_systems.midi_keyboard"));
+        super(Component.translatable("block.create_media_systems.midi_keyboard"), 13.52f);
         this.playing = playing;
         controller = playing.controller;
-    }
-
-    @Override
-    protected void init() {
-        pixel = minecraft.getWindow().getGuiScale();
-        int wide = minecraft.getWindow().getWidth(), high = minecraft.getWindow().getHeight();
-        int margin = (int) Math.round(8 * pixel);
-        // Every key a whole number of pixels wide: as many as fit across the window, or as leave the world a third
-        // of its height above the strip. The rest follows from that.
-        keyWidth = Mth.clamp(Math.min((wide - 2 * margin) / Layout.WHITE_KEYS, (int) (high * 0.7 / 22.5)), 8, 48);
-        keysHeight = keyWidth * 8;
-        keysX = (wide - keyWidth * Layout.WHITE_KEYS) / 2;
-        keysY = high - margin - keysHeight;
-        // The lettering in half steps of the font's own pixels, which keeps it crisp.
-        textScale = Math.max(1, Math.round(keyWidth / 7f) / 2f);
-        felt = Math.max(2, keyWidth / 6);
-        // Room for the two lines FUNC's functions are named on, and the line under them.
-        deck = 2 * lineHeight() + felt + 5;
-        stripWidth = keyWidth * Layout.WHITE_KEYS;
-        stripHeight = Math.round(stripWidth * 0.26f);
-        stripY = keysY - deck - stripHeight;
-    }
-
-    /** How high a line of the small lettering is. */
-    private int lineHeight() {
-        return Math.round(8 * textScale) + 2;
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 
     @Override
@@ -160,29 +108,18 @@ final class KeyboardScreen extends Screen {
         KeyboardClient.closed(playing);
     }
 
-    /** The world stays in sight behind it. */
     @Override
-    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    protected void draw(GuiGraphics g, double x, double y) {
+        MidiKeyboardBlock.Entity keyboard = KeyboardAudio.near().get(playing.pos);
+        PanelLook look = new PanelLook(controller.panel(), keyboard == null ? 0 : keyboard.padsDown, controller);
+        drawHeader(g, look.panel());
+        drawControls(g, look, keyboard);
+        drawKeys(g, look.panel(), keyboard);
     }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        MidiKeyboardBlock.Entity keyboard = KeyboardAudio.near().get(playing.pos);
-        PanelLook look = new PanelLook(controller.panel(), keyboard == null ? 0 : keyboard.padsDown, controller);
-        g.pose().pushPose();
-        g.pose().scale((float) (1 / pixel), (float) (1 / pixel), 1);
-        // In one batch: it is a few thousand small rectangles.
-        g.drawManaged(() -> {
-            int around = keyWidth / 3, corner = keyWidth / 2;
-            box(g, keysX - around - 2, stripY - around - 2, keysX + stripWidth + around + 2, keysY + keysHeight + around + 2,
-                    corner + 2, true, EDGE, EDGE);
-            box(g, keysX - around, stripY - around, keysX + stripWidth + around, keysY + keysHeight + around, corner, true,
-                    BODY[0], BODY[1]);
-            drawHeader(g, look.panel());
-            drawControls(g, look, keyboard);
-            drawKeys(g, look.panel(), keyboard);
-        });
-        g.pose().popPose();
+        super.render(g, mouseX, mouseY, partialTick);
         Control hovered = controlAt(mouseX * pixel, mouseY * pixel);
         if (hovered != null && held == null && mouseNote < 0) {
             g.renderTooltip(font, font.split(Component.translatable(KEY + "control." + hovered.name().toLowerCase(Locale.ROOT)), 210),
@@ -195,33 +132,6 @@ final class KeyboardScreen extends Screen {
         float[] place = PLACES[control.ordinal()];
         return new int[]{keysX + Math.round(place[0] * stripWidth), stripY + Math.round(place[1] * stripHeight),
                 keysX + Math.round(place[2] * stripWidth), stripY + Math.round(place[3] * stripHeight)};
-    }
-
-    /**
-     * A rectangle with its corners rounded by {@code radius} (the upper two only with {@code roundTop}), shaded from
-     * {@code top} down to {@code bottom}. The pixels the curve only partly covers are drawn as faint as it covers them.
-     */
-    private static void box(GuiGraphics g, int x0, int y0, int x1, int y1, int radius, boolean roundTop, int top, int bottom) {
-        int r = Math.max(0, Math.min(radius, Math.min(x1 - x0, y1 - y0) / 2));
-        for (int row = 0; row < r; row++) {
-            double up = r - row - 0.5, inset = r - Math.sqrt(r * r - up * up);
-            int whole = (int) Math.ceil(inset);
-            if (roundTop) {
-                span(g, x0 + whole, x1 - whole, y0 + row, (float) (whole - inset), top);
-            }
-            span(g, x0 + whole, x1 - whole, y1 - 1 - row, (float) (whole - inset), bottom);
-        }
-        g.fillGradient(x0, y0 + (roundTop ? r : 0), x1, y1 - r, top, bottom);
-    }
-
-    /** One row of pixels from {@code x0} to {@code x1}, and the pixel beyond each end at {@code edge} (0..1) of its colour. */
-    private static void span(GuiGraphics g, int x0, int x1, int y, float edge, int color) {
-        g.fill(x0, y, x1, y + 1, color);
-        if (edge > 0.05f) {
-            int faint = Math.round((color >>> 24) * edge) << 24 | color & 0xFFFFFF;
-            g.fill(x0 - 1, y, x0, y + 1, faint);
-            g.fill(x1, y, x1 + 1, y + 1, faint);
-        }
     }
 
     /** A filled circle of {@code radius} around ({@code x}, {@code y}), its rim as soft as a box's corners. */
@@ -242,28 +152,14 @@ final class KeyboardScreen extends Screen {
                 | b + Math.round((255 - b) * share);
     }
 
-    /** {@code text} at {@code scale}, its middle {@code y} high and its left end, middle or right end at {@code x}. */
-    private void write(GuiGraphics g, String text, float x, float y, float scale, int color, int align) {
-        int wide = font.width(text);
-        g.pose().pushPose();
-        g.pose().translate(x, y, 0);
-        g.pose().scale(scale, scale, 1);
-        g.drawString(font, text, align == LEFT ? 0 : align == MIDDLE ? -wide / 2 : -wide, -4, color, false);
-        g.pose().popPose();
-    }
-
     /** The top line: what is set off its usual on the left (nothing, on a keyboard as it comes), the MIDI inputs on the right. */
     private void drawHeader(GuiGraphics g, Panel panel) {
-        float y = stripY + stripHeight * HEADER / 2;
-        int inset = keyWidth / 3;
-        write(g, "Koland A-88MKII", keysX + inset, y, textScale, FAINT, LEFT);
-        write(g, status(panel), keysX + inset + (font.width("Koland A-88MKII") + 8) * textScale, y, textScale, LAMP, LEFT);
         List<String> inputs = MidiInput.names();
         Component midi = inputs == null ? Component.translatable(KEY + "midi.looking")
                 : inputs.isEmpty() ? Component.translatable(KEY + "midi.none")
                 : Component.translatable(KEY + "midi", String.join(", ", inputs));
-        write(g, midi.getString(), keysX + stripWidth - inset, y, textScale, inputs == null || inputs.isEmpty() ? FAINT
-                : 0xFF000000 | PanelLook.GREEN, RIGHT);
+        drawHeader(g, "Koland A-88MKII", status(panel), LAMP, midi.getString(), inputs == null || inputs.isEmpty() ? FAINT
+                : 0xFF000000 | PanelLook.GREEN);
     }
 
     private String status(Panel panel) {
@@ -356,7 +252,7 @@ final class KeyboardScreen extends Screen {
         if (panel.target == zone) {
             box(g, x0 - 2, y0 - 2, x1 + 2, y1 + 2, corner + 2, true, 0xFFFFFFFF, 0xFFD8D8DE);
         }
-        int[] face = sounds ? BUTTON : OFF;
+        int[] face = sounds ? BUTTON : UNLIT;
         box(g, x0, y0, x1, y1, corner, true, face[0], face[1]);
         int lamp = Math.max(2, keyWidth / 7), inset = Math.max(3, keyWidth / 6);
         box(g, x0 + inset, y0 + inset, x0 + inset + lamp, y1 - inset, lamp / 2, true, sounds ? LIT[0] : 0xFF45454C,
@@ -390,49 +286,20 @@ final class KeyboardScreen extends Screen {
         return new String[]{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}[note % 12] + (note / 12 - 1);
     }
 
-    /**
-     * The keys as a piano's look from above: the white ones rounded at their front corners and in the shade towards
-     * their back; the black ones with their lighter top face, narrower than the key and short of its front, where it
-     * slopes down, and their shadow on the white ones beside them.
-     */
+    /** The keys, what FUNC works named over them while it is lit, and the split point marked. */
     private void drawKeys(GuiGraphics g, Panel panel, @Nullable MidiKeyboardBlock.Entity keyboard) {
         long low = keyboard == null ? 0 : keyboard.keysDown.get(0), high = keyboard == null ? 0 : keyboard.keysDown.get(1);
-        int right = keysX + stripWidth, bottom = keysY + keysHeight;
         if (controller.lit(Control.FUNC)) {
             legend(g, "PANIC", Controller.PANIC_KEY, 1, 0);
             legend(g, "MIDI CH 1-16", Controller.FIRST_CHANNEL_KEY, 16, 1);
             legend(g, "STEP " + STEPS[panel.step], Controller.FIRST_STEP_KEY, STEPS.length, 0);
             legend(g, "GATE " + (panel.gate == 0 ? 50 : 100) + "%", Controller.FIRST_GATE_KEY, 2, 1);
         }
-        g.fill(keysX, keysY - felt, right, keysY, 0xFF000000 | PanelLook.FELT);
-        g.fill(keysX, keysY, right, bottom, EDGE);
-        int gap = Math.max(1, Math.round(keyWidth / 11f)), corner = Math.max(2, keyWidth / 5);
-        int blackWidth = Math.max(3, Math.round(keyWidth * Layout.BLACK_WIDTH)), blackLength = Math.round(keysHeight * Layout.BLACK_LENGTH);
-        int side = Math.max(1, blackWidth / 6), slope = Math.max(3, keyWidth / 2), shade = Math.max(1, keyWidth / 8);
-        for (int black = 0; black < 2; black++) {
-            for (int note = Layout.LOWEST; note <= Layout.HIGHEST; note++) {
-                if (Layout.black(note) != (black == 1)) {
-                    continue;
-                }
-                boolean down = ((note < 64 ? low : high) >> note & 1) != 0;
-                int x = keysX + Layout.across(note) * keyWidth;
-                if (black == 0) {
-                    int[] face = down ? WHITE_DOWN : WHITE;
-                    box(g, x, keysY, x + keyWidth - gap, bottom, corner, false, face[0], face[1]);
-                    continue;
-                }
-                // On the middle of the gap between the two white keys it lies between.
-                int x0 = Math.round(x - gap / 2f - blackWidth / 2f), x1 = x0 + blackWidth, end = keysY + blackLength;
-                int[] body = down ? BLACK_DOWN : BLACK, top = down ? BLACK_TOP_DOWN : BLACK_TOP;
-                box(g, x0 + shade, keysY, x1 + shade, end + shade, corner, false, 0x30000000, 0x48000000);
-                box(g, x0, keysY, x1, end, Math.max(2, blackWidth / 4), false, body[0], body[1]);
-                // Held down it tips forward: more of its top shows, less of its front.
-                box(g, x0 + side, keysY, x1 - side, end - (down ? slope / 2 : slope), Math.max(1, blackWidth / 5), false, top[0], top[1]);
-            }
-        }
+        drawKeys(g, note -> ((note < 64 ? low : high) >> note & 1) != 0);
         if (panel.split || controller.lit(Control.SPLIT)) {
+            int gap = Math.max(1, Math.round(keyWidth / 11f));
             int x = keysX + (Layout.across(Math.clamp(panel.splitPoint, Layout.LOWEST, Layout.HIGHEST)) + 1) * keyWidth - gap;
-            g.fill(x, keysY - felt, x + gap, bottom, 0xFF000000 | PanelLook.RED);
+            g.fill(x, keysY - felt, x + gap, keysY + keysHeight, 0xFF000000 | PanelLook.RED);
         }
     }
 
@@ -449,21 +316,16 @@ final class KeyboardScreen extends Screen {
                 keysY - deck + lineHeight() * (row + 0.5f), textScale, LAMP, MIDDLE);
     }
 
-    /** The control at ({@code x}, {@code y}) of the window; null for none. */
+    /** The control at ({@code x}, {@code y}) of the window; null for none, as while it is hidden. */
     @Nullable
     private Control controlAt(double x, double y) {
         for (Control control : Control.values()) {
             int[] at = place(control);
-            if (x >= at[0] && x < at[2] && y >= at[1] && y < at[3]) {
+            if (!hidden && x >= at[0] && x < at[2] && y >= at[1] && y < at[3]) {
                 return control;
             }
         }
         return null;
-    }
-
-    /** The note of the key at ({@code x}, {@code y}) of the window; -1 off the keys. */
-    private int keyAt(double x, double y) {
-        return Layout.keyAt((float) (x - keysX) / keyWidth, (float) (y - keysY) / keysHeight);
     }
 
     /** How hard a click at {@code y} strikes a key: harder towards its front edge. */
@@ -473,6 +335,9 @@ final class KeyboardScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
         double x = mouseX * pixel, y = mouseY * pixel;
         int note = keyAt(x, y);
         Control control = controlAt(x, y);
@@ -490,7 +355,7 @@ final class KeyboardScreen extends Screen {
                 }
                 case LEVER -> lever(x, y);
             }
-        } else if (y >= stripY && y < stripY + stripHeight * HEADER && x > keysX + stripWidth / 2) {
+        } else if (y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2) {
             // The MIDI inputs, at the right of the top line: looked for again.
             KeyboardClient.listen(playing);
         }

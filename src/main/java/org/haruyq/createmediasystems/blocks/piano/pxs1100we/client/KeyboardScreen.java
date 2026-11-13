@@ -13,14 +13,11 @@ import java.util.function.Supplier;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.haruyq.createmediasystems.client.KeysScreen;
 import org.haruyq.createmediasystems.client.MidiPort;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardLayout;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Action;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
@@ -29,8 +26,13 @@ import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings.Ton
 import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.*;
 import static org.lwjgl.glfw.GLFW.*;
 
-final class KeyboardScreen extends Screen {
-    private static final int INK = 0xFFF1F6FC, MUTED = 0xFFADBED0, ACCENT = 0xFF7BE1D1, DARK = 0xFF101820;
+/**
+ * Playing a PX-S1100, on a screen that looks as the Koland keyboard's does. The strip has its three tabs and the
+ * power switch down its left, and right of them the open tab's controls in four rows of five columns.
+ */
+final class KeyboardScreen extends KeysScreen {
+    /** In white keys: how high a row of the strip is, and how far one column is from the next. */
+    private static final float ROW = 2.3f, COLUMN = 8.76f;
     private static final int[] LOWER = {GLFW_KEY_Z, GLFW_KEY_S, GLFW_KEY_X, GLFW_KEY_D, GLFW_KEY_C, GLFW_KEY_V,
             GLFW_KEY_G, GLFW_KEY_B, GLFW_KEY_H, GLFW_KEY_N, GLFW_KEY_J, GLFW_KEY_M, GLFW_KEY_COMMA,
             GLFW_KEY_L, GLFW_KEY_PERIOD, GLFW_KEY_SEMICOLON, GLFW_KEY_SLASH};
@@ -38,7 +40,6 @@ final class KeyboardScreen extends Screen {
             GLFW_KEY_5, GLFW_KEY_T, GLFW_KEY_6, GLFW_KEY_Y, GLFW_KEY_7, GLFW_KEY_U, GLFW_KEY_I,
             GLFW_KEY_9, GLFW_KEY_O, GLFW_KEY_0, GLFW_KEY_P};
     private static final int[] PEDALS = {SUSTAIN, SOSTENUTO, SOFT};
-    private static final int TOTAL_WHITE = 52;
     private static final String[] FAMILIES = {"pianos", "chromatic", "organs", "guitars", "basses", "strings",
             "ensemble", "brass", "reeds", "pipes", "leads", "pads", "effects", "world", "percussive", "sfx", "kits"};
     private static String preferred;
@@ -50,21 +51,16 @@ final class KeyboardScreen extends Screen {
     private final Map<Integer, Integer> computer = new HashMap<>();
     private final boolean[] hardwareHeld = new boolean[128], pcPedals = new boolean[3];
     private final int[] hardwarePedals = new int[3];
-    private final List<Label> labels = new ArrayList<>();
-    private final List<SettingSlider> sliders = new ArrayList<>();
     private enum Tab { PLAY, TONES, SETTINGS }
-    private record Label(Button button, Supplier<Component> text) {}
 
     private Tab tab;
-    private Button device;
     private EditBox search;
     private String query = "";
-    private int category = -1, role, toneScroll, ticks, base = 48, zoom = 1, firstWhite;
-    private int left, top, panel, tall, keyLeft, keyTop, keyWidth, keyHeight, mouseNote = -1;
+    private int category = -1, role, toneScroll, base = 48, mouseNote = -1;
     private boolean mouseDown, pedalLatched, closed;
 
     KeyboardScreen(PxS1100Client client, PxS1100Client.Instrument instrument, boolean browser) {
-        super(Component.translatable("block.create_media_systems.px_s1100"));
+        super(Component.translatable("block.create_media_systems.px_s1100"), 13.52f);
         this.client = client;
         this.instrument = instrument;
         tab = browser ? Tab.TONES : Tab.PLAY;
@@ -87,34 +83,16 @@ final class KeyboardScreen extends Screen {
     void openTones() { switchTab(Tab.TONES); }
 
     @Override protected void init() {
-        panel = Math.min(560, width - 16);
-        tall = Math.min(238, height - 12);
-        left = (width - panel) / 2;
-        top = (height - tall) / 2;
-        build();
-    }
-
-    private void switchTab(Tab next) {
-        if (tab == next) return;
-        releaseComputer();
-        tab = next;
-        build();
-    }
-
-    private void build() {
-        clearWidgets();
-        setFocused(null);
-        labels.clear();
-        sliders.clear();
+        super.init();
         search = null;
-        device = null;
-        int content = panel - 20, each = (content - 8) / 3;
+        if (hidden) return;
         for (var next : Tab.values()) {
-            String label = next.name().toLowerCase(Locale.ROOT);
-            var button = addRenderableWidget(Button.builder(t(label), b -> switchTab(next))
-                    .bounds(left + 10 + next.ordinal() * (each + 4), top + 27, each, 18).build());
-            button.active = next != tab;
+            float top = top(next.ordinal());
+            button(0.6f, top, 7.4f, top + ROW, () -> t(next.name().toLowerCase(Locale.ROOT)), () -> switchTab(next))
+                    .lit(() -> tab == next);
         }
+        button(0.6f, top(3), 7.4f, top(3) + ROW, () -> t(flag("Switch") ? "power_on" : "power_off"), () -> action(Action.POWER))
+                .lit(() -> flag("Powered")).hint(t("power_help"));
         switch (tab) {
             case PLAY -> playWidgets();
             case TONES -> toneWidgets();
@@ -122,93 +100,115 @@ final class KeyboardScreen extends Screen {
         }
     }
 
-    private void playWidgets() {
-        int start = left + 10, content = panel - 20, cell = (content - 20) / 6;
-        label(start, 52, cell, () -> t(flag("Switch") ? "power_on" : "power_off"), () -> action(Action.POWER), "power_help");
-        label(start + (cell + 4), 52, cell, () -> t(flag("Playing") ? "stop" : "playback"), () -> action(Action.PLAY), null);
-        label(start + 2 * (cell + 4), 52, cell, () -> t(flag("Recording") ? "stop" : "rec"), () -> action(Action.RECORD), null);
-        label(start + 3 * (cell + 4), 52, cell, () -> t("metro_toggle", flag("Metro") ? "●" : "○"), () -> action(Action.METRONOME), null);
-        label(start + 4 * (cell + 4), 52, cell, () -> t("pedal_toggle", instrument.keys.pedal() ? "●" : "○"), () -> {
-            togglePedal();
-        }, "pedal_help");
-        label(start + 5 * (cell + 4), 52, cell, () -> t("zoom", zoom), () -> zoom(zoom == 4 ? 1 : zoom * 2), "zoom_help");
-        slider(start, 75, content / 2 - 2, "volume", 0, 127, () -> settings().volume, value -> action(Action.VOLUME, value));
-        label(start + content / 2 + 2, 75, content / 2 - 2, this::toneTitle, this::openTones, null);
-        keyLeft = start;
-        keyTop = top + 108;
-        keyWidth = content;
-        keyHeight = Math.max(28, tall - 151);
+    private void switchTab(Tab next) {
+        if (tab == next) return;
+        tab = next;
+        rebuildWidgets();
     }
 
+    /** The top of row {@code row} of the strip's four, in white keys. */
+    private static float top(int row) { return 1.75f + row * 2.95f; }
+
+    /** A button on {@code row}, {@code span} columns wide from {@code column}. */
+    private Face cell(int column, int row, int span, Supplier<Component> text, Runnable press) {
+        float left = 8 + column * COLUMN;
+        return button(left, top(row), left + span * COLUMN - 0.4f, top(row) + ROW, text, press);
+    }
+
+    private void slide(int column, int row, int span, String key, int min, int max, IntSupplier current, IntConsumer apply) {
+        float left = 8 + column * COLUMN;
+        slider(left, top(row), left + span * COLUMN - 0.4f, top(row) + ROW, value -> t(key, value), min, max, current, apply);
+    }
+
+    private void playWidgets() {
+        cell(0, 0, 5, this::toneTitle, this::openTones);
+        slide(0, 1, 5, "volume", 0, 127, () -> settings().volume, value -> action(Action.VOLUME, value));
+        cell(0, 2, 1, () -> t(flag("Playing") ? "stop" : "playback"), () -> action(Action.PLAY)).lit(() -> flag("Playing"));
+        cell(1, 2, 1, () -> t(flag("Recording") ? "stop" : "rec"), () -> action(Action.RECORD)).lit(() -> flag("Recording"));
+        cell(2, 2, 1, () -> t("metro_toggle", flag("Metro") ? "●" : "○"), () -> action(Action.METRONOME)).lit(() -> flag("Metro"));
+        cell(3, 2, 1, () -> t("pedal_toggle", instrument.keys.pedal() ? "●" : "○"), this::togglePedal)
+                .lit(() -> instrument.keys.pedal()).hint(t("pedal_help"));
+        cell(4, 2, 1, () -> t("zoom", zoom), () -> zoom(zoom == 4 ? 1 : zoom * 2)).hint(t("zoom_help"));
+    }
+
+    /** The search box, the two columns at the left of the first row: its place in the window. */
+    private int[] searchBox() { return place(8, top(0), 8 + 2 * COLUMN - 0.4f, top(0) + ROW); }
+
     private void toneWidgets() {
-        int start = left + 10, content = panel - 20;
-        search = new EditBox(font, start, top + 53, content / 2 - 2, 18, t("search"));
+        int[] box = searchBox();
+        int inset = keyWidth / 2;
+        // The one vanilla widget: its lettering, without its border, as large as the rest and over a box drawn as the rest is.
+        float scale = (float) (textScale / pixel);
+        search = new EditBox(font, (int) ((box[0] + inset) / textScale), (int) ((box[1] + box[3]) / 2 / textScale) - 4,
+                (int) ((box[2] - box[0] - 2 * inset) / textScale), 9, t("search")) {
+            @Override public void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+                g.pose().pushPose();
+                g.pose().scale(scale, scale, 1);
+                super.renderWidget(g, mouseX, mouseY, partialTick);
+                g.pose().popPose();
+            }
+            @Override public boolean mouseClicked(double x, double y, int button) {
+                return super.mouseClicked(x / scale, y / scale, button);
+            }
+        };
+        search.setBordered(false);
         search.setMaxLength(64);
-        search.setHint(t("search"));
+        search.setHint(Component.literal(font.plainSubstrByWidth(t("search").getString(), search.getWidth())));
         search.setValue(query);
         search.setResponder(value -> { query = value; toneScroll = 0; });
         addRenderableWidget(search);
-        label(start + content / 2 + 2, 52, content / 2 - 2, () -> t(switch (role) {
+        float end = 8 + 2 * COLUMN - 0.4f;
+        cell(0, 1, 2, () -> t(switch (role) {
             case 1 -> "layer_voice";
             case 2 -> "lower_voice";
             default -> "main_voice";
-        }), () -> role = (role + 1) % 3, null);
-        label(start, 75, 22, () -> Component.literal("‹"), () -> category(-1), null);
-        label(start + 25, 75, content - 50, this::categoryLabel, () -> category(1), "category_help");
-        label(start + content - 22, 75, 22, () -> Component.literal("›"), () -> category(1), null);
-        label(start, tall - 27, 36, () -> Component.literal("▲"), () -> page(-1), null);
-        label(start + 40, tall - 27, 36, () -> Component.literal("▼"), () -> page(1), null);
-        label(start + 80, tall - 27, content - 80, () -> t("favorite", KeyboardToneHistory.get().favorite(bankName(), chosen()) ? "★" : "☆"),
-                () -> KeyboardToneHistory.get().toggle(bankName(), chosen()), null);
+        }), () -> role = (role + 1) % 3);
+        button(8, top(2), 10.3f, top(2) + ROW, () -> Component.literal("‹"), () -> category(-1));
+        button(10.7f, top(2), end - 2.7f, top(2) + ROW, this::categoryLabel, () -> category(1)).hint(t("category_help"));
+        button(end - 2.3f, top(2), end, top(2) + ROW, () -> Component.literal("›"), () -> category(1));
+        button(8, top(3), 10.3f, top(3) + ROW, () -> Component.literal("▲"), () -> page(-1));
+        button(10.7f, top(3), 13, top(3) + ROW, () -> Component.literal("▼"), () -> page(1));
+        button(13.4f, top(3), end, top(3) + ROW, () -> t("favorite", KeyboardToneHistory.get().favorite(bankName(), chosen()) ? "★" : "☆"),
+                () -> KeyboardToneHistory.get().toggle(bankName(), chosen()));
     }
 
     private void settingsWidgets() {
-        int start = left + 10, each = (panel - 28) / 3;
-        int middle = start + each + 4, end = middle + each + 4;
-        device = label(start, 52, each * 2 + 4, () -> Component.empty(), this::nextInput, "device_help");
-        label(end, 52, each, () -> Component.translatable("keyboard.refresh"), midi::scan, null);
-        label(start, 75, each, () -> preferredChannel < 0 ? Component.translatable("keyboard.all_channels")
-                : Component.translatable("keyboard.channel", preferredChannel + 1), () -> {
+        cell(0, 0, 2, this::device, this::nextInput).hint(t("device_help"));
+        cell(2, 0, 1, () -> t("refresh"), midi::scan);
+        cell(3, 0, 1, () -> preferredChannel < 0 ? t("all_channels") : t("channel", preferredChannel + 1), () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
             requestMidiReset();
-        }, null);
-        label(middle, 75, each, () -> t("stand_toggle", flag("Stand") ? "●" : "○"),
-                () -> action(Action.STAND, flag("Stand") ? 0 : 1), null);
-        label(end, 75, each, () -> t("rack_toggle", flag("Rack") ? "●" : "○"),
-                () -> action(Action.RACK, flag("Rack") ? 0 : 1), null);
-        label(start, 98, each, () -> t("layer_toggle", settings().layered ? "●" : "○"),
-                () -> action(Action.LAYER_ON, settings().layered ? 0 : 1), null);
-        label(middle, 98, each, () -> t("split_toggle", settings().split ? "●" : "○"),
-                () -> action(Action.SPLIT_ON, settings().split ? 0 : 1), null);
-        slider(end, 98, each, "split_key", 22, 108, () -> settings().splitKey, n -> action(Action.SPLIT_KEY, n));
-        slider(start, 121, each, "transpose", -36, 36, () -> settings().transpose, n -> action(Action.TRANSPOSE, n));
-        slider(middle, 121, each, "touch", 0, 4, () -> settings().touch, n -> action(Action.TOUCH, n));
-        label(end, 121, each, () -> t("poly", settings().polyphony),
-                () -> action(Action.POLYPHONY, settings().polyphony >= 256 ? 32 : (settings().polyphony / 32 + 1) * 32), null);
-        slider(start, 144, each, "reverb", 0, 127, () -> settings().reverb, n -> action(Action.REVERB, n));
-        slider(middle, 144, each, "chorus", 0, 127, () -> settings().chorus, n -> action(Action.CHORUS, n));
-        label(end, 144, each, () -> Component.translatable("keyboard.panic"), this::panic, null);
-        slider(start, 167, each, "bpm", 20, 300, () -> settings().bpm, n -> action(Action.BPM, n));
-        slider(middle, 167, each, "beats", 1, 12, () -> settings().beats, n -> action(Action.BEATS, n));
-        label(end, 167, each, () -> t("sf2", settings().font), this::nextFont, "font_help");
+        });
+        cell(4, 0, 1, () -> t("panic"), this::panic);
+        cell(0, 1, 1, () -> t("stand_toggle", flag("Stand") ? "●" : "○"), () -> action(Action.STAND, flag("Stand") ? 0 : 1))
+                .lit(() -> flag("Stand"));
+        cell(1, 1, 1, () -> t("rack_toggle", flag("Rack") ? "●" : "○"), () -> action(Action.RACK, flag("Rack") ? 0 : 1))
+                .lit(() -> flag("Rack"));
+        cell(2, 1, 1, () -> t("layer_toggle", settings().layered ? "●" : "○"), () -> action(Action.LAYER_ON, settings().layered ? 0 : 1))
+                .lit(() -> settings().layered);
+        cell(3, 1, 1, () -> t("split_toggle", settings().split ? "●" : "○"), () -> action(Action.SPLIT_ON, settings().split ? 0 : 1))
+                .lit(() -> settings().split);
+        slide(4, 1, 1, "split_key", 22, 108, () -> settings().splitKey, n -> action(Action.SPLIT_KEY, n));
+        slide(0, 2, 1, "transpose", -36, 36, () -> settings().transpose, n -> action(Action.TRANSPOSE, n));
+        slide(1, 2, 1, "touch", 0, 4, () -> settings().touch, n -> action(Action.TOUCH, n));
+        cell(2, 2, 1, () -> t("poly", settings().polyphony),
+                () -> action(Action.POLYPHONY, settings().polyphony >= 256 ? 32 : (settings().polyphony / 32 + 1) * 32));
+        slide(3, 2, 1, "reverb", 0, 127, () -> settings().reverb, n -> action(Action.REVERB, n));
+        slide(4, 2, 1, "chorus", 0, 127, () -> settings().chorus, n -> action(Action.CHORUS, n));
+        slide(0, 3, 1, "bpm", 20, 300, () -> settings().bpm, n -> action(Action.BPM, n));
+        slide(1, 3, 1, "beats", 1, 12, () -> settings().beats, n -> action(Action.BEATS, n));
+        cell(2, 3, 1, () -> t("sf2", settings().font), this::nextFont).hint(t("font_help"));
     }
 
-    private Button label(int x, int y, int w, Supplier<Component> message, Runnable press, String hint) {
-        var b = addRenderableWidget(Button.builder(fit(message.get(), w - 8), ignored -> press.run())
-                .bounds(x, top + y, w, 18).build());
-        if (hint != null) b.setTooltip(Tooltip.create(t(hint)));
-        labels.add(new Label(b, message));
-        return b;
-    }
-
-    private void slider(int x, int y, int w, String key, int min, int max, IntSupplier current, IntConsumer apply) {
-        sliders.add(addRenderableWidget(new SettingSlider(x, top + y, w, key, min, max, current, apply)));
+    /** The MIDI input it listens to, or why it listens to none. */
+    private Component device() {
+        var status = midi.status();
+        var name = status.inputs().stream().filter(input -> input.id().equals(status.selected())).map(MidiPort.Input::name).findFirst();
+        return name.isPresent() && status.message().equals("keyboard.midi_connected") ? Component.literal(name.get())
+                : Component.translatable(status.message());
     }
 
     private static Component t(String key, Object... args) { return Component.translatable("keyboard." + key, args); }
-    private Component fit(Component text, int w) {
-        return font.width(text) <= w ? text : Component.literal(font.plainSubstrByWidth(text.getString(), Math.max(0, w - 7)) + "…");
-    }
     private boolean flag(String name) { return instrument.view.getBoolean(name); }
     private KeyboardSettings settings() { return instrument.settings; }
     private void action(Action action) { action(action, 0); }
@@ -269,7 +269,10 @@ final class KeyboardScreen extends Screen {
         return matching.toList();
     }
 
-    private int rows() { return Math.max(1, (tall - 131) / 15); }
+    /** The tones to pick from, right of the search and what narrows them: its place in the window, and a row of it. */
+    private int[] list() { return place(8 + 2 * COLUMN, top(0), 51.4f, top(3) + ROW); }
+    private int rowHeight() { return lineHeight() * 3 / 2; }
+    private int rows() { return Math.max(1, (list()[3] - list()[1]) / rowHeight()); }
     private void page(int direction) { scrollTones(direction * rows(), tones().size()); }
     private void scrollTones(int amount, int count) { toneScroll = Math.clamp(toneScroll + amount, 0, Math.max(0, count - rows())); }
     private void pick(Tone tone) {
@@ -278,15 +281,8 @@ final class KeyboardScreen extends Screen {
     }
 
     @Override public void tick() {
-        if (++ticks % 40 == 0) midi.scan();
-        for (var label : labels) label.button.setMessage(fit(label.text.get(), label.button.getWidth() - 8));
-        sliders.forEach(SettingSlider::sync);
-        if (device != null) {
-            var status = midi.status();
-            var name = status.inputs().stream().filter(input -> input.id().equals(status.selected())).map(MidiPort.Input::name).findFirst();
-            device.setMessage(fit(name.isPresent() && status.message().equals("keyboard.midi_connected")
-                    ? Component.literal(name.get()) : Component.translatable(status.message()), device.getWidth() - 8));
-        }
+        super.tick();
+        if (ticks % 40 == 0) midi.scan();
         if (!Minecraft.getInstance().isWindowActive()) releaseComputer();
     }
 
@@ -417,14 +413,20 @@ final class KeyboardScreen extends Screen {
         }
     }
 
-    @Override public synchronized boolean mouseClicked(double x, double y, int button) {
-        if (button == 0 && tab == Tab.PLAY && keyAt(x, y) >= 0) {
+    @Override public synchronized boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double x = mouseX * pixel, y = mouseY * pixel;
+        // A click anywhere in its box takes the search up; one anywhere else puts it down, and the computer's keys play again.
+        if (search != null) setFocused(in(searchBox(), x, y) ? search : null);
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        if (button != 0) return false;
+        if (keyAt(x, y) >= 0) {
             mouseDown = true;
             playMouse(x, y);
             return true;
         }
-        if (button == 0 && tab == Tab.TONES && x >= left + 10 && x < left + panel - 10 && y >= top + 100) {
-            int row = (int) (y - top - 100) / 15;
+        int[] list = list();
+        if (tab == Tab.TONES && in(list, x, y)) {
+            int row = (int) (y - list[1]) / rowHeight();
             var tones = tones();
             scrollTones(0, tones.size());
             if (row < rows() && toneScroll + row < tones.size()) {
@@ -432,11 +434,11 @@ final class KeyboardScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(x, y, button);
+        return false;
     }
     @Override public synchronized boolean mouseDragged(double x, double y, int button, double dx, double dy) {
         if (mouseDown && button == 0) {
-            playMouse(x, y);
+            playMouse(x * pixel, y * pixel);
             return true;
         }
         return super.mouseDragged(x, y, button, dx, dy);
@@ -452,15 +454,13 @@ final class KeyboardScreen extends Screen {
         return super.mouseReleased(x, y, button);
     }
     @Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
-        if (vertical != 0 && tab == Tab.TONES) {
+        if (hidden || vertical == 0) return super.mouseScrolled(x, y, horizontal, vertical);
+        if (y * pixel >= keysY - felt) {
+            firstWhite = Math.clamp(firstWhite + (vertical > 0 ? -4 : 4), 0, Layout.WHITE_KEYS - whites());
+        } else if (tab == Tab.TONES) {
             scrollTones(vertical > 0 ? -3 : 3, tones().size());
-            return true;
         }
-        if (vertical != 0 && tab == Tab.PLAY && y >= keyTop - 8 && y < keyTop + keyHeight + 13) {
-            firstWhite = Math.clamp(firstWhite + (vertical > 0 ? -4 : 4), 0, TOTAL_WHITE - whites());
-            return true;
-        }
-        return super.mouseScrolled(x, y, horizontal, vertical);
+        return true;
     }
 
     private void playMouse(double x, double y) {
@@ -470,127 +470,70 @@ final class KeyboardScreen extends Screen {
         boolean held = next >= 0 && (pcHolds(next) || hardwareHeld[next]);
         mouseNote = next;
         release(previous);
-        if (next >= 0 && !held) note(KeyboardMidi.note(next,
-                Math.clamp(20 + (int) (107 * (y - keyTop) / (black(next) ? blackHeight() : keyHeight)), 20, 127)));
+        if (next >= 0 && !held) note(KeyboardMidi.note(next, Math.clamp(
+                20 + (int) (107 * (y - keysY) / (keysHeight * (Layout.black(next) ? Layout.BLACK_LENGTH : 1))), 20, 127)));
     }
 
     private void zoom(int amount) {
         int center = firstWhite + whites() / 2;
         zoom = amount;
-        firstWhite = Math.clamp(center - whites() / 2, 0, TOTAL_WHITE - whites());
+        firstWhite = Math.clamp(center - whites() / 2, 0, Layout.WHITE_KEYS - whites());
     }
-    private int whites() { return TOTAL_WHITE / zoom; }
-    private int xAt(int white) { return keyLeft + Math.floorDiv((white - firstWhite) * keyWidth, whites()); }
-    private int blackWidth() { return Math.max(2, keyWidth * 62 / (whites() * 100)); }
-    private int blackHeight() { return keyHeight * 37 / 61; }
-    private int blackLeft(int white) { return xAt(white) - blackWidth() / 2; }
-    private static boolean black(int note) { return KeyboardLayout.PX.keys.get(note - KeyboardLayout.FIRST).black(); }
+    private int whites() { return Layout.WHITE_KEYS / zoom; }
 
-    private int keyAt(double x, double y) {
-        if (x < keyLeft || x >= keyLeft + keyWidth || y < keyTop || y >= keyTop + keyHeight) return -1;
-        int white = 0, result = -1;
-        for (int note = KeyboardLayout.FIRST; note <= KeyboardLayout.LAST; note++) {
-            if (black(note)) {
-                int a = blackLeft(white);
-                if (y < keyTop + blackHeight() && x >= a && x < a + blackWidth()) return note;
-            } else {
-                int a = xAt(white++);
-                if (x >= a && x < xAt(white)) result = note;
-            }
-        }
-        return result;
-    }
-
-    @Override public void renderBackground(GuiGraphics g, int mx, int my, float partial) {
-        super.renderBackground(g, mx, my, partial);
-        g.fill(left - 1, top - 1, left + panel + 1, top + tall + 1, 0xFF425463);
-        g.fill(left, top, left + panel, top + tall, DARK);
-        g.fill(left, top, left + panel, top + 2, flag("Powered") ? ACCENT : 0xFF526473);
-        g.drawString(font, fit(title, panel / 2 + 24), left + 10, top + 10, INK, false);
+    @Override protected void draw(GuiGraphics g, double x, double y) {
         int energy = instrument.view.getInt("Energy");
         var power = flag("Powered") ? t("energy", Math.max(1, (int) (energy * 100L / 2880000)))
                 : t(flag("Switch") ? "needs_power" : "power_off");
-        g.drawString(font, power, left + panel - 10 - font.width(power), top + 10, flag("Powered") ? ACCENT : MUTED, false);
-        if (tab == Tab.PLAY) drawKeys(g, mx, my);
-        if (tab == Tab.TONES) drawTones(g, mx, my);
+        drawHeader(g, title.getString(), power.getString(), flag("Powered") ? LAMP : FAINT, "", FAINT);
+        // The last row, right of what the open tab has on it.
+        float last = stripY + (top(3) + ROW / 2) * keyWidth + textScale / 2;
+        if (tab == Tab.PLAY && (flag("Recording") || flag("Playing"))) {
+            write(g, t(flag("Recording") ? "recording" : "playing", instrument.view.getInt("Events")).getString(),
+                    keysX + 8 * keyWidth, last, textScale, flag("Recording") ? 0xFFFF8588 : LAMP, LEFT);
+        }
+        if (tab == Tab.TONES) drawTones(g, x, y);
         if (tab == Tab.SETTINGS) {
             var bank = bank();
             Component status = bank == null ? t("font_loading") : bank.name().equals(settings().font)
                     ? t("patch_count", bank.patches().size()) : t("font_fallback");
-            g.drawString(font, fit(status, panel - 20), left + 10, top + tall - 16, MUTED, false);
+            write(g, fit(status.getString(), Math.round(2 * COLUMN * keyWidth)), keysX + (8 + 3 * COLUMN) * keyWidth, last,
+                    textScale, FAINT, LEFT);
         }
+        write(g, fit(t("keys_help", base / 12 - 1).getString(), stripWidth), keysX + keyWidth / 3f, keysY - deck + lineHeight(),
+                textScale, FAINT, LEFT);
+        if (zoom > 1) {
+            // Which of the keys are in sight.
+            g.fill(keysX + firstWhite * keyWidth, keysY - felt - 4, keysX + (firstWhite + whites()) * keyWidth, keysY - felt - 2, LAMP);
+        }
+        drawKeys(g, note -> instrument.keys.pressed(note) || pcHolds(note));
     }
 
-    private void drawKeys(GuiGraphics g, int mx, int my) {
-        int hover = keyAt(mx, my);
-        g.enableScissor(keyLeft, keyTop, keyLeft + keyWidth, keyTop + keyHeight);
-        int white = 0;
-        for (int n = KeyboardLayout.FIRST; n <= KeyboardLayout.LAST; n++) {
-            if (black(n)) continue;
-            int a = xAt(white), b = xAt(++white) - 1;
-            boolean held = instrument.keys.pressed(n) || pcHolds(n);
-            int tone = held ? 0xFFE4B45D : hover == n ? 0xFFFFF5CE : 0xFFF3F0E5;
-            g.fillGradient(a, keyTop, Math.max(a + 1, b), keyTop + keyHeight, tone, 0xFFCAC2B1);
-            if (n % 12 == 0) {
-                var octave = "C" + (n / 12 - 1);
-                int labelWidth = font.width(octave);
-                float scale = Math.min(1f, (b - a) / (float) labelWidth);
-                if (scale >= .72f) {
-                    var pose = g.pose();
-                    pose.pushPose();
-                    pose.translate((a + b - labelWidth * scale) / 2, keyTop + keyHeight - 12, 0);
-                    pose.scale(scale, scale, 1);
-                    g.drawString(font, octave, 0, 0, 0xFF433925, true);
-                    pose.popPose();
-                }
-            }
-        }
-        white = 0;
-        for (int n = KeyboardLayout.FIRST; n <= KeyboardLayout.LAST; n++) {
-            if (!black(n)) {
-                white++;
-                continue;
-            }
-            int a = blackLeft(white);
-            boolean held = instrument.keys.pressed(n) || pcHolds(n);
-            int tone = held ? 0xFFC18A38 : hover == n ? 0xFF54545F : 0xFF26272E;
-            g.fillGradient(a, keyTop, a + blackWidth(), keyTop + blackHeight(), tone, 0xFF0A0A0D);
-        }
-        g.disableScissor();
-        int track = keyTop + keyHeight + 4;
-        g.fill(keyLeft, track, keyLeft + keyWidth, track + 2, 0xFF324555);
-        g.fill(keyLeft + firstWhite * keyWidth / TOTAL_WHITE, track,
-                keyLeft + (firstWhite + whites()) * keyWidth / TOTAL_WHITE, track + 2, ACCENT);
-        g.drawString(font, fit(t("keys_help", base / 12 - 1), panel - 20), keyLeft, track + 8, MUTED, false);
-        if (flag("Recording") || flag("Playing")) {
-            var status = t(flag("Recording") ? "recording" : "playing", instrument.view.getInt("Events"));
-            g.drawString(font, fit(status, panel - 20), keyLeft, track + 20, flag("Recording") ? 0xFFFF8588 : ACCENT, false);
-        }
-    }
-
-    private void drawTones(GuiGraphics g, int mx, int my) {
+    private void drawTones(GuiGraphics g, double x, double y) {
+        int[] box = searchBox(), list = list();
+        int corner = Math.max(2, keyWidth / 5), high = rowHeight(), inset = keyWidth / 3;
+        box(g, box[0], box[1], box[2], box[3], corner, true, UNLIT[0], UNLIT[1]);
         var matching = tones();
         scrollTones(0, matching.size());
         if (matching.isEmpty()) {
-            g.drawString(font, t(bank() == null ? "font_loading" : "no_tones"), left + 10, top + 108, MUTED, false);
+            write(g, t(bank() == null ? "font_loading" : "no_tones").getString(), list[0] + inset, list[1] + high / 2f, textScale, FAINT, LEFT);
             return;
         }
         var history = KeyboardToneHistory.get();
         for (int i = 0; i < rows() && toneScroll + i < matching.size(); i++) {
             var patch = matching.get(toneScroll + i);
-            int y = top + 100 + i * 15, a = left + 10, b = left + panel - 10;
+            int top = list[1] + i * high;
             boolean selected = patch.tone().equals(chosen());
-            boolean hover = mx >= a && mx < b && my >= y && my < y + 15;
-            g.fill(a, y, b, y + 14, selected ? 0xFF244C50 : hover ? 0xFF344958 : 0xFF1C2834);
+            int[] face = selected ? LIT : in(new int[]{list[0], top, list[2], top + high}, x, y) ? HELD : UNLIT;
+            box(g, list[0], top, list[2], top + high - 2, corner, true, face[0], face[1]);
             String number = "%03d / %03d".formatted(patch.tone().bank(), patch.tone().program());
-            int numberWidth = font.width(number);
             String name = (history.favorite(bankName(), patch.tone()) ? "★ " : "") + patch.name();
-            g.drawString(font, fit(Component.literal(name), b - a - numberWidth - 16), a + 5, y + 3, selected ? ACCENT : INK, false);
-            g.drawString(font, number, b - 5 - numberWidth, y + 3, MUTED, false);
+            float middle = top + (high - 2) / 2f + textScale / 2;
+            write(g, fit(name, list[2] - list[0] - 3 * inset - Math.round(font.width(number) * textScale)), list[0] + inset, middle,
+                    textScale, selected ? INK : TEXT, LEFT);
+            write(g, number, list[2] - inset, middle, textScale, selected ? INK : FAINT, RIGHT);
         }
     }
-
-    @Override public boolean isPauseScreen() { return false; }
 
     @Override public synchronized void removed() {
         closed = true;
@@ -598,48 +541,5 @@ final class KeyboardScreen extends Screen {
         midi.close();
         action(Action.CLOSE);
         super.removed();
-    }
-
-    private final class SettingSlider extends AbstractSliderButton {
-        private final String key;
-        private final int min, max;
-        private final IntSupplier current;
-        private final IntConsumer apply;
-        private int edited = -20;
-        private boolean dragging;
-
-        SettingSlider(int x, int y, int w, String key, int min, int max, IntSupplier current, IntConsumer apply) {
-            super(x, y, w, 18, Component.empty(), (current.getAsInt() - min) / (double) (max - min));
-            this.key = key;
-            this.min = min;
-            this.max = max;
-            this.current = current;
-            this.apply = apply;
-            updateMessage();
-        }
-
-        private int number() { return min + (int) Math.round(value * (max - min)); }
-
-        void sync() {
-            int actual = current.getAsInt();
-            if (!dragging && ticks - edited >= 3 && number() != actual) {
-                value = (actual - min) / (double) (max - min);
-                updateMessage();
-            }
-        }
-
-        @Override protected void updateMessage() { setMessage(fit(t(key, number()), getWidth() - 8)); }
-        @Override protected void applyValue() {
-            edited = ticks;
-            apply.accept(number());
-        }
-        @Override public void onClick(double x, double y) {
-            dragging = true;
-            super.onClick(x, y);
-        }
-        @Override public void onRelease(double x, double y) {
-            dragging = false;
-            super.onRelease(x, y);
-        }
     }
 }

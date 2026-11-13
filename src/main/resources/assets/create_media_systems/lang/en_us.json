@@ -571,6 +571,8 @@
   "megaphone.drive_1": "HORN / LOUD",
   "megaphone.drive_2": "HORN / OVERLOAD",
   "block.create_media_systems.midi_keyboard": "Koland A-88MKII MIDI Keyboard",
+  "create_media_systems.keys.hide": "Hide",
+  "create_media_systems.keys.show": "Show",
   "create_media_systems.keyboard.in_use": "%s is playing this keyboard.",
   "create_media_systems.keyboard.midi": "MIDI IN: %s",
   "create_media_systems.keyboard.midi.none": "No MIDI device (click to look again)",

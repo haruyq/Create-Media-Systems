@@ -10,16 +10,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
+import org.haruyq.createmediasystems.client.KeysScreen;
 import org.lwjgl.glfw.GLFW;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 
-final class PianoScreen extends Screen {
+/** Playing a grand piano, on a screen that looks as the Koland keyboard's does. */
+final class PianoScreen extends KeysScreen {
     private static final int[] PC_KEYS = {
         GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_E,
         GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_G,
@@ -38,13 +38,12 @@ final class PianoScreen extends Screen {
     private final Map<Integer, Integer> pcNotes = new HashMap<>();
     private final boolean[] midiHeld = new boolean[KEYS];
     private final int[] midiPedal = new int[3], pcPedal = new int[3];
-    private int left, top, panel, keyLeft, keyTop, keyWidth;
-    private static final int KEY_HEIGHT = 61, BLACK_HEIGHT = 37;
-    private int pcRoot = 60, mouse = -1, ticks;
-    private Button deviceButton;
+    /** The strip's one row of buttons, in white keys from its top. */
+    private static final float ROW = 1.75f, ROW_END = 4.05f;
+    private int pcRoot = 60, mouse = -1;
 
     PianoScreen(PianoClient client, PianoClient.Instrument instrument) {
-        super(Component.translatable("block.create_media_systems.grand_piano"));
+        super(Component.translatable("block.create_media_systems.grand_piano"), 4.6f);
         this.client = client;
         this.instrument = instrument;
         midi = new MidiKeyboard(preferred, this::queueMidi);
@@ -54,29 +53,34 @@ final class PianoScreen extends Screen {
     PianoClient.Instrument instrument() { return instrument; }
 
     @Override protected void init() {
-        panel = Math.min(750, width - 20);
-        left = (width - panel) / 2;
-        top = (height - 178) / 2;
-        keyLeft = left + 10;
-        keyTop = top + 75;
-        keyWidth = panel - 20;
-        int controls = panel - 20;
-        deviceButton = addRenderableWidget(Button.builder(Component.translatable("piano.midi_none"), b -> nextInput())
-                .bounds(left + 10, top + 26, controls - 63, 19).build());
-        addRenderableWidget(Button.builder(Component.translatable("piano.refresh"), b -> midi.scan())
-                .bounds(left + panel - 69, top + 26, 59, 19).build());
-        addRenderableWidget(Button.builder(channel(), b -> {
+        super.init();
+        midi.scan();
+        if (hidden) return;
+        button(0.6f, ROW, 13, ROW_END, this::device, this::nextInput);
+        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("piano.refresh"), midi::scan);
+        button(17.8f, ROW, 23, ROW_END, this::channel, () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
             midi.channel(preferredChannel);
-            b.setMessage(channel());
-        }).bounds(left + 10, top + 49, 61, 19).build());
-        addRenderableWidget(Button.builder(Component.translatable("piano.lid"), b -> client.command(instrument, Action.ROOF))
-                .bounds(left + 75, top + 49, 53, 19).build());
-        addRenderableWidget(Button.builder(Component.translatable("piano.keyboard_lid"), b -> client.command(instrument, Action.KEYBOARD_LID))
-                .bounds(left + 132, top + 49, 66, 19).build());
-        addRenderableWidget(Button.builder(Component.translatable("piano.panic"), b -> midi.panic())
-                .bounds(left + panel - 69, top + 49, 59, 19).build());
-        midi.scan();
+        });
+        button(23.4f, ROW, 27.4f, ROW_END, () -> Component.translatable("piano.lid"), () -> client.command(instrument, Action.ROOF));
+        button(27.8f, ROW, 32.8f, ROW_END, () -> Component.translatable("piano.keyboard_lid"),
+                () -> client.command(instrument, Action.KEYBOARD_LID));
+        button(33.2f, ROW, 37.2f, ROW_END, () -> Component.translatable("piano.panic"), midi::panic);
+        for (int i = 0; i < PEDALS.length; i++) {
+            int pedal = i;
+            float left = 37.8f + i * 4.6f;
+            slider(left, ROW, left + 4.2f, ROW_END, value -> Component.translatable(PEDAL_NAMES[pedal]), 0, 127,
+                    () -> instrument.keys.pedal(PEDALS[pedal]), null);
+        }
+    }
+
+    /** The MIDI input it listens to, or why it listens to none. */
+    private Component device() {
+        var status = midi.status();
+        String name = status.inputs().stream().filter(input -> input.id().equals(status.selected()))
+                .map(MidiKeyboard.Input::name).findFirst().orElse(null);
+        return name == null || !status.message().equals("piano.midi_connected") ? Component.translatable(status.message())
+                : Component.literal(name);
     }
 
     private Component channel() {
@@ -97,12 +101,8 @@ final class PianoScreen extends Screen {
     }
 
     @Override public void tick() {
-        if (++ticks % 40 == 0) midi.scan();
-        var status = midi.status();
-        String name = status.inputs().stream().filter(input -> input.id().equals(status.selected()))
-                .map(MidiKeyboard.Input::name).findFirst().orElse(null);
-        deviceButton.setMessage(name == null || !status.message().equals("piano.midi_connected") ? Component.translatable(status.message())
-                : Component.literal(font.plainSubstrByWidth(name, deviceButton.getWidth() - 12)));
+        super.tick();
+        if (ticks % 40 == 0) midi.scan();
         if (!Minecraft.getInstance().isWindowActive() && (!pcNotes.isEmpty() || mouse >= 0 || Arrays.stream(pcPedal).anyMatch(p -> p != 0))) {
             releaseComputer();
         }
@@ -240,18 +240,19 @@ final class PianoScreen extends Screen {
     }
 
     @Override public boolean mouseClicked(double x, double y, int button) {
-        int note = noteAt(x, y);
+        if (super.mouseClicked(x, y, button)) return true;
+        int note = keyAt(x * pixel, y * pixel);
         if (button == 0 && note >= 0) {
             mouse = note;
             play(press(note, 90));
             return true;
         }
-        return super.mouseClicked(x, y, button);
+        return false;
     }
 
     @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
         if (button == 0 && mouse >= 0) {
-            int note = noteAt(x, y);
+            int note = keyAt(x * pixel, y * pixel);
             if (note >= 0 && note != mouse) {
                 int previous = mouse;
                 mouse = note;
@@ -273,71 +274,12 @@ final class PianoScreen extends Screen {
         return super.mouseReleased(x, y, button);
     }
 
-    private int xAt(int white) { return keyLeft + white * keyWidth / 52; }
-    private int blackWidth() { return Math.max(2, keyWidth * 62 / 5200); }
-
-    private int noteAt(double x, double y) {
-        if (x < keyLeft || x >= keyLeft + keyWidth || y < keyTop || y >= keyTop + KEY_HEIGHT) return -1;
-        int white = 0, found = -1;
-        for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
-            if (black(note)) {
-                int center = xAt(white);
-                if (y < keyTop + BLACK_HEIGHT && Math.abs(x - center) <= blackWidth() / 2d) return note;
-            } else {
-                if (x >= xAt(white) && x < xAt(white + 1)) found = note;
-                white++;
-            }
-        }
-        return found;
+    @Override protected void draw(GuiGraphics g, double x, double y) {
+        drawHeader(g, title.getString(), Component.translatable(PianoAudio.INSTANCE.status()).getString(), LAMP, "", FAINT);
+        write(g, fit(Component.translatable("piano.pc_controls", pcRoot / 12 - 1).getString(), stripWidth), keysX + keyWidth / 3f,
+                keysY - deck + lineHeight(), textScale, FAINT, LEFT);
+        drawKeys(g, instrument.keys::pressed);
     }
-
-    @Override public void renderBackground(GuiGraphics g, int mx, int my, float partial) {
-        super.renderBackground(g, mx, my, partial);
-        g.fill(left - 1, top - 1, left + panel + 1, top + 179, 0xFF4D3D2D);
-        g.fill(left, top, left + panel, top + 178, 0xF2181A21);
-        g.fill(left, top, left + panel, top + 2, 0xFFCFA765);
-        g.drawString(font, title, left + 10, top + 10, 0xFFF4E7CA, false);
-        String status = PianoAudio.INSTANCE.status();
-        Component detail = Component.translatable(status);
-        int statusWidth = font.width(detail);
-        if (statusWidth + font.width(title) + 30 < panel) {
-            g.drawString(font, detail, left + panel - statusWidth - 10, top + 10, 0xFFC3AD8F, false);
-        }
-
-        int white = 0, hover = noteAt(mx, my);
-        for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
-            if (black(note)) continue;
-            int a = xAt(white), b = xAt(++white) - 1;
-            int fill = instrument.keys.pressed(note) ? 0xFFE4B45D : note == hover ? 0xFFFFF5CE : 0xFFF3F0E5;
-            g.fillGradient(a, keyTop, Math.max(a + 1, b), keyTop + KEY_HEIGHT, fill, 0xFFCAC2B1);
-            if (note % 12 == 0 && keyWidth >= 330) {
-                String octave = "C" + (note / 12 - 1);
-                g.drawCenteredString(font, octave, (a + b) / 2, keyTop + KEY_HEIGHT - 12, 0xFF433925);
-            }
-        }
-        white = 0;
-        for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
-            if (!black(note)) {
-                white++;
-                continue;
-            }
-            int a = xAt(white) - blackWidth() / 2;
-            int fill = instrument.keys.pressed(note) ? 0xFFC18A38 : note == hover ? 0xFF54545F : 0xFF26272E;
-            g.fillGradient(a, keyTop, a + blackWidth(), keyTop + BLACK_HEIGHT, fill, 0xFF0A0A0D);
-        }
-        int bar = (panel - 24) / 3;
-        for (int i = 0; i < PEDALS.length; i++) {
-            int a = keyLeft + i * bar;
-            int position = instrument.keys.pedal(PEDALS[i]);
-            g.fill(a, top + 144, a + bar - 4, top + 146, 0xFF43434D);
-            g.fill(a, top + 144, a + (bar - 4) * position / 127, top + 146, 0xFFD5A956);
-            g.drawString(font, Component.translatable(PEDAL_NAMES[i]), a, top + 150, 0xFFC3AD8F, false);
-        }
-        String controls = Component.translatable("piano.pc_controls", pcRoot / 12 - 1).getString();
-        g.drawString(font, font.plainSubstrByWidth(controls, panel - 20), keyLeft, top + 165, 0xFFADADB8, false);
-    }
-
-    @Override public boolean isPauseScreen() { return false; }
 
     @Override public void removed() {
         preferred = midi.preference();

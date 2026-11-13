@@ -571,6 +571,8 @@
   "megaphone.drive_1": "ホーン / 大音量",
   "megaphone.drive_2": "ホーン / オーバーロード",
   "block.create_media_systems.midi_keyboard": "Koland A-88MKII MIDIキーボード",
+  "create_media_systems.keys.hide": "非表示",
+  "create_media_systems.keys.show": "表示",
   "create_media_systems.keyboard.in_use": "%s が演奏中です。",
   "create_media_systems.keyboard.midi": "MIDI入力: %s",
   "create_media_systems.keyboard.midi.none": "MIDI機器なし(クリックで再検索)",
