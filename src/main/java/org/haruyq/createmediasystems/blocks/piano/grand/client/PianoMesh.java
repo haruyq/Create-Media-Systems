@@ -39,7 +39,7 @@ final class PianoMesh {
     private static final RenderType FALLBOARD_SURFACE = RenderType.entityCutoutNoCull(
             CreateMediaSystems.id("textures/block/piano/grand/grand_piano_fallboard.png"));
     private static final int SECTIONS = 56;
-    // Keyboard at z=0, straight bass rim on the left, bentside and rounded tail on the right.
+    // Keyboard at z=0, with the tail tapering towards the low-X rim.
     private static final float[][] PROFILE = {
         {FRONT, .10f, 1.72f}, {.80f, .10f, 1.72f}, {1.01f, .10f, 1.707f},
         {1.20f, .10f, 1.648f}, {1.40f, .10f, 1.512f}, {1.61f, .103f, 1.323f},
@@ -59,9 +59,13 @@ final class PianoMesh {
     private static final float FLANGE_Y = .823f, FLANGE_Z = .770f, STRIKE = .888f, SHANK = STRIKE - FLANGE_Z;
     private static final float BLOW = .046f, HAMMER_REST = (float) Math.toDegrees(Math.asin(BLOW / SHANK));
     private static final float DAMPER_Z = .968f, DAMPER_LIFT = .0062f;
-    /** The una corda pedal slides keyboard and hammers towards the treble. */
-    private static final float SHIFT = .0026f;
+    /** The una corda pedal slides the keyboard and hammers towards the treble, on the player's right (-X). */
+    private static final float SOFT_SHIFT = -.0026f;
     private static final int PLATE = 0xA88442, FELT_WHITE = 0xECE6D7, FELT_SHADE = 0xD8D1BF;
+    private static final float PLAIN_BRIDGE_FIRST_X = .760f, PLAIN_BRIDGE_LAST_X = .250f;
+    private static final float PLAIN_BRIDGE_FIRST_Z = 2.514f, PLAIN_BRIDGE_LAST_Z = 1.090f;
+    private static final float BASS_BRIDGE_FIRST_X = .664f, BASS_BRIDGE_LAST_X = .954f;
+    private static final float BASS_BRIDGE_FIRST_Z = 2.619f, BASS_BRIDGE_LAST_Z = 1.815f;
     /** Per note: x and z at the tuning pin, x and z at the bridge, and the height of the string. */
     private static final float[][] STRINGS = new float[KEYS][];
 
@@ -69,12 +73,14 @@ final class PianoMesh {
         for (int i = 0; i < KEYS; i++) {
             if (i < BASS_NOTES) {
                 float t = i / (BASS_NOTES - 1f);
-                STRINGS[i] = new float[] {Mth.lerp(t, .180f, .392f), .764f, Mth.lerp(t, .664f, .954f),
-                    Mth.lerp(t, 2.619f, 1.815f), BASS_Y};
+                STRINGS[i] = new float[] {Mth.lerp(t, 1.640f, 1.428f), .764f,
+                    Mth.lerp(t, BASS_BRIDGE_FIRST_X, BASS_BRIDGE_LAST_X),
+                    Mth.lerp(t, BASS_BRIDGE_FIRST_Z, BASS_BRIDGE_LAST_Z), BASS_Y};
             } else {
                 float t = (i - BASS_NOTES) / (KEYS - BASS_NOTES - 1f);
-                STRINGS[i] = new float[] {Mth.lerp(t, .480f, 1.589f), .778f, Mth.lerp(t, .486f, 1.496f),
-                    Mth.lerp(t, 2.514f, 1.090f), TREBLE_Y};
+                STRINGS[i] = new float[] {Mth.lerp(t, 1.340f, .231f), .778f,
+                    Mth.lerp(t, PLAIN_BRIDGE_FIRST_X, PLAIN_BRIDGE_LAST_X),
+                    Mth.lerp(t, PLAIN_BRIDGE_FIRST_Z, PLAIN_BRIDGE_LAST_Z), TREBLE_Y};
             }
         }
     }
@@ -187,8 +193,9 @@ final class PianoMesh {
         int white = 0;
         boolean previousWhitePressed = false;
         pose.pushPose();
-        pose.translate(action.pedal(SOFT) * SHIFT, 0, 0);
-        for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
+        pose.translate(action.pedal(SOFT) * SOFT_SHIFT, 0, 0);
+        // The player faces +Z, so low model X is the treble end.
+        for (int note = LAST_NOTE; note >= FIRST_NOTE; note--) {
             float seam = KEY_LEFT + KEY_PITCH * white;
             boolean accidental = black(note);
             float dip = action.key(note);
@@ -203,11 +210,11 @@ final class PianoMesh {
                 blackKey(blackCenter(seam, note));
             } else {
                 float left = seam + KEY_GAP, right = seam + KEY_PITCH - KEY_GAP;
-                boolean leftHasBlack = note > FIRST_NOTE && black(note - 1);
+                boolean leftHasBlack = note < LAST_NOTE && black(note + 1);
                 float stemLeft = leftHasBlack
-                        ? blackCenter(seam, note - 1) + BLACK_HALF_WIDTH + KEY_GAP : left;
-                float stemRight = note < LAST_NOTE && black(note + 1)
-                        ? blackCenter(seam + KEY_PITCH, note + 1) - BLACK_HALF_WIDTH - KEY_GAP : right;
+                        ? blackCenter(seam, note + 1) + BLACK_HALF_WIDTH + KEY_GAP : left;
+                float stemRight = note > FIRST_NOTE && black(note - 1)
+                        ? blackCenter(seam + KEY_PITCH, note - 1) - BLACK_HALF_WIDTH - KEY_GAP : right;
                 whiteKey(left, right, stemLeft, stemRight);
                 if (white > 0 && !pressed && !previousWhitePressed) {
                     restingSeam(seam, leftHasBlack ? KEY_SHOULDER : KEY_BACK);
@@ -236,7 +243,7 @@ final class PianoMesh {
             case 10 -> .14f;
             default -> 0;
         };
-        return seam + offset * KEY_PITCH;
+        return seam - offset * KEY_PITCH;
     }
 
     private void whiteKey(float left, float right, float stemLeft, float stemRight) {
@@ -298,9 +305,9 @@ final class PianoMesh {
         }
         box(.738f, .093f, .600f, 1.087f, .163f, .777f, EBONY);
         box(.741f, .158f, .603f, 1.084f, .174f, .773f, EDGE);
-        pedal(.816f, action.pedal(SOFT));
+        pedal(.816f, action.pedal(DAMPER));
         pedal(.912f, action.pedal(SOSTENUTO));
-        pedal(1.008f, action.pedal(DAMPER));
+        pedal(1.008f, action.pedal(SOFT));
     }
 
     private void pedal(float x, float travel) {
@@ -323,15 +330,17 @@ final class PianoMesh {
         band(.078f, .858f, .137f, .858f, 0xCBA45E);
         band(.137f, .858f, .145f, .840f, 0x83612F);
         box(.168f, .831f, .704f, 1.602f, .866f, .833f, 0xAD843F);
-        box(.168f, .866f, .742f, .412f, BASS_Y - .010f, .792f, PLATE);
-        box(.430f, .869f, .774f, 1.585f, .879f, .833f, 0x671E2C);
+        box(1.408f, .866f, .742f, 1.652f, BASS_Y - .010f, .792f, PLATE);
+        box(.212f, .869f, .774f, 1.390f, .879f, .833f, 0x671E2C);
         // The capo bar holds the plain strings down just ahead of the strike line.
-        rod(.452f, .884f, .838f, 1.606f, .884f, .838f, .0075f, .0075f, 0xB68D46, 6);
+        rod(.210f, .884f, .838f, 1.370f, .884f, .838f, .0075f, .0075f, 0xB68D46, 6);
         rod(.350f, .857f, 1.233f, .556f, .857f, 2.643f, .021f, .027f, 0xC2A065, 4);
-        rod(.422f, .866f, 2.310f, 1.574f, .866f, 1.119f, .012f, .015f, 0x775032, 6);
-        rod(.645f, .884f, 2.519f, .974f, .884f, 1.720f, .012f, .015f, 0x78472A, 6);
+        rod(PLAIN_BRIDGE_FIRST_X, .866f, PLAIN_BRIDGE_FIRST_Z, PLAIN_BRIDGE_LAST_X, .866f, PLAIN_BRIDGE_LAST_Z,
+                .012f, .015f, 0x775032, 6);
+        rod(BASS_BRIDGE_FIRST_X, .884f, BASS_BRIDGE_FIRST_Z, BASS_BRIDGE_LAST_X, .884f, BASS_BRIDGE_LAST_Z,
+                .012f, .015f, 0x78472A, 6);
         // One string, hammer and damper to a note. A two-plane cross-strung scale: the bass passes over the tenor.
-        float shift = action.pedal(SOFT) * SHIFT;
+        float shift = action.pedal(SOFT) * SOFT_SHIFT;
         for (int i = 0; i < KEYS; i++) {
             int note = FIRST_NOTE + i;
             float[] line = STRINGS[i];
