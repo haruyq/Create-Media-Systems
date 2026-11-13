@@ -616,6 +616,17 @@ public class HifiStackBlock extends HorizontalDirectionalBlock implements Entity
             return discPlayer.transport.state();
         }
 
+        /** Its disc player's: the one part of it a remote moves. */
+        @Override
+        public boolean playing() {
+            return live(Unit.DISC_PLAYER) && discPlayer.transport.playing();
+        }
+
+        @Override
+        public boolean paused() {
+            return live(Unit.DISC_PLAYER) && discPlayer.transport.paused();
+        }
+
         /** {@code ticks} into a track, as its counter shows it (see PlaybackClock#format). */
         public static String clock(long ticks) {
             return PlaybackClock.format(ticks / (double) PlaybackClock.TICKS_PER_SECOND);
