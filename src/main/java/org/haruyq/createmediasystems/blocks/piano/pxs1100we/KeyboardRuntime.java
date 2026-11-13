@@ -164,7 +164,11 @@ final class KeyboardRuntime {
             closeOwner();
             return;
         }
-        if (playingAt < 0) accept(events.stream().filter(event -> !event.metronome()).toList(), true);
+        if (playingAt < 0) {
+            accept(events.stream().filter(event -> !event.metronome()).toList(), true, player);
+        } else {
+            send(player, true, keys.snapshot(), routing(SableCompat.eye(player, 1)));
+        }
     }
 
     void command(ServerPlayer player, int receivedToken, Action action, int first, int second, String text) {
@@ -311,6 +315,10 @@ final class KeyboardRuntime {
     }
 
     private void accept(List<KeyboardMidi> events, boolean record) {
+        accept(events, record, null);
+    }
+
+    private void accept(List<KeyboardMidi> events, boolean record, @Nullable ServerPlayer performer) {
         if (events.isEmpty()) return;
         refresh();
         for (var event : events) {
@@ -328,7 +336,7 @@ final class KeyboardRuntime {
         if (record && powered()) record(events);
         if (events.stream().anyMatch(event -> event.command() == PROGRAM
                 || event.command() == CONTROL && event.key() == 7)) host.changed(false);
-        broadcast(events);
+        broadcast(events, performer);
     }
 
     void tick() {
@@ -407,7 +415,7 @@ final class KeyboardRuntime {
         for (ServerPlayer player : level.players()) {
             var ear = SableCompat.eye(player, 1);
             var routing = routing(ear);
-            if (ear.distanceToSqr(position) <= RANGE * RANGE || !routing.outputs().isEmpty()) {
+            if (ear.distanceToSqr(position) <= RANGE * RANGE || !routing.outputs().isEmpty() || player.getUUID().equals(owner)) {
                 if (listeners.put(player, routing) == null) send(player, true, keys.snapshot(), routing);
             } else if (listeners.remove(player) != null) {
                 end(player, 0);
@@ -420,12 +428,16 @@ final class KeyboardRuntime {
     }
 
     private void broadcast(List<KeyboardMidi> events) {
+        broadcast(events, null);
+    }
+
+    private void broadcast(List<KeyboardMidi> events, @Nullable ServerPlayer performer) {
         if (listeners.isEmpty()) return;
         var target = host.target();
         var frame = host.frame();
         var view = view();
-        listeners.forEach((player, routing) ->
-                PacketDistributor.sendToPlayer(player, new KeyboardPackets.Update(target, frame, view, false, events, routing)));
+        listeners.forEach((player, routing) -> PacketDistributor.sendToPlayer(player,
+                new KeyboardPackets.Update(target, frame, view, false, player == performer ? List.of() : events, routing)));
     }
 
     private void changed() {

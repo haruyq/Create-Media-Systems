@@ -21,6 +21,7 @@
     "create_media_systems:hifi_stack",
     "create_media_systems:hifi_speaker",
     "create_media_systems:midi_keyboard",
-    "create_media_systems:px_s1100"
+    "create_media_systems:px_s1100",
+    "create_media_systems:px_s1100_power_adapter"
   ]
 }

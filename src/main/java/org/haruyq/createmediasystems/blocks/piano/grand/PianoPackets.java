@@ -31,6 +31,10 @@ public final class PianoPackets {
     public static void client(Client handler) { client = handler; }
 
     public record Target(int carrier, BlockPos pos) {
+        public Target {
+            pos = pos.immutable();
+        }
+
         public static final StreamCodec<ByteBuf, Target> CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Target::carrier, BlockPos.STREAM_CODEC, Target::pos, Target::new);
 

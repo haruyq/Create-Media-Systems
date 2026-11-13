@@ -19,16 +19,16 @@ public final class KeyboardKeys {
         Arrays.fill(programs, -1);
     }
 
-    public boolean pressed(int note) {
+    public synchronized boolean pressed(int note) {
         for (int[] keys : down) if (keys[note] != 0) return true;
         return false;
     }
 
-    public boolean pedal() {
+    public synchronized boolean pedal() {
         return pedalAmount(SUSTAIN) > 0 || pedalAmount(SOSTENUTO) > 0 || pedalAmount(SOFT) > 0;
     }
 
-    public int pedalAmount(int control) {
+    public synchronized int pedalAmount(int control) {
         int amount = 0;
         for (int[] channel : controllers) amount = Math.max(amount, channel[control]);
         return amount;
@@ -40,7 +40,7 @@ public final class KeyboardKeys {
         return false;
     }
 
-    public void apply(KeyboardMidi event) {
+    public synchronized void apply(KeyboardMidi event) {
         int channel = event.channel(), note = event.key(), value = event.value();
         if (event.command() == ON && value != 0) {
             down[channel][note] = value << 7 | velocityPrefixes[channel];
@@ -90,7 +90,7 @@ public final class KeyboardKeys {
         velocityPrefixes[channel] = 0;
     }
 
-    public List<KeyboardMidi> snapshot() {
+    public synchronized List<KeyboardMidi> snapshot() {
         var events = new ArrayList<KeyboardMidi>();
         for (int channel = 0; channel < 16; channel++) {
             if (channel != 0 && programs[channel] >= 0) {

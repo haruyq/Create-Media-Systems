@@ -42,6 +42,10 @@ public final class KeyboardPackets {
     public static void client(Client receiver) { client = receiver; }
 
     public record Target(int carrier, BlockPos pos) {
+        public Target {
+            pos = pos.immutable();
+        }
+
         static final StreamCodec<ByteBuf, Target> CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Target::carrier, BlockPos.STREAM_CODEC, Target::pos, Target::new);
 

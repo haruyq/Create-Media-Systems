@@ -3,7 +3,6 @@ package org.haruyq.createmediasystems.blocks.piano.pxs1100we.client;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -27,10 +26,11 @@ import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.
 /** One stereo SoundFont synth for one instrument, advanced by its two OpenAL sources. */
 final class KeyboardSynth implements AutoCloseable {
     static final int RATE = 48_000;
-    static final int FRAMES_PER_BUFFER = RATE / 50;
+    static final int FRAMES_PER_BUFFER = RATE / 200;
     private static final int VOICES_PER_INPUT = 3, CHANNELS = 16 * VOICES_PER_INPUT + 1;
     private static final int MAIN = 0, LAYER = 1, LOWER = 2, CLICK_CHANNEL = 9;
     private static final int PERCUSSION_BANK = 120 << 7;
+    private static final int MIN_ATTACK_FRAMES = RATE * 15 / 1000;
     private static final Tone KIT = new Tone(KeyboardSettings.DRUM_BANK, 0);
 
     private record Batch(KeyboardSettings settings, boolean snapshot, List<KeyboardMidi> events) {}
@@ -42,13 +42,16 @@ final class KeyboardSynth implements AutoCloseable {
     private final Instrument[] patches = new Instrument[CHANNELS];
     private final Tone[] midiTones = new Tone[16];
     private final Map<Instrument, Boolean> loaded = new LinkedHashMap<>(32, .75f, true);
+    private final Tone[] selected = new Tone[CHANNELS];
     private final int[] banks = new int[16], soft = new int[16], velocityPrefixes = new int[16];
     private final int[][] notes = new int[16][128], counts = new int[CHANNELS][128];
     private final ArrayDeque<Batch> batches = new ArrayDeque<>();
-    private final BitSet attacks = new BitSet(16 * 128);
+    private final long[] releaseAfter = new long[16 * 128];
     private Iterator<KeyboardMidi> events = Collections.emptyIterator();
     private KeyboardMidi nextAfterAttack;
     private boolean restoring;
+    private int attackFrames;
+    private long renderedFrames;
     private KeyboardSettings settings = new KeyboardSettings();
     private int framesToReleaseClick, clickNote;
 
@@ -73,7 +76,8 @@ final class KeyboardSynth implements AutoCloseable {
             batches.clear();
             this.events = Collections.emptyIterator();
             nextAfterAttack = null;
-            attacks.clear();
+            Arrays.fill(releaseAfter, 0);
+            attackFrames = 0;
         }
         batches.addLast(new Batch(next, snapshot, events));
     }
@@ -116,10 +120,11 @@ final class KeyboardSynth implements AutoCloseable {
                 events = batch.events().iterator();
             }
             var next = events.next();
-            if (!restoring && (next.command() == ON || next.command() == OFF)
-                    && attacks.get(next.channel() * 128 + next.key())) {
+            long until = releaseAfter[next.channel() * 128 + next.key()];
+            if (!restoring && (next.command() == ON || next.command() == OFF) && until > renderedFrames) {
                 // A release or repeated strike must wait for Gervill to render the current attack.
                 nextAfterAttack = next;
+                attackFrames = (int) (until - renderedFrames);
                 return;
             }
             event(next);
@@ -135,7 +140,7 @@ final class KeyboardSynth implements AutoCloseable {
                 if (value == 0) noteOff(input, key, 0);
                 else {
                     noteOn(input, key, Math.min(127, value + fineVelocity / 128.0));
-                    attacks.set(input * 128 + key);
+                    releaseAfter[input * 128 + key] = renderedFrames + MIN_ATTACK_FRAMES;
                 }
             }
             case OFF -> noteOff(input, key, value);
@@ -199,6 +204,10 @@ final class KeyboardSynth implements AutoCloseable {
     }
 
     private void select(int index, Tone tone) {
+        if (tone.equals(selected[index])) {
+            loaded.get(patches[index]);
+            return;
+        }
         var instrument = bank.instruments().get(tone);
         if (instrument == null) {
             boolean drums = tone.bank() == KeyboardSettings.DRUM_BANK;
@@ -217,8 +226,15 @@ final class KeyboardSynth implements AutoCloseable {
             }
             if (loaded.size() > 32) {
                 var iterator = loaded.keySet().iterator();
-                synth.unloadInstrument(iterator.next());
+                var evicted = iterator.next();
+                synth.unloadInstrument(evicted);
                 iterator.remove();
+                for (int channel = 0; channel < CHANNELS; channel++) {
+                    if (patches[channel] == evicted) {
+                        selected[channel] = null;
+                        patches[channel] = null;
+                    }
+                }
             }
         }
         if (patches[index] != instrument) {
@@ -228,6 +244,7 @@ final class KeyboardSynth implements AutoCloseable {
             outputs[index].programChange(selectedBank, patch.getProgram());
             patches[index] = instrument;
         }
+        selected[index] = tone;
     }
 
     private void noteOff(int input, int key, int velocity) {
@@ -245,7 +262,7 @@ final class KeyboardSynth implements AutoCloseable {
         if (cc == RESET) velocityPrefixes[input] = 0;
         if (stopsNotes) {
             Arrays.fill(notes[input], 0);
-            attacks.clear(input * 128, (input + 1) * 128);
+            Arrays.fill(releaseAfter, input * 128, (input + 1) * 128, 0);
         }
         if (cc == SOFT) soft[input] = value;
         else if (cc == RESET) soft[input] = 0;
@@ -269,11 +286,17 @@ final class KeyboardSynth implements AutoCloseable {
     }
 
     void read(byte[] stereo) throws IOException {
-        processEvents();
-        int size = pcm.readNBytes(stereo, 0, stereo.length);
-        if (size < stereo.length) Arrays.fill(stereo, size, stereo.length, (byte) 0);
-        attacks.clear();
-        if (framesToReleaseClick > 0 && (framesToReleaseClick -= stereo.length / 4) <= 0) {
+        read(stereo, stereo.length / 4);
+    }
+
+    void read(byte[] stereo, int frames) throws IOException {
+        if (attackFrames == 0) processEvents();
+        int bytes = frames * 4;
+        int size = pcm.readNBytes(stereo, 0, bytes);
+        if (size < bytes) Arrays.fill(stereo, size, bytes, (byte) 0);
+        renderedFrames += frames;
+        if (attackFrames > 0) attackFrames = Math.max(0, attackFrames - frames);
+        if (framesToReleaseClick > 0 && (framesToReleaseClick -= frames) <= 0) {
             outputs[CLICK_CHANNEL].noteOff(clickNote);
         }
     }

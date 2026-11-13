@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": ["ICI", "RBR", " S "],
+  "key": {
+    "I": { "item": "create:iron_sheet" },
+    "C": { "item": "create:copper_sheet" },
+    "R": { "item": "minecraft:redstone" },
+    "B": { "item": "create:andesite_casing" },
+    "S": { "item": "create:shaft" }
+  },
+  "result": { "id": "create_media_systems:px_s1100_power_adapter", "count": 1 }
+}

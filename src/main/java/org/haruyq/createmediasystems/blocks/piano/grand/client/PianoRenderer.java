@@ -78,7 +78,7 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
             float scale = GrandPianoBlock.FULL_SCALE;
             pose.scale(scale, scale, scale);
         }
-        new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.target()), lid);
+        new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.target()), lid, PianoClient.motion(piano.target()));
         pose.popPose();
     }
 

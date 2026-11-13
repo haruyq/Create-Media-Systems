@@ -68,7 +68,7 @@ public final class CreateMediaSystemsMod {
                 AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL));
         audio.addAll(HifiFeature.hifiUnits());
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
-                KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PianoFeature.PIANO_ITEM));
+                KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM));
         List<Supplier<? extends Item>> portable = new ArrayList<>(List.of(
                 PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY, MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
                 LauncherFeature.DISC_LAUNCHER, LauncherFeature.LAUNCHER_AIM_MODULE_ITEM, LauncherFeature.DISC_CELL_CHARGER_ITEM));

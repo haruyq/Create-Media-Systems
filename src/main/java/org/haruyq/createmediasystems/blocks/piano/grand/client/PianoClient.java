@@ -26,6 +26,7 @@ import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
+import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.jetbrains.annotations.Nullable;
 
 public final class PianoClient implements PianoPackets.Client {
@@ -38,6 +39,7 @@ public final class PianoClient implements PianoPackets.Client {
         final PianoPackets.Target target;
         final int session;
         final PianoState keys = new PianoState();
+        final KeyMotion motion = new KeyMotion(PianoEvent.FIRST_NOTE, PianoEvent.KEYS);
         final PianoAudio.Source sound = new PianoAudio.Source();
         PianoPackets.Frame frame;
         long received;
@@ -50,7 +52,18 @@ public final class PianoClient implements PianoPackets.Client {
         }
 
         void play(List<PianoEvent> events) {
-            events.forEach(keys::apply);
+            if (events.isEmpty()) return;
+            long now = System.nanoTime();
+            for (var event : events) {
+                keys.apply(event);
+                if (event.kind() != PianoEvent.Kind.CONTROL) {
+                    if (keys.pressed(event.number())) motion.press(event.number(), now);
+                    else motion.release(event.number(), now);
+                }
+                else if (event.number() == PianoEvent.ALL_NOTES_OFF || event.number() == PianoEvent.ALL_SOUND_OFF) {
+                    for (int n = PianoEvent.FIRST_NOTE; n <= PianoEvent.LAST_NOTE; n++) motion.release(n, now);
+                }
+            }
             sound.play(events);
         }
     }
@@ -82,6 +95,11 @@ public final class PianoClient implements PianoPackets.Client {
     static PianoState keys(PianoPackets.Target target) {
         var instrument = INSTANCE.instruments.get(target);
         return instrument == null ? IDLE : instrument.keys;
+    }
+
+    @Nullable static KeyMotion motion(PianoPackets.Target target) {
+        var instrument = INSTANCE.instruments.get(target);
+        return instrument == null ? null : instrument.motion;
     }
 
     @Nullable

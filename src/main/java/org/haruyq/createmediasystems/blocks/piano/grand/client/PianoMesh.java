@@ -9,7 +9,9 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
+import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
+import org.jetbrains.annotations.Nullable;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 import static org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock.KEY_LEFT;
@@ -67,8 +69,12 @@ final class PianoMesh {
     }
 
     void draw(PianoState state, float lidAngle) {
+        draw(state, lidAngle, null);
+    }
+
+    void draw(PianoState state, float lidAngle, @Nullable KeyMotion motion) {
         casework();
-        keyboard(state);
+        keyboard(state, motion);
         leg(.265f, .430f, .082f);
         leg(1.555f, .430f, .082f);
         leg(.495f, 2.525f, .070f);
@@ -131,17 +137,19 @@ final class PianoMesh {
         }
     }
 
-    private void keyboard(PianoState state) {
+    private void keyboard(PianoState state, @Nullable KeyMotion motion) {
         int white = 0;
         boolean previousWhitePressed = false;
+        long now = System.nanoTime();
         for (int note = FIRST_NOTE; note <= LAST_NOTE; note++) {
             float seam = KEY_LEFT + KEY_PITCH * white;
             boolean accidental = black(note);
-            boolean pressed = state.pressed(note);
+            float travel = motion == null ? (state.pressed(note) ? 1 : 0) : motion.travel(note, now);
+            boolean pressed = travel > 0;
             if (pressed) {
                 pose.pushPose();
                 pose.translate(0, KEY_BOTTOM, .425f);
-                pose.mulPose(Axis.XN.rotationDegrees(accidental ? 2.25f : 1.75f));
+                pose.mulPose(Axis.XN.rotationDegrees((accidental ? 2.25f : 1.75f) * travel));
                 pose.translate(0, -KEY_BOTTOM, -.425f);
             }
             if (accidental) {

@@ -13,15 +13,18 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardKeys;
+import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardLayout;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Action;
@@ -30,14 +33,17 @@ import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Rout
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Target;
 
+import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.*;
+
 public final class PxS1100Client implements ClientFeature, KeyboardPackets.Client {
     public static final PxS1100Client INSTANCE = new PxS1100Client();
     private final Map<Target, Instrument> instruments = new HashMap<>();
-    private Instrument local;
+    private volatile Instrument local;
 
     static final class Instrument {
         final Target target;
-        KeyboardKeys keys = new KeyboardKeys();
+        volatile KeyboardKeys keys = new KeyboardKeys();
+        final KeyMotion motion = new KeyMotion(KeyboardLayout.FIRST, KeyboardLayout.LAST - KeyboardLayout.FIRST + 1);
         CompoundTag view = new CompoundTag();
         KeyboardSettings settings = new KeyboardSettings();
         Frame frame;
@@ -48,9 +54,39 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
 
         Instrument(Target target) { this.target = target; }
 
-        void stopAudio() {
+        synchronized void stopAudio() {
             if (audio != null) audio.close();
             audio = null;
+        }
+
+        void apply(List<KeyboardMidi> events, boolean snapshot) {
+            if (!snapshot && events.isEmpty()) return;
+            long now = System.nanoTime();
+            if (snapshot) keys = new KeyboardKeys();
+            for (var event : events) {
+                if (event.metronome()) continue;
+                keys.apply(event);
+                if (snapshot) continue;
+                int note = event.key();
+                switch (event.command()) {
+                    case ON, OFF -> updateMotion(note, now);
+                    case CONTROL -> {
+                        if (note == SILENCE || note == NOTES_OFF) updateMotion(now);
+                    }
+                }
+            }
+            if (snapshot) updateMotion(now);
+        }
+
+        private void updateMotion(long now) {
+            for (int note = KeyboardLayout.FIRST; note <= KeyboardLayout.LAST; note++) {
+                updateMotion(note, now);
+            }
+        }
+
+        private void updateMotion(int note, long now) {
+            if (keys.pressed(note)) motion.press(note, now);
+            else motion.release(note, now);
         }
     }
 
@@ -60,6 +96,8 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
     public void register(IEventBus bus) {
         KeyboardPackets.client(this);
         KeyboardRenderer.register(bus);
+        bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
+                event.registerBlockEntityRenderer(PxS1100Feature.ADAPTER_ENTITY.get(), context -> new KeyboardAdapterRenderer()));
         WorldEvents.onLevelChanged(this::clear);
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::scrollKnob);
@@ -76,8 +114,10 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;
         var instrument = instruments.computeIfAbsent(packet.target(), Instrument::new);
-        instrument.token = packet.token();
-        instrument.received = mc.level.getGameTime();
+        synchronized (instrument) {
+            instrument.token = packet.token();
+            instrument.received = mc.level.getGameTime();
+        }
         if (local == instrument && mc.screen instanceof KeyboardScreen screen && screen.instrument() == instrument) {
             if (packet.browser()) screen.openTones();
             return;
@@ -91,29 +131,28 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;
         var instrument = instruments.computeIfAbsent(packet.target(), Instrument::new);
-        instrument.frame = packet.frame();
-        instrument.routing = packet.routing();
-        instrument.received = mc.level.getGameTime();
-        instrument.view = packet.view();
-        instrument.settings = KeyboardSettings.load(packet.view().getCompound("Settings"));
-        if (packet.snapshot()) instrument.keys = new KeyboardKeys();
-        boolean reopen = instrument.audio == null || !instrument.audio.matches(instrument.settings);
-        var initial = packet.snapshot() ? packet.events() : reopen ? instrument.keys.snapshot() : null;
-        for (var event : packet.events()) {
-            if (!event.metronome()) instrument.keys.apply(event);
+        synchronized (instrument) {
+            instrument.frame = packet.frame();
+            instrument.routing = packet.routing();
+            instrument.received = mc.level.getGameTime();
+            instrument.view = packet.view();
+            instrument.settings = KeyboardSettings.load(packet.view().getCompound("Settings"));
+            boolean reopen = instrument.audio == null || !instrument.audio.matches(instrument.settings);
+            var initial = packet.snapshot() ? packet.events() : reopen ? instrument.keys.snapshot() : null;
+            instrument.apply(packet.events(), packet.snapshot());
+            if (!packet.view().getBoolean("Powered")) {
+                instrument.stopAudio();
+                return;
+            }
+            if (instrument.audio == null && instrument != local && !packet.view().getBoolean("Live") && packet.events().isEmpty()) return;
+            if (reopen) {
+                instrument.stopAudio();
+                instrument.audio = new KeyboardAudio(instrument.settings, packet.frame());
+            }
+            instrument.audio.update(instrument.settings, initial, packet.snapshot() ? List.of() : packet.events(),
+                    instrument.keys::snapshot);
+            instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
         }
-        if (!packet.view().getBoolean("Powered")) {
-            instrument.stopAudio();
-            return;
-        }
-        if (instrument.audio == null && instrument != local && !packet.view().getBoolean("Live") && packet.events().isEmpty()) return;
-        if (reopen) {
-            instrument.stopAudio();
-            instrument.audio = new KeyboardAudio(instrument.settings, packet.frame());
-        }
-        instrument.audio.update(instrument.settings, initial, packet.snapshot() ? List.of() : packet.events(),
-                instrument.keys::snapshot);
-        instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
     }
 
     @Override public void end(KeyboardPackets.End packet) {
@@ -127,19 +166,30 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
     }
 
     void send(Instrument instrument, List<KeyboardMidi> events) {
-        if (local != instrument || events.isEmpty() || Minecraft.getInstance().getConnection() == null) return;
-        for (int i = 0; i < events.size(); i += KeyboardPackets.BATCH) {
-            PacketDistributor.sendToServer(new KeyboardPackets.Play(instrument.target, instrument.token,
-                    List.copyOf(events.subList(i, Math.min(i + KeyboardPackets.BATCH, events.size())))));
+        if (events.isEmpty()) return;
+        synchronized (instrument) {
+            var connection = Minecraft.getInstance().getConnection();
+            if (local != instrument || connection == null || instrument.view.getBoolean("Playing")) return;
+            instrument.apply(events, false);
+            if (instrument.audio != null) {
+                instrument.audio.update(instrument.settings, null, events, instrument.keys::snapshot);
+            }
+            for (int i = 0; i < events.size(); i += KeyboardPackets.BATCH) {
+                connection.send(new KeyboardPackets.Play(instrument.target, instrument.token,
+                        List.copyOf(events.subList(i, Math.min(i + KeyboardPackets.BATCH, events.size())))));
+            }
         }
     }
 
     void command(Instrument instrument, Action action, int first, int second, String text) {
-        if (local != instrument) return;
-        if (Minecraft.getInstance().getConnection() != null) {
-            PacketDistributor.sendToServer(new KeyboardPackets.Command(instrument.target, instrument.token, action.ordinal(), first, second, text));
+        synchronized (instrument) {
+            if (local != instrument) return;
+            var connection = Minecraft.getInstance().getConnection();
+            if (connection != null) {
+                connection.send(new KeyboardPackets.Command(instrument.target, instrument.token, action.ordinal(), first, second, text));
+            }
+            if (action == Action.CLOSE) local = null;
         }
-        if (action == Action.CLOSE) local = null;
     }
 
     private void scrollKnob(InputEvent.MouseScrollingEvent event) {
@@ -198,7 +248,10 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
 
     private void closeScreen() {
         var instrument = local;
-        local = null;
+        if (instrument == null) return;
+        synchronized (instrument) {
+            local = null;
+        }
         var mc = Minecraft.getInstance();
         if (mc.screen instanceof KeyboardScreen screen && screen.instrument() == instrument) mc.setScreen(null);
     }
