@@ -215,7 +215,9 @@ org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract normal 
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract point ()Lnet/minecraft/world/phys/Vec3;
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit class 512
 org/haruyq/createmediasystems/api/media/MediaSources class 16
+org/haruyq/createmediasystems/api/media/MediaSources static hold (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Z)Z
 org/haruyq/createmediasystems/api/media/MediaSources static playing (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lorg/haruyq/createmediasystems/api/media/MediaSources$Track;
+org/haruyq/createmediasystems/api/media/MediaSources static rewind (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z
 org/haruyq/createmediasystems/api/media/MediaSources$Track <init> (Ljava/lang/String;JIJ)V
 org/haruyq/createmediasystems/api/media/MediaSources$Track class 16
 org/haruyq/createmediasystems/api/media/MediaSources$Track equals (Ljava/lang/Object;)Z

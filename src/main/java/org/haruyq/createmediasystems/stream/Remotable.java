@@ -19,6 +19,12 @@ public interface Remotable extends PlaylistView, MediaSource {
 
     Component state();
 
+    /** Whether it plays an entry, paused or not: false while stopped. */
+    boolean playing();
+
+    /** Whether the entry it plays is paused. */
+    boolean paused();
+
     /**
      * What a remote asks, by an id that stays as it is on the wire whatever the order here. SEEK goes to a second of
      * the entry playing, SEEK_BY that many seconds on (or back) from where it is.

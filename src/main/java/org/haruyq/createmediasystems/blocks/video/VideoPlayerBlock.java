@@ -287,6 +287,16 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         }
 
         @Override
+        public boolean playing() {
+            return transport.playing();
+        }
+
+        @Override
+        public boolean paused() {
+            return transport.paused();
+        }
+
+        @Override
         public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
             tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
             List<String> playlist = playlist();
