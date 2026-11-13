@@ -134,6 +134,7 @@ public final class KeyboardClient implements ClientFeature {
         say(scene, 130, keys, "It sounds from itself. To play it through speakers, pick it with a Range Quill, then right-click each speaker: set one to the left channel and one to the right.");
         notes(scene, keys.add(0, 0.3, 0), 60);
         say(scene, 110, keys, PonderPalette.GREEN, "Everyone nearby hears and sees what is played, as it is played. The pads pick the sound: 128 of them, in 16 banks of 8.");
+        PonderPerformance.play(scene, keys);
     }
 
     /** The player of the keyboard at {@code pos} played {@code message}, as the server passed it on. Network thread. */
@@ -165,6 +166,7 @@ public final class KeyboardClient implements ClientFeature {
     private static void tick() {
         Minecraft mc = Minecraft.getInstance();
         KeyboardAudio.tick(mc);
+        PonderPerformance.tick(mc);
         UUID me = mc.player == null ? null : mc.player.getUUID();
         MidiKeyboardBlock.Entity mine = null;
         for (MidiKeyboardBlock.Entity keyboard : KeyboardAudio.near().values()) {

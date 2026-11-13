@@ -116,10 +116,8 @@ public final class KeyboardAudio {
             }
         }
         near = loaded;
-        if (!loaded.isEmpty() && !bankAsked) {
-            bankAsked = true;
-            // ponytail: read once and kept until the game is closed; a resource reload doesn't read it again.
-            CompletableFuture.supplyAsync(() -> read(mc), Util.ioPool()).thenAccept(font -> bank = font);
+        if (!loaded.isEmpty()) {
+            bank(mc);
         }
         Vec3 ear = loaded.isEmpty() ? Vec3.ZERO : mc.gameRenderer.getMainCamera().getPosition();
         PLAYING.values().removeIf(instance -> {
@@ -150,6 +148,17 @@ public final class KeyboardAudio {
                 instance.follow(mc, ear, played);
             }
         }
+    }
+
+    /** The sound bank; null until it has been read, which the first call starts. */
+    @Nullable
+    static SoundFont bank(Minecraft mc) {
+        if (!bankAsked) {
+            bankAsked = true;
+            // ponytail: read once and kept until the game is closed; a resource reload doesn't read it again.
+            CompletableFuture.supplyAsync(() -> read(mc), Util.ioPool()).thenAccept(font -> bank = font);
+        }
+        return bank;
     }
 
     @Nullable

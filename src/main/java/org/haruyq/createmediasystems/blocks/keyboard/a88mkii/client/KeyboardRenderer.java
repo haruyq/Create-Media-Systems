@@ -86,6 +86,7 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
         Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         boolean near = camera.distanceToSqr(SableCompat.toRenderWorld(keyboard.getLevel(), keyboard.getBlockPos(),
                 Vec3.atCenterOf(keyboard.getBlockPos()))) < TEXT_RANGE * TEXT_RANGE;
+        PonderPerformance.pose(keyboard);
         draw(pose, buffers, light, keyboard.facing(), KeyboardClient.look(keyboard), keyboard.keysDown.get(0),
                 keyboard.keysDown.get(1), keyboard.bend, keyboard.modulation, near);
     }
