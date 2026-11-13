@@ -19,5 +19,3 @@ Modの完全な動作には、[CMS-API](https://github.com/haruyq/CMS-API)が別
 ## ライセンス
 
 このプロジェクトは[MIT License](./LICENSE)で公開されています。
-
-MIDIキーボードの音源として同梱している SoundFont「GeneralUser GS」（S. Christian Collins 作）は、[そのライセンス](./src/main/resources/assets/create_media_systems/soundfonts/generaluser_gs_license.txt)に従います。
