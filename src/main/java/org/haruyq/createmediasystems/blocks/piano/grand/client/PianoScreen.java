@@ -14,6 +14,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.lwjgl.glfw.GLFW;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
@@ -69,8 +70,10 @@ final class PianoScreen extends Screen {
             midi.channel(preferredChannel);
             b.setMessage(channel());
         }).bounds(left + 10, top + 49, 61, 19).build());
-        addRenderableWidget(Button.builder(Component.translatable("piano.lid"), b -> client.command(instrument, true))
+        addRenderableWidget(Button.builder(Component.translatable("piano.lid"), b -> client.command(instrument, Action.ROOF))
                 .bounds(left + 75, top + 49, 53, 19).build());
+        addRenderableWidget(Button.builder(Component.translatable("piano.keyboard_lid"), b -> client.command(instrument, Action.KEYBOARD_LID))
+                .bounds(left + 132, top + 49, 66, 19).build());
         addRenderableWidget(Button.builder(Component.translatable("piano.panic"), b -> midi.panic())
                 .bounds(left + panel - 69, top + 49, 59, 19).build());
         midi.scan();
@@ -340,7 +343,7 @@ final class PianoScreen extends Screen {
         preferred = midi.preference();
         midi.close();
         pending.clear();
-        client.command(instrument, false);
+        client.command(instrument, Action.CLOSE);
         super.removed();
     }
 }

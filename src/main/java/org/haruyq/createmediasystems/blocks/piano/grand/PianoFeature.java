@@ -59,5 +59,5 @@ public final class PianoFeature implements Feature {
         }));
     }
 
-    @Override public void registerPayloads(PayloadRegistrar registrar) { PianoPackets.register(registrar); }
+    @Override public void registerPayloads(PayloadRegistrar registrar) { PianoPackets.register(registrar.versioned("2")); }
 }

@@ -20,14 +20,13 @@ import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsE
 import org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoBlockEntity;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
-import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 
 final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
     private static final float OPEN_ANGLE = 43;
-    private static final PianoState REST = new PianoState();
-    private final Map<PianoBlockEntity, Lid> lids = new WeakHashMap<>();
+    private static final float FALLBOARD_OPEN_ANGLE = 96;
+    private final Map<PianoBlockEntity, Lids> lids = new WeakHashMap<>();
 
     static void register(IEventBus bus) {
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
@@ -47,7 +46,7 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
                             pose.pushPose();
                             pose.translate(.19, .26, .025);
                             pose.scale(.34f, .34f, .34f);
-                            new PianoMesh(pose, buffers, light).draw(REST, lid);
+                            new PianoMesh(pose, buffers, light).draw(PianoAction.REST, lid, FALLBOARD_OPEN_ANGLE);
                             pose.popPose();
                         }
                     };
@@ -60,8 +59,12 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
     @Override
     public void render(PianoBlockEntity piano, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         var state = piano.renderedState();
-        float target = state.getValue(GrandPianoBlock.OPEN) ? OPEN_ANGLE : 0;
-        float lid = lids.computeIfAbsent(piano, key -> new Lid(target)).move(target);
+        float roofTarget = state.getValue(GrandPianoBlock.OPEN) ? OPEN_ANGLE : 0;
+        float coverTarget = state.getValue(GrandPianoBlock.KEYBOARD_OPEN) ? FALLBOARD_OPEN_ANGLE : 0;
+        var panels = lids.computeIfAbsent(piano, key -> new Lids(new Lid(roofTarget), new Lid(coverTarget)));
+        float lid = panels.roof().move(roofTarget, 130);
+        var cover = panels.cover();
+        float fallboard = cover.move(coverTarget, coverTarget > 0 ? 235 : 58 + .9f * cover.angle);
         pose.pushPose();
         var right = GrandPianoBlock.right(state);
         var up = GrandPianoBlock.up(state);
@@ -78,7 +81,9 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
             float scale = GrandPianoBlock.FULL_SCALE;
             pose.scale(scale, scale, scale);
         }
-        new PianoMesh(pose, buffers, light).draw(PianoClient.keys(piano.target()), lid, PianoClient.motion(piano.target()));
+        var action = PianoClient.action(piano.target());
+        if (action != PianoAction.REST) action.advance(PianoClient.keys(piano.target()), System.nanoTime());
+        new PianoMesh(pose, buffers, light).draw(action, lid, fallboard);
         pose.popPose();
     }
 
@@ -91,15 +96,17 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
         return bounds.inflate(state.getValue(GrandPianoBlock.FULL_SIZE) ? 2.2 : 1.1);
     }
 
+    private record Lids(Lid roof, Lid cover) {}
+
     private static final class Lid {
         private float angle;
         private long lastRender = System.nanoTime();
 
         Lid(float angle) { this.angle = angle; }
 
-        float move(float target) {
+        float move(float target, float speed) {
             long now = System.nanoTime();
-            float step = Math.min(.4f, (now - lastRender) * 1e-9f) * 130;
+            float step = Math.min(.4f, (now - lastRender) * 1e-9f) * speed;
             angle = Mth.approach(angle, target, step);
             lastRender = now;
             return angle;

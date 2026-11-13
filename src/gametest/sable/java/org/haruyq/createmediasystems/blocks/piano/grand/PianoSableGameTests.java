@@ -24,6 +24,7 @@ public class PianoSableGameTests {
         var level = helper.getLevel();
         var root = helper.absolutePos(new BlockPos(3, 4, 3));
         var state = PianoFeature.PIANO.get().defaultBlockState().setValue(GrandPianoBlock.OPEN, true)
+                .setValue(GrandPianoBlock.KEYBOARD_OPEN, false)
                 .setValue(GrandPianoBlock.FULL_SIZE, true);
         helper.assertTrue(GrandPianoBlock.placeParts(level, root, state), "Piano placement failed");
         List<BlockPos> parts = GrandPianoBlock.parts(state).stream().map(part -> part.at(root, state)).toList();
@@ -31,7 +32,8 @@ public class PianoSableGameTests {
                 root.getX() - 1, root.getY(), root.getZ(), root.getX() + 2, root.getY() + 1, root.getZ() + 5));
         var plot = ship.getPlot().getCenterBlock();
         var mounted = (PianoBlockEntity) level.getBlockEntity(plot);
-        helper.assertTrue(mounted != null && mounted.frame().lidOpen(), "The piano arrived on the plot with an open lid");
+        helper.assertTrue(mounted != null && mounted.frame().lidOpen()
+                && !mounted.getBlockState().getValue(GrandPianoBlock.KEYBOARD_OPEN), "Sable did not preserve both lids");
         var initial = mounted.frame().origin();
         ship.logicalPose().orientation().rotationY(Math.PI / 2);
         ship.logicalPose().position().add(7, 0, 12);
@@ -53,8 +55,8 @@ public class PianoSableGameTests {
         var grid = container.getOrigin();
         container.removeSubLevel(plotPos.x - grid.x, plotPos.z - grid.y, SubLevelRemovalReason.REMOVED);
         var landed = level.getBlockState(landing);
-        helper.assertTrue(landed.is(PianoFeature.PIANO.get()) && landed.getValue(GrandPianoBlock.OPEN),
-                "The piano did not retain its open lid after returning to world blocks");
+        helper.assertTrue(landed.is(PianoFeature.PIANO.get()) && landed.getValue(GrandPianoBlock.OPEN)
+                && !landed.getValue(GrandPianoBlock.KEYBOARD_OPEN), "The piano did not retain both lids after landing");
         for (var part : GrandPianoBlock.parts(landed)) {
             var pos = part.at(landing, landed);
             var restored = level.getBlockState(pos);

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.blocks.piano.grand;
 import java.util.List;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -26,6 +27,19 @@ public final class PianoPackets {
         void open(Open packet);
         void update(Update packet);
         void end(End packet);
+    }
+
+    public enum Action {
+        CLOSE, ROOF, KEYBOARD_LID, PLAY;
+
+        private static Action command(int id) {
+            return switch (id) {
+                case 0 -> CLOSE;
+                case 1 -> ROOF;
+                case 2 -> KEYBOARD_LID;
+                default -> throw new DecoderException("Invalid grand piano command");
+            };
+        }
     }
 
     public static void client(Client handler) { client = handler; }
@@ -70,10 +84,11 @@ public final class PianoPackets {
         @Override public Type<Update> type() { return TYPE; }
     }
 
-    public record Command(Target target, int session, boolean toggleLid) implements CustomPacketPayload {
+    public record Command(Target target, int session, Action action) implements CustomPacketPayload {
         static final Type<Command> TYPE = new Type<>(CreateMediaSystems.id("piano_command"));
         static final StreamCodec<ByteBuf, Command> CODEC = StreamCodec.composite(Target.CODEC, Command::target,
-                ByteBufCodecs.VAR_INT, Command::session, ByteBufCodecs.BOOL, Command::toggleLid, Command::new);
+                ByteBufCodecs.VAR_INT, Command::session, ByteBufCodecs.idMapper(Action::command, Action::ordinal),
+                Command::action, Command::new);
         @Override public Type<Command> type() { return TYPE; }
     }
 
@@ -97,7 +112,7 @@ public final class PianoPackets {
         registrar.playToServer(Command.TYPE, Command.CODEC, (packet, context) -> {
             if (context.player() instanceof ServerPlayer player) {
                 var piano = find(player, packet.target);
-                if (piano != null) piano.command(player, packet.session, packet.toggleLid);
+                if (piano != null) piano.command(player, packet.session, packet.action);
             }
         });
     }
