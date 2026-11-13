@@ -18,6 +18,11 @@ public interface CmsStream extends AudioStream {
         return 0;
     }
 
+    /** Bytes in each OpenAL buffer. Live instruments need a shorter queue than prerecorded media. */
+    default int bufferBytes(int vanillaBytes) {
+        return vanillaBytes;
+    }
+
     /** Whether what it plays moves on while the game is paused, so a resumed channel starts over from it. */
     default boolean advancesWhilePaused() {
         return false;
@@ -39,6 +44,11 @@ public interface CmsStream extends AudioStream {
         @Override
         public long attach(int sourceId, long deviceNow) {
             return source instanceof CmsStream cms ? cms.attach(sourceId, deviceNow) : 0;
+        }
+
+        @Override
+        public int bufferBytes(int vanillaBytes) {
+            return source instanceof CmsStream cms ? cms.bufferBytes(vanillaBytes) : vanillaBytes;
         }
 
         @Override

@@ -12,6 +12,7 @@ base {
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+sourceSets.main.java.srcDir('third_party/gervill/java')
 
 // The -P switches: each turns on one test or dev source set (see "Test and dev source sets" below).
 def flag = { String name -> providers.gradleProperty(name).isPresent() }

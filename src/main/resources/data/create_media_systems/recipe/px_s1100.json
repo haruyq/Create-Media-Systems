@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": ["QQQ", "SNS", "APA"],
+  "key": {
+    "Q": { "item": "minecraft:smooth_quartz" },
+    "S": { "item": "create:brass_sheet" },
+    "N": { "item": "minecraft:note_block" },
+    "A": { "item": "create:andesite_alloy" },
+    "P": { "item": "create:precision_mechanism" }
+  },
+  "result": { "id": "create_media_systems:px_s1100", "count": 1 }
+}

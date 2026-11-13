@@ -21,6 +21,7 @@ import org.haruyq.createmediasystems.p2p.P2pFeature;
 import org.haruyq.createmediasystems.partybox.PartyBoxFeature;
 import org.haruyq.createmediasystems.piano.PianoFeature;
 import org.haruyq.createmediasystems.power.PowerFeature;
+import org.haruyq.createmediasystems.pxs1100.PxS1100Feature;
 import org.haruyq.createmediasystems.stream.StreamFeature;
 import org.haruyq.createmediasystems.train.TrainFeature;
 import org.haruyq.createmediasystems.video.VideoFeature;
@@ -36,7 +37,7 @@ import net.neoforged.fml.common.Mod;
 @Mod(CreateMediaSystems.MOD_ID)
 public final class CreateMediaSystemsMod {
     /** Making each loads its registry entries. */
-    private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new MegaphoneFeature(),
+    private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new PxS1100Feature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
             new KeyboardFeature(), new PianoFeature());
@@ -62,7 +63,7 @@ public final class CreateMediaSystemsMod {
                 // Media
                 AudioFeature.CUSTOM_DISC, DiscFeature.CD, DiscFeature.CASSETTE, DiscFeature.DVD, DiscFeature.BLU_RAY,
                 // Jukebox audio
-                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL));
+                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL, PxS1100Feature.ITEM));
         // Hi-Fi
         order.addAll(HifiFeature.hifiUnits());
         order.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
