@@ -17,6 +17,7 @@ import org.haruyq.createmediasystems.keyboard.client.KeyboardClient;
 import org.haruyq.createmediasystems.launcher.client.LauncherClient;
 import org.haruyq.createmediasystems.lighting.LightingClient;
 import org.haruyq.createmediasystems.megaphone.client.MegaphoneClient;
+import org.haruyq.createmediasystems.piano.client.PianoClient;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.partybox.client.PartyBoxClient;
 import org.haruyq.createmediasystems.playback.ClientStreams;
@@ -41,7 +42,7 @@ public final class CreateMediaSystemsClient {
     private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT, LauncherClient::register, PartyBoxClient::register,
             MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(), new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
-            DiscClient::register, BroadcastClient::register, new KeyboardClient());
+            DiscClient::register, BroadcastClient::register, new KeyboardClient(), PianoClient::register);
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

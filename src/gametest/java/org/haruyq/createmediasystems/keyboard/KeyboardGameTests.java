@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.keyboard;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -14,7 +15,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestInfo;
+import net.minecraft.gametest.framework.GameTestListener;
+import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -30,12 +35,35 @@ public class KeyboardGameTests {
         return helper.getBlockEntity(KEYBOARD);
     }
 
-    /** A player of this test's own, standing at the keyboard. */
+    /** Represent a logged-in performer to the relay without a network login (which needs Sable's handshake). */
     private static ServerPlayer player(GameTestHelper helper, String name) {
         ServerPlayer player = FakePlayerFactory.get(helper.getLevel(), new GameProfile(UUID.randomUUID(), name));
         player.setPos(Vec3.atCenterOf(helper.absolutePos(KEYBOARD.north())));
         player.setShiftKeyDown(false);
+        var players = onlinePlayers(helper);
+        players.put(player.getUUID(), player);
+        helper.testInfo.addListener(new GameTestListener() {
+            @Override public void testStructureLoaded(GameTestInfo info) {}
+            @Override public void testAddedForRerun(GameTestInfo old, GameTestInfo next, GameTestRunner runner) {}
+            @Override public void testPassed(GameTestInfo info, GameTestRunner runner) { leave(); }
+            @Override public void testFailed(GameTestInfo info, GameTestRunner runner) { leave(); }
+
+            private void leave() {
+                players.remove(player.getUUID(), player);
+            }
+        });
         return player;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<UUID, ServerPlayer> onlinePlayers(GameTestHelper helper) {
+        try {
+            var field = PlayerList.class.getDeclaredField("playersByUUID");
+            field.setAccessible(true);
+            return (Map<UUID, ServerPlayer>) field.get(helper.getLevel().getServer().getPlayerList());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to register GameTest players for the keyboard relay", e);
+        }
     }
 
     private static KeyboardPackets.Played played(MidiKeyboardBlock.Entity keyboard, int message) {

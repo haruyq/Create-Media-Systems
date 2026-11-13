@@ -3,6 +3,7 @@
     "create_media_systems:train_disc_reader",
     "create_media_systems:speaker",
     "create_media_systems:train_speaker",
-    "create_media_systems:disc_reader"
+    "create_media_systems:disc_reader",
+    "create_media_systems:grand_piano"
   ]
 }

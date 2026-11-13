@@ -1,0 +1,11 @@
+Salamander Grand Piano V3
+Piano recordings by Alexander Holm (Yamaha C5).
+Source: https://github.com/sfzinstruments/SalamanderGrandPiano/tree/3382bf9496bba2486f5ab0de55a264d1dfc38404
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0).
+https://creativecommons.org/licenses/by/3.0/
+The license text is in CC-BY-3.0.txt.
+
+Create: Media Systems selected five attack velocity layers and the
+recorded key-release, resonance and pedal sounds, extracted the left
+microphone channel, resampled it to 32 kHz, and encoded the bank as
+Ogg Vorbis. Some long tails were trimmed and faded.
