@@ -72,7 +72,7 @@ class LightingControlTest {
         // Ids clients and servers of other versions send: the enum's order before ids were declared.
         String[] wire = {"GROUP", "BRIGHTNESS", "MASTER", "COLOR", "SLOT", "COUNT", "RGB", "MAPPING", "VIDEO", "AUDIO",
                 "BAND", "MOTION", "PATTERN", "RANGE", "SPREAD", "SPEED", "AIM", "ENABLED", "CYCLE", "TARGET", "PRESET",
-                "SOURCES", null, null, "RANGE_ALL", "STROBE"};
+                "SOURCES", null, null, "RANGE_ALL", "STROBE", "CHASE"};
         for (int id = 0; id < wire.length; id++) {
             Control control = Control.byId(id);
             assertEquals(wire[id], control == null ? null : control.name(), "id " + id);
@@ -80,12 +80,19 @@ class LightingControlTest {
     }
 
     @Test
-    void steppingTheStrobePastEitherEndComesRoundToTheOther() {
+    void theStrobeRowStepsThroughTheStrobeThenTheRandomLightsAndRound() {
         LightingSettings settings = new LightingSettings();
-        assertEquals(1, Control.STROBE.step(settings, 0, 1, false).value());
-        assertEquals(LightingSettings.STROBE.max(), Control.STROBE.step(settings, 0, -1, false).value());
+        assertEquals(new LightingPackets.Stepped(Control.STROBE, 0, 1), Control.STROBE.step(settings, 0, 1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 3), Control.STROBE.step(settings, 0, -1, false));
         settings.selected().strobe = LightingSettings.STROBE.max();
-        assertEquals(0, Control.STROBE.step(settings, 0, 1, false).value());
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 1), Control.STROBE.step(settings, 0, 1, false));
+        settings.selected().strobe = 0;
+        settings.selected().chase = 1;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 3), Control.STROBE.step(settings, 0, 1, false));
+        assertEquals(new LightingPackets.Stepped(Control.STROBE, 0, LightingSettings.STROBE.max()),
+                Control.STROBE.step(settings, 0, -1, false));
+        settings.selected().chase = 3;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
     }
 
     @Test
@@ -97,7 +104,7 @@ class LightingControlTest {
                 new LightingPackets.Change(BlockPos.ZERO, -1, rgb, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, LightingSettings.GROUPS, rgb, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, -1, 0, 0, 0),
-                new LightingPackets.Change(BlockPos.ZERO, 0, 26, 0, 0, 0),
+                new LightingPackets.Change(BlockPos.ZERO, 0, 27, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, -1, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, 64, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, 0, Float.NaN, 0),

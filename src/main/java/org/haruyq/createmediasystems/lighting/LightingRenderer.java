@@ -186,6 +186,36 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         return QuadOutput.FLAT;
     }
 
+    /** A console's beats as this client has counted them (see beat). */
+    private static final Map<LightingConsoleBlock.Entity, Beats> BEATS = new WeakHashMap<>();
+
+    private static final class Beats {
+        long tick = Long.MIN_VALUE;
+        long counted = Long.MIN_VALUE;
+        float pulse;
+        long count;
+    }
+
+    /**
+     * How many beats {@code console} has played, counted once a tick: a beat each time its sound's pulse jumps, and
+     * one each beat of its tempo (120 a minute without sound) where none has for a beat and a half. Counted on each
+     * client, so clients light different lights; each sees them change on the beat.
+     */
+    static long beat(LightingConsoleBlock.Entity console, @Nullable AnalysisFrame audio, long tick) {
+        Beats beats = BEATS.computeIfAbsent(console, ignored -> new Beats());
+        if (beats.tick != tick) {
+            float pulse = audio == null ? 0 : audio.pulse();
+            double ticks = 1200 / (audio == null ? AnalysisFrame.DEFAULT_BPM : audio.bpm());
+            if (pulse > beats.pulse + 0.3f || tick - beats.counted >= (pulse > 0 ? ticks * 1.5 : ticks)) {
+                beats.count++;
+                beats.counted = tick;
+            }
+            beats.pulse = pulse;
+            beats.tick = tick;
+        }
+        return beats.count;
+    }
+
     @Override
     public void render(StageLightBlock.Entity lamp, float partialTick, PoseStack pose, MultiBufferSource buffers,
                        int light, int overlay) {
@@ -298,7 +328,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         // takes a light left undrawn for one whose faces are out of date). By the game's clock, which a paused track
         // doesn't stop; and steady for a player who has lightning flashes hidden.
         boolean dark = group.strobe > 0 && !LightingSettings.strobeLit(gameSeconds, group.strobe)
-                && !Minecraft.getInstance().options.hideLightningFlash().get();
+                && !Minecraft.getInstance().options.hideLightningFlash().get()
+                || group.chase > 0 && console != null && !LightingSettings.chaseLit(group.chase, lamp.order(), count,
+                beat(console, audio, level.getGameTime()) * 31L + lamp.group());
         VertexConsumer screen = new QuadOutput(buffers, QuadOutput.FLAT);
         double lens = front - 0.002;
         quad(screen, new Matrix4f(model).mul(head), new Vec3(-spec.lensWidth(), -spec.lensHeight(), lens),

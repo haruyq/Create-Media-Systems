@@ -54,6 +54,7 @@ org/haruyq/createmediasystems/api/lighting/ConsoleSetting static AIM Lorg/haruyq
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static AUDIO Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static BAND Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static BRIGHTNESS Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
+org/haruyq/createmediasystems/api/lighting/ConsoleSetting static CHASE Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static COLOR Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static COUNT Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static CYCLE Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
@@ -108,6 +109,7 @@ org/haruyq/createmediasystems/api/lighting/Consoles static onTick (Ljava/util/fu
 org/haruyq/createmediasystems/api/lighting/GroupView abstract audio ()Z
 org/haruyq/createmediasystems/api/lighting/GroupView abstract audioBand ()Lorg/haruyq/createmediasystems/api/lighting/GroupView$Band;
 org/haruyq/createmediasystems/api/lighting/GroupView abstract brightness ()F
+org/haruyq/createmediasystems/api/lighting/GroupView abstract chase ()I
 org/haruyq/createmediasystems/api/lighting/GroupView abstract color (I)I
 org/haruyq/createmediasystems/api/lighting/GroupView abstract colorCount ()I
 org/haruyq/createmediasystems/api/lighting/GroupView abstract colorCycle ()Z

@@ -283,6 +283,41 @@ class LightingSettingsTest {
     }
 
     @Test
+    void randomLightsAreSavedBoundedAndTurnedOffByABuiltInPreset() {
+        LightingSettings.Group group = new LightingSettings.Group();
+        group.chase = 3;
+        LightingSettings.Group restored = new LightingSettings.Group();
+        restored.load(group.save());
+        assertEquals(3, restored.chase);
+        group.chase = 9;
+        group.normalize();
+        assertEquals(3, group.chase);
+        group.preset(LightingSettings.Preset.SWEEP, null);
+        assertEquals(0, group.chase);
+    }
+
+    @Test
+    void aBeatLightsAsManyAtRandomAndAnotherBeatOthers() {
+        java.util.Set<String> picks = new java.util.HashSet<>();
+        for (long beat = 0; beat < 50; beat++) {
+            for (int chase : new int[]{1, 3}) {
+                StringBuilder lit = new StringBuilder();
+                for (int order = 0; order < 8; order++) {
+                    if (LightingSettings.chaseLit(chase, order, 8, beat)) {
+                        lit.append(order);
+                    }
+                }
+                assertEquals(chase, lit.length(), "beat " + beat);
+                picks.add(lit.toString());
+            }
+        }
+        assertTrue(picks.size() > 20, picks.size() + " different picks");
+        // As many or fewer lights than it lights: all of them; and none chosen: all of them.
+        assertTrue(LightingSettings.chaseLit(3, 1, 2, 7));
+        assertTrue(LightingSettings.chaseLit(0, 5, 8, 7));
+    }
+
+    @Test
     void aStrobeIsSavedBoundedAndTurnedOffByABuiltInPreset() {
         LightingSettings.Group group = new LightingSettings.Group();
         group.strobe = 6;

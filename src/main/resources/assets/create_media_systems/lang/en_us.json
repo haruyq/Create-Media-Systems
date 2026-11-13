@@ -97,6 +97,8 @@
   "create_media_systems.lighting.label.spread": "Beam angle",
   "create_media_systems.lighting.label.speed": "Movement speed",
   "create_media_systems.lighting.label.strobe": "Strobe",
+  "create_media_systems.lighting.label.chase": "Random",
+  "create_media_systems.lighting.chase": "Random %s",
   "create_media_systems.lighting.label.aim": "Aim",
   "create_media_systems.lighting.label.enabled": "Lights",
   "create_media_systems.lighting.label.cycle": "Color cycle",

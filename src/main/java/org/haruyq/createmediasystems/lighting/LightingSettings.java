@@ -59,6 +59,8 @@ public final class LightingSettings {
     public static final Setting STROBE = new Setting("Strobe", 0, 0, 10, 1);
     /** How much of each flash's time a strobing light is lit. */
     private static final double STROBE_DUTY = 0.4;
+    /** How many of a group's lights are lit at once, chosen again on each beat; 0 for all. Not with a strobe. */
+    public static final Setting CHASE = new Setting("Chase", 0, 0, 3, 1);
 
     /** One of a few ways a group does something, shown by its own lang key. Saved and sent as its ordinal. */
     public interface Mode {
@@ -236,6 +238,7 @@ public final class LightingSettings {
         public float pan = PAN.initial();
         public float tilt = TILT.initial();
         public float strobe = STROBE.initial();
+        public int chase;
         public UUID target;
 
         /** Takes {@code preset}'s effect; a tracking one follows {@code player}, if given. */
@@ -249,6 +252,7 @@ public final class LightingSettings {
             speed = SPEED.initial();
             spread = preset.spread;
             strobe = STROBE.initial();
+            chase = 0;
             if (preset.motion == LightingSettings.Motion.TRACK && player != null) {
                 target = player;
             }
@@ -272,6 +276,7 @@ public final class LightingSettings {
             PAN.save(tag, pan);
             TILT.save(tag, tilt);
             STROBE.save(tag, strobe);
+            tag.putInt("Chase", chase);
             if (target != null) {
                 tag.putUUID("Target", target);
             }
@@ -296,6 +301,7 @@ public final class LightingSettings {
             pan = PAN.load(tag);
             tilt = TILT.load(tag);
             strobe = STROBE.load(tag);
+            chase = tag.getInt("Chase");
             target = tag.hasUUID("Target") ? tag.getUUID("Target") : null;
             normalize();
         }
@@ -312,6 +318,7 @@ public final class LightingSettings {
             pan = PAN.bounded(pan);
             tilt = TILT.bounded(tilt);
             strobe = STROBE.bounded(strobe);
+            chase = (int) CHASE.bounded(chase);
         }
 
         /** The colour it is showing in slot {@code slot}'s place (the selected one, say). */
@@ -395,6 +402,11 @@ public final class LightingSettings {
         }
 
         @Override
+        public int chase() {
+            return chase;
+        }
+
+        @Override
         @Nullable
         public UUID target() {
             return target;
@@ -429,6 +441,32 @@ public final class LightingSettings {
 
     public Group selected() {
         return groups[selectedGroup];
+    }
+
+    /**
+     * Whether the light {@code order}th of {@code count} is among the {@code chase} lit on the beat numbered
+     * {@code beat} (any number, the same on every light of a group for one beat): always, at 0.
+     */
+    public static boolean chaseLit(int chase, int order, int count, long beat) {
+        if (chase <= 0 || chase >= count) {
+            return true;
+        }
+        // The first chase places of a shuffle of the lights, the same for every light that asks on this beat.
+        int[] lights = new int[count];
+        for (int i = 0; i < count; i++) {
+            lights[i] = i;
+        }
+        java.util.Random random = new java.util.Random(beat * 0x9E3779B97F4A7C15L);
+        for (int i = 0; i < chase; i++) {
+            int pick = i + random.nextInt(count - i);
+            int swap = lights[i];
+            lights[i] = lights[pick];
+            lights[pick] = swap;
+            if (lights[i] == order) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether a light strobing {@code strobe} times a second is lit at {@code seconds}: always, at 0. */
