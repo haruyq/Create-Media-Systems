@@ -385,17 +385,17 @@ final class KeyboardRuntime {
                 || !host.world().isLoaded(heard.output().pos()));
     }
 
-    private Routing routing(Vec3 ear) {
+    Routing routing(Vec3 ear) {
         if (speakers.isEmpty()) return Routing.INTERNAL;
         var level = host.world();
         var outputs = speakers.values().stream().map(Heard::output)
-                .filter(output -> output.volume() > 0 && EmitterRange.DEFAULT.hears(level, output.pos(),
-                        output.sound().origin(), ear, EmitterRange.DROP_MARGIN))
+                .filter(output -> output.volume() > 0 && EmitterRange.DEFAULT.gain(output.pos(), output.sound().origin(),
+                        SableCompat.toBlockSpace(level, output.pos(), ear)) > 0)
                 .sorted(Comparator.comparingDouble((Output output) ->
                                 SableCompat.toWorld(level, output.pos(), output.sound().origin()).distanceToSqr(ear))
                         .thenComparingLong(output -> output.pos().asLong()))
                 .limit(KeyboardPackets.MAX_SPEAKERS).toList();
-        return new Routing(true, outputs);
+        return outputs.isEmpty() ? Routing.INTERNAL : new Routing(true, outputs);
     }
 
     private void refresh() {

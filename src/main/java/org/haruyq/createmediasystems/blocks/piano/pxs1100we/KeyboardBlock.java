@@ -149,6 +149,17 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
         return at.y >= 1 ? Part.TOP_BASS : Part.BASS;
     }
 
+    static boolean powerInput(BlockState state, Part part) {
+        // Existing floor-level wiring stays connected after a compact keyboard expands.
+        return part == Part.BASS || part == dcInput(state);
+    }
+
+    private static void invalidatePowerInputs(Level level, BlockPos root, BlockState state) {
+        for (var part : parts(state)) {
+            if (powerInput(state, part)) level.invalidateCapabilities(part.at(root, state));
+        }
+    }
+
     @Override
     public @Nullable BlockState getStateForPlacement(BlockPlaceContext context) {
         var state = defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite()).setValue(FULL_SIZE, true);
@@ -196,9 +207,9 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
                     level.removeBlock(pos, true);
                 }
             }
-            level.invalidateCapabilities(dcInput(before).at(root, before));
+            invalidatePowerInputs(level, root, before);
         }
-        level.invalidateCapabilities(dcInput(after).at(root, after));
+        invalidatePowerInputs(level, root, after);
         return true;
     }
 

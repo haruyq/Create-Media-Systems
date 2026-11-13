@@ -36,9 +36,11 @@ import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Rout
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
 import org.haruyq.createmediasystems.playback.AudibleTimeline;
 import org.haruyq.createmediasystems.playback.CmsStream;
+import org.haruyq.createmediasystems.playback.StreamPump;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams.Channel;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.openal.AL10;
 
 final class KeyboardAudio implements AutoCloseable {
     private static final int LIVE_FRAMES = KeyboardSynth.RATE / 50, SCORE_FRAMES = KeyboardSynth.RATE / 20, SLOTS = 16;
@@ -141,7 +143,7 @@ final class KeyboardAudio implements AutoCloseable {
         }
         speakers.entrySet().removeIf(entry -> {
             if (desired.containsKey(entry.getKey())) return false;
-            sounds.stop(entry.getValue());
+            entry.getValue().end(sounds);
             return true;
         });
 
@@ -149,11 +151,11 @@ final class KeyboardAudio implements AutoCloseable {
         var start = new StereoStart(cursor());
         desired.forEach((key, output) -> {
             var speaker = speakers.get(key);
-            if (speaker != null && (sounds.isActive(speaker) || now - speaker.started < 1_000_000_000)) {
+            if (speaker != null && !speaker.ended && (sounds.isActive(speaker) || now - speaker.started < 1_000_000_000)) {
                 speaker.output = output;
                 return;
             }
-            if (speaker != null) sounds.stop(speaker);
+            if (speaker != null) speaker.end(sounds);
             var next = new Speaker(key.channel(), output, start, now);
             speakers.put(key, next);
             sounds.play(next);
@@ -246,7 +248,7 @@ final class KeyboardAudio implements AutoCloseable {
 
     private void stop() {
         var sounds = Minecraft.getInstance().getSoundManager();
-        speakers.values().forEach(sounds::stop);
+        speakers.values().forEach(speaker -> speaker.end(sounds));
         speakers.clear();
     }
 
@@ -266,6 +268,7 @@ final class KeyboardAudio implements AutoCloseable {
         private final StereoStart start;
         private final long started;
         @Nullable private Output output;
+        private volatile boolean ended;
 
         Speaker(Channel channel, @Nullable Output output, StereoStart start, long started) {
             super(PxS1100Feature.SYNTH.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
@@ -278,6 +281,12 @@ final class KeyboardAudio implements AutoCloseable {
         }
 
         @Override public boolean canStartSilent() { return true; }
+
+        void end(SoundManager sounds) {
+            ended = true;
+            stop();
+            sounds.stop(this);
+        }
 
         @Override public WeighedSoundEvents resolve(SoundManager manager) {
             var resolved = super.resolve(manager);
@@ -316,34 +325,53 @@ final class KeyboardAudio implements AutoCloseable {
         }
 
         @Override public CompletableFuture<AudioStream> getStream(SoundBufferLibrary buffers, Sound sound, boolean looping) {
-            return CompletableFuture.completedFuture(new Mono(channel, start));
+            return CompletableFuture.completedFuture(new Mono(this));
         }
     }
 
     private final class Mono implements CmsStream {
-        private final Channel channel;
-        private final StereoStart start;
+        private final Speaker speaker;
         private final ByteBuffer samples = ByteBuffer.allocateDirect(framesPerBuffer * 2).order(ByteOrder.LITTLE_ENDIAN);
+        private final Runnable resume = this::resumeAfterUnderrun;
+        private int source;
         private long cursor;
         private boolean closed;
 
-        Mono(Channel channel, StereoStart start) {
-            this.channel = channel;
-            this.start = start;
-            this.cursor = start.cursor;
+        Mono(Speaker speaker) {
+            this.speaker = speaker;
+            cursor = speaker.start.cursor;
         }
         @Override public AudioFormat getFormat() { return MONO; }
         @Override public long attach(int source, long now) {
-            long at = start.attach(now);
-            if (audible != null && channel == Channel.LEFT) audible.attach(source, at);
+            if (score == null) {
+                this.source = source;
+                StreamPump.live(resume);
+            }
+            long at = speaker.start.attach(now);
+            if (audible != null && speaker.channel == Channel.LEFT) audible.attach(source, at);
             return at;
         }
         @Override public int bufferBytes(int vanillaBytes) { return samples.capacity(); }
         @Override public boolean needsFastRefill() { return score != null; }
         @Override public ByteBuffer read(int size) throws IOException {
-            KeyboardAudio.this.read(channel, this);
+            KeyboardAudio.this.read(speaker.channel, this);
             return samples;
         }
-        @Override public void close() { closed = true; }
+
+        private void resumeAfterUnderrun() {
+            if (!closed && !speaker.ended && !KeyboardAudio.this.closed && !Minecraft.getInstance().isPaused()
+                    && AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE) == AL10.AL_STOPPED
+                    && AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED) > 0) {
+                AL10.alSourcePlay(source);
+            }
+        }
+
+        @Override public void close() {
+            closed = true;
+            if (score == null) {
+                speaker.ended = true;
+                StreamPump.ended(resume);
+            }
+        }
     }
 }
