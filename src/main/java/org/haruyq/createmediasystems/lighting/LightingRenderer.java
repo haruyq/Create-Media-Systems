@@ -281,7 +281,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 case ALL -> audio.level();
             };
             float floor = group.motion == Motion.TRACK ? spec.trackFloor() : 0.12f;
-            strength *= Mth.clamp(floor + energy * 1.5f + audio.pulse() * 0.35f, 0, 1);
+            // Mostly the beat: a loud track's band level hardly drops between its beats, and alone it holds the
+            // light at full.
+            strength *= floor + (1 - floor) * Mth.clamp(energy * 0.5f + audio.pulse() * 0.6f, 0, 1);
         }
         int count = console == null ? 1 : Math.max(1, console.groupSize(lamp.group()));
         AnalysisFrame shown = console == null ? null : console.video(level.getGameTime());

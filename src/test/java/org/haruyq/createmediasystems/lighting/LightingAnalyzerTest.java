@@ -98,11 +98,23 @@ class LightingAnalyzerTest {
             offer(analyzer, hit, at);
             offer(analyzer, silence, at + 80_000);
             LightingAnalyzer.Sound onset = analyzer.heard(at + 20_000);
+            // A frame taken anywhere in the interval after the beat sees it whole.
+            LightingAnalyzer.Sound held = analyzer.heard(at + 20_000 + AnalysisFrame.INTERVAL * 1000L - 1);
             LightingAnalyzer.Sound rest = analyzer.heard(at + 480_000);
             assertTrue(onset.pulse() > 0.8);
+            assertEquals(1, held.pulse());
             assertTrue(rest.pulse() < 0.2);
             assertEquals(120, rest.bpm(), 3);
         }
+    }
+
+    @Test
+    void aBeatShowsFromItsFrameAndDecaysWithoutRisingBeforeIt() {
+        AnalysisFrame before = new AnalysisFrame(0, 0.8f, 0.8f, 0, 0, 0, 120, 0, 0, true, false);
+        AnalysisFrame beat = new AnalysisFrame(100, 0.8f, 0.8f, 0, 0, 1, 120, 0, 0, true, false);
+        assertEquals(0, before.blend(beat, 90).pulse());
+        assertEquals(1, beat.at(100).pulse());
+        assertEquals(0.85f, beat.at(120).pulse(), 0.001f);
     }
 
     @Test
