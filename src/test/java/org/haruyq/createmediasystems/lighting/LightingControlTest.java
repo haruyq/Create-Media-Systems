@@ -83,7 +83,7 @@ class LightingControlTest {
     void theStrobeRowStepsThroughTheStrobeThenTheRandomLightsAndRound() {
         LightingSettings settings = new LightingSettings();
         assertEquals(new LightingPackets.Stepped(Control.STROBE, 0, 1), Control.STROBE.step(settings, 0, 1, false));
-        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 3), Control.STROBE.step(settings, 0, -1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 8), Control.STROBE.step(settings, 0, -1, false));
         settings.selected().strobe = LightingSettings.STROBE.max();
         assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 1), Control.STROBE.step(settings, 0, 1, false));
         settings.selected().strobe = 0;
@@ -92,7 +92,13 @@ class LightingControlTest {
         assertEquals(new LightingPackets.Stepped(Control.STROBE, 0, LightingSettings.STROBE.max()),
                 Control.STROBE.step(settings, 0, -1, false));
         settings.selected().chase = 3;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 5), Control.STROBE.step(settings, 0, 1, false));
+        settings.selected().chase = 8;
         assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
+        // One a mod set between the row's: the next above it, and on from there.
+        settings.selected().chase = 6;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 5), Control.STROBE.step(settings, 0, -1, false));
     }
 
     @Test
