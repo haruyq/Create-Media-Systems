@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.blocks.piano.pxs1100we.client;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -28,12 +29,12 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
 import org.haruyq.createmediasystems.items.power.PowerFeature;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlockEntity;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardKeys;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardLayout;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Frame;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardPackets.Routing;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
@@ -41,7 +42,6 @@ import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
 import org.haruyq.createmediasystems.stream.Streams.Channel;
 import org.jetbrains.annotations.Nullable;
 
-import static org.haruyq.createmediasystems.client.PonderScenes.notes;
 import static org.haruyq.createmediasystems.client.PonderScenes.plate;
 import static org.haruyq.createmediasystems.client.PonderScenes.say;
 
@@ -49,6 +49,7 @@ final class PxS1100Ponder {
     private static final KeyboardLayout MODEL = KeyboardLayout.PX;
     private static final Map<PonderScene, Demo> DEMOS = new WeakHashMap<>();
     private static final int AUDIO_TAIL_TICKS = 18;
+    private static final int AUDIO_END_PADDING_TICKS = 12;
     private record Shot(float scale, float offset, float pitch, float yaw) {}
 
     private static final Shot STAGE = new Shot(1.23f, -.35f, -35, 145);
@@ -122,9 +123,9 @@ final class PxS1100Ponder {
         scene.effects().indicateSuccess(root);
         scene.overlay().showControls(keys, Pointing.DOWN, 28).rightClick();
         say(scene, 70, keys, "Right-click to play with the mouse, computer keyboard, or MIDI. Space works the damper.");
-        scene.addInstruction(ignored -> demo.keys.apply(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 103)));
+        scene.addInstruction(ignored -> demo.keys.apply(PianoEvent.control(PianoEvent.DAMPER, 103)));
         scene.idle(10);
-        scene.addInstruction(ignored -> demo.keys.apply(KeyboardMidi.cc(KeyboardMidi.SUSTAIN, 0)));
+        scene.addInstruction(ignored -> demo.keys.apply(PianoEvent.control(PianoEvent.DAMPER, 0)));
 
         var left = util.grid().at(4, 1, 3);
         var right = util.grid().at(0, 1, 3);
@@ -144,8 +145,7 @@ final class PxS1100Ponder {
         say(scene, 85, keys, PonderPalette.GREEN, "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.");
         scene.overlay().showText(75).attachKeyFrame().pointAt(keys).placeNearTarget()
                 .text("U.N. Owen Was Her? (MIDI © chishige 2016)");
-        playScore(scene, demo, List.of(SpeakerBlock.mouth(left, Direction.NORTH),
-                SpeakerBlock.mouth(right, Direction.NORTH)));
+        playScore(scene, demo);
         scene.idle(AUDIO_TAIL_TICKS);
         scene.addInstruction(ignored -> demo.view.putBoolean("Powered", false));
         scene.markAsFinished();
@@ -183,30 +183,12 @@ final class PxS1100Ponder {
         });
     }
 
-    private static void playScore(CreateSceneBuilder scene, Demo demo, List<Vec3> mouths) {
-        scene.addInstruction(ponder -> {
-            demo.start = ponder.getCurrentTime();
-            demo.settings.volume = demo.score.cues().stream().flatMap(cue -> cue.events().stream())
-                    .filter(event -> event.command() == KeyboardMidi.CONTROL && event.key() == 7 && event.channel() == 0)
-                    .mapToInt(KeyboardMidi::value).findFirst().orElse(demo.settings.volume);
-        });
-        int time = 0, lastPulse = -20;
-        int cutToKeys = 48, pullBack = demo.score.duration() + 2;
-        boolean closeUp = false;
-        for (var cue : demo.score.cues()) {
-            if (time < cue.tick()) scene.idle(cue.tick() - time);
-            time = cue.tick();
-            if (pullBack > cutToKeys && !closeUp && time >= cutToKeys) {
-                zoom(scene, STAGE, KEYS, 24);
-                closeUp = true;
-            }
-            if (time - lastPulse >= 8 && cue.events().stream().anyMatch(event -> event.command() == KeyboardMidi.ON && event.value() > 0)) {
-                for (var mouth : mouths) notes(scene, mouth.add(0, .11, 0), 2);
-                lastPulse = time;
-            }
-        }
-        if (time < pullBack) scene.idle(pullBack - time);
-        if (closeUp) zoom(scene, KEYS, STAGE, AUDIO_TAIL_TICKS);
+    private static void playScore(CreateSceneBuilder scene, Demo demo) {
+        scene.idle(12);
+        scene.addInstruction(ponder -> demo.start = ponder.getCurrentTime());
+        zoom(scene, STAGE, KEYS, 24);
+        scene.idle(demo.score.duration() + AUDIO_END_PADDING_TICKS);
+        zoom(scene, KEYS, STAGE, AUDIO_TAIL_TICKS);
     }
 
     static void tick(Minecraft mc) {
@@ -222,7 +204,10 @@ final class PxS1100Ponder {
         boolean silent = options.getSoundSourceVolume(SoundSource.RECORDS) == 0 || options.getSoundSourceVolume(SoundSource.MASTER) == 0;
         boolean sameScene = active == scene;
         if (sameScene && now == time && silent == muted) {
-            if (++still >= 3) close();
+            if (++still >= 3) {
+                demo.keys();
+                close();
+            }
             return;
         }
         boolean jumped = !sameScene || now != time + 1;
@@ -246,7 +231,7 @@ final class PxS1100Ponder {
         if (reset) {
             close();
             int startFrame = resume ? demo.visibleFrame + 1 : (now - demo.start) * PonderScore.FRAMES_PER_TICK;
-            demo.seek(startFrame - 1);
+            demo.seek(startFrame);
             audio = new KeyboardAudio(demo.settings, frame, demo.score, startFrame);
         }
         audio.tick(mc, frame, Routing.INTERNAL);
@@ -258,13 +243,16 @@ final class PxS1100Ponder {
     }
 
     static final class Demo {
+        private static final int ATTACK_FRAMES = KeyboardSynth.RATE / 100;
+        private static final int RELEASE_FRAMES = KeyboardSynth.RATE * 30 / 1000;
         final CompoundTag view = new CompoundTag();
         final PonderScore score = PonderScore.load();
-        KeyboardKeys keys;
+        PianoState keys;
         KeyboardSettings settings;
         PonderScore.Cursor cursor;
         int start, visibleFrame;
         boolean external;
+        private final int[] lastChange = new int[PianoEvent.KEYS];
 
         Demo() { reset(); }
 
@@ -281,19 +269,55 @@ final class PxS1100Ponder {
         }
 
         void seek(int frame) {
-            keys = new KeyboardKeys();
+            keys = new PianoState();
             cursor = score.cursor();
             visibleFrame = -1;
+            Arrays.fill(lastChange, -RELEASE_FRAMES - 1);
             advance(frame);
         }
 
         void advance(int frame) {
             if (frame <= visibleFrame) return;
+            cursor.advance(frame, this::apply);
             visibleFrame = frame;
-            cursor.advance(frame, events -> events.forEach(keys::apply));
         }
 
-        KeyboardKeys keys() {
+        private void apply(PonderScore.Cue cue) {
+            for (var event : cue.events()) {
+                int note = event.number();
+                if (event.kind() == PianoEvent.Kind.CONTROL) {
+                    keys.apply(event);
+                    if (note == PianoEvent.ALL_SOUND_OFF || note == PianoEvent.ALL_NOTES_OFF) {
+                        Arrays.fill(lastChange, cue.frame() - RELEASE_FRAMES);
+                    }
+                    continue;
+                }
+                boolean down = keys.pressed(note);
+                keys.apply(event);
+                if (event.kind() == PianoEvent.Kind.ON || keys.pressed(note) != down) {
+                    lastChange[note - KeyboardLayout.FIRST] = cue.frame();
+                }
+            }
+        }
+
+        float travel(int note) {
+            int elapsed = visibleFrame - lastChange[note - KeyboardLayout.FIRST];
+            if (keys.pressed(note)) return Math.min(1, (elapsed + 1) / (float) ATTACK_FRAMES);
+            return Math.max(0, 1 - elapsed / (float) RELEASE_FRAMES);
+        }
+
+        boolean movingKeys() {
+            for (int note = KeyboardLayout.FIRST; note <= KeyboardLayout.LAST; note++) {
+                if (travel(note) > 0) return true;
+            }
+            return false;
+        }
+
+        boolean playing() {
+            return start >= 0 && visibleFrame >= 0 && visibleFrame < score.duration() * PonderScore.FRAMES_PER_TICK;
+        }
+
+        PianoState keys() {
             if (active != null && DEMOS.get(active) == this && audio != null) {
                 advance(audio.audibleFrame(System.nanoTime()));
             }

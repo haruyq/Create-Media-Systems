@@ -84,6 +84,11 @@ public final class PianoClient implements PianoPackets.Client {
         return instrument == null ? IDLE : instrument.keys;
     }
 
+    @Nullable
+    public static GrandPianoSampler sampler(int rate, int frames) {
+        return PianoAudio.INSTANCE.sampler(rate, frames);
+    }
+
     @Override public void open(PianoPackets.Open packet) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;

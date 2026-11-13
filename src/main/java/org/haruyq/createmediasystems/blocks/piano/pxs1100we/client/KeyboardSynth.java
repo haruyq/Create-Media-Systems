@@ -201,13 +201,9 @@ final class KeyboardSynth implements AutoCloseable {
     }
 
     void read(byte[] stereo) throws IOException {
-        read(stereo, 0, stereo.length);
-    }
-
-    void read(byte[] stereo, int offset, int length) throws IOException {
-        if (framesToReleaseClick > 0 && (framesToReleaseClick -= length / 4) <= 0) outputs[CLICK_CHANNEL].noteOff(clickNote);
-        int size = pcm.readNBytes(stereo, offset, length);
-        if (size < length) Arrays.fill(stereo, offset + size, offset + length, (byte) 0);
+        if (framesToReleaseClick > 0 && (framesToReleaseClick -= stereo.length / 4) <= 0) outputs[CLICK_CHANNEL].noteOff(clickNote);
+        int size = pcm.readNBytes(stereo, 0, stereo.length);
+        if (size < stereo.length) Arrays.fill(stereo, size, stereo.length, (byte) 0);
     }
 
     @Override public void close() { synth.close(); }
