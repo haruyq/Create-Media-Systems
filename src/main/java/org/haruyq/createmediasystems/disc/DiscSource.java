@@ -245,8 +245,35 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         return List.of("-f", "dvdvideo", "-title", Integer.toString(Math.max(0, title)), "-i", root.toString());
     }
 
-    private byte[] stdin() throws IOException {
+    /** What FFmpeg is given to read the whole title: a Blu-ray's clips, in the playlist's order. */
+    byte[] stdin() throws IOException {
         return playlist == null ? new byte[0] : playlist.concat(root, 0, duration == 0 ? playlist.duration() : duration, 0, access);
+    }
+
+    /**
+     * Its whole title read once from its start, for what follows it ahead of its playing (see DiscScan): the sound
+     * chosen as 48 kHz stereo samples on FFmpeg's output, and its pictures, {@code width} by {@code height} and
+     * {@code fps} a second, as RGB to {@code port} of this computer; decoded on {@code threads} threads.
+     *
+     * <p>Neither output carries times, so both are laid on the title's own: from its zero, what is missing filled
+     * (silence, the picture before) and what overlaps dropped, so the nth sample and the nth picture are where the
+     * title has them. Counted from their own first instead, each join of a Blu-ray's clips left a little over or
+     * out (the sound frame across its in-point, the pictures before its first whole one), adding up clip by clip.
+     */
+    List<String> scan(int width, int height, int fps, int threads, int port) {
+        List<String> command = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-v", "error", "-nostdin",
+                "-threads", Integer.toString(threads)));
+        if (bluray) {
+            command.add("-copyts");
+        }
+        command.addAll(input());
+        command.addAll(List.of("-map", "0:a:" + tracks.audio() + "?",
+                "-af", (bluray ? "aselect=concatdec_select," : "") + "aresample=async=1:min_hard_comp=0.01:first_pts=0",
+                "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", "-f", "s16le", "pipe:1",
+                "-map", "0:v:0", "-vf", (bluray ? "select=concatdec_select," : "") + "fps=" + fps + ":start_time=0,scale="
+                        + width + ":" + height,
+                "-pix_fmt", "rgb24", "-f", "rawvideo", "tcp://127.0.0.1:" + port));
+        return command;
     }
 
     @Override

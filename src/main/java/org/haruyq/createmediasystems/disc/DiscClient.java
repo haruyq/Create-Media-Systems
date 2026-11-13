@@ -18,6 +18,7 @@ import org.haruyq.createmediasystems.p2p.P2pOverlay;
 import org.haruyq.createmediasystems.p2p.Transport;
 import org.haruyq.createmediasystems.playback.ClientStreams;
 import org.haruyq.createmediasystems.playback.MediaSources;
+import org.haruyq.createmediasystems.playback.MediaTap;
 import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.MediaKind;
 
@@ -259,6 +260,23 @@ public final class DiscClient {
             say("failed", true, failed.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Reads the whole of the disc this player shares as {@code link}, ahead of its playing and as fast as it reads,
+     * giving {@code tap} its sound and small pictures with their times in it (see DiscScan). Null if that isn't the
+     * disc shared here (another player's comes as its host encodes it, no faster than it plays), or it is a CD, or
+     * longer than {@code maxMillis}. Cancelling the result stops the reading.
+     */
+    @Nullable
+    public static CompletableFuture<Void> decodeAhead(String link, long maxMillis, MediaTap tap) {
+        DiscSource disc = source;
+        DiscUrl url = shared;
+        if (disc == null || url == null || !url.equals(DiscUrl.parse(link)) || disc.cd() != null
+                || disc.duration() > maxMillis / 1000.0) {
+            return null;
+        }
+        return DiscScan.start(disc, tap);
     }
 
     /** What the P2P debug overlay shows of the disc streams (see DiscStream#stats); nothing without one. */

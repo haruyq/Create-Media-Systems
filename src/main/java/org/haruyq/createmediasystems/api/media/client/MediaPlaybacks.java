@@ -3,10 +3,12 @@ package org.haruyq.createmediasystems.api.media.client;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntUnaryOperator;
 
+import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.playback.CachedDecoder;
 import org.haruyq.createmediasystems.playback.MediaTap;
 import org.haruyq.createmediasystems.playback.MediaTaps;
 import org.haruyq.createmediasystems.playback.NativeAudio;
+import org.haruyq.createmediasystems.stream.DiscUrl;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
@@ -77,10 +79,17 @@ public final class MediaPlaybacks {
      * sound and small pictures, their times counted from wherever its first is. {@code videoHeight} is the tallest
      * picture its disc plays (see MediaSources.Track). Null if no copy is kept, or the track is live or longer than
      * {@code maxMillis}; cancelling the result stops the decoding.
+     *
+     * <p>A disc a player shares has its only copy in that player's drive: there it is read whole from the disc, by a
+     * reader of its own beside the one that plays it, and nowhere else at all (null). On a real drive the two readers
+     * seek against each other, so ask for it while the disc waits (see MediaSources.hold), not while it plays.
      */
     @Nullable
     public static CompletableFuture<Void> decodeAhead(String track, int videoHeight, long maxMillis,
                                                       MediaListener listener) {
+        if (DiscUrl.parse(track) != null) {
+            return DiscClient.decodeAhead(track, maxMillis, new Tap(listener));
+        }
         return CachedDecoder.decode(track, videoHeight, maxMillis, new Tap(listener), () -> null);
     }
 }
