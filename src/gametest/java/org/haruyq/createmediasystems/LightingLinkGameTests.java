@@ -5,6 +5,9 @@ import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.haruyq.createmediasystems.api.lighting.ConsoleSetting;
+import org.haruyq.createmediasystems.api.lighting.ConsoleView;
+import org.haruyq.createmediasystems.api.lighting.GroupView;
 import org.haruyq.createmediasystems.lighting.ConsoleLayout;
 import org.haruyq.createmediasystems.lighting.LightingConsoleBlock;
 import org.haruyq.createmediasystems.lighting.LightingLinkItem;
@@ -104,6 +107,30 @@ public class LightingLinkGameTests {
                 });
             });
         });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void aModRunsTheShowFromTheServerThroughAnyPartOfTheConsole(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 2, 2));
+        console(level, origin);
+        BlockPos fixture = origin.east(4);
+        level.setBlockAndUpdate(fixture, LightingFeature.STRIP_LIGHT.get().defaultBlockState());
+        LightingConsoleBlock.Entity root = (LightingConsoleBlock.Entity) level.getBlockEntity(origin);
+        helper.assertTrue(root.bind((StageLightBlock.Entity) level.getBlockEntity(fixture), 2), "a strip light joins a group");
+        // Not the root, and no player near: as a mod on the server has it.
+        ConsoleView part = (ConsoleView) level.getBlockEntity(ConsoleLayout.at(origin, Direction.SOUTH, 3, 0, 1));
+        part.set(ConsoleSetting.STROBE, 2, 0, 4, 0);
+        part.set(ConsoleSetting.PATTERN, 2, 0, GroupView.Pattern.WASH.ordinal(), 0);
+        part.set(ConsoleSetting.STROBE, 3, 0, 99, 0);
+        part.set(ConsoleSetting.STROBE, 9, 0, 4, 0);
+        java.util.UUID performer = java.util.UUID.randomUUID();
+        part.track(2, performer);
+        GroupView group = part.controller().groupSettings(2);
+        helper.assertTrue(group.strobe() == 4 && group.pattern() == GroupView.Pattern.WASH, "settings reach the root");
+        helper.assertTrue(performer.equals(root.settings.groups[2].target), "the group follows whom it is told to");
+        helper.assertTrue(root.settings.groups[3].strobe == 10, "a setting out of bounds is brought within them");
+        helper.succeed();
     }
 
     static List<BlockPos> console(ServerLevel level, BlockPos origin) {

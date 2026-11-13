@@ -12,9 +12,11 @@
         { "name": "Origin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "Direction", "type": "float", "count": 3, "values": [ 0.0, -1.0, 0.0 ] },
         { "name": "Tangent", "type": "float", "count": 1, "values": [ 0.2 ] },
+        { "name": "Softness", "type": "float", "count": 1, "values": [ 0.35 ] },
         { "name": "Range", "type": "float", "count": 1, "values": [ 32.0 ] },
         { "name": "Strength", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "LightColor", "type": "float", "count": 3, "values": [ 1.0, 1.0, 1.0 ] },
+        { "name": "Shade", "type": "int", "count": 1, "values": [ 0 ] },
         { "name": "Shadowed", "type": "int", "count": 1, "values": [ 0 ] },
         { "name": "GridOrigin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "GridSize", "type": "int", "count": 1, "values": [ 128 ] }

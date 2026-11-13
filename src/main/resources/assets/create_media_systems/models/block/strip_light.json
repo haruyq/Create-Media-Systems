@@ -1,0 +1,103 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "create_media_systems:block/lighting_console_casing",
+    "metal": "create_media_systems:block/lighting_console_frame",
+    "casing": "create_media_systems:block/lighting_console_casing",
+    "lens": "minecraft:block/light_blue_concrete"
+  },
+  "elements": [
+    {
+      "from": [2, 0, 2],
+      "to": [14, 2, 14],
+      "faces": {
+        "down": {"texture": "#metal"},
+        "up": {"texture": "#metal"},
+        "north": {"texture": "#metal"},
+        "south": {"texture": "#metal"},
+        "west": {"texture": "#metal"},
+        "east": {"texture": "#metal"}
+      }
+    },
+    {
+      "from": [5, 2, 5],
+      "to": [11, 3, 11],
+      "faces": {
+        "down": {"texture": "#metal"},
+        "up": {"texture": "#metal"},
+        "north": {"texture": "#metal"},
+        "south": {"texture": "#metal"},
+        "west": {"texture": "#metal"},
+        "east": {"texture": "#metal"}
+      }
+    },
+    {
+      "from": [2.5, 2, 6],
+      "to": [13.5, 3.5, 10],
+      "faces": {
+        "down": {"texture": "#metal"},
+        "up": {"texture": "#metal"},
+        "north": {"texture": "#metal"},
+        "south": {"texture": "#metal"},
+        "west": {"texture": "#metal"},
+        "east": {"texture": "#metal"}
+      }
+    },
+    {
+      "from": [2.75, 3.5, 7.25],
+      "to": [3.75, 5.5, 8.75],
+      "faces": {
+        "north": {"texture": "#metal"},
+        "south": {"texture": "#metal"},
+        "west": {"texture": "#metal"},
+        "east": {"texture": "#metal"}
+      }
+    },
+    {
+      "from": [12.25, 3.5, 7.25],
+      "to": [13.25, 5.5, 8.75],
+      "faces": {
+        "north": {"texture": "#metal"},
+        "south": {"texture": "#metal"},
+        "west": {"texture": "#metal"},
+        "east": {"texture": "#metal"}
+      }
+    },
+    {
+      "from": [0, 4, 6.4],
+      "to": [16, 6.9, 9.75],
+      "faces": {
+        "down": {"texture": "#casing"},
+        "up": {"texture": "#casing"},
+        "north": {"texture": "#casing"},
+        "south": {"texture": "#casing"},
+        "west": {"texture": "#casing"},
+        "east": {"texture": "#casing"}
+      }
+    },
+    {
+      "from": [0, 3.85, 6.25],
+      "to": [16, 7.05, 6.65],
+      "faces": {
+        "down": {"texture": "#metal"},
+        "up": {"texture": "#metal"},
+        "north": {"texture": "#metal"},
+        "south": {"texture": "#metal"},
+        "west": {"texture": "#metal"},
+        "east": {"texture": "#metal"}
+      }
+    },
+    {
+      "from": [0.5, 4.5, 6.15],
+      "to": [15.5, 6.4, 6.25],
+      "faces": {
+        "down": {"texture": "#lens"},
+        "up": {"texture": "#lens"},
+        "north": {"texture": "#lens"},
+        "south": {"texture": "#lens"},
+        "west": {"texture": "#lens"},
+        "east": {"texture": "#lens"}
+      }
+    }
+  ]
+}

@@ -22,7 +22,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** Stage lights and laser projectors, the lighting console that drives them, and the LED tuning wrench that links them. */
+/** Stage lights, strip lights and laser projectors, the lighting console that drives them, and the LED tuning wrench that links them. */
 public final class LightingFeature implements Feature {
     public static final DeferredBlock<StageLightBlock> STAGE_LIGHT = BLOCKS.register("stage_light",
             () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
@@ -31,9 +31,13 @@ public final class LightingFeature implements Feature {
             () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion(),
                     StageLightBlock.Spec.LASER));
     public static final DeferredItem<?> LASER_PROJECTOR_ITEM = ITEMS.registerSimpleBlockItem("laser_projector", LASER_PROJECTOR);
+    public static final DeferredBlock<StageLightBlock> STRIP_LIGHT = BLOCKS.register("strip_light",
+            () -> new StageLightBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion(),
+                    StageLightBlock.Spec.STRIP));
+    public static final DeferredItem<?> STRIP_LIGHT_ITEM = ITEMS.registerSimpleBlockItem("strip_light", STRIP_LIGHT);
     public static final Supplier<BlockEntityType<StageLightBlock.Entity>> STAGE_LIGHT_ENTITY = BLOCK_ENTITIES.register(
-            "stage_light", () -> BlockEntityType.Builder.of(StageLightBlock.Entity::new, STAGE_LIGHT.get(), LASER_PROJECTOR.get())
-                    .build(null));
+            "stage_light", () -> BlockEntityType.Builder.of(StageLightBlock.Entity::new, STAGE_LIGHT.get(),
+                    LASER_PROJECTOR.get(), STRIP_LIGHT.get()).build(null));
     public static final DeferredBlock<LightingConsoleBlock> LIGHTING_CONSOLE = BLOCKS.register("lighting_console",
             () -> new LightingConsoleBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).noOcclusion()));
     public static final DeferredItem<?> LIGHTING_CONSOLE_ITEM = ITEMS.registerSimpleBlockItem("lighting_console", LIGHTING_CONSOLE);

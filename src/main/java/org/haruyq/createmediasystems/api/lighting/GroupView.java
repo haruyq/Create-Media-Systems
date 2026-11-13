@@ -11,7 +11,7 @@ import org.jetbrains.annotations.Nullable;
 public interface GroupView {
     enum Motion { FIXED, SWEEP, CIRCLE, TRACK }
 
-    enum Pattern { SPOT, BEAM, LASER_RAY, LASER_FAN, LASER_SHEET }
+    enum Pattern { SPOT, BEAM, LASER_RAY, LASER_FAN, LASER_SHEET, WASH }
 
     enum Mapping { SEQUENCE, SPLIT, GRADIENT, PER_FIXTURE }
 
@@ -55,6 +55,9 @@ public interface GroupView {
 
     /** Degrees. */
     float tilt();
+
+    /** How many times a second its lights flash; 0 for a steady light. */
+    float strobe();
 
     /** The player its lights follow (Motion.TRACK); null for none. */
     @Nullable

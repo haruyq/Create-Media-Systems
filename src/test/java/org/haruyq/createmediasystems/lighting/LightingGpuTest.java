@@ -59,8 +59,12 @@ class LightingGpuTest {
     void theSpotShadersLightAsLightingIlluminationDoes() throws IOException {
         String fragment = shader("spot_light.fsh");
         says(fragment, "max(" + LightingGpu.MIN_RADIUS + ", along * Tangent)");
-        says(fragment, "(1.0 - radial) / " + LightingGpu.EDGE_SOFTNESS);
+        says(fragment, "(1.0 - radial) / Softness");
+        says(shader("spot_light.json"), "\"Softness\", \"type\": \"float\", \"count\": 1, \"values\": [ "
+                + LightingGpu.EDGE_SOFTNESS + " ]");
         says(fragment, "Range * " + LightingGpu.END_FADE);
+        says(fragment, "opacity * " + LightingGpu.SHADE + ")");
+        says(fragment, "vec3(1.0), " + LightingGpu.LIFT + ")");
         String vertex = shader("spot_light.vsh");
         says(vertex, "gl_VertexID / " + LightingGpu.CELL_VERTICES);
         says(vertex, "corners[gl_VertexID % " + LightingGpu.CELL_VERTICES + "]");

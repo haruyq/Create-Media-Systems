@@ -31,10 +31,16 @@ final class LightingGpu {
     // spot_light.fsh: how brightly a cone lights a point (LightingIllumination.exposure).
     /** The cone's least radius, so its tip still lights the block it is in. */
     static final double MIN_RADIUS = 0.08;
-    /** How far in from its edge (a share of its radius) the light is at full strength. */
+    /** How far in from its edge (a share of its radius) the light is at full strength: the shader's Softness. */
     static final double EDGE_SOFTNESS = 0.35;
+    /** A wash's: it fades all the way out from its middle. */
+    static final double WASH_SOFTNESS = 1;
     /** How much of its range (a share, at least a block) it fades out over at its far end. */
     static final double END_FADE = 0.2;
+    /** How much of what a face shows gives way to a light at full strength on it, before the light is added. */
+    static final double SHADE = 0.6;
+    /** How much of a light shows on a face whatever the face's own colour. */
+    static final double LIFT = 0.25;
 
     // spot_light.vsh: the light a face's cells get, a texel a cell, a byte a corner (red first), four vertices a cell.
     static final int VISIBILITY_WIDTH = 256;

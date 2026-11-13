@@ -64,6 +64,7 @@ class BlockResourcesTest {
             Map.entry("reload_glow", new Row(Tool.NONE, false, false)),
             Map.entry("speaker", new Row(Tool.AXE, false, true)),
             Map.entry("stage_light", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("strip_light", new Row(Tool.PICKAXE, false, true)),
             Map.entry("train_detector", new Row(Tool.PICKAXE, false, true)),
             Map.entry("train_disc_reader", new Row(Tool.AXE, false, true)),
             Map.entry("train_signal_receiver", new Row(Tool.PICKAXE, false, true)),

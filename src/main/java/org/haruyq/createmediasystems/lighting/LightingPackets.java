@@ -280,9 +280,15 @@ public final class LightingPackets {
             boolean valid(Change change) {
                 return Math.abs(change.value) == 1 || Math.abs(change.value) == LightingSettings.FAST_RANGE_STEP;
             }
-        };
+        },
+        /** Value: flashes a second, 0 for none. A step past either end comes round to the other. */
+        STROBE(25, "strobe", Press.STEP,
+                (s, g, i, step, fine) -> Math.floorMod(Math.round(g.strobe) + step, (int) LightingSettings.STROBE.max() + 1),
+                view -> view.group().strobe <= 0 ? LightingText.on(false)
+                        : LightingText.number(Math.round(view.group().strobe) + " Hz"),
+                (console, s, g, change, value, player) -> set(() -> g.strobe = change.value));
 
-        private static final Control[] BY_ID = new Control[25];
+        private static final Control[] BY_ID = new Control[26];
 
         static {
             for (Control control : values()) {

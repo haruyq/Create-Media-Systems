@@ -1,0 +1,40 @@
+{
+  "variants": {
+    "facing=north,hanging=false": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 0
+    },
+    "facing=north,hanging=true": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 0,
+      "x": 180
+    },
+    "facing=east,hanging=false": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 90
+    },
+    "facing=east,hanging=true": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 90,
+      "x": 180
+    },
+    "facing=south,hanging=false": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 180
+    },
+    "facing=south,hanging=true": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 180,
+      "x": 180
+    },
+    "facing=west,hanging=false": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 270
+    },
+    "facing=west,hanging=true": {
+      "model": "create_media_systems:block/stage_light_base",
+      "y": 270,
+      "x": 180
+    }
+  }
+}

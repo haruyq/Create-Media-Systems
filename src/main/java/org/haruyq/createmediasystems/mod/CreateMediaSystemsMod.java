@@ -82,8 +82,8 @@ public final class CreateMediaSystemsMod {
                 VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM, VideoFeature.EQUALIZER_ITEM,
                 DisplayFeature.DISPLAY_ITEM, DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL));
         sections.put("lighting", List.of(
-                LightingFeature.STAGE_LIGHT_ITEM, LightingFeature.LASER_PROJECTOR_ITEM, LightingFeature.LIGHTING_CONSOLE_ITEM,
-                LightingFeature.LIGHTING_MONITOR_ITEM, LightingFeature.LIGHTING_LINK));
+                LightingFeature.STAGE_LIGHT_ITEM, LightingFeature.STRIP_LIGHT_ITEM, LightingFeature.LASER_PROJECTOR_ITEM,
+                LightingFeature.LIGHTING_CONSOLE_ITEM, LightingFeature.LIGHTING_MONITOR_ITEM, LightingFeature.LIGHTING_LINK));
         sections.put("broadcast", List.of(
                 BroadcastFeature.BASE_ITEM, BroadcastFeature.MAST_ITEM, BroadcastFeature.HORN_ITEM,
                 BroadcastFeature.DIGITAL_HORN_ITEM, BroadcastFeature.ARRAY_ITEM,

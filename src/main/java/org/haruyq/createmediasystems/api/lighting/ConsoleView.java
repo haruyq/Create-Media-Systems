@@ -90,8 +90,16 @@ public interface ConsoleView {
     GroupView groupSettings(int group);
 
     /**
-     * Changes a setting the console keeps as its own controls do, here and on the server (client only):
-     * {@code group} it applies to, and the slot {@code index}, {@code value} and {@code other} as that control takes.
+     * Changes a setting the console keeps as its own controls do: {@code group} it applies to, and the slot
+     * {@code index}, {@code value} and {@code other} as that control takes. On a client, here and on the server, which
+     * takes it as the player's own (within reach, with an empty hand or a wrench). On the server, at once and for
+     * every player, whoever is near: what a mod running the show there calls.
      */
     void set(ConsoleSetting setting, int group, int index, float value, float other);
+
+    /**
+     * Has {@code group}'s lights follow {@code player} (under Motion.TRACK, set with ConsoleSetting.MOTION), or
+     * nobody with null. Server only.
+     */
+    void track(int group, @Nullable UUID player);
 }

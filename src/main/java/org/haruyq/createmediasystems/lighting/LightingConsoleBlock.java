@@ -529,7 +529,26 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         @Override
         public void set(ConsoleSetting setting, int group, int index, float value, float other) {
-            LightingConsolePage.send(this, LightingPackets.Control.valueOf(setting.name()), group, index, value, other);
+            Entity root = controller();
+            if (root == null) {
+                return;
+            }
+            LightingPackets.Control control = LightingPackets.Control.valueOf(setting.name());
+            if (level.isClientSide) {
+                LightingConsolePage.send(root, control, group, index, value, other);
+            } else if (LightingPackets.apply(root, new LightingPackets.Change(root.getBlockPos(), group, control, index,
+                    value, other), null)) {
+                root.changed();
+            }
+        }
+
+        @Override
+        public void track(int group, @Nullable UUID player) {
+            Entity root = controller();
+            if (root != null && !level.isClientSide && group >= 0 && group < LightingSettings.GROUPS) {
+                root.settings.groups[group].target = player;
+                root.changed();
+            }
         }
 
         public int groupSize(int group) {

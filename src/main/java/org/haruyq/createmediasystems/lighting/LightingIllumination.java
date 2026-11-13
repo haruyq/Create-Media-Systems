@@ -28,6 +28,7 @@ import org.lwjgl.system.MemoryUtil;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -69,7 +70,10 @@ public final class LightingIllumination {
     private static final ArrayDeque<SurfaceScan> SCANS = new ArrayDeque<>();
     private static ShaderInstance shader;
     /** This frame's lit surfaces in the world, drawn with the beams (LightingRenderer.effects). */
-    private static final List<Runnable> SURFACES = new ArrayList<>();
+    private static final List<Beam> SURFACES = new ArrayList<>();
+    /** Under a shader pack, the frame whose beams packSurfaces holds; see surfaces. */
+    private static long packFrame = -1;
+    private static List<Beam> packSurfaces;
     /** Sections and chunk columns whose blocks changed since the last frame (see WorldEvents). */
     private static final LongOpenHashSet DIRTY_SECTIONS = new LongOpenHashSet();
     private static final LongOpenHashSet DIRTY_COLUMNS = new LongOpenHashSet();
@@ -138,6 +142,7 @@ public final class LightingIllumination {
         Vec3 origin;
         Vec3 direction;
         double tangent;
+        double softness = LightingGpu.EDGE_SOFTNESS;
         float range;
         float strength;
         long at = -1;
@@ -202,6 +207,8 @@ public final class LightingIllumination {
         float drawTangent;
         float drawRange;
         float drawStrength;
+        Matrix4f drawModelView;
+        Matrix4f drawProjection;
         final RenderType type = SurfaceLight.type("create_media_systems_spot_light", () -> shader, this::setup);
 
         private void setup() {
@@ -216,6 +223,7 @@ public final class LightingIllumination {
             shader.safeGetUniform("Origin").set(drawOrigin);
             shader.safeGetUniform("Direction").set(drawDirection);
             shader.safeGetUniform("Tangent").set(drawTangent);
+            shader.safeGetUniform("Softness").set((float) softness);
             shader.safeGetUniform("Range").set(drawRange);
             shader.safeGetUniform("Strength").set(drawStrength);
             shader.safeGetUniform("LightColor").set(drawColor);
@@ -336,13 +344,18 @@ public final class LightingIllumination {
         }
 
         /** Draws the lit faces, their vertices in the lamp's block space, with the lamp at {@code modelView}. */
-        void draw(Matrix4f modelView, Matrix4f projection) {
+        /** One of its two passes (spot_light.fsh): with {@code shade}, the faces give way to it; without, it is added. */
+        void draw(boolean shade) {
             if (buffer == null || (gpu ? !meshed : empty) || shader == null) {
                 return;
             }
             type.setupRenderState();
+            shader.safeGetUniform("Shade").set(shade ? 1 : 0);
+            if (shade) {
+                RenderSystem.blendFunc(GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            }
             buffer.bind();
-            buffer.drawWithShader(modelView, projection, shader);
+            buffer.drawWithShader(drawModelView, drawProjection, shader);
             VertexBuffer.unbind();
             type.clearRenderState();
         }
@@ -511,13 +524,19 @@ public final class LightingIllumination {
      * LightingGpu's constants).
      */
     static float exposure(double x, double y, double z, Vec3 direction, double tangent, double range, double margin) {
+        return exposure(x, y, z, direction, tangent, range, margin, LightingGpu.EDGE_SOFTNESS);
+    }
+
+    /** As above, the light at full strength {@code softness} of its radius in from its edge. */
+    static float exposure(double x, double y, double z, Vec3 direction, double tangent, double range, double margin,
+                          double softness) {
         double along = x * direction.x + y * direction.y + z * direction.z;
         if (along <= 0 || along >= range) {
             return 0;
         }
         double radius = Math.max(LightingGpu.MIN_RADIUS, along * tangent);
         double radial = Math.max(0, Math.sqrt(Math.max(0, x * x + y * y + z * z - along * along)) - margin) / radius;
-        float edge = Mth.clamp((float) ((1 - radial) / LightingGpu.EDGE_SOFTNESS), 0, 1);
+        float edge = Mth.clamp((float) ((1 - radial) / softness), 0, 1);
         float distance = Mth.clamp((float) ((range - along) / Math.max(1, range * LightingGpu.END_FADE)), 0, 1);
         return edge * edge * (3 - 2 * edge) * distance;
     }
@@ -552,7 +571,7 @@ public final class LightingIllumination {
                     .subtract(Vec3.atLowerCornerOf(lamp.getBlockPos()));
             Vec3 offset = local.subtract(beam.origin);
             float value = exposure(offset.x, offset.y, offset.z, beam.direction, beam.tangent, beam.range,
-                    entity.getBbWidth() * 0.35) * beam.strength;
+                    entity.getBbWidth() * 0.35, beam.softness) * beam.strength;
             Vec3 origin = SableCompat.toRenderWorld(entity.level(), lamp.getBlockPos(),
                     beam.origin.add(Vec3.atLowerCornerOf(lamp.getBlockPos())));
             if (value > 0 && LightingRaycast.rendered(entity.level(), lamp.getBlockPos()).visible(origin, target)) {
@@ -564,6 +583,8 @@ public final class LightingIllumination {
 
     /** The most blocks across the surface hit a stage light's faces are found for, either way from the hit. */
     public static final int STAGE_RADIUS = 8;
+    /** As STAGE_RADIUS, for a wash: its cone is wide, and cut short it would end in a line. */
+    public static final int WASH_RADIUS = 16;
     /** The most a fixture may ask for (see render): a floodlight over a hall's floor. */
     public static final int MAX_RADIUS = 48;
 
@@ -588,6 +609,17 @@ public final class LightingIllumination {
     public static void render(StageLightBlock.Entity lamp, Vec3 origin, Vec3 direction, double halfAngle, float range,
                               float strength, int color, LightingRaycast.Hit hit, LightingRaycast rays,
                               Matrix4f matrix, MultiBufferSource buffers, int maxRadius) {
+        render(lamp, origin, direction, halfAngle, range, strength, color, hit, rays, matrix, buffers, maxRadius,
+                LightingGpu.EDGE_SOFTNESS);
+    }
+
+    /**
+     * As above, the light at full strength {@code softness} of the cone's radius in from its edge (0 to 1, not 0): a
+     * spot's is 0.35, and at 1 it fades all the way out from its middle, as a wash does.
+     */
+    public static void render(StageLightBlock.Entity lamp, Vec3 origin, Vec3 direction, double halfAngle, float range,
+                              float strength, int color, LightingRaycast.Hit hit, LightingRaycast rays,
+                              Matrix4f matrix, MultiBufferSource buffers, int maxRadius, double softness) {
         Level level = lamp.getLevel();
         long frame = WorldEvents.frame();
         Beam beam = BEAMS.computeIfAbsent(lamp, ignored -> new Beam());
@@ -600,6 +632,7 @@ public final class LightingIllumination {
         beam.origin = origin;
         beam.direction = direction;
         beam.tangent = Math.tan(halfAngle);
+        beam.softness = softness;
         beam.range = range;
         beam.strength = strength * Math.max(color >> 16 & 255, Math.max(color >> 8 & 255, color & 255)) / 255;
         beam.at = now;
@@ -793,15 +826,35 @@ public final class LightingIllumination {
         beam.drawTangent = (float) beam.tangent;
         beam.drawRange = range;
         beam.drawStrength = strength;
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
-        Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        beam.drawModelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(matrix);
+        beam.drawProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
         if (WorldEvents.isClientWorld(level)) {
-            Runnable draw = () -> beam.draw(modelView, projection);
-            if (!ScreenLight.afterPack(draw)) {
-                SURFACES.add(draw);
-            }
+            surfaces(frame).add(beam);
         } else {
-            beam.draw(modelView, projection);
+            draw(List.of(beam));
+        }
+    }
+
+    /**
+     * Where this frame's lit beams wait to be drawn together: SURFACES, or under a shader pack a list of the frame's
+     * own, drawn once the pack has finished it (ScreenLight.afterPack).
+     */
+    private static List<Beam> surfaces(long frame) {
+        if (packFrame != frame) {
+            packFrame = frame;
+            List<Beam> queued = new ArrayList<>();
+            packSurfaces = ScreenLight.afterPack(() -> draw(queued)) ? queued : null;
+        }
+        return packSurfaces != null ? packSurfaces : SURFACES;
+    }
+
+    /** Both passes of {@code beams}: every one's shade before any's light, so lights that overlap still add up. */
+    private static void draw(List<Beam> beams) {
+        for (Beam beam : beams) {
+            beam.draw(true);
+        }
+        for (Beam beam : beams) {
+            beam.draw(false);
         }
     }
 
@@ -930,7 +983,7 @@ public final class LightingIllumination {
 
     /** Draws this frame's lit surfaces; LightingRenderer.effects, with the beams. */
     public static void drawSurfaces() {
-        SURFACES.forEach(Runnable::run);
+        draw(SURFACES);
         SURFACES.clear();
     }
 

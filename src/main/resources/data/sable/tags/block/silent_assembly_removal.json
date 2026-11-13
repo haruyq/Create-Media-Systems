@@ -9,6 +9,7 @@
     "create_media_systems:disc_cell_charger",
     "create_media_systems:stage_light",
     "create_media_systems:laser_projector",
+    "create_media_systems:strip_light",
     "create_media_systems:lighting_console",
     "create_media_systems:lighting_monitor",
     "create_media_systems:hifi_stack",

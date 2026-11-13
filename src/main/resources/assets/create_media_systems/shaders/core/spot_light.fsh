@@ -1,7 +1,7 @@
 #version 150
 
 // A stage light's light on a block face (LightingIllumination), added to the face as it is: the beam's cone from
-// Origin along Direction, Tangent wide, Range long (the same cone as LightingIllumination.exposure, with
+// Origin along Direction, Tangent wide, Range long, at full strength Softness of its radius in from its edge (the same cone as LightingIllumination.exposure, with
 // LightingGpu's constants, which LightingGpuTest checks here), falling on the
 // face as it is turned to the light. Everything is in the lamp's block space. The vertices' colour is the face's tint,
 // its alpha how much of the light gets there past the blocks between (traced on the CPU at each corner of a
@@ -13,9 +13,13 @@ uniform sampler2D Sampler0;
 uniform vec3 Origin;
 uniform vec3 Direction;
 uniform float Tangent;
+uniform float Softness;
 uniform float Range;
 uniform float Strength;
 uniform vec3 LightColor;
+// Each light is drawn twice, every light's first pass before any's second. First, with Shade, what the face shows
+// gives way to the light: under the sun a light only added would turn white, and lose its colour. Then it is added.
+uniform int Shade;
 // With Shadowed, the light is traced here, a pixel at a time, through the blocks round the camera (LightingOcclusion):
 // a texel a block, a bit for each of its half-block corners a collision shape fills (bit x + 2y + 4z). Its unit is set
 // on the program itself; Minecraft only binds 2D samplers.
@@ -88,7 +92,7 @@ void main() {
     }
     float radius = max(0.08, along * Tangent);
     float radial = sqrt(max(0.0, dot(offset, offset) - along * along)) / radius;
-    float edge = clamp((1.0 - radial) / 0.35, 0.0, 1.0);
+    float edge = clamp((1.0 - radial) / Softness, 0.0, 1.0);
     float reach = clamp((Range - along) / max(1.0, Range * 0.2), 0.0, 1.0);
     float exposure = edge * edge * (3.0 - 2.0 * edge) * reach;
     float facing = max(0.0, dot(normalize(localNormal), -normalize(offset)));
@@ -103,5 +107,10 @@ void main() {
     if (Shadowed != 0 && reaches(localPos + normalize(localNormal) * 0.02) <= 0.0) {
         discard;
     }
-    fragColor = vec4(texel.rgb * LightColor * tint.rgb, opacity);
+    if (Shade != 0) {
+        fragColor = vec4(0.0, 0.0, 0.0, opacity * 0.6);
+    } else {
+        // Some of the light shows whatever the face's own colour, so a dark face, or one of another colour, is seen lit.
+        fragColor = vec4(mix(texel.rgb * tint.rgb, vec3(1.0), 0.25) * LightColor, opacity);
+    }
 }
