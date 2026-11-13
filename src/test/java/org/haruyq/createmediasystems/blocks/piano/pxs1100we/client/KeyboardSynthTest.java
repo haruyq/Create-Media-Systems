@@ -124,7 +124,7 @@ class KeyboardSynthTest {
     }
 
     private static int peak(KeyboardSynth synth, int blocks) throws Exception {
-        byte[] audio = new byte[KeyboardSynth.FRAMES_PER_BUFFER * 4];
+        byte[] audio = new byte[KeyboardSynth.RATE / 50 * 4];
         int peak = 0;
         for (int block = 0; block < blocks; block++) {
             synth.read(audio);

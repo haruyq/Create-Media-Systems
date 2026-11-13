@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -31,6 +30,7 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.model.CompositeModel;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlockEntity;
@@ -49,9 +49,8 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
     private static final List<String> LEDS = List.of("power", "function", "sound_mode", "metronome", "play", "rec",
             "grand_piano", "elec_piano");
     private static final RenderType LAYER = RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS);
-    private static final float PONDER_BLACK_KEY_TILT = -7;
+    private static final float BLACK_KEY_TILT = -7;
     private static final Map<String, ModelResourceLocation> MODELS = new HashMap<>();
-    private final Map<KeyboardBlockEntity, Motion> motions = new WeakHashMap<>();
     private BakedModel staticKeys;
     private List<List<BakedQuad>> restingQuads = List.of();
 
@@ -80,7 +79,8 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
                 : instrument == null ? KeyboardSettings.load(view.getCompound("Settings")) : instrument.settings;
         var keys = instrument == null ? REST : instrument.keys;
         var demoKeys = demo == null ? null : demo.keys();
-        var motion = motions.computeIfAbsent(keyboard, ignored -> new Motion());
+        var motion = instrument == null ? null : instrument.motion;
+        long renderTime = System.nanoTime();
         boolean stand = state.getValue(KeyboardBlock.STAND), rack = state.getValue(KeyboardBlock.RACK);
         boolean powered = view.getBoolean("Powered");
         long now = keyboard.getLevel() == null ? 0 : keyboard.getLevel().getGameTime();
@@ -106,7 +106,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
             pose.translate(origin.x, origin.y, origin.z);
             pose.scale(MODEL.fullScale, MODEL.fullScale, MODEL.fullScale);
         }
-        if (rack && distance > 24 * 24) {
+        if (rack && distance > 24 * 24 && (motion == null || !motion.moving(renderTime))) {
             draw(stand ? "full" : "full_tabletop", pose, out, light, overlay);
             pose.popPose();
             return;
@@ -131,7 +131,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         draw(stand ? "body" : "body_tabletop", pose, out, light, overlay);
         if (!stand) pose.translate(0, MODEL.tabletop, 0);
         if (rack) draw("music_stand", pose, out, light, overlay);
-        renderKeys(motion, keys, demo, pose, out, light, overlay);
+        renderKeys(motion, demo, renderTime, pose, out, light, overlay);
         pose.pushPose();
         pose.translate(MODEL.knob.x, MODEL.knob.y, MODEL.knob.z);
         pose.mulPose(Axis.YP.rotationDegrees(Mth.lerp(settings.volume / 127f, 150, -150)));
@@ -161,16 +161,16 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         pose.popPose();
     }
 
-    private void renderKeys(Motion motion, KeyboardKeys keys, @Nullable PxS1100Ponder.Demo demo,
+    private void renderKeys(@Nullable KeyMotion motion, @Nullable PxS1100Ponder.Demo demo, long now,
             PoseStack pose, VertexConsumer out, int light, int overlay) {
-        if (demo == null ? !motion.update(keys) : !demo.movingKeys()) {
+        if (demo == null ? motion == null || !motion.moving(now) : !demo.movingKeys()) {
             draw("keys_static", pose, out, light, overlay);
             return;
         }
         cacheRestingQuads();
         for (int i = 0; i < MODEL.keys.size(); i++) {
             var key = MODEL.keys.get(i);
-            float amount = demo == null ? motion.amount[i] : demo.travel(key.note());
+            float amount = demo == null ? motion.travel(key.note(), now) : demo.travel(key.note());
             if (amount == 0 && !restingQuads.isEmpty()) {
                 for (var quad : restingQuads.get(i)) {
                     out.putBulkData(pose.last(), quad, 1, 1, 1, 1, light, overlay);
@@ -180,7 +180,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
             pose.pushPose();
             pose.translate(key.pivot().x, key.pivot().y, key.pivot().z);
             if (amount != 0) {
-                float tilt = demo != null && key.black() ? PONDER_BLACK_KEY_TILT : MODEL.tilt;
+                float tilt = key.black() ? BLACK_KEY_TILT : MODEL.tilt;
                 pose.mulPose(Axis.XP.rotationDegrees(tilt * amount));
             }
             draw(key.model(), pose, out, light, overlay);
@@ -246,21 +246,4 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         return bounds.inflate(.15);
     }
 
-    private static final class Motion {
-        final float[] amount = new float[88];
-        private long last = System.nanoTime() - 16_000_000L;
-
-        boolean update(KeyboardKeys keys) {
-            long now = System.nanoTime();
-            float elapsed = (now - last) * 1e-9f;
-            last = now;
-            boolean moving = false;
-            for (int i = 0; i < amount.length; i++) {
-                boolean pressed = keys.pressed(MODEL.keys.get(i).note());
-                amount[i] = Mth.approach(amount[i], pressed ? 1 : 0, elapsed / (pressed ? .04f : .07f));
-                moving |= amount[i] != 0;
-            }
-            return moving;
-        }
-    }
 }

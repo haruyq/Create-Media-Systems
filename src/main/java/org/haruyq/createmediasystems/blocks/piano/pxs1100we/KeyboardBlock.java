@@ -144,9 +144,29 @@ public final class KeyboardBlock extends BaseEntityBlock implements IWrenchable,
 
     public static Part dcInput(BlockState state) {
         if (!state.getValue(FULL_SIZE)) return Part.BASS;
-        var layout = KeyboardLayout.PX;
-        var at = modelToLocal(state, layout.dcIn.add(0, state.getValue(STAND) ? 0 : layout.tabletop, 0));
+        var at = modelToLocal(state, dcJack(state));
         return at.y >= 1 ? Part.TOP_BASS : Part.BASS;
+    }
+
+    public static Vec3 dcJack(BlockPos root, BlockState state) {
+        return point(root, state, dcJack(state));
+    }
+
+    private static Vec3 dcJack(BlockState state) {
+        var layout = KeyboardLayout.PX;
+        return layout.dcIn.add(0, state.getValue(STAND) ? 0 : layout.tabletop, 0);
+    }
+
+    private static boolean isDcPort(BlockPos pos, BlockState state, Direction back) {
+        return state.is(PxS1100Feature.BLOCK.get()) && state.getValue(FACING).getOpposite() == back
+                && dcInput(state).at(root(pos, state), state).equals(pos);
+    }
+
+    public static boolean isAdapterPort(BlockPos pos, BlockState state, Direction back) {
+        if (isDcPort(pos, state, back)) return true;
+        // A stand also accepts a floor-mounted adapter, whose lead reaches the raised jack.
+        return state.is(PxS1100Feature.BLOCK.get()) && state.getValue(STAND) && state.getValue(PART) == Part.BASS
+                && state.getValue(FACING).getOpposite() == back;
     }
 
     static boolean powerInput(BlockState state, Part part) {

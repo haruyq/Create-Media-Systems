@@ -7,8 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
@@ -49,8 +47,6 @@ final class KeyboardScreen extends Screen {
     private final PxS1100Client client;
     private final PxS1100Client.Instrument instrument;
     private final MidiPort midi;
-    private final ArrayBlockingQueue<KeyboardMidi> pending = new ArrayBlockingQueue<>(384);
-    private final AtomicBoolean drainPosted = new AtomicBoolean(), resetMidi = new AtomicBoolean();
     private final Map<Integer, Integer> computer = new HashMap<>();
     private final boolean[] hardwareHeld = new boolean[128], pcPedals = new boolean[3];
     private final int[] hardwarePedals = new int[3];
@@ -65,7 +61,7 @@ final class KeyboardScreen extends Screen {
     private String query = "";
     private int category = -1, role, toneScroll, ticks, base = 48, zoom = 1, firstWhite;
     private int left, top, panel, tall, keyLeft, keyTop, keyWidth, keyHeight, mouseNote = -1;
-    private boolean mouseDown, pedalLatched;
+    private boolean mouseDown, pedalLatched, closed;
 
     KeyboardScreen(PxS1100Client client, PxS1100Client.Instrument instrument, boolean browser) {
         super(Component.translatable("block.create_media_systems.px_s1100"));
@@ -76,13 +72,15 @@ final class KeyboardScreen extends Screen {
         midi.scan();
     }
 
-    void receiveMidi(javax.sound.midi.ShortMessage message) {
+    synchronized void receiveMidi(javax.sound.midi.ShortMessage message) {
         int filter = preferredChannel;
-        if (filter >= 0 && message.getChannel() != filter) return;
+        if (closed || filter >= 0 && message.getChannel() != filter) return;
         var event = new KeyboardMidi(message.getStatus(), message.getData1(), message.getData2());
         if (!event.valid() || event.metronome()) return;
-        if (!pending.offer(event)) requestMidiReset();
-        postDrain();
+        if (event.channel() != 0 || acceptHardware(event)) {
+            int pedal = event.command() == CONTROL && event.channel() == 0 ? pedalIndex(event.key()) : -1;
+            note(pedal < 0 ? event : cc(event.key(), effectivePedal(pedal)));
+        }
     }
 
     PxS1100Client.Instrument instrument() { return instrument; }
@@ -131,8 +129,7 @@ final class KeyboardScreen extends Screen {
         label(start + 2 * (cell + 4), 52, cell, () -> t(flag("Recording") ? "stop" : "rec"), () -> action(Action.RECORD), null);
         label(start + 3 * (cell + 4), 52, cell, () -> t("metro_toggle", flag("Metro") ? "●" : "○"), () -> action(Action.METRONOME), null);
         label(start + 4 * (cell + 4), 52, cell, () -> t("pedal_toggle", instrument.keys.pedal() ? "●" : "○"), () -> {
-            pedalLatched = !pedalLatched;
-            pedal(0);
+            togglePedal();
         }, "pedal_help");
         label(start + 5 * (cell + 4), 52, cell, () -> t("zoom", zoom), () -> zoom(zoom == 4 ? 1 : zoom * 2), "zoom_help");
         slider(start, 75, content / 2 - 2, "volume", 0, 127, () -> settings().volume, value -> action(Action.VOLUME, value));
@@ -293,54 +290,41 @@ final class KeyboardScreen extends Screen {
         if (!Minecraft.getInstance().isWindowActive()) releaseComputer();
     }
 
-    private void requestMidiReset() {
-        pending.clear();
-        resetMidi.set(true);
-        postDrain();
-    }
-    private void postDrain() {
-        if (drainPosted.compareAndSet(false, true)) Minecraft.getInstance().execute(this::drainMidi);
-    }
-    private void drainMidi() {
-        drainPosted.set(false);
-        if (Minecraft.getInstance().screen != this) {
-            pending.clear();
-            return;
-        }
+    private synchronized void requestMidiReset() {
+        if (closed) return;
         var batch = new ArrayList<KeyboardMidi>();
-        if (resetMidi.getAndSet(false)) {
-            Arrays.fill(hardwareHeld, false);
-            Arrays.fill(hardwarePedals, 0);
-            for (int channel = 0; channel < 16; channel++) {
-                batch.add(new KeyboardMidi(CONTROL | channel, SILENCE, 0));
-                batch.add(new KeyboardMidi(CONTROL | channel, RESET, 0));
-            }
-            for (int n = 0; n < PEDALS.length; n++) batch.add(cc(PEDALS[n], effectivePedal(n)));
-            computer.values().stream().distinct().forEach(n -> batch.add(KeyboardMidi.note(n, 88)));
-            if (mouseNote >= 0 && !computer.containsValue(mouseNote)) batch.add(KeyboardMidi.note(mouseNote, 88));
-        }
-        while (batch.size() < 350) {
-            var event = pending.poll();
-            if (event == null) break;
-            if (event.channel() == 0) {
-                if (event.command() == ON && event.value() != 0) hardwareHeld[event.key()] = true;
-                else if (event.command() == OFF || event.command() == ON) {
-                    hardwareHeld[event.key()] = false;
-                    if (pcHolds(event.key())) continue;
-                } else if (event.command() == CONTROL) {
-                    int pedal = pedalIndex(event.key());
-                    if (pedal >= 0) {
-                        hardwarePedals[pedal] = event.value();
-                        event = cc(event.key(), effectivePedal(pedal));
-                    }
-                    if (event.key() == SILENCE || event.key() == NOTES_OFF) Arrays.fill(hardwareHeld, false);
-                    if (event.key() == RESET) Arrays.fill(hardwarePedals, 0);
-                }
-            }
-            batch.add(event);
-        }
+        resetHardware(batch);
         client.send(instrument, batch);
-        if (!pending.isEmpty()) postDrain();
+    }
+
+    private void resetHardware(List<KeyboardMidi> batch) {
+        Arrays.fill(hardwareHeld, false);
+        Arrays.fill(hardwarePedals, 0);
+        for (int channel = 0; channel < 16; channel++) {
+            batch.add(new KeyboardMidi(CONTROL | channel, SILENCE, 0));
+            batch.add(new KeyboardMidi(CONTROL | channel, RESET, 0));
+        }
+        for (int n = 0; n < PEDALS.length; n++) batch.add(cc(PEDALS[n], effectivePedal(n)));
+        computer.values().stream().distinct().forEach(n -> batch.add(KeyboardMidi.note(n, 88)));
+        if (mouseNote >= 0 && !computer.containsValue(mouseNote)) batch.add(KeyboardMidi.note(mouseNote, 88));
+    }
+
+    private boolean acceptHardware(KeyboardMidi event) {
+        int key = event.key();
+        switch (event.command()) {
+            case ON, OFF -> {
+                boolean pressed = event.command() == ON && event.value() != 0;
+                hardwareHeld[key] = pressed;
+                return pressed || !pcHolds(key);
+            }
+            case CONTROL -> {
+                int pedal = pedalIndex(key);
+                if (pedal >= 0) hardwarePedals[pedal] = event.value();
+                if (key == SILENCE || key == NOTES_OFF) Arrays.fill(hardwareHeld, false);
+                if (key == RESET) Arrays.fill(hardwarePedals, 0);
+            }
+        }
+        return true;
     }
 
     private static int pedalIndex(int controller) {
@@ -357,18 +341,21 @@ final class KeyboardScreen extends Screen {
     }
     private int effectivePedal(int i) { return pcPedals[i] || i == 0 && pedalLatched ? 127 : hardwarePedals[i]; }
     private void pedal(int i) { note(cc(PEDALS[i], effectivePedal(i))); }
-    private void panic() {
+    private synchronized void togglePedal() {
+        pedalLatched = !pedalLatched;
+        pedal(0);
+    }
+    private synchronized void panic() {
         computer.clear();
         mouseDown = pedalLatched = false;
         mouseNote = -1;
         Arrays.fill(pcPedals, false);
         Arrays.fill(hardwareHeld, false);
         Arrays.fill(hardwarePedals, 0);
-        pending.clear();
         action(Action.PANIC);
     }
 
-    @Override public boolean keyPressed(int key, int scan, int mods) {
+    @Override public synchronized boolean keyPressed(int key, int scan, int mods) {
         if (search != null && search.isFocused() || tab != Tab.PLAY) return super.keyPressed(key, scan, mods);
         int pedal = pedalKey(key);
         if (pedal >= 0) {
@@ -394,7 +381,7 @@ final class KeyboardScreen extends Screen {
         return super.keyPressed(key, scan, mods);
     }
 
-    @Override public boolean keyReleased(int key, int scan, int mods) {
+    @Override public synchronized boolean keyReleased(int key, int scan, int mods) {
         int pedal = pedalKey(key);
         if (pedal >= 0 && pcPedals[pedal]) {
             pcPedals[pedal] = false;
@@ -417,7 +404,7 @@ final class KeyboardScreen extends Screen {
     private void release(int note) {
         if (note >= 0 && !pcHolds(note) && !hardwareHeld[note]) note(KeyboardMidi.note(note, 0));
     }
-    private void releaseComputer() {
+    private synchronized void releaseComputer() {
         var held = new ArrayList<>(computer.values());
         if (mouseNote >= 0) held.add(mouseNote);
         mouseDown = false;
@@ -430,7 +417,7 @@ final class KeyboardScreen extends Screen {
         }
     }
 
-    @Override public boolean mouseClicked(double x, double y, int button) {
+    @Override public synchronized boolean mouseClicked(double x, double y, int button) {
         if (button == 0 && tab == Tab.PLAY && keyAt(x, y) >= 0) {
             mouseDown = true;
             playMouse(x, y);
@@ -447,14 +434,14 @@ final class KeyboardScreen extends Screen {
         }
         return super.mouseClicked(x, y, button);
     }
-    @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
+    @Override public synchronized boolean mouseDragged(double x, double y, int button, double dx, double dy) {
         if (mouseDown && button == 0) {
             playMouse(x, y);
             return true;
         }
         return super.mouseDragged(x, y, button, dx, dy);
     }
-    @Override public boolean mouseReleased(double x, double y, int button) {
+    @Override public synchronized boolean mouseReleased(double x, double y, int button) {
         if (mouseDown && button == 0) {
             mouseDown = false;
             int last = mouseNote;
@@ -605,10 +592,10 @@ final class KeyboardScreen extends Screen {
 
     @Override public boolean isPauseScreen() { return false; }
 
-    @Override public void removed() {
+    @Override public synchronized void removed() {
+        closed = true;
         preferred = midi.preference();
         midi.close();
-        pending.clear();
         action(Action.CLOSE);
         super.removed();
     }

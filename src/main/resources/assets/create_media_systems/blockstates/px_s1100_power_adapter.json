@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,powered=false": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter" },
+    "facing=east,powered=false": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter", "y": 90 },
+    "facing=south,powered=false": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter", "y": 180 },
+    "facing=west,powered=false": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter", "y": 270 },
+    "facing=north,powered=true": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter_on" },
+    "facing=east,powered=true": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter_on", "y": 90 },
+    "facing=south,powered=true": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter_on", "y": 180 },
+    "facing=west,powered=true": { "model": "create_media_systems:block/piano/pxs1100we/power_adapter_on", "y": 270 }
+  }
+}

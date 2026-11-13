@@ -22,6 +22,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -38,6 +39,55 @@ import org.haruyq.createmediasystems.stream.Streams;
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class KeyboardGameTests {
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void keyboardAdapterPowersItsDcJackFromFeOrRotation(GameTestHelper test) {
+        var level = test.getLevel();
+        var recipe = CraftingInput.of(3, 3, List.of(
+                AllItems.IRON_SHEET.asStack(), AllItems.COPPER_SHEET.asStack(), AllItems.IRON_SHEET.asStack(),
+                new ItemStack(Items.REDSTONE), AllBlocks.ANDESITE_CASING.asStack(), new ItemStack(Items.REDSTONE),
+                ItemStack.EMPTY, AllBlocks.SHAFT.asStack(), ItemStack.EMPTY));
+        test.assertTrue(level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, recipe, level)
+                .filter(match -> match.id().equals(CreateMediaSystems.id("px_s1100_power_adapter"))
+                        && match.value().assemble(recipe, level.registryAccess()).is(PxS1100Feature.ADAPTER_ITEM.get()))
+                .isPresent(), "Wrong AC adapter recipe");
+        var root = test.absolutePos(new BlockPos(3, 2, 3));
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FULL_SIZE, true);
+        for (var part : KeyboardBlock.parts(state)) {
+            if (part.y == 0) level.setBlockAndUpdate(part.at(root, state).below(), Blocks.STONE.defaultBlockState());
+        }
+        test.assertTrue(KeyboardBlock.place(level, root, state), "Keyboard fixture did not fit");
+        var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
+        var back = state.getValue(KeyboardBlock.FACING).getOpposite();
+        var dc = KeyboardBlock.dcInput(state).at(root, state);
+        var bass = KeyboardBlock.Part.BASS.at(root, state);
+        test.assertTrue(KeyboardBlock.isAdapterPort(dc, level.getBlockState(dc), back) && !dc.equals(bass),
+                "The physical jack no longer accepts an adapter");
+        var pos = bass.relative(back);
+        level.setBlockAndUpdate(pos, PxS1100Feature.ADAPTER.get().defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, back.getOpposite()));
+        var supply = (KeyboardPowerAdapter.Supply) level.getBlockEntity(pos);
+        var fe = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, back);
+        test.assertTrue(fe != null && level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, back.getOpposite()) == null
+                && PxS1100Feature.ADAPTER.get().hasShaftTowards(level, pos, supply.getBlockState(), Direction.DOWN),
+                "The FE socket or shaft is on the wrong face");
+        test.assertTrue(fe.receiveEnergy(40, true) == 40 && fe.getEnergyStored() == 0
+                && fe.receiveEnergy(40, false) == 40, "FE storage did not respect simulation");
+        supply.tick();
+        test.assertTrue(keyboard.runtime().energy() == 20 && fe.getEnergyStored() == 20
+                && supply.getBlockState().getValue(BlockStateProperties.POWERED), "The DC cable did not transfer FE");
+        supply.tick();
+        supply.tick();
+        test.assertTrue(keyboard.runtime().energy() == 40 && fe.getEnergyStored() == 0
+                && !supply.getBlockState().getValue(BlockStateProperties.POWERED), "The adapter delivered energy after its inputs stopped");
+        level.setBlockAndUpdate(pos.below(), AllBlocks.CREATIVE_MOTOR.getDefaultState().setValue(DirectionalBlock.FACING, Direction.UP));
+        test.runAfterDelay(25, () -> {
+            test.assertTrue(Math.abs(supply.getSpeed()) >= KeyboardPowerAdapter.MIN_RPM && keyboard.runtime().energy() > 40
+                    && fe.getEnergyStored() == 0 && supply.getBlockState().getValue(BlockStateProperties.POWERED),
+                    "A rotating Create shaft did not power the keyboard without FE");
+            test.succeed();
+        });
+    }
+
     @GameTest(template = "empty")
     public static void keyboardCraftsPlacesChargesAndDropsAsOneItem(GameTestHelper test) {
         var level = test.getLevel();
@@ -130,6 +180,12 @@ public final class KeyboardGameTests {
         test.assertTrue(KeyboardBlock.place(level, root, state), "Fixture placement failed");
         var source = (KeyboardBlockEntity) level.getBlockEntity(root);
         source.runtime().charge(1400, false);
+        var back = state.getValue(KeyboardBlock.FACING).getOpposite();
+        var adapterPos = KeyboardBlock.Part.BASS.at(root, state).relative(back);
+        level.setBlockAndUpdate(adapterPos, PxS1100Feature.ADAPTER.get().defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, back.getOpposite()));
+        var input = level.getCapability(Capabilities.EnergyStorage.BLOCK, adapterPos, back);
+        test.assertTrue(input != null && input.receiveEnergy(80, false) == 80, "The adapter did not buffer FE");
         var data = source.saveWithoutMetadata(level.registryAccess());
         data.getCompound(KeyboardBlockEntity.DATA).putIntArray("Tape", new int[] {
                 0, KeyboardMidi.note(60, 92).pack(), 12, KeyboardMidi.note(60, 0).pack()});
@@ -139,8 +195,8 @@ public final class KeyboardGameTests {
         var bearing = (MechanicalBearingBlockEntity) level.getBlockEntity(bearingPos);
         bearing.assemble();
         var carrier = bearing.getMovedContraption();
-        test.assertTrue(carrier != null && carrier.getContraption().getBlocks().size() == KeyboardBlock.parts(state).size() + 1,
-                "Create did not pick up the whole keyboard");
+        test.assertTrue(carrier != null && carrier.getContraption().getBlocks().size() == KeyboardBlock.parts(state).size() + 2
+                && level.getBlockState(adapterPos).isAir(), "Create did not pick up the keyboard and its adapter");
         for (var part : KeyboardBlock.parts(state)) {
             test.assertTrue(level.getBlockState(part.at(root, state)).isAir(), "Create left behind " + part);
         }
@@ -148,13 +204,23 @@ public final class KeyboardGameTests {
         var target = new KeyboardPackets.Target(carrier.getId(), local);
         var runtime = MountedKeyboard.find(level, target);
         test.assertTrue(runtime != null && runtime.energy() == 1400, "Captured keyboard lost its FE or actor");
-        runtime.charge(450, false);
+        carrier.tickActors();
+        var adapterLocal = adapterPos.subtract(deck);
+        var actor = carrier.getContraption().getActorAt(adapterLocal);
+        test.assertTrue(actor != null && KeyboardPowerAdapter.stored(actor.right.blockEntityData) == 60
+                && runtime.energy() == 1420, "The moving adapter did not power the keyboard");
         carrier.setAngle(90);
         var landedPos = BlockPos.containing(carrier.toGlobalVector(Vec3.atCenterOf(local), 1));
+        var landedAdapterPos = BlockPos.containing(carrier.toGlobalVector(Vec3.atCenterOf(adapterLocal), 1));
         bearing.disassemble();
         var landed = (KeyboardBlockEntity) level.getBlockEntity(landedPos);
-        test.assertTrue(landed != null && landed.runtime().energy() == 1850 && landed.runtime().view().getInt("Events") == 2
+        test.assertTrue(landed != null && landed.runtime().energy() == 1420 && landed.runtime().view().getInt("Events") == 2
                 && !landed.state().getValue(KeyboardBlock.RACK), "Disassembly lost power or the rack setting");
+        var landedBack = landed.state().getValue(KeyboardBlock.FACING).getOpposite();
+        var landedInput = level.getCapability(Capabilities.EnergyStorage.BLOCK, landedAdapterPos, landedBack);
+        test.assertTrue(landedInput != null && landedInput.getEnergyStored() == 60
+                && landedAdapterPos.equals(KeyboardBlock.Part.BASS.at(landedPos, landed.state()).relative(landedBack)),
+                "Disassembly lost the adapter's stored FE or its orientation");
         for (var part : KeyboardBlock.parts(state)) {
             test.assertTrue(KeyboardBlock.part(level.getBlockState(part.at(landedPos, landed.state())), part, landed.state()),
                     "Create did not restore " + part);

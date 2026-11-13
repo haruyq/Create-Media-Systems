@@ -41,9 +41,13 @@ import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams.Channel;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.ALC10;
 
 final class KeyboardAudio implements AutoCloseable {
     private static final int SCORE_FRAMES = KeyboardSynth.RATE / 20, SLOTS = 16;
+    private static final int MAX_LIVE_FRAMES = KeyboardSynth.RATE / 80;
+    private static final int DEVICE_HEADROOM_FRAMES = KeyboardSynth.RATE * 6 / 1000;
+    private static final int QUEUED_BUFFERS = 4;
     private static final int MAX_PENDING = 64;
     private static final AudioFormat MONO = new AudioFormat(KeyboardSynth.RATE, 16, 1, true, false);
 
@@ -56,9 +60,9 @@ final class KeyboardAudio implements AutoCloseable {
 
         StereoStart(long cursor) { this.cursor = cursor; }
 
-        long attach(long now) {
+        long attach(long now, long delay) {
             if (now == 0) return 0;
-            if (deviceTime == 0) deviceTime = now + 32_000_000;
+            if (deviceTime == 0) deviceTime = now + delay;
             return Math.max(deviceTime, now);
         }
     }
@@ -67,6 +71,7 @@ final class KeyboardAudio implements AutoCloseable {
     private final int polyphony;
     private final int framesPerBuffer;
     private final byte[][] stereo;
+    private int liveFrames = KeyboardSynth.FRAMES_PER_BUFFER;
     private final ArrayDeque<Change> changes = new ArrayDeque<>();
     private final Map<SpeakerKey, Speaker> speakers = new LinkedHashMap<>();
     @Nullable private final PonderScore.Cursor score;
@@ -91,7 +96,7 @@ final class KeyboardAudio implements AutoCloseable {
         this.score = score == null ? null : score.cursor();
         audible = score == null ? null : new AudibleTimeline(KeyboardSynth.RATE);
         framesPerBuffer = score == null ? KeyboardSynth.FRAMES_PER_BUFFER : SCORE_FRAMES;
-        stereo = new byte[SLOTS][framesPerBuffer * 4];
+        stereo = new byte[SLOTS][(score == null ? MAX_LIVE_FRAMES : SCORE_FRAMES) * 4];
         scoreStart = startFrame;
         volume = score == null ? settings.volume : 127;
         if (score != null) return;
@@ -211,8 +216,9 @@ final class KeyboardAudio implements AutoCloseable {
     private synchronized void read(Channel channel, Mono pcm) throws IOException {
         var out = pcm.samples;
         out.clear();
+        int frames = score == null ? liveFrames : framesPerBuffer;
         if (closed || pcm.closed) {
-            for (int i = 0; i < framesPerBuffer; i++) out.putShort((short) 0);
+            for (int i = 0; i < frames; i++) out.putShort((short) 0);
         } else {
             long index = Math.max(pcm.cursor, rendered - SLOTS + 1);
             if (index >= rendered) {
@@ -222,7 +228,7 @@ final class KeyboardAudio implements AutoCloseable {
                         var next = changes.removeFirst();
                         synth.apply(next.settings, next.reset, next.events);
                     }
-                    synth.read(buffer);
+                    synth.read(buffer, frames);
                 } else {
                     renderScore(grand, buffer, scoreStart + (int) (rendered * framesPerBuffer), framesPerBuffer);
                 }
@@ -233,12 +239,12 @@ final class KeyboardAudio implements AutoCloseable {
             }
             byte[] chunk = stereo[(int) (index % SLOTS)];
             if (channel == Channel.MIX) {
-                for (int i = 0; i < chunk.length; i += 4) {
+                for (int i = 0; i < frames * 4; i += 4) {
                     int left = sample(chunk, i), right = sample(chunk, i + 2);
                     out.putShort((short) ((left + right) / 2));
                 }
             } else {
-                for (int i = channel == Channel.LEFT ? 0 : 2; i < chunk.length; i += 4) out.put(chunk[i]).put(chunk[i + 1]);
+                for (int i = channel == Channel.LEFT ? 0 : 2; i < frames * 4; i += 4) out.put(chunk[i]).put(chunk[i + 1]);
             }
             pcm.cursor = index + 1;
         }
@@ -334,7 +340,8 @@ final class KeyboardAudio implements AutoCloseable {
 
     private final class Mono implements CmsStream {
         private final Speaker speaker;
-        private final ByteBuffer samples = ByteBuffer.allocateDirect(framesPerBuffer * 2).order(ByteOrder.LITTLE_ENDIAN);
+        private final ByteBuffer samples = ByteBuffer.allocateDirect((score == null ? MAX_LIVE_FRAMES : SCORE_FRAMES) * 2)
+                .order(ByteOrder.LITTLE_ENDIAN);
         private final Runnable resume = this::resumeAfterUnderrun;
         private int source;
         private long cursor;
@@ -348,13 +355,23 @@ final class KeyboardAudio implements AutoCloseable {
         @Override public long attach(int source, long now) {
             if (score == null) {
                 this.source = source;
+                synchronized (KeyboardAudio.this) {
+                    long context = ALC10.alcGetCurrentContext();
+                    int refresh = context == 0 ? 0 : ALC10.alcGetInteger(ALC10.alcGetContextsDevice(context), ALC10.ALC_REFRESH);
+                    if (rendered == 0 && refresh > 0) {
+                        int period = KeyboardSynth.RATE / refresh;
+                        int queued = period + Math.max(period / 2, DEVICE_HEADROOM_FRAMES);
+                        liveFrames = Math.clamp(Math.ceilDiv(queued, QUEUED_BUFFERS),
+                                framesPerBuffer, MAX_LIVE_FRAMES);
+                    }
+                }
                 StreamPump.live(resume);
             }
-            long at = speaker.start.attach(now);
+            long at = speaker.start.attach(now, score == null ? 4_000_000 : 32_000_000);
             if (audible != null && speaker.channel == Channel.LEFT) audible.attach(source, at);
             return at;
         }
-        @Override public int bufferBytes(int vanillaBytes) { return samples.capacity(); }
+        @Override public int bufferBytes(int vanillaBytes) { return (score == null ? liveFrames : framesPerBuffer) * 2; }
         @Override public boolean needsFastRefill() { return score != null; }
         @Override public ByteBuffer read(int size) throws IOException {
             KeyboardAudio.this.read(speaker.channel, this);
