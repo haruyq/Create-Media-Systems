@@ -20,7 +20,10 @@ import javax.sound.midi.Sequence;
 import javax.sound.midi.ShortMessage;
 import javax.sound.sampled.AudioFormat;
 
+import static org.haruyq.createmediasystems.client.PonderScenes.plate;
+
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardFeature;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
@@ -33,6 +36,8 @@ import com.mojang.logging.LogUtils;
 import com.simibubi.create.foundation.ponder.CreateSceneBuilder;
 
 import net.createmod.ponder.api.level.PonderLevel;
+import net.createmod.ponder.api.scene.SceneBuilder;
+import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.createmod.ponder.foundation.PonderScene;
 import net.createmod.ponder.foundation.ui.PonderUI;
 import net.minecraft.client.Minecraft;
@@ -53,6 +58,8 @@ final class PonderPerformance {
     static final int FRAMES_PER_TICK = Synth.RATE / 20;
     /** Ticks the last notes ring on after the piece. */
     private static final int TAIL_TICKS = 40;
+    /** How close the scene comes: the keys over this much of the window's width, but no closer than {@link #MAX_ZOOM}. */
+    private static final float KEYS_SCREEN_FRACTION = .85f, MAX_ZOOM = 4;
     static final Score SCORE = Score.load();
     private static final Map<PonderScene, Show> SHOWS = new WeakHashMap<>();
 
@@ -112,8 +119,20 @@ final class PonderPerformance {
         }
     }
 
-    /** The piece, from a key frame with a word on it, to its end: the rest of the scene. */
-    static void play(CreateSceneBuilder scene, Vec3 keys) {
+    /**
+     * A scene of its own, so the long piece leaves the other scene's timeline alone: the keyboard seen from where its
+     * player sits, close enough that its keys fill most of the window's width, playing the piece to its end.
+     */
+    static void scene(SceneBuilder builder, SceneBuildingUtil util) {
+        builder.addInstruction(ponder -> {
+            float width = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+            ponder.builder().scaleSceneView(Math.min(MAX_ZOOM, KEYS_SCREEN_FRACTION * width / (30 * Layout.WIDTH / 16)));
+            ponder.builder().setSceneOffsetY(-1);
+            ponder.getTransform().xRotation.startWithValue(-55);
+            ponder.getTransform().yRotation.startWithValue(180);
+        });
+        CreateSceneBuilder scene = plate(builder, "midi_keyboard_performance", "Playing a Piece");
+        Vec3 keys = KeyboardClient.desk(scene, util);
         Show show = new Show();
         SHOWS.put(scene.getScene(), show);
         scene.overlay().showText(80).attachKeyFrame().pointAt(keys).placeNearTarget()

@@ -51,6 +51,8 @@ import net.neoforged.neoforge.common.NeoForge;
  * screen is closed or the server says otherwise.
  */
 public final class KeyboardClient implements ClientFeature {
+    /** Where the keyboard stands in its Ponder scenes. */
+    static final BlockPos KEYBOARD = new BlockPos(2, 2, 2);
     private static final ModConfigSpec.ConfigValue<String> MIDI_DEVICE = ClientConfig.BUILDER
             .comment("The MIDI input a keyboard block is played from while you sit at it: part of the device's name, like 'A-88'. Empty takes every MIDI input of this computer.")
             .define("midiDevice", "");
@@ -95,23 +97,13 @@ public final class KeyboardClient implements ClientFeature {
     @Override
     public void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
         helper.forComponents(KeyboardFeature.KEYBOARD.getId())
-                .addStoryBoard(Create.asResource("redstone_link"), KeyboardClient::keyboard);
+                .addStoryBoard(Create.asResource("redstone_link"), KeyboardClient::keyboard)
+                .addStoryBoard(Create.asResource("redstone_link"), PonderPerformance::scene);
     }
 
     private static void keyboard(SceneBuilder builder, SceneBuildingUtil util) {
         CreateSceneBuilder scene = plate(builder, "midi_keyboard", "The MIDI Keyboard");
-
-        BlockPos keyboard = util.grid().at(2, 2, 2);
-        for (int x = 1; x <= 3; x++) {
-            scene.world().setBlock(util.grid().at(x, 1, 2), Blocks.SPRUCE_PLANKS.defaultBlockState(), false);
-        }
-        scene.world().showSection(util.select().fromTo(1, 1, 2, 3, 1, 2), Direction.DOWN);
-        scene.idle(10);
-        scene.world().setBlock(keyboard, KeyboardFeature.KEYBOARD.get().defaultBlockState()
-                .setValue(MidiKeyboardBlock.FACING, Direction.NORTH), false);
-        scene.world().showSection(util.select().position(keyboard), Direction.DOWN);
-        scene.idle(15);
-        Vec3 keys = util.vector().centerOf(keyboard).add(0, -0.25, 0);
+        Vec3 keys = desk(scene, util);
         scene.overlay().showControls(keys, Pointing.DOWN, 50).rightClick();
         say(scene, 120, keys, "The keyboard is three blocks wide in one block: set it on a desk with room to either side. Right-click it to sit down and play. One player plays it at a time, until they close the screen.");
         say(scene, 120, keys, PonderPalette.GREEN, "Its keys, pads, knobs and buttons are worked with the mouse, and the keys with the computer's keyboard too. A real MIDI keyboard plugged into the computer plays it as well.");
@@ -123,7 +115,7 @@ public final class KeyboardClient implements ClientFeature {
             scene.world().showSection(util.select().position(speaker), Direction.DOWN);
             int channel = (side < 0 ? Streams.Channel.RIGHT : Streams.Channel.LEFT).ordinal();
             scene.world().modifyBlockEntityNBT(util.select().position(speaker), SpeakerBlock.Entity.class, nbt -> {
-                nbt.put("Source", NbtUtils.writeBlockPos(keyboard));
+                nbt.put("Source", NbtUtils.writeBlockPos(KEYBOARD));
                 nbt.putInt("Channel", channel);
             });
             scene.idle(10);
@@ -134,7 +126,20 @@ public final class KeyboardClient implements ClientFeature {
         say(scene, 130, keys, "It sounds from itself. To play it through speakers, pick it with a Range Quill, then right-click each speaker: set one to the left channel and one to the right.");
         notes(scene, keys.add(0, 0.3, 0), 60);
         say(scene, 110, keys, PonderPalette.GREEN, "Everyone nearby hears and sees what is played, as it is played. The pads pick the sound: 128 of them, in 16 banks of 8.");
-        PonderPerformance.play(scene, keys);
+    }
+
+    /** A desk in the middle of the plate with a keyboard on it, at {@link #KEYBOARD}, shown; where its keys are. */
+    static Vec3 desk(CreateSceneBuilder scene, SceneBuildingUtil util) {
+        for (int x = 1; x <= 3; x++) {
+            scene.world().setBlock(util.grid().at(x, 1, 2), Blocks.SPRUCE_PLANKS.defaultBlockState(), false);
+        }
+        scene.world().showSection(util.select().fromTo(1, 1, 2, 3, 1, 2), Direction.DOWN);
+        scene.idle(10);
+        scene.world().setBlock(KEYBOARD, KeyboardFeature.KEYBOARD.get().defaultBlockState()
+                .setValue(MidiKeyboardBlock.FACING, Direction.NORTH), false);
+        scene.world().showSection(util.select().position(KEYBOARD), Direction.DOWN);
+        scene.idle(15);
+        return util.vector().centerOf(KEYBOARD).add(0, -0.25, 0);
     }
 
     /** The player of the keyboard at {@code pos} played {@code message}, as the server passed it on. Network thread. */
