@@ -80,7 +80,7 @@ public final class GrandPianoBlock extends BaseEntityBlock implements SableCompa
     private static final List<Part> COMPACT_PARTS = List.of(Part.KEYBOARD, Part.RIGHT, Part.BODY, Part.BEND, Part.TAIL, Part.TIP);
     private static final List<Part> COMPACT_SUPPORTS = List.of(Part.KEYBOARD, Part.RIGHT, Part.TAIL);
     private static final List<Part> FULL_SUPPORTS = List.of(Part.LEFT_LEG, Part.RIGHT_LEG, Part.TAIL_LEG);
-    private static final double[] CLOSED_COVER_BOUNDS = {.272, .818, .118, 1.548, .891, .310};
+    private static final double[] CLOSED_COVER_BOUNDS = {.272, .818, .118, 1.548, .891, .323};
     private static final double[] OPEN_COVER_BOUNDS = {.272, .856, .284, 1.548, 1.062, .387};
     private static final VoxelShape[][][] COMPACT_SHAPES = createShapes(false, null);
     private static final VoxelShape[][][] FULL_SHAPES = createShapes(true, null);

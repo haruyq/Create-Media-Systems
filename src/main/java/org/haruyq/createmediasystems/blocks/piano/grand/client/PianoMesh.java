@@ -28,7 +28,14 @@ final class PianoMesh {
     private static final float FALLBOARD_LEFT = KEY_LEFT - .003f, FALLBOARD_RIGHT = KEY_RIGHT + .003f;
     private static final float FALLBOARD_PIVOT_Y = .873f, FALLBOARD_PIVOT_Z = .303f;
     private static final float FALLBOARD_FRONT = KEY_FRONT - .009f - FALLBOARD_PIVOT_Z;
-    private static final float FALLBOARD_BOTTOM = -.006f, FALLBOARD_BACK = .007f;
+    private static final float FALLBOARD_BOTTOM = -.006f, FALLBOARD_TOP = .017f, FALLBOARD_BACK = .017f;
+    private static final float FALLBOARD_SEAM = .0012f, FALLBOARD_RAIL = FALLBOARD_PIVOT_Z + .020f;
+    private static final int FALLBOARD_LACQUER = 0x22232A;
+    // The rounded heel clears the fixed rail as the lid swings.
+    private static final float[][] FALLBOARD_PROFILE = {
+        {FALLBOARD_FRONT, FALLBOARD_TOP}, {.008f, FALLBOARD_TOP}, {.015f, .012f},
+        {.019f, .004f}, {.019f, -.003f}, {FALLBOARD_BACK, FALLBOARD_BOTTOM}
+    };
     private static final RenderType FALLBOARD_SURFACE = RenderType.entityCutoutNoCull(
             CreateMediaSystems.id("textures/block/piano/grand/grand_piano_fallboard.png"));
     private static final int SECTIONS = 56;
@@ -119,33 +126,54 @@ final class PianoMesh {
         panel(.013f, .717f, -1, 0x161518);
         box(.104f, .695f, .107f, 1.717f, .778f, .597f, EBONY);
         box(.107f, .778f, .115f, 1.713f, KEY_BOTTOM, .595f, 0x2C2B31);
-        keyCheek(.100f, KEY_LEFT - .004f);
-        keyCheek(KEY_RIGHT + .004f, 1.720f);
+        keyCheek(.100f, FALLBOARD_LEFT - FALLBOARD_SEAM);
+        keyCheek(FALLBOARD_RIGHT + FALLBOARD_SEAM, 1.720f);
 
         // A recessed keybed keeps the hairline gaps legible without high-contrast speckle at a distance.
         box(KEY_LEFT, KEY_BOTTOM, KEY_FRONT + .004f, KEY_RIGHT, .817f, KEY_BACK, 0xC5BEB3);
         box(KEY_LEFT, KEY_BOTTOM, KEY_BACK + .001f, KEY_RIGHT, .833f, FALLBOARD_PIVOT_Z, FELT);
-        box(FALLBOARD_LEFT, .817f, .306f, FALLBOARD_RIGHT, .856f, .577f, INSET);
-        box(.104f, .856f, .387f, 1.716f, .914f, .586f, EBONY);
-        box(.109f, .914f, .400f, 1.711f, .921f, .581f, 0x2C2D33);
-        for (float x : new float[] {FALLBOARD_LEFT, FALLBOARD_RIGHT}) {
-            rod(x - .022f, FALLBOARD_PIVOT_Y, FALLBOARD_PIVOT_Z,
-                    x + .019f, FALLBOARD_PIVOT_Y, FALLBOARD_PIVOT_Z, .008f, .008f, BRASS, 8);
-        }
+        fallboardSeat();
     }
 
     private void keyCheek(float left, float right) {
-        box(left, .780f, KEY_FRONT - .019f, right, .853f, .597f, EBONY);
-        box(left + .005f, .853f, KEY_FRONT - .011f, right - .005f, .862f, .591f, 0x2F2E34);
+        box(left, .780f, KEY_FRONT - .019f, right, FALLBOARD_PIVOT_Y + FALLBOARD_TOP, .597f, EBONY);
+    }
+
+    private void fallboardSeat() {
+        // Recessed stops overlap the lid edges and keep the seams from opening onto the keys.
+        box(FALLBOARD_LEFT - .002f, .805f, KEY_FRONT - .006f,
+                FALLBOARD_RIGHT + .002f, .823f, KEY_FRONT - .001f, EBONY);
+        float sideStopTop = FALLBOARD_PIVOT_Y + FALLBOARD_BOTTOM - .001f;
+        box(FALLBOARD_LEFT - .002f, .839f, .122f, FALLBOARD_LEFT + .001f, sideStopTop, .327f, INSET);
+        box(FALLBOARD_RIGHT - .001f, .839f, .122f, FALLBOARD_RIGHT + .002f, sideStopTop, .327f, INSET);
+        box(FALLBOARD_LEFT + .0005f, .817f, .306f, FALLBOARD_RIGHT - .0005f, .870f, .577f, INSET);
+        box(FALLBOARD_LEFT, .856f, FALLBOARD_RAIL, FALLBOARD_RIGHT, FALLBOARD_PIVOT_Y + FALLBOARD_TOP,
+                .387f, FALLBOARD_LACQUER);
+        box(.104f, .856f, .387f, 1.716f, .914f, .586f, EBONY);
+        box(.109f, .914f, .400f, 1.711f, .921f, .581f, 0x2C2D33);
     }
 
     private void fallboard(float angle) {
         pose.pushPose();
         pose.translate(0, FALLBOARD_PIVOT_Y, FALLBOARD_PIVOT_Z);
         pose.mulPose(Axis.XP.rotationDegrees(angle));
-        float left = FALLBOARD_LEFT, right = FALLBOARD_RIGHT, front = FALLBOARD_FRONT, back = FALLBOARD_BACK;
-        cap(left, FALLBOARD_BOTTOM, front, right, .017f, back, 0x22232A);
-        box(left + .0005f, -.055f, front - .003f, right - .0005f, .006f, front + .001f, 0x18191D);
+        // Give the lid clearance from the side stops as it lifts.
+        float taper = FALLBOARD_SEAM * Mth.clamp(angle / 15f, 0, 1);
+        float left = FALLBOARD_LEFT + taper, right = FALLBOARD_RIGHT - taper, front = FALLBOARD_FRONT, back = FALLBOARD_BACK;
+        for (int i = 1; i < FALLBOARD_PROFILE.length; i++) {
+            float[] a = FALLBOARD_PROFILE[i - 1], b = FALLBOARD_PROFILE[i];
+            float dz = b[0] - a[0], dy = b[1] - a[1];
+            float normal = Mth.invSqrt(dz * dz + dy * dy);
+            quad(left, a[1], a[0], right, a[1], a[0], right, b[1], b[0], left, b[1], b[0],
+                    0, dz * normal, -dy * normal, FALLBOARD_LACQUER);
+            quad(left, FALLBOARD_BOTTOM, a[0], left, FALLBOARD_BOTTOM, b[0], left, b[1], b[0], left, a[1], a[0],
+                    -1, 0, 0, EBONY);
+            quad(right, FALLBOARD_BOTTOM, a[0], right, FALLBOARD_BOTTOM, b[0], right, b[1], b[0], right, a[1], a[0],
+                    1, 0, 0, EBONY);
+        }
+        quad(left, FALLBOARD_BOTTOM, front, right, FALLBOARD_BOTTOM, front, right, FALLBOARD_TOP, front, left, FALLBOARD_TOP, front,
+                0, 0, -1, EBONY);
+        box(left + .0005f, -.055f, front - .003f, right - .0005f, .006f, front + .004f, 0x18191D);
         box(.899f, -.009f, front - .004f, .921f, .001f, front - .0032f, BRASS);
         var surface = buffers.getBuffer(FALLBOARD_SURFACE);
         Mesh.vertex(pose, surface, right, FALLBOARD_BOTTOM, front, 0, .442f, 0xFFFFFF, 0, -1, 0, light, OverlayTexture.NO_OVERLAY);
