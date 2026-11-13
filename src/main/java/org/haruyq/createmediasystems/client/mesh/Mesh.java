@@ -17,7 +17,7 @@ import net.minecraft.resources.ResourceLocation;
  * in the winding that faces it, whichever way round they were listed.
  */
 public final class Mesh {
-    public static final ResourceLocation ATLAS = CreateMediaSystems.id("textures/item/disc_launcher_materials.png");
+    public static final ResourceLocation ATLAS = CreateMediaSystems.id("textures/item/launcher/disc_launcher_materials.png");
     /** Packed light for a part that glows by itself. */
     public static final int FULL_BRIGHT = 0xF000F0;
     /** The atlas texel that colour-only quads sample. */

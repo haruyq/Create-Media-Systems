@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.audio.DiscReaderBlock;
+import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
+import org.haruyq.createmediasystems.blocks.audio.DiscReaderBlock;
 
 import org.junit.jupiter.api.Test;
 

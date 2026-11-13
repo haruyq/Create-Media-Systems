@@ -14,18 +14,13 @@ base {
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 sourceSets.main.java.srcDir('third_party/gervill/java')
 
-// The -P switches: each turns on one test or dev source set (see "Test and dev source sets" below).
+// The -P switches: each adds optional game tests (see "Game tests" below).
 def flag = { String name -> providers.gradleProperty(name).isPresent() }
 def sableTests = flag('sableTests')
 
-// Optional regression check against JEI's real crafting display predicate; never a runtime dependency.
-if (flag('recipeViewerTest')) {
-    repositories { maven { url = 'https://maven.blamejared.com'; content { includeGroup 'mezz.jei' } } }
-    sourceSets.test.java.srcDir('src/recipeViewerTest/java')
-    dependencies { testImplementation 'mezz.jei:jei-1.21.1-neoforge:19.27.0.346@jar' }
-}
-
 repositories {
+    // JEI, for the unit test against its real crafting display predicate; never a runtime dependency.
+    maven { url = 'https://maven.blamejared.com'; content { includeGroup 'mezz.jei' } }
     maven { url = 'https://maven.createmod.net' }
     maven { url = 'https://maven.ithundxr.dev/snapshots' }
     maven {
@@ -72,7 +67,7 @@ neoForge {
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.INFO
-            // Just CMS as it ships; a run that needs a test or dev source set loads it on top (see loads below).
+            // Just CMS as it ships; runGameTestServer loads the game tests on top (see "Game tests" below).
             loadedMods = [mods."${mod_id}"]
         }
     }
@@ -125,40 +120,32 @@ dependencies {
     testImplementation(platform('org.junit:junit-bom:5.11.4'))
     testImplementation('org.junit.jupiter:junit-jupiter')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+    testImplementation('mezz.jei:jei-1.21.1-neoforge:19.27.0.346@jar')
 }
 
-// Test and dev source sets. Each is compiled against main (and the sets it builds on) and is part of the mod only in
-// the runs that load it, so ordinary runs, the unit tests and the jar never see it; there it shares main's packages.
-def devSet = { String name, SourceSet... uses ->
-    def set = sourceSets.create(name) // src/<name>/java and resources
-    configurations[set.implementationConfigurationName].extendsFrom(configurations.implementation)
-    configurations[set.compileOnlyConfigurationName].extendsFrom(configurations.compileOnly)
-    configurations[set.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly, configurations.localRuntime)
-    dependencies.add(set.implementationConfigurationName, sourceSets.main.output)
-    uses.each { dependencies.add(set.implementationConfigurationName, it.output) }
-    neoForge.addModdingDependenciesTo(set)
-    return set
+// Game tests: src/gametest, compiled against main and part of the mod only in runGameTestServer, so ordinary runs, the
+// unit tests and the jar never see it; it shares main's packages. They run on the NeoForge CMS ships, without Sable.
+// -PsableTests adds Sable and its own tests (src/gametest/sable, on the NeoForge Sable needs); -PcellPlantTest adds the
+// Plant fixture mod (src/gametest/plant).
+def gametest = sourceSets.create('gametest')
+if (sableTests) {
+    gametest.java.srcDir('src/gametest/sable/java')
 }
-// The source sets each run loads on top of main; the last one's classpath (which has the others') is the run's.
-def loads = [:].withDefault { [] }
-
-// Game tests run on the NeoForge CMS ships, without Sable. -PsableTests adds Sable and its own tests (on the NeoForge
-// Sable needs); -PlauncherServerTest runs the launcher's tests instead, and -PcellPlantTest those with the Plant fixture.
-def gametest = devSet('gametest')
+configurations.gametestImplementation.extendsFrom(configurations.implementation)
+configurations.gametestCompileOnly.extendsFrom(configurations.compileOnly)
+configurations.gametestRuntimeOnly.extendsFrom(configurations.runtimeOnly, configurations.localRuntime)
+dependencies.gametestImplementation(sourceSets.main.output)
+neoForge.addModdingDependenciesTo(gametest)
+def gametestMod = neoForge.mods.create("${mod_id}_gametest") {
+    sourceSet(sourceSets.main)
+    sourceSet(gametest)
+}
 def cellPlantTest = flag('cellPlantTest')
-if (flag('launcherServerTest') || cellPlantTest) {
-    loads.gameTestServer << devSet('launcherServerTest')
-    neoForge.runs.gameTestServer {
-        gameDirectory = file(cellPlantTest ? 'run-launcher-server-test-plant'
-                : providers.gradleProperty('launcherServerDirectory').orElse('run-launcher-server-test').get())
-        jvmArgument '-Xmx2G'
-    }
-} else {
-    loads.gameTestServer << gametest
-    if (sableTests) {
-        loads.gameTestServer << devSet('sableGametest', gametest)
-    }
-    neoForge.runs.gameTestServer.gameDirectory = file(sableTests ? 'build/sable-gametest' : 'build/gametest')
+neoForge.runs.gameTestServer {
+    gameDirectory = file(cellPlantTest ? 'build/gametest-plant' : sableTests ? 'build/sable-gametest' : 'build/gametest')
+    jvmArgument '-Xmx2G'
+    loadedMods = [gametestMod]
+    sourceSet = gametest
 }
 // Game tests never ask a CMS API that happens to run on this computer (one refuses their made-up tracks, which then end
 // at once): their server's apiUrl is one nothing listens on, so a track's length stays unknown, as with no API at all.
@@ -175,8 +162,8 @@ tasks.matching { it.name == 'runGameTestServer' }.configureEach {
 // A tiny registry fixture verifies both branches of the optional Plant recipe without making Plant a dependency.
 if (cellPlantTest) {
     def fixture = sourceSets.create('plantCompatFixture') {
-        java.srcDir('src/plantCompatTest/java')
-        resources.srcDir('src/plantCompatTest/resources')
+        java.srcDir('src/gametest/plant/java')
+        resources.srcDir('src/gametest/plant/resources')
         compileClasspath = sourceSets.main.compileClasspath
     }
     def fixtureJar = tasks.register('plantCellCompatJar', Jar) {
@@ -190,104 +177,6 @@ if (cellPlantTest) {
         doFirst {
             copy { from fixtureJar.flatMap { it.archiveFile }; into neoForge.runs.gameTestServer.gameDirectory.get().dir('mods').asFile }
         }
-    }
-}
-
-if (flag('launcherDebug')) {
-    loads.client << devSet('launcherDebug')
-    neoForge.runs.client {
-        gameDirectory = file('run-launcher-debug')
-        programArguments.addAll('--username', 'DiscTester', '--width', '1280', '--height', '760')
-        jvmArgument '-Xmx3G'
-    }
-}
-
-// The lighting lab (lightingDemo) and what builds on it: the benchmark, the network test, and with -PsableTests the
-// Sable demo. Opt-in, so ordinary runClient saves are untouched.
-def lightingBenchmark = flag('lightingBenchmark')
-def lightingNetworkTest = flag('lightingNetworkTest')
-if (flag('lightingDemo') || lightingBenchmark || lightingNetworkTest) {
-    def lightingDemo = devSet('lightingDemo')
-    def sableLightingDemo = sableTests && !lightingBenchmark
-    loads.client << lightingDemo
-    if (sableLightingDemo) {
-        loads.client << devSet('sableLightingDemo', lightingDemo)
-    }
-    neoForge.runs.client {
-        gameDirectory = file(sableLightingDemo ? 'run-sable-lighting-demo' : 'run-lighting-demo')
-        systemProperty 'cms.sableLightingDemo', Boolean.toString(sableLightingDemo)
-        programArguments.addAll('--width', '1280', '--height', '800')
-    }
-    if (lightingBenchmark) {
-        loads.client << devSet('lightingBenchmark', lightingDemo)
-        neoForge.runs.client {
-            gameDirectory = file('run-lighting-benchmark')
-            systemProperty 'cms.lightingDisplays', providers.gradleProperty('lightingDisplays').orElse('1').get()
-            systemProperty 'cms.lightingDense', flag('lightingDense').toString()
-            systemProperty 'cms.benchmarkCapture', flag('benchmarkCapture').toString()
-            jvmArgument '-Xmx3G'
-        }
-    }
-    if (lightingNetworkTest) {
-        def network = devSet('lightingNetworkTest', lightingDemo)
-        neoForge.runs {
-            analysisServer {
-                server()
-                gameDirectory = file('build/lighting-network/server')
-                programArgument '--nogui'
-            }
-            analysisA {
-                client()
-                gameDirectory = file('build/lighting-network/a')
-                programArguments.addAll('--username', 'CMS_Analyst', '--quickPlayMultiplayer', '127.0.0.1:25584', '--width', '800', '--height', '500')
-            }
-            analysisB {
-                client()
-                gameDirectory = file('build/lighting-network/b')
-                programArguments.addAll('--username', 'CMS_Observer', '--quickPlayMultiplayer', '127.0.0.1:25585', '--width', '800', '--height', '500')
-            }
-        }
-        ['analysisServer', 'analysisA', 'analysisB'].each { name ->
-            loads[name] += [lightingDemo, network]
-            neoForge.runs.named(name) {
-                systemProperty 'cms.lightingNetworkTest', 'true'
-                systemProperty 'cms.demoSeconds', providers.gradleProperty('lightingNetworkSeconds').orElse('180').get()
-                jvmArgument '-Xmx2G'
-            }
-        }
-    }
-}
-
-// Speaker stress test: a dedicated server and a client that reconnects on its own (see scripts/speaker_stress.py).
-if (flag('speakerStress')) {
-    def stress = devSet('speakerStress')
-    neoForge.runs {
-        stressServer {
-            server()
-            gameDirectory = file('build/speaker-stress/server')
-            programArgument '--nogui'
-        }
-        stressClient {
-            client()
-            gameDirectory = file('build/speaker-stress/client')
-            programArguments.addAll('--username', 'CMS_Listener', '--width', '960', '--height', '600')
-        }
-    }
-    ['stressServer', 'stressClient'].each { name ->
-        loads[name] << stress
-        neoForge.runs.named(name) { jvmArgument '-Xmx3G' }
-    }
-}
-
-// Each run that loads a set loads CMS as main plus those sets, as one mod.
-loads.each { String run, List<SourceSet> sets ->
-    def mod = neoForge.mods.create("${mod_id}_${run}") {
-        sourceSet(sourceSets.main)
-        sets.each { sourceSet(it) }
-    }
-    neoForge.runs.named(run) {
-        loadedMods = [mod]
-        sourceSet = sets.last()
     }
 }
 

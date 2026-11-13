@@ -1,18 +1,18 @@
 package org.haruyq.createmediasystems;
 
 import org.haruyq.createmediasystems.disc.DiscFeature;
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
+import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.haruyq.createmediasystems.audio.SpeakerBlock;
+import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.Remotable;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.blocks.video.VideoPlayerBlock;
 
 import org.jetbrains.annotations.Nullable;
 

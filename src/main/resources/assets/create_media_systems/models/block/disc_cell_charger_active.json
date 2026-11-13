@@ -1,6 +1,0 @@
-{
-  "parent": "create_media_systems:block/disc_cell_charger",
-  "textures": {
-    "core": "minecraft:block/sea_lantern"
-  }
-}

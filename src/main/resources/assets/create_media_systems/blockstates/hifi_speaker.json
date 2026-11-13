@@ -1,25 +1,25 @@
 {
   "variants": {
     "facing=north": {
-      "model": "create_media_systems:block/hifi_speaker"
+      "model": "create_media_systems:block/component/m700/hifi_speaker"
     },
     "facing=east": {
-      "model": "create_media_systems:block/hifi_speaker",
+      "model": "create_media_systems:block/component/m700/hifi_speaker",
       "y": 90
     },
     "facing=south": {
-      "model": "create_media_systems:block/hifi_speaker",
+      "model": "create_media_systems:block/component/m700/hifi_speaker",
       "y": 180
     },
     "facing=west": {
-      "model": "create_media_systems:block/hifi_speaker",
+      "model": "create_media_systems:block/component/m700/hifi_speaker",
       "y": 270
     },
     "facing=up": {
-      "model": "create_media_systems:block/hifi_speaker"
+      "model": "create_media_systems:block/component/m700/hifi_speaker"
     },
     "facing=down": {
-      "model": "create_media_systems:block/hifi_speaker"
+      "model": "create_media_systems:block/component/m700/hifi_speaker"
     }
   }
 }

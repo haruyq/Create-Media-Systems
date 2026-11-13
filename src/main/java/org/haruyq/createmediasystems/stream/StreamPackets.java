@@ -2,7 +2,7 @@ package org.haruyq.createmediasystems.stream;
 
 import java.util.UUID;
 import net.minecraft.core.UUIDUtil;
-import org.haruyq.createmediasystems.broadcast.MovingBroadcastPackets;
+import org.haruyq.createmediasystems.blocks.broadcast.MovingBroadcastPackets;
 
 import java.util.Optional;
 

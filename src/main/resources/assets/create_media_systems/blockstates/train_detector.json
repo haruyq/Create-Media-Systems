@@ -1,7 +1,7 @@
 {
   "variants": {
     "": {
-      "model": "create_media_systems:block/train_detector"
+      "model": "create_media_systems:block/train/train_detector"
     }
   }
 }

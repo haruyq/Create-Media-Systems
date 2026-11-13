@@ -1,8 +1,0 @@
-{
-  "parent": "minecraft:block/cube_bottom_top",
-  "textures": {
-    "top": "create_media_systems:block/train_detector_top",
-    "bottom": "create_media_systems:block/train_detector_side",
-    "side": "create_media_systems:block/train_detector_side"
-  }
-}

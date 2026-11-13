@@ -1,7 +1,7 @@
 package org.haruyq.createmediasystems;
 
 import org.haruyq.createmediasystems.lighting.LightingFeature;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 import java.util.ArrayList;
 import java.util.List;
 

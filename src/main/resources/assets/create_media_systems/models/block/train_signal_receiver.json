@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "create_media_systems:block/train_signal_receiver"
-  }
-}

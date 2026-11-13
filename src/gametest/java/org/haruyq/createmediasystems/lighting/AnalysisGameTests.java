@@ -8,13 +8,13 @@ import java.util.function.BooleanSupplier;
 import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.VideoPlayerGameTests;
-import org.haruyq.createmediasystems.audio.AudioFeature;
-import org.haruyq.createmediasystems.audio.SpeakerBlock;
-import org.haruyq.createmediasystems.video.VideoFeature;
+import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
+import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
+import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 import org.haruyq.createmediasystems.stream.BlockIdentity;
 import org.haruyq.createmediasystems.stream.Streams;
 import org.haruyq.createmediasystems.stream.Remotable;
-import org.haruyq.createmediasystems.video.VideoPlayerBlock;
+import org.haruyq.createmediasystems.blocks.video.VideoPlayerBlock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;

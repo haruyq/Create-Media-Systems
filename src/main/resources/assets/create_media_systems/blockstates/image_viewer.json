@@ -1,33 +1,33 @@
 {
   "variants": {
     "facing=north,framed=true": {
-      "model": "create_media_systems:block/image_viewer"
+      "model": "create_media_systems:block/display/image_viewer"
     },
     "facing=east,framed=true": {
-      "model": "create_media_systems:block/image_viewer",
+      "model": "create_media_systems:block/display/image_viewer",
       "y": 90
     },
     "facing=south,framed=true": {
-      "model": "create_media_systems:block/image_viewer",
+      "model": "create_media_systems:block/display/image_viewer",
       "y": 180
     },
     "facing=west,framed=true": {
-      "model": "create_media_systems:block/image_viewer",
+      "model": "create_media_systems:block/display/image_viewer",
       "y": 270
     },
     "facing=north,framed=false": {
-      "model": "create_media_systems:block/image_viewer_frameless"
+      "model": "create_media_systems:block/display/image_viewer_frameless"
     },
     "facing=east,framed=false": {
-      "model": "create_media_systems:block/image_viewer_frameless",
+      "model": "create_media_systems:block/display/image_viewer_frameless",
       "y": 90
     },
     "facing=south,framed=false": {
-      "model": "create_media_systems:block/image_viewer_frameless",
+      "model": "create_media_systems:block/display/image_viewer_frameless",
       "y": 180
     },
     "facing=west,framed=false": {
-      "model": "create_media_systems:block/image_viewer_frameless",
+      "model": "create_media_systems:block/display/image_viewer_frameless",
       "y": 270
     }
   }

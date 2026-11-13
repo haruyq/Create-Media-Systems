@@ -62,7 +62,7 @@ def build():
 
 
 if __name__ == "__main__":
-    path = Path(__file__).resolve().parents[1] / "src/main/resources/assets/create_media_systems/models/block/disc_cell_charger.json"
+    path = Path(__file__).resolve().parents[1] / "src/main/resources/assets/create_media_systems/models/block/launcher/disc_cell_charger.json"
     model = json.loads(path.read_text(encoding="utf-8"))
     model["elements"] = build()
     path.write_text(json.dumps(model, indent=2) + "\n", encoding="utf-8")

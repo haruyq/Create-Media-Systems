@@ -16,13 +16,5 @@ libs/
 /logs/
 .yomiyasu/
 /scripts/*
-!/scripts/lighting_latency_proxy.py
-!/scripts/test_lighting_latency_proxy.py
-!/scripts/analyze_lighting_network.py
-!/scripts/prepare_lighting_network.py
-!/scripts/speaker_stress.py
 !/scripts/disc_fixture.ps1
-!/scripts/launcher_runtime_checks.py
-!/scripts/launcher_multiplayer_checks.py
-!/scripts/generate_launcher_debug_audio.py
 /docs/
