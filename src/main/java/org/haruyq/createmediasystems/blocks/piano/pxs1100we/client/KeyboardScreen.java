@@ -44,7 +44,7 @@ final class KeyboardScreen extends Screen {
     private static final String[] FAMILIES = {"pianos", "chromatic", "organs", "guitars", "basses", "strings",
             "ensemble", "brass", "reeds", "pipes", "leads", "pads", "effects", "world", "percussive", "sfx", "kits"};
     private static String preferred;
-    private static int preferredChannel = -1;
+    private static volatile int preferredChannel = -1;
 
     private final PxS1100Client client;
     private final PxS1100Client.Instrument instrument;

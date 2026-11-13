@@ -7,7 +7,8 @@ import net.minecraft.network.codec.StreamCodec;
 
 public record KeyboardMidi(int status, int key, int value) {
     public static final int OFF = 0x80, ON = 0x90, CONTROL = 0xB0, PROGRAM = 0xC0, BEND = 0xE0;
-    public static final int SUSTAIN = 64, SOSTENUTO = 66, SOFT = 67, CLICK = 84, SILENCE = 120, RESET = 121, NOTES_OFF = 123;
+    public static final int SUSTAIN = 64, SOSTENUTO = 66, SOFT = 67, CLICK = 84, VELOCITY_PREFIX = 88,
+            SILENCE = 120, RESET = 121, NOTES_OFF = 123;
     public static final StreamCodec<ByteBuf, KeyboardMidi> CODEC = ByteBufCodecs.VAR_INT.map(KeyboardMidi::unpack, KeyboardMidi::pack);
 
     public static KeyboardMidi note(int key, int velocity) {
@@ -24,7 +25,7 @@ public record KeyboardMidi(int status, int key, int value) {
         return switch (command()) {
             case ON, OFF, PROGRAM, BEND -> true;
             case CONTROL -> switch (key) {
-                case 0, 7, 11, 32, SUSTAIN, SOSTENUTO, SOFT, SILENCE, RESET, NOTES_OFF -> true;
+                case 0, 7, 11, 32, SUSTAIN, SOSTENUTO, SOFT, VELOCITY_PREFIX, SILENCE, RESET, NOTES_OFF -> true;
                 case CLICK -> channel() == 9 && (value == 1 || value == 2);
                 default -> false;
             };

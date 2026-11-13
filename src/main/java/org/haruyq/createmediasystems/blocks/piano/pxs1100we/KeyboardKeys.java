@@ -9,6 +9,7 @@ import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.
 public final class KeyboardKeys {
     private final int[][] down = new int[16][128], sustained = new int[16][128], latched = new int[16][128];
     private final int[][] controllers = new int[16][128];
+    private final int[] velocityPrefixes = new int[16];
     private final int[] bends = new int[16];
     private final int[] programmedBanks = new int[16], programs = new int[16];
     private final boolean[] expression = new boolean[16];
@@ -42,7 +43,7 @@ public final class KeyboardKeys {
     public void apply(KeyboardMidi event) {
         int channel = event.channel(), note = event.key(), value = event.value();
         if (event.command() == ON && value != 0) {
-            down[channel][note] = value;
+            down[channel][note] = value << 7 | velocityPrefixes[channel];
             sustained[channel][note] = 0;
         } else if (event.command() == OFF || event.command() == ON) {
             if (down[channel][note] != 0) {
@@ -55,7 +56,10 @@ public final class KeyboardKeys {
             programs[channel] = note;
             programmedBanks[channel] = controllers[channel][0] << 7 | controllers[channel][32];
         } else if (event.command() == CONTROL) {
-            if (note == SILENCE) {
+            if (note == VELOCITY_PREFIX) {
+                velocityPrefixes[channel] = value;
+                return;
+            } else if (note == SILENCE) {
                 Arrays.fill(down[channel], 0);
                 Arrays.fill(sustained[channel], 0);
                 Arrays.fill(latched[channel], 0);
@@ -83,6 +87,7 @@ public final class KeyboardKeys {
                 }
             }
         }
+        velocityPrefixes[channel] = 0;
     }
 
     public List<KeyboardMidi> snapshot() {
@@ -101,20 +106,28 @@ public final class KeyboardKeys {
             if (bends[channel] != 8192) events.add(new KeyboardMidi(BEND | channel, bends[channel] & 127, bends[channel] >> 7));
             if (controllers[channel][SOSTENUTO] >= 64) {
                 for (int n = 0; n < 128; n++) {
-                    if (latched[channel][n] != 0) events.add(new KeyboardMidi(ON | channel, n, latched[channel][n]));
+                    if (latched[channel][n] != 0) addNote(events, channel, n, latched[channel][n]);
                 }
                 events.add(new KeyboardMidi(CONTROL | channel, SOSTENUTO, controllers[channel][SOSTENUTO]));
             }
             for (int n = 0; n < 128; n++) {
                 int velocity = down[channel][n], ringing = sustained[channel][n], held = latched[channel][n];
                 if (velocity != 0) {
-                    if (held == 0) events.add(new KeyboardMidi(ON | channel, n, velocity));
+                    if (held == 0) addNote(events, channel, n, velocity);
                 } else if (ringing != 0 || held != 0) {
-                    if (held == 0) events.add(new KeyboardMidi(ON | channel, n, ringing));
+                    if (held == 0) addNote(events, channel, n, ringing);
                     events.add(new KeyboardMidi(OFF | channel, n, 0));
                 }
             }
+            if (velocityPrefixes[channel] != 0) {
+                events.add(new KeyboardMidi(CONTROL | channel, VELOCITY_PREFIX, velocityPrefixes[channel]));
+            }
         }
         return events;
+    }
+
+    private static void addNote(List<KeyboardMidi> events, int channel, int note, int velocity) {
+        if ((velocity & 127) != 0) events.add(new KeyboardMidi(CONTROL | channel, VELOCITY_PREFIX, velocity & 127));
+        events.add(new KeyboardMidi(ON | channel, note, velocity >> 7));
     }
 }

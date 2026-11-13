@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardKeys;
+import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardLayout;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,44 @@ import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.
 import static org.junit.jupiter.api.Assertions.*;
 
 class KeyboardSynthTest {
+    @Test void midiChannelTenPlaysEveryPianoKeyIncludingSameBatchReleases() throws Exception {
+        var bank = KeyboardSoundbank.bank(KeyboardSettings.DEFAULT_FONT).join();
+        var settings = new KeyboardSettings();
+        settings.reverb = 0;
+        try (var synth = new KeyboardSynth(bank, 192)) {
+            for (int key = KeyboardLayout.FIRST; key <= KeyboardLayout.LAST; key++) {
+                synth.apply(settings, true, List.of());
+                synth.apply(settings, false, List.of(new KeyboardMidi(ON | 9, key, 36), new KeyboardMidi(OFF | 9, key, 64)));
+                assertTrue(peak(synth, 8) > 120, "MIDI channel 10 lost note " + key);
+            }
+            synth.apply(settings, true, List.of(new KeyboardMidi(CONTROL | 9, 0, 120),
+                    new KeyboardMidi(PROGRAM | 9, 0, 0), new KeyboardMidi(ON | 9, 38, 100)));
+            assertTrue(peak(synth, 8) > 300, "An explicit MIDI percussion bank lost its snare");
+        }
+    }
+
+    @Test void theDefaultPianoGetsProgressivelyLouderAndUsesFineMidiVelocity() throws Exception {
+        var bank = KeyboardSoundbank.bank(KeyboardSettings.DEFAULT_FONT).join();
+        for (int key : new int[] {21, 24, 25, 60, 96, 108}) {
+            int previous = 0, soft = 0;
+            for (int velocity : new int[] {1, 18, 36, 48, 64, 80, 96, 112, 127}) {
+                int peak = attack(bank, key, velocity, 0);
+                assertTrue(peak > previous && peak > 120, "Velocity " + velocity + " lost dynamics at MIDI note " + key);
+                if (velocity == 1) soft = peak;
+                previous = peak;
+            }
+            assertTrue(previous < soft * 10, "The quietest strike nearly disappeared at MIDI note " + key);
+        }
+        assertTrue(attack(bank, 24, 55, 127) > attack(bank, 24, 55, 0), "CC88 must affect the next strike");
+
+        var keys = new KeyboardKeys();
+        keys.apply(new KeyboardMidi(CONTROL | 9, VELOCITY_PREFIX, 103));
+        keys.apply(new KeyboardMidi(ON | 9, 24, 40));
+        keys.apply(new KeyboardMidi(ON | 9, 25, 40));
+        assertEquals(List.of(new KeyboardMidi(CONTROL | 9, VELOCITY_PREFIX, 103), new KeyboardMidi(ON | 9, 24, 40),
+                new KeyboardMidi(ON | 9, 25, 40)), keys.snapshot());
+    }
+
     @Test void bundledSoundFontPlaysGeneralMidiAndStereoPercussion() throws Exception {
         var bank = KeyboardSoundbank.bank(KeyboardSettings.DEFAULT_FONT).join();
         assertEquals(128, bank.patches().stream().filter(p -> p.tone().bank() == 0).count());
@@ -85,7 +124,7 @@ class KeyboardSynthTest {
     }
 
     private static int peak(KeyboardSynth synth, int blocks) throws Exception {
-        byte[] audio = new byte[KeyboardSynth.RATE / 50 * 4];
+        byte[] audio = new byte[KeyboardSynth.FRAMES_PER_BUFFER * 4];
         int peak = 0;
         for (int block = 0; block < blocks; block++) {
             synth.read(audio);
@@ -94,5 +133,14 @@ class KeyboardSynthTest {
             }
         }
         return peak;
+    }
+
+    private static int attack(KeyboardSoundbank.Bank bank, int note, int velocity, int fineVelocity) throws Exception {
+        var settings = new KeyboardSettings();
+        settings.reverb = 0;
+        try (var synth = new KeyboardSynth(bank, 192)) {
+            synth.apply(settings, false, List.of(cc(VELOCITY_PREFIX, fineVelocity), KeyboardMidi.note(note, velocity)));
+            return peak(synth, 8);
+        }
     }
 }

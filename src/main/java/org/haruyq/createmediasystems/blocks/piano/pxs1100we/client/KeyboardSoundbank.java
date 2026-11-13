@@ -20,6 +20,7 @@ import net.neoforged.fml.loading.FMLPaths;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings.Tone;
+import org.haruyq.gervill.ModelInstrument;
 import org.haruyq.gervill.ModelPatch;
 import org.haruyq.gervill.SF2Soundbank;
 
@@ -107,7 +108,8 @@ final class KeyboardSoundbank {
             int bank = patch instanceof ModelPatch model && model.isPercussion() ? KeyboardSettings.DRUM_BANK : patch.getBank();
             var tone = new Tone(bank, patch.getProgram());
             patches.putIfAbsent(tone, new Patch(tone, instrument.getName().strip()));
-            instruments.putIfAbsent(tone, instrument);
+            instruments.putIfAbsent(tone, KeyboardSettings.DEFAULT_FONT.equals(name) && bank == 0 && tone.program() == 0
+                    ? new KeyboardPianoTone((ModelInstrument) instrument) : instrument);
         });
         if (patches.isEmpty()) throw new IllegalArgumentException("No SoundFont instruments in " + name);
         return new Bank(name, Map.copyOf(instruments), patches.values().stream()

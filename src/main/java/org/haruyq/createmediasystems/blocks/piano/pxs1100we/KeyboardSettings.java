@@ -11,6 +11,9 @@ public final class KeyboardSettings {
             bank = Math.clamp(bank, 0, 16383);
             program = Math.clamp(program, 0, 127);
         }
+        public static Tone fromMidiBank(int bank, int program) {
+            return new Tone(bank >>> 7 == 120 ? DRUM_BANK : bank, program);
+        }
         int pack() { return bank << 7 | program; }
         static Tone from(int value) { return new Tone(value >>> 7, value & 127); }
     }
