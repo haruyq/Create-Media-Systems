@@ -321,7 +321,7 @@ final class KeyboardRuntime {
                 else if (event.key() == 32) banks[channel] = banks[channel] & ~127 | event.value();
                 else if (event.key() == 7) settings.volume = event.value();
             } else if (event.command() == PROGRAM && channel == 0) {
-                settings.main = new KeyboardSettings.Tone(banks[channel], event.key());
+                settings.main = KeyboardSettings.Tone.fromMidiBank(banks[channel], event.key());
             }
         }
         lastEvent = host.world().getGameTime();

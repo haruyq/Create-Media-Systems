@@ -76,7 +76,7 @@ public final class PxS1100Feature implements Feature {
     }
 
     @Override public void registerPayloads(PayloadRegistrar registrar) {
-        KeyboardPackets.register(registrar.versioned("2"));
+        KeyboardPackets.register(registrar.versioned("3"));
     }
 
     private record EnergyPort(KeyboardBlockEntity keyboard, BlockPos pos, KeyboardBlock.Part part, @Nullable Direction side)

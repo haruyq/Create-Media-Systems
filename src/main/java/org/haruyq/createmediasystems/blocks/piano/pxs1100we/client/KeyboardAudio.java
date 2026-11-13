@@ -43,7 +43,8 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.openal.AL10;
 
 final class KeyboardAudio implements AutoCloseable {
-    private static final int LIVE_FRAMES = KeyboardSynth.RATE / 50, SCORE_FRAMES = KeyboardSynth.RATE / 20, SLOTS = 16;
+    private static final int SCORE_FRAMES = KeyboardSynth.RATE / 20, SLOTS = 16;
+    private static final int MAX_PENDING = 64;
     private static final AudioFormat MONO = new AudioFormat(KeyboardSynth.RATE, 16, 1, true, false);
 
     private record Change(KeyboardSettings settings, boolean reset, List<KeyboardMidi> events) {}
@@ -89,7 +90,7 @@ final class KeyboardAudio implements AutoCloseable {
         this.frame = frame;
         this.score = score == null ? null : score.cursor();
         audible = score == null ? null : new AudibleTimeline(KeyboardSynth.RATE);
-        framesPerBuffer = score == null ? LIVE_FRAMES : SCORE_FRAMES;
+        framesPerBuffer = score == null ? KeyboardSynth.FRAMES_PER_BUFFER : SCORE_FRAMES;
         stereo = new byte[SLOTS][framesPerBuffer * 4];
         scoreStart = startFrame;
         volume = score == null ? settings.volume : 127;
@@ -108,13 +109,15 @@ final class KeyboardAudio implements AutoCloseable {
 
     boolean matches(KeyboardSettings settings) { return font.equals(settings.font) && polyphony == settings.polyphony; }
 
-    synchronized void update(KeyboardSettings settings, boolean reset, List<KeyboardMidi> events, Supplier<List<KeyboardMidi>> snapshot) {
+    synchronized void update(KeyboardSettings settings, @Nullable List<KeyboardMidi> initial, List<KeyboardMidi> events,
+            Supplier<List<KeyboardMidi>> snapshot) {
         volume = settings.volume;
-        if (reset || changes.size() >= 64) {
+        int pending = changes.size() + (synth == null ? 0 : synth.queuedBatches());
+        if (initial != null || pending >= MAX_PENDING) {
             changes.clear();
-            changes.add(new Change(settings, true, snapshot.get()));
-            var clicks = events.stream().filter(KeyboardMidi::metronome).toList();
-            if (!clicks.isEmpty()) changes.add(new Change(settings, false, clicks));
+            changes.add(new Change(settings, true, initial == null ? snapshot.get() : initial));
+            var remaining = initial != null ? events : events.stream().filter(KeyboardMidi::metronome).toList();
+            if (!remaining.isEmpty()) changes.add(new Change(settings, false, remaining));
         } else {
             if (events.isEmpty() && !changes.isEmpty() && changes.getLast().events.isEmpty() && !changes.getLast().reset) changes.removeLast();
             changes.add(new Change(settings, false, events));

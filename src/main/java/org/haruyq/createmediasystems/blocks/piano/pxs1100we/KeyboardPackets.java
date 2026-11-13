@@ -19,7 +19,8 @@ public final class KeyboardPackets {
     public static final int BATCH = 96;
     static final int MAX_SPEAKERS = 8;
     private static final StreamCodec<ByteBuf, List<KeyboardMidi>> INPUT = KeyboardMidi.CODEC.apply(ByteBufCodecs.list(BATCH));
-    private static final StreamCodec<ByteBuf, List<KeyboardMidi>> STATE = KeyboardMidi.CODEC.apply(ByteBufCodecs.list(4300));
+    // A full snapshot can carry a velocity prefix, press and release for each note on each channel.
+    private static final StreamCodec<ByteBuf, List<KeyboardMidi>> STATE = KeyboardMidi.CODEC.apply(ByteBufCodecs.list(6300));
     private static final StreamCodec<ByteBuf, Vec3> VEC = StreamCodec.composite(
             ByteBufCodecs.DOUBLE, Vec3::x, ByteBufCodecs.DOUBLE, Vec3::y, ByteBufCodecs.DOUBLE, Vec3::z, Vec3::new);
     private static Client client;

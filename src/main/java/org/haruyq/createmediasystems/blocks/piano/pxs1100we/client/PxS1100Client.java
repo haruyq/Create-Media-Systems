@@ -97,6 +97,8 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         instrument.view = packet.view();
         instrument.settings = KeyboardSettings.load(packet.view().getCompound("Settings"));
         if (packet.snapshot()) instrument.keys = new KeyboardKeys();
+        boolean reopen = instrument.audio == null || !instrument.audio.matches(instrument.settings);
+        var initial = packet.snapshot() ? packet.events() : reopen ? instrument.keys.snapshot() : null;
         for (var event : packet.events()) {
             if (!event.metronome()) instrument.keys.apply(event);
         }
@@ -105,12 +107,12 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
             return;
         }
         if (instrument.audio == null && instrument != local && !packet.view().getBoolean("Live") && packet.events().isEmpty()) return;
-        boolean reopen = instrument.audio == null || !instrument.audio.matches(instrument.settings);
         if (reopen) {
             instrument.stopAudio();
             instrument.audio = new KeyboardAudio(instrument.settings, packet.frame());
         }
-        instrument.audio.update(instrument.settings, packet.snapshot() || reopen, packet.events(), instrument.keys::snapshot);
+        instrument.audio.update(instrument.settings, initial, packet.snapshot() ? List.of() : packet.events(),
+                instrument.keys::snapshot);
         instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
     }
 
