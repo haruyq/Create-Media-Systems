@@ -98,7 +98,7 @@ final class KeyboardScreen extends KeysScreen {
     private final Map<Integer, Integer> typed = new HashMap<>();
 
     KeyboardScreen(KeyboardClient.Playing playing) {
-        super(Component.translatable("block.create_media_systems.midi_keyboard"), 13.52f);
+        super(Component.translatable("block.create_media_systems.midi_keyboard"), 13.52f, 0);
         this.playing = playing;
         controller = playing.controller;
     }
@@ -132,17 +132,6 @@ final class KeyboardScreen extends KeysScreen {
         float[] place = PLACES[control.ordinal()];
         return new int[]{keysX + Math.round(place[0] * stripWidth), stripY + Math.round(place[1] * stripHeight),
                 keysX + Math.round(place[2] * stripWidth), stripY + Math.round(place[3] * stripHeight)};
-    }
-
-    /** A filled circle of {@code radius} around ({@code x}, {@code y}), its rim as soft as a box's corners. */
-    private static void disc(GuiGraphics g, int x, int y, float radius, int color) {
-        for (int row = -(int) Math.ceil(radius); row < Math.ceil(radius); row++) {
-            double up = row + 0.5;
-            if (Math.abs(up) < radius) {
-                double half = Math.sqrt(radius * radius - up * up);
-                span(g, x - (int) half, x + (int) half, y + row, (float) (half - (int) half), color);
-            }
-        }
     }
 
     /** {@code color} with {@code share} (0..1) of white mixed in. */

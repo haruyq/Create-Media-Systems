@@ -11,6 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.haruyq.createmediasystems.client.KeysScreen;
@@ -18,7 +20,10 @@ import org.lwjgl.glfw.GLFW;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 
-/** Playing a grand piano, on a screen that looks as the Koland keyboard's does. */
+/**
+ * Playing a grand piano, on a screen laid out as the Koland keyboard's is and coloured as the piano itself: black
+ * lacquer, brass and gold, ivory and ebony keys under red felt, and behind them its fallboard with the maker's name.
+ */
 final class PianoScreen extends KeysScreen {
     private static final int[] PC_KEYS = {
         GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_E,
@@ -40,10 +45,32 @@ final class PianoScreen extends KeysScreen {
     private final int[] midiPedal = new int[3], pcPedal = new int[3];
     /** The strip's one row of buttons, in white keys from its top. */
     private static final float ROW = 1.75f, ROW_END = 4.05f;
+    /** The fallboard's texture, the maker's name on it (its left, top, width and height), and the lacquer around the name. */
+    private static final ResourceLocation FALLBOARD = CreateMediaSystems.id("textures/block/piano/grand/grand_piano_fallboard.png");
+    private static final int[] NAME = {428, 167, 169, 40};
+    private static final int LACQUER = 0xFF1F2024;
     private int pcRoot = 60, mouse = -1;
 
     PianoScreen(PianoClient client, PianoClient.Instrument instrument) {
-        super(Component.translatable("block.create_media_systems.grand_piano"), 4.6f);
+        super(Component.translatable("block.create_media_systems.grand_piano"), 4.6f, 2.4f);
+        // The model's colours (PianoMesh).
+        text = 0xFFF1EDE6;
+        faint = 0xFF9A917E;
+        ink = 0xFF1D1C21;
+        lamp = 0xFFDDB972;
+        bed = 0xFF0E0D10;
+        feltColor = 0xFF701C32;
+        body = new int[]{0xFA25242B, 0xFA18171C};
+        button = new int[]{0xFF37363F, 0xFF27262D};
+        held = new int[]{0xFF4D4B56, 0xFF3B3A42};
+        lit = new int[]{0xFFE9CB8C, 0xFFBF9450};
+        unlit = new int[]{0xFF151418, 0xFF0E0D10};
+        white = new int[]{0xFFDED8CE, 0xFFF1EDE6};
+        whiteDown = new int[]{0xFFD0A961, 0xFFEFD08E};
+        black = new int[]{0xFF222126, 0xFF151419};
+        blackTop = new int[]{0xFF3B3A42, 0xFF2D2C32};
+        blackDown = new int[]{0xFF7A5C2B, 0xFF574018};
+        blackTopDown = new int[]{0xFFDDB972, 0xFFBF9450};
         this.client = client;
         this.instrument = instrument;
         midi = new MidiKeyboard(preferred, this::queueMidi);
@@ -275,9 +302,13 @@ final class PianoScreen extends KeysScreen {
     }
 
     @Override protected void draw(GuiGraphics g, double x, double y) {
-        drawHeader(g, title.getString(), Component.translatable(PianoAudio.INSTANCE.status()).getString(), LAMP, "", FAINT);
-        write(g, fit(Component.translatable("piano.pc_controls", pcRoot / 12 - 1).getString(), stripWidth), keysX + keyWidth / 3f,
-                keysY - deck + lineHeight(), textScale, FAINT, LEFT);
+        drawHeader(g, title.getString(), Component.translatable(PianoAudio.INSTANCE.status()).getString(), lamp,
+                Component.translatable("piano.pc_controls", pcRoot / 12 - 1).getString(), faint);
+        // The fallboard behind the keys, the maker's name at its middle.
+        int top = keysY - deck, bottom = keysY - felt, high = Math.round(keyWidth * 1.2f), wide = high * NAME[2] / NAME[3];
+        int left = keysX + (stripWidth - wide) / 2, above = (top + bottom - high) / 2;
+        g.fill(keysX, top, keysX + stripWidth, bottom, LACQUER);
+        picture(g, FALLBOARD, left, above, left + wide, above + high, NAME[0], NAME[1], NAME[2], NAME[3], 1024, 256);
         drawKeys(g, instrument.keys::pressed);
     }
 
