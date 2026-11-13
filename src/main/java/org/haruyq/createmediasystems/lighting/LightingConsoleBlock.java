@@ -271,12 +271,24 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
             return index < 0 ? 0 : fixtures.get(index).group();
         }
 
-        /** The fixture at {@code pos}'s place among its group's, from 0; 0 if it is not linked. */
+        /**
+         * The fixture at {@code pos}'s place among its group's, from 0: left to right as the console's player sees
+         * them (see ConsoleLayout.compareFixtures), in the order they were linked where that doesn't tell; 0 if it is
+         * not linked.
+         */
         public int order(BlockPos pos) {
             int index = indexOf(pos);
+            if (index < 0) {
+                return 0;
+            }
+            Direction facing = getBlockState().getValue(FACING);
             int order = 0;
-            for (int i = 0; i < index; i++) {
-                order += fixtures.get(i).group() == fixtures.get(index).group() ? 1 : 0;
+            for (int i = 0; i < fixtures.size(); i++) {
+                Fixture other = fixtures.get(i);
+                if (i != index && other.group() == fixtures.get(index).group()) {
+                    int place = other.link().pos() == null ? 1 : ConsoleLayout.compareFixtures(facing, other.link().pos(), pos);
+                    order += place < 0 || place == 0 && i < index ? 1 : 0;
+                }
             }
             return order;
         }

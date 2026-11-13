@@ -37,7 +37,10 @@ public interface ConsoleView {
     /** The group (0 to 5) of the fixture at {@code fixture}; 0 if it is not linked. */
     int group(BlockPos fixture);
 
-    /** The fixture at {@code fixture}'s place among its group's, from 0. */
+    /**
+     * The fixture at {@code fixture}'s place among its group's, from 0: left to right as the console's player sees
+     * them, then near to far, then in the order they were linked.
+     */
     int order(BlockPos fixture);
 
     /** How many fixtures {@code group} has, at least 1. */
