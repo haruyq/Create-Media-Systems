@@ -274,6 +274,9 @@ public final class ConsoleLayout {
     public static final Control[] SETTING_ROWS = {Control.ENABLED, Control.AUDIO, Control.BAND, Control.CYCLE,
             Control.PATTERN, Control.SOURCES};
 
+    /** The settings the fourth monitor lists, top to bottom, above the setting knobs' values. */
+    public static final Control[] AIM_ROWS = {Control.MOTION, Control.TARGET, Control.STROBE};
+
     /** What the client draws and works on the console without the server's knowing: the preset bank's keys. */
     public enum Button {
         /** Index 0: the built-in presets; 1: those saved. */
@@ -348,8 +351,9 @@ public final class ConsoleLayout {
         slots.add(new Slot(Control.COUNT, null, 0, new Area(2.065f, 1.54f, 2.935f, 1.70f), true));
         slots.add(new Slot(Control.MAPPING, null, 0, new Area(2.065f, 1.38f, 2.935f, 1.54f), true));
         slots.add(new Slot(Control.VIDEO, null, 0, new Area(2.065f, 1.24f, 2.935f, 1.38f), true));
-        slots.add(new Slot(Control.MOTION, null, 0, new Area(3.065f, 1.70f, 3.935f, 1.86f), true));
-        slots.add(new Slot(Control.TARGET, null, 0, new Area(3.065f, 1.54f, 3.935f, 1.70f), true));
+        for (int row = 0; row < AIM_ROWS.length; row++) {
+            slots.add(new Slot(AIM_ROWS[row], null, 0, row(3, row), true));
+        }
         return List.copyOf(slots);
     }
 
@@ -398,11 +402,10 @@ public final class ConsoleLayout {
         readouts.add(new Readout(Control.COUNT, 2.08f, 1.665f));
         readouts.add(new Readout(Control.MAPPING, 2.08f, 1.505f));
         readouts.add(new Readout(Control.VIDEO, 2.08f, 1.345f));
-        readouts.add(new Readout(Control.MOTION, 3.08f, 1.82f));
-        readouts.add(new Readout(Control.TARGET, 3.08f, 1.68f));
-        readouts.add(new Readout(Control.RANGE, 3.08f, 1.49f));
-        readouts.add(new Readout(Control.SPREAD, 3.08f, 1.37f));
-        readouts.add(new Readout(Control.SPEED, 3.08f, 1.25f));
+        for (int row = 0; row < MONITOR_ROWS; row++) {
+            readouts.add(new Readout(row < AIM_ROWS.length ? AIM_ROWS[row] : SETTING_KNOBS[row - AIM_ROWS.length], 3.08f,
+                    rowTop(row) - 0.015f));
+        }
         return List.copyOf(readouts);
     }
 }

@@ -283,6 +283,59 @@ class LightingSettingsTest {
     }
 
     @Test
+    void aStrobeIsSavedBoundedAndTurnedOffByABuiltInPreset() {
+        LightingSettings.Group group = new LightingSettings.Group();
+        group.strobe = 6;
+        LightingSettings.Group restored = new LightingSettings.Group();
+        restored.load(group.save());
+        assertEquals(6, restored.strobe);
+        // A group saved before strobes had one: a steady light.
+        CompoundTag old = group.save();
+        old.remove("Strobe");
+        restored.load(old);
+        assertEquals(0, restored.strobe);
+        group.strobe = 99;
+        group.normalize();
+        assertEquals(LightingSettings.STROBE.max(), group.strobe);
+        group.preset(Preset.SWEEP, null);
+        assertEquals(0, group.strobe);
+    }
+
+    @Test
+    void aStrobingLightIsLitForTheStartOfEachFlash() {
+        assertTrue(LightingSettings.strobeLit(123.7, 0));
+        // Five flashes a second: lit for the first 0.08 s of each 0.2 s.
+        assertTrue(LightingSettings.strobeLit(2.0, 5));
+        assertTrue(LightingSettings.strobeLit(2.05, 5));
+        assertFalse(LightingSettings.strobeLit(2.1, 5));
+        assertFalse(LightingSettings.strobeLit(2.19, 5));
+        assertTrue(LightingSettings.strobeLit(2.21, 5));
+    }
+
+    @Test
+    void fixturesDrawThePatternsTheyCanAndTheirOwnForTheRest() {
+        // Saved and sent as ordinals: the wash comes after the lasers.
+        assertEquals(5, Pattern.WASH.ordinal());
+        assertEquals(Pattern.WASH, StageLightBlock.Spec.LIGHT.pattern(Pattern.WASH));
+        assertEquals(Pattern.SPOT, StageLightBlock.Spec.LIGHT.pattern(Pattern.SPOT));
+        // As before the wash: a light among lasers draws a beam, a laser among lights a ray.
+        assertEquals(Pattern.BEAM, StageLightBlock.Spec.LIGHT.pattern(Pattern.LASER_SHEET));
+        assertEquals(Pattern.LASER_RAY, StageLightBlock.Spec.LASER.pattern(Pattern.SPOT));
+        assertEquals(Pattern.LASER_RAY, StageLightBlock.Spec.LASER.pattern(Pattern.WASH));
+        for (Pattern pattern : Pattern.values()) {
+            assertEquals(Pattern.WASH, StageLightBlock.Spec.STRIP.pattern(pattern));
+            // Every pattern has its name in the API, as GroupView.pattern gives it.
+            LightingSettings.Group group = new LightingSettings.Group();
+            group.pattern = pattern;
+            assertEquals(pattern.name(), group.pattern().name());
+        }
+        assertEquals(40, Pattern.WASH.coneSpread(12));
+        assertEquals(100, Pattern.WASH.coneSpread(70));
+        assertEquals(2, Pattern.BEAM.coneSpread(12));
+        assertEquals(12, Pattern.SPOT.coneSpread(12));
+    }
+
+    @Test
     void savedPresetIsIndependentOfLaterEditsAndOfItsLoadedCopies() {
         LightingSettings.Group original = colors(0x123456, 0xABCDEF);
         original.motion = Motion.TRACK;

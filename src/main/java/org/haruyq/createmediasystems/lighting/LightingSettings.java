@@ -55,6 +55,10 @@ public final class LightingSettings {
     public static final Setting SPEED = new Setting("Speed", 1, 0.05f, 4, 0.05f);
     public static final Setting PAN = new Setting("Pan", 0, -180, 180, 1);
     public static final Setting TILT = new Setting("Tilt", 35, -85, 85, 1);
+    /** Flashes a second; 0 is a steady light. */
+    public static final Setting STROBE = new Setting("Strobe", 0, 0, 10, 1);
+    /** How much of each flash's time a strobing light is lit. */
+    private static final double STROBE_DUTY = 0.4;
 
     /** One of a few ways a group does something, shown by its own lang key. Saved and sent as its ordinal. */
     public interface Mode {
@@ -78,7 +82,9 @@ public final class LightingSettings {
     }
 
     public enum Pattern implements Mode {
-        SPOT("pattern.0"), BEAM("pattern.1"), LASER_RAY("pattern.2"), LASER_FAN("pattern.3"), LASER_SHEET("pattern.4");
+        SPOT("pattern.0"), BEAM("pattern.1"), LASER_RAY("pattern.2"), LASER_FAN("pattern.3"), LASER_SHEET("pattern.4"),
+        /** A wide cone fading from its middle out, with hardly a beam in the air. Last: a saved one is its ordinal. */
+        WASH("pattern.5");
 
         private final String key;
 
@@ -91,9 +97,18 @@ public final class LightingSettings {
             return key;
         }
 
-        /** Whether it is a cone of light (a spot or a beam), not a laser's rays. */
+        /** Whether it is a cone of light (a spot, a beam or a wash), not a laser's rays. */
         public boolean cone() {
-            return this == SPOT || this == BEAM;
+            return this == SPOT || this == BEAM || this == WASH;
+        }
+
+        /** The spread (degrees) its cone opens to, for a group's {@code spread}: a beam's is held narrow, a wash's wide. */
+        public double coneSpread(double spread) {
+            return switch (this) {
+                case BEAM -> Math.min(spread, 2);
+                case WASH -> Mth.clamp(spread * 2, 40, 100);
+                default -> spread;
+            };
         }
     }
 
@@ -145,7 +160,7 @@ public final class LightingSettings {
 
     /**
      * The console's built-in presets, keyed by their lang key: each replaces a group's effect (its motion, pattern,
-     * audio response, colour cycle and spread), keeping its colours and where it points.
+     * audio response, colour cycle and spread, and its strobe off), keeping its colours and where it points.
      */
     public enum Preset {
         FIXED("preset.0", 0x36C9EE, Motion.FIXED, Pattern.SPOT, false, false, 12),
@@ -220,6 +235,7 @@ public final class LightingSettings {
         public float speed = SPEED.initial();
         public float pan = PAN.initial();
         public float tilt = TILT.initial();
+        public float strobe = STROBE.initial();
         public UUID target;
 
         /** Takes {@code preset}'s effect; a tracking one follows {@code player}, if given. */
@@ -232,6 +248,7 @@ public final class LightingSettings {
             audioBand = LightingSettings.Band.ALL;
             speed = SPEED.initial();
             spread = preset.spread;
+            strobe = STROBE.initial();
             if (preset.motion == LightingSettings.Motion.TRACK && player != null) {
                 target = player;
             }
@@ -254,6 +271,7 @@ public final class LightingSettings {
             SPEED.save(tag, speed);
             PAN.save(tag, pan);
             TILT.save(tag, tilt);
+            STROBE.save(tag, strobe);
             if (target != null) {
                 tag.putUUID("Target", target);
             }
@@ -277,6 +295,7 @@ public final class LightingSettings {
             speed = SPEED.load(tag);
             pan = PAN.load(tag);
             tilt = TILT.load(tag);
+            strobe = STROBE.load(tag);
             target = tag.hasUUID("Target") ? tag.getUUID("Target") : null;
             normalize();
         }
@@ -292,6 +311,7 @@ public final class LightingSettings {
             speed = SPEED.bounded(speed);
             pan = PAN.bounded(pan);
             tilt = TILT.bounded(tilt);
+            strobe = STROBE.bounded(strobe);
         }
 
         /** The colour it is showing in slot {@code slot}'s place (the selected one, say). */
@@ -370,6 +390,11 @@ public final class LightingSettings {
         }
 
         @Override
+        public float strobe() {
+            return strobe;
+        }
+
+        @Override
         @Nullable
         public UUID target() {
             return target;
@@ -404,6 +429,11 @@ public final class LightingSettings {
 
     public Group selected() {
         return groups[selectedGroup];
+    }
+
+    /** Whether a light strobing {@code strobe} times a second is lit at {@code seconds}: always, at 0. */
+    public static boolean strobeLit(double seconds, float strobe) {
+        return strobe <= 0 || Mth.positiveModulo(seconds * strobe, 1) < STROBE_DUTY;
     }
 
     public static int palette(int column, int row) {

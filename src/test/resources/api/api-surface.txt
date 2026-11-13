@@ -71,6 +71,7 @@ org/haruyq/createmediasystems/api/lighting/ConsoleSetting static SLOT Lorg/haruy
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static SOURCES Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static SPEED Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static SPREAD Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
+org/haruyq/createmediasystems/api/lighting/ConsoleSetting static STROBE Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static TARGET Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static VIDEO Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static valueOf (Ljava/lang/String;)Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
@@ -98,6 +99,7 @@ org/haruyq/createmediasystems/api/lighting/ConsoleView abstract playhead ()Lorg/
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract selectedColor ()I
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract selectedGroup ()I
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract set (Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;IIFF)V
+org/haruyq/createmediasystems/api/lighting/ConsoleView abstract track (ILjava/util/UUID;)V
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract video (J)Lorg/haruyq/createmediasystems/api/lighting/AudioLevels;
 org/haruyq/createmediasystems/api/lighting/ConsoleView abstract videoSource ()Lnet/minecraft/core/BlockPos;
 org/haruyq/createmediasystems/api/lighting/ConsoleView class 512
@@ -114,6 +116,7 @@ org/haruyq/createmediasystems/api/lighting/GroupView abstract pattern ()Lorg/har
 org/haruyq/createmediasystems/api/lighting/GroupView abstract range ()F
 org/haruyq/createmediasystems/api/lighting/GroupView abstract speed ()F
 org/haruyq/createmediasystems/api/lighting/GroupView abstract spread ()F
+org/haruyq/createmediasystems/api/lighting/GroupView abstract strobe ()F
 org/haruyq/createmediasystems/api/lighting/GroupView abstract target ()Ljava/util/UUID;
 org/haruyq/createmediasystems/api/lighting/GroupView abstract tilt ()F
 org/haruyq/createmediasystems/api/lighting/GroupView abstract videoColors (Z)Z
@@ -145,6 +148,7 @@ org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_FAN Lo
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_RAY Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_SHEET Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static SPOT Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
+org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static WASH Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static valueOf (Ljava/lang/String;)Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static values ()[Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/client/ConsolePage abstract hit (Lorg/haruyq/createmediasystems/api/lighting/ConsoleView;Lnet/minecraft/world/phys/Vec3;Z)Lorg/haruyq/createmediasystems/api/lighting/client/ConsolePage$Control;

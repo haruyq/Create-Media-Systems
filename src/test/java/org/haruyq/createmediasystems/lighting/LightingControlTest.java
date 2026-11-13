@@ -72,11 +72,20 @@ class LightingControlTest {
         // Ids clients and servers of other versions send: the enum's order before ids were declared.
         String[] wire = {"GROUP", "BRIGHTNESS", "MASTER", "COLOR", "SLOT", "COUNT", "RGB", "MAPPING", "VIDEO", "AUDIO",
                 "BAND", "MOTION", "PATTERN", "RANGE", "SPREAD", "SPEED", "AIM", "ENABLED", "CYCLE", "TARGET", "PRESET",
-                "SOURCES", null, null, "RANGE_ALL"};
+                "SOURCES", null, null, "RANGE_ALL", "STROBE"};
         for (int id = 0; id < wire.length; id++) {
             Control control = Control.byId(id);
             assertEquals(wire[id], control == null ? null : control.name(), "id " + id);
         }
+    }
+
+    @Test
+    void steppingTheStrobePastEitherEndComesRoundToTheOther() {
+        LightingSettings settings = new LightingSettings();
+        assertEquals(1, Control.STROBE.step(settings, 0, 1, false).value());
+        assertEquals(LightingSettings.STROBE.max(), Control.STROBE.step(settings, 0, -1, false).value());
+        settings.selected().strobe = LightingSettings.STROBE.max();
+        assertEquals(0, Control.STROBE.step(settings, 0, 1, false).value());
     }
 
     @Test
@@ -88,7 +97,7 @@ class LightingControlTest {
                 new LightingPackets.Change(BlockPos.ZERO, -1, rgb, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, LightingSettings.GROUPS, rgb, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, -1, 0, 0, 0),
-                new LightingPackets.Change(BlockPos.ZERO, 0, 25, 0, 0, 0),
+                new LightingPackets.Change(BlockPos.ZERO, 0, 26, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, -1, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, 64, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, 0, Float.NaN, 0),

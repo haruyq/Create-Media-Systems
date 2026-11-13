@@ -217,6 +217,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         if (hanging) {
             base.rotateZ((float) Math.PI);
         }
+        // A bar's light leaves it lower, and nearer its middle, than a head's.
+        boolean bar = spec.bar();
+        float pivot = bar ? 0.34f : 0.56f;
+        float front = bar ? -0.11f : -0.34f;
         boolean holdAim = group.motion == Motion.TRACK;
         if (holdAim && group.target != null) {
             Player target = level.getPlayerByUUID(group.target);
@@ -225,11 +229,15 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 Vec3 targetCenter = SableCompat.bodyCenter(target, partialTick);
                 Vec3 at = SableCompat.toRenderBlockSpace(level, lamp.getBlockPos(), targetCenter)
                         .subtract(Vec3.atLowerCornerOf(lamp.getBlockPos()));
-                Vector3f local = new Matrix4f().translate(0.5f, hanging ? 0.44f : 0.56f, 0.5f).rotateY(facing)
+                Vector3f local = new Matrix4f().translate(0.5f, hanging ? 1 - pivot : pivot, 0.5f).rotateY(facing)
                         .invert().transformPosition(new Vector3f((float) at.x, (float) at.y, (float) at.z));
                 pan = (float) Math.toDegrees(Math.atan2(local.x, -local.z));
-                tilt = (float) Math.toDegrees(Math.atan2(-local.y, Math.sqrt(local.x * local.x + local.z * local.z)));
+                tilt = (float) Math.toDegrees(Math.atan2(-local.y, bar ? Math.max(0.001, -local.z)
+                        : Math.sqrt(local.x * local.x + local.z * local.z)));
             }
+        }
+        if (bar) {
+            pan = 0;
         }
         LightingMotion.Angles angles = motion.update(seconds, pan, LightingSettings.TILT.bounded(tilt), holdAim);
         pan = angles.pan();
@@ -239,18 +247,26 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             tilt = -tilt;
         }
         Matrix4f yoke = new Matrix4f(base).rotateY((float) Math.toRadians(-pan));
-        Matrix4f head = new Matrix4f(yoke).translate(0, 0.56f, 0).rotateX((float) Math.toRadians(-tilt));
+        Matrix4f head = new Matrix4f(yoke).translate(0, pivot, 0).rotateX((float) Math.toRadians(-tilt));
         Matrix4f model = new Matrix4f(pose.last().pose());
         // The console's own brushed frame and riveted casing, so fixtures and console read as one set.
         VertexConsumer metal = new QuadOutput(buffers, CONSOLE_FRAME);
         VertexConsumer casing = new QuadOutput(buffers, CONSOLE_CASING);
-        box(metal, new Matrix4f(model).mul(yoke), -0.39f, 0.13f, -0.13f, -0.29f, 0.66f, 0.13f, 0x9A9CA8, light);
-        box(metal, new Matrix4f(model).mul(yoke), 0.29f, 0.13f, -0.13f, 0.39f, 0.66f, 0.13f, 0x9A9CA8, light);
         box(metal, new Matrix4f(model).mul(yoke), -0.35f, 0.13f, -0.13f, 0.35f, 0.22f, 0.13f, 0x9A9CA8, light);
-        box(casing, new Matrix4f(model).mul(head), -0.3f, -0.24f, -0.31f, 0.3f, 0.24f, 0.29f, 0xFFFFFF, light);
-        box(metal, new Matrix4f(model).mul(head), -0.335f, -0.265f, -0.34f, 0.335f, 0.265f, -0.285f, 0xB1B3BE, light);
-        box(metal, new Matrix4f(model).mul(yoke), -0.42f, 0.47f, -0.1f, -0.375f, 0.65f, 0.1f, 0xE5BC55, light);
-        box(metal, new Matrix4f(model).mul(yoke), 0.375f, 0.47f, -0.1f, 0.42f, 0.65f, 0.1f, 0xE5BC55, light);
+        if (bar) {
+            // Two posts up to the bar's pivot, and the bar across the whole block, so a row of them reads as one.
+            box(metal, new Matrix4f(model).mul(yoke), -0.33f, 0.22f, -0.04f, -0.27f, pivot, 0.04f, 0x9A9CA8, light);
+            box(metal, new Matrix4f(model).mul(yoke), 0.27f, 0.22f, -0.04f, 0.33f, pivot, 0.04f, 0x9A9CA8, light);
+            box(casing, new Matrix4f(model).mul(head), -0.5f, -0.09f, -0.1f, 0.5f, 0.09f, 0.11f, 0xFFFFFF, light);
+            box(metal, new Matrix4f(model).mul(head), -0.5f, -0.1f, front, 0.5f, 0.1f, -0.085f, 0xB1B3BE, light);
+        } else {
+            box(metal, new Matrix4f(model).mul(yoke), -0.39f, 0.13f, -0.13f, -0.29f, 0.66f, 0.13f, 0x9A9CA8, light);
+            box(metal, new Matrix4f(model).mul(yoke), 0.29f, 0.13f, -0.13f, 0.39f, 0.66f, 0.13f, 0x9A9CA8, light);
+            box(casing, new Matrix4f(model).mul(head), -0.3f, -0.24f, -0.31f, 0.3f, 0.24f, 0.29f, 0xFFFFFF, light);
+            box(metal, new Matrix4f(model).mul(head), -0.335f, -0.265f, front, 0.335f, 0.265f, -0.285f, 0xB1B3BE, light);
+            box(metal, new Matrix4f(model).mul(yoke), -0.42f, 0.47f, -0.1f, -0.375f, 0.65f, 0.1f, 0xE5BC55, light);
+            box(metal, new Matrix4f(model).mul(yoke), 0.375f, 0.47f, -0.1f, 0.42f, 0.65f, 0.1f, 0xE5BC55, light);
+        }
         // A shader pack drawing its shadow map: the body only, no light.
         if (IrisCompat.shadowPass()) {
             return;
@@ -276,14 +292,20 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         if (group.mapping == LightingSettings.Mapping.PER_FIXTURE && !group.videoColors(video)) {
             color = group.colors[Math.floorMod(lamp.individualColor, group.colorCount)];
         }
+        // Between a strobe's flashes it is dark, though it goes on finding what it lights (LightingIllumination.render
+        // takes a light left undrawn for one whose faces are out of date). By the game's clock, which a paused track
+        // doesn't stop; and steady for a player who has lightning flashes hidden.
+        boolean dark = group.strobe > 0 && !LightingSettings.strobeLit(gameSeconds, group.strobe)
+                && !Minecraft.getInstance().options.hideLightningFlash().get();
         VertexConsumer screen = new QuadOutput(buffers, QuadOutput.FLAT);
-        quad(screen, new Matrix4f(model).mul(head), new Vec3(-spec.lensWidth(), -spec.lensHeight(), -0.342),
-                new Vec3(spec.lensWidth(), -spec.lensHeight(), -0.342), new Vec3(spec.lensWidth(), spec.lensHeight(), -0.342),
-                new Vec3(-spec.lensWidth(), spec.lensHeight(), -0.342), strength > 0 ? color : 0x163340, 255);
+        double lens = front - 0.002;
+        quad(screen, new Matrix4f(model).mul(head), new Vec3(-spec.lensWidth(), -spec.lensHeight(), lens),
+                new Vec3(spec.lensWidth(), -spec.lensHeight(), lens), new Vec3(spec.lensWidth(), spec.lensHeight(), lens),
+                new Vec3(-spec.lensWidth(), spec.lensHeight(), lens), strength > 0 && !dark ? color : 0x163340, 255);
         if (strength <= 0.001f) {
             return;
         }
-        Vec3 origin = point(head, new Vec3(0, 0, -0.347));
+        Vec3 origin = point(head, new Vec3(0, 0, front - 0.007));
         Vec3 direction = vector(head, new Vec3(0, 0, -1)).normalize();
         Vec3 right = vector(head, new Vec3(1, 0, 0)).normalize();
         Vec3 up = vector(head, new Vec3(0, 1, 0)).normalize();
@@ -301,10 +323,15 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         VertexConsumer beam = LightingBeams.available(level) ? null
                 : effects == EFFECTS ? effects.getBuffer(LIGHT) : new QuadOutput(buffers, LIGHT);
         if (pattern.cone()) {
-            LightingIllumination.render(lamp, origin, direction, Math.toRadians(coneSpread(pattern, group.spread)) / 2,
-                    group.range, strength, color, trace.intersections[SIDES], frame.rays, model, effects);
-            cone(beam, model, frame, trace, color, strength, pattern == Pattern.BEAM);
-        } else {
+            boolean wash = pattern == Pattern.WASH;
+            LightingIllumination.render(lamp, origin, direction, Math.toRadians(pattern.coneSpread(group.spread)) / 2,
+                    group.range, dark ? 0 : strength, color, trace.intersections[SIDES], frame.rays, model, effects,
+                    wash ? LightingIllumination.WASH_RADIUS : LightingIllumination.STAGE_RADIUS,
+                    wash ? LightingGpu.WASH_SOFTNESS : LightingGpu.EDGE_SOFTNESS);
+            if (!dark) {
+                cone(beam, model, frame, trace, color, strength, pattern);
+            }
+        } else if (!dark) {
             boolean fixtureColor = pattern == Pattern.LASER_RAY
                     || group.mapping == LightingSettings.Mapping.PER_FIXTURE;
             for (int i = 0; i < trace.ends.length; i++) {
@@ -343,11 +370,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     @Override
     public AABB getRenderBoundingBox(StageLightBlock.Entity lamp) {
         return renderBounds(lamp.getLevel(), lamp.getBlockPos(), LightingSettings.MAX_RANGE + 1);
-    }
-
-    /** The spread (degrees) a cone of {@code pattern} opens to: a beam's is held narrow. */
-    private static double coneSpread(Pattern pattern, double spread) {
-        return pattern == Pattern.BEAM ? Math.min(spread, 2) : spread;
     }
 
     private static AABB renderBounds(Level level, BlockPos anchor, double margin) {
@@ -468,7 +490,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             if (middle.length != sectors) {
                 middle = new LightingBeams.Clip[sectors];
             }
-            double tangent = Math.tan(Math.toRadians(coneSpread(pattern, spread)) / 2);
+            double tangent = Math.tan(Math.toRadians(pattern.coneSpread(spread)) / 2);
             for (int i = 0; i < count; i++) {
                 Vec3 aim = forward;
                 if (cone && i < SIDES) {
@@ -494,15 +516,21 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
     }
 
     private static void cone(@Nullable VertexConsumer out, Matrix4f matrix, BeamFrame frame, Trace trace, int color,
-                             float strength, boolean narrow) {
+                             float strength, Pattern pattern) {
         Vec3 origin = frame.origin;
+        boolean narrow = pattern == Pattern.BEAM;
+        // A wash is seen on what it lights: in the air, a haze.
+        float haze = narrow ? 38 : pattern == Pattern.WASH ? 5 : 17;
         for (int i = 0; i < SIDES; i++) {
             int next = (i + 1) % SIDES;
             strip(out, matrix, origin, origin, trace.ends[next], trace.ends[i], color, color, LightingBeams.Fade.CONE,
-                    strength * (narrow ? 38 : 17), trace.planes[i], trace.planes[next], trace.middle[i]);
+                    strength * haze, trace.planes[i], trace.planes[next], trace.middle[i]);
         }
         // A camera-facing inner shaft keeps the beam visible while looking along its cone.
-        ray(out, matrix, frame, trace.ends[SIDES], color, strength * 0.22f, narrow ? 0.025f : 0.055f, trace.planes[SIDES]);
+        if (pattern != Pattern.WASH) {
+            ray(out, matrix, frame, trace.ends[SIDES], color, strength * 0.22f, narrow ? 0.025f : 0.055f,
+                    trace.planes[SIDES]);
+        }
     }
 
     private static void sheet(@Nullable VertexConsumer out, Matrix4f matrix, Vec3 origin, Vec3 a, Vec3 b,

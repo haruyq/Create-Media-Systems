@@ -159,6 +159,16 @@ class LightingIlluminationTest {
     }
 
     @Test
+    void aWashFadesAllTheWayOutFromItsMiddle() {
+        double tangent = 0.2;
+        // Halfway out: a spot is still at full strength, a wash at half.
+        assertEquals(1, LightingIllumination.exposure(1, 0, 10, FORWARD, tangent, 32, 0, LightingGpu.EDGE_SOFTNESS));
+        assertEquals(0.5f, LightingIllumination.exposure(1, 0, 10, FORWARD, tangent, 32, 0, LightingGpu.WASH_SOFTNESS), 1e-6);
+        assertEquals(1, LightingIllumination.exposure(0, 0, 10, FORWARD, tangent, 32, 0, LightingGpu.WASH_SOFTNESS));
+        assertEquals(0, LightingIllumination.exposure(2, 0, 10, FORWARD, tangent, 32, 0, LightingGpu.WASH_SOFTNESS));
+    }
+
+    @Test
     void coneEdgesFadeContinuously() {
         double tangent = 0.2;
         float inner = LightingIllumination.exposure(1.4, 0, 10, FORWARD, tangent, 32, 0);

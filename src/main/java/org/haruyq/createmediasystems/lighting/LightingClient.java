@@ -42,8 +42,8 @@ public final class LightingClient implements ClientFeature {
     public void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
         helper.forComponents(LightingFeature.LIGHTING_CONSOLE.getId(), LightingFeature.LIGHTING_MONITOR.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), LightingClient::lightingConsole);
-        helper.forComponents(LightingFeature.STAGE_LIGHT.getId(), LightingFeature.LASER_PROJECTOR.getId(),
-                        LightingFeature.LIGHTING_LINK.getId())
+        helper.forComponents(LightingFeature.STAGE_LIGHT.getId(), LightingFeature.STRIP_LIGHT.getId(),
+                        LightingFeature.LASER_PROJECTOR.getId(), LightingFeature.LIGHTING_LINK.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), LightingClient::stageLights);
     }
 

@@ -59,22 +59,24 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
 
     /**
      * What a fixture of this block is like: its lens ({@code lensWidth} by {@code lensHeight}, from its middle), the
-     * patterns it draws (from {@code first} to {@code last}), and how dim it goes between beats while it tracks a
-     * player and follows the music ({@code trackFloor}; 0.12 otherwise).
+     * {@code patterns} it draws (the first, for a group set to one it can't), how dim it goes between beats while
+     * it tracks a player and follows the music ({@code trackFloor}; 0.12 otherwise), and whether it is a {@code bar}
+     * across its block, which tilts but doesn't turn, in place of a head on a yoke.
      */
-    public record Spec(float lensWidth, float lensHeight, LightingSettings.Pattern first, LightingSettings.Pattern last,
-                       float trackFloor) {
-        /** A moving head: a spot or a beam, kept bright on whom it follows. */
-        public static final Spec LIGHT = new Spec(0.255f, 0.205f, LightingSettings.Pattern.SPOT,
-                LightingSettings.Pattern.BEAM, 0.65f);
+    public record Spec(float lensWidth, float lensHeight, List<LightingSettings.Pattern> patterns, float trackFloor,
+                       boolean bar) {
+        /** A moving head: a spot, a beam or a wash, kept bright on whom it follows. */
+        public static final Spec LIGHT = new Spec(0.255f, 0.205f, List.of(LightingSettings.Pattern.BEAM,
+                LightingSettings.Pattern.SPOT, LightingSettings.Pattern.WASH), 0.65f, false);
         /** A laser projector: laser patterns only. */
-        public static final Spec LASER = new Spec(0.18f, 0.075f, LightingSettings.Pattern.LASER_RAY,
-                LightingSettings.Pattern.LASER_SHEET, 0.12f);
+        public static final Spec LASER = new Spec(0.18f, 0.075f, List.of(LightingSettings.Pattern.LASER_RAY,
+                LightingSettings.Pattern.LASER_FAN, LightingSettings.Pattern.LASER_SHEET), 0.12f, false);
+        /** A strip light: a wash, whatever its group is set to. */
+        public static final Spec STRIP = new Spec(0.47f, 0.06f, List.of(LightingSettings.Pattern.WASH), 0.65f, true);
 
-        /** The pattern it draws for a group set to {@code pattern}: the nearest it can. */
+        /** The pattern it draws for a group set to {@code pattern}. */
         public LightingSettings.Pattern pattern(LightingSettings.Pattern pattern) {
-            return LightingSettings.byId(LightingSettings.Pattern.values(),
-                    Math.max(first.ordinal(), Math.min(last.ordinal(), pattern.ordinal())));
+            return patterns.contains(pattern) ? pattern : patterns.getFirst();
         }
     }
 
@@ -106,7 +108,12 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return box(2, 0, 2, 14, 16, 14);
+        if (!spec.bar()) {
+            return box(2, 0, 2, 14, 16, 14);
+        }
+        int foot = state.getValue(HANGING) ? 8 : 0;
+        return state.getValue(FACING).getAxis() == Direction.Axis.Z ? box(0, foot, 3, 16, foot + 8, 13)
+                : box(3, foot, 0, 13, foot + 8, 16);
     }
 
     @Override
