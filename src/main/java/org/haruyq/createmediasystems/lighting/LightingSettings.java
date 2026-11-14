@@ -69,7 +69,13 @@ public final class LightingSettings {
     }
 
     public enum Motion implements Mode {
-        FIXED("motion.0"), SWEEP("motion.1"), CIRCLE("motion.2"), TRACK("motion.3");
+        FIXED("motion.0"), SWEEP("motion.1"), CIRCLE("motion.2"), TRACK("motion.3"),
+        /**
+         * On each beat the group points somewhere new at random (see randomAim), every light of it the same way.
+         * Its lights lit at random (see CHASE) are then a run of neighbours, so they read as one burst of beams
+         * rather than beams scattered along the row. Last: a saved one is its ordinal.
+         */
+        RANDOM("motion.4");
 
         private final String key;
 
@@ -445,11 +451,16 @@ public final class LightingSettings {
 
     /**
      * Whether the light {@code order}th of {@code count} is among the {@code chase} lit on the beat numbered
-     * {@code beat} (any number, the same on every light of a group for one beat): always, at 0.
+     * {@code beat} (any number, the same on every light of a group for one beat): always, at 0. {@code run}: those
+     * lit are neighbours, a run of them somewhere along the group, rather than any of it.
      */
-    public static boolean chaseLit(int chase, int order, int count, long beat) {
+    public static boolean chaseLit(int chase, int order, int count, long beat, boolean run) {
         if (chase <= 0 || chase >= count) {
             return true;
+        }
+        if (run) {
+            int first = new java.util.Random(beat * 0x9E3779B97F4A7C15L).nextInt(count - chase + 1);
+            return order >= first && order < first + chase;
         }
         // The first chase places of a shuffle of the lights, the same for every light that asks on this beat.
         int[] lights = new int[count];
@@ -467,6 +478,15 @@ public final class LightingSettings {
             }
         }
         return false;
+    }
+
+    /**
+     * Where a group in Motion.RANDOM points on the beat numbered {@code beat} (see chaseLit), from where it is aimed:
+     * {pan, tilt} in degrees, as far either way as a sweep swings across and a circle up and down.
+     */
+    public static float[] randomAim(long beat) {
+        java.util.Random random = new java.util.Random(beat * 0x9E3779B97F4A7C15L ^ 0x5DEECE66DL);
+        return new float[]{(random.nextFloat() * 2 - 1) * 55, (random.nextFloat() * 2 - 1) * 22};
     }
 
     /** Whether a light strobing {@code strobe} times a second is lit at {@code seconds}: always, at 0. */

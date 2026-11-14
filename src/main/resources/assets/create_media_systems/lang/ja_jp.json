@@ -126,6 +126,7 @@
   "create_media_systems.lighting.motion.1": "左右往復",
   "create_media_systems.lighting.motion.2": "円運動",
   "create_media_systems.lighting.motion.3": "プレイヤー追従",
+  "create_media_systems.lighting.motion.4": "ランダム方向",
   "item.create_media_systems.custom_disc": "カスタムディスク",
   "item.create_media_systems.announcement_schedule": "車内放送時刻表",
   "block.create_media_systems.train_disc_reader": "鉄道用ディスクリーダー",

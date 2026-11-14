@@ -142,6 +142,7 @@ org/haruyq/createmediasystems/api/lighting/GroupView$Mapping static values ()[Lo
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion class 16400
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static CIRCLE Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static FIXED Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
+org/haruyq/createmediasystems/api/lighting/GroupView$Motion static RANDOM Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static SWEEP Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static TRACK Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static valueOf (Ljava/lang/String;)Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;

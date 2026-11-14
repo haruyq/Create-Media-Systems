@@ -9,7 +9,11 @@ import org.jetbrains.annotations.Nullable;
 @ApiStatus.Experimental
 @ApiStatus.NonExtendable
 public interface GroupView {
-    enum Motion { FIXED, SWEEP, CIRCLE, TRACK }
+    /**
+     * RANDOM: on each beat its lights point somewhere new at random, all the same way; those lit at random (see
+     * chase) are then neighbours, a run of them somewhere along the group.
+     */
+    enum Motion { FIXED, SWEEP, CIRCLE, TRACK, RANDOM }
 
     enum Pattern { SPOT, BEAM, LASER_RAY, LASER_FAN, LASER_SHEET, WASH }
 
@@ -59,7 +63,10 @@ public interface GroupView {
     /** How many times a second its lights flash; 0 for a steady light. */
     float strobe();
 
-    /** How many of its lights are lit at once, chosen again at random on each beat; 0 for all of them. */
+    /**
+     * How many of its lights are lit at once, chosen again at random on each beat; 0 for all of them. Any of them,
+     * or under Motion.RANDOM a run of neighbours.
+     */
     int chase();
 
     /** The player its lights follow (Motion.TRACK); null for none. */
