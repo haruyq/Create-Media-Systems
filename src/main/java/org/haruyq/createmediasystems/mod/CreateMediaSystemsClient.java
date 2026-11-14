@@ -15,6 +15,7 @@ import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.blocks.display.DisplayClient;
 import org.haruyq.createmediasystems.blocks.component.m700.HifiClient;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.client.KeyboardClient;
+import org.haruyq.createmediasystems.items.instrument.client.WearableClient;
 import org.haruyq.createmediasystems.items.launcher.client.LauncherClient;
 import org.haruyq.createmediasystems.lighting.LightingClient;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.client.MegaphoneClient;
@@ -45,7 +46,7 @@ public final class CreateMediaSystemsClient {
             MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(),
             PxS1100Client.INSTANCE, new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
-            DiscClient::register, BroadcastClient::register, new KeyboardClient(), PianoClient::register);
+            DiscClient::register, BroadcastClient::register, new KeyboardClient(), PianoClient::register, WearableClient::register);
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

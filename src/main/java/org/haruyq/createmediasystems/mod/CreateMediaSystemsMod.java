@@ -16,6 +16,7 @@ import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import org.haruyq.createmediasystems.blocks.component.m700.HifiFeature;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardFeature;
+import org.haruyq.createmediasystems.items.instrument.WearableInstruments;
 import org.haruyq.createmediasystems.items.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.MegaphoneFeature;
@@ -42,7 +43,7 @@ public final class CreateMediaSystemsMod {
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new PxS1100Feature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
-            new KeyboardFeature(), new PianoFeature());
+            new KeyboardFeature(), new PianoFeature(), new WearableInstruments());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -70,7 +71,8 @@ public final class CreateMediaSystemsMod {
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
                 KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM));
         List<Supplier<? extends Item>> portable = new ArrayList<>(List.of(
-                PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY, MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
+                WearableInstruments.KEYTAR, WearableInstruments.MELODICA, PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY,
+                MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
                 LauncherFeature.DISC_LAUNCHER, LauncherFeature.LAUNCHER_AIM_MODULE_ITEM, LauncherFeature.DISC_CELL_CHARGER_ITEM));
         portable.addAll(LauncherFeature.DISC_CELLS);
 

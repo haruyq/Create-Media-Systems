@@ -152,7 +152,7 @@ public final class KeyboardAudio {
 
     /** The sound bank; null until it has been read, which the first call starts. */
     @Nullable
-    static SoundFont bank(Minecraft mc) {
+    public static SoundFont bank(Minecraft mc) {
         if (!bankAsked) {
             bankAsked = true;
             // ponytail: read once and kept until the game is closed; a resource reload doesn't read it again.
