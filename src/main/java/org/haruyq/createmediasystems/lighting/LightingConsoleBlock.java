@@ -273,8 +273,8 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
 
         /**
          * The fixture at {@code pos}'s place among its group's, from 0: left to right as the console's player sees
-         * them (see ConsoleLayout.compareFixtures), in the order they were linked where that doesn't tell; 0 if it is
-         * not linked.
+         * them (see ConsoleLayout.compareFixtures) wherever Sable has it and them, in the order they were linked where
+         * that doesn't tell; 0 if it is not linked.
          */
         public int order(BlockPos pos) {
             int index = indexOf(pos);
@@ -282,15 +282,26 @@ public class LightingConsoleBlock extends HorizontalDirectionalBlock implements 
                 return 0;
             }
             Direction facing = getBlockState().getValue(FACING);
+            BlockPos seen = seen(pos);
             int order = 0;
             for (int i = 0; i < fixtures.size(); i++) {
                 Fixture other = fixtures.get(i);
                 if (i != index && other.group() == fixtures.get(index).group()) {
-                    int place = other.link().pos() == null ? 1 : ConsoleLayout.compareFixtures(facing, other.link().pos(), pos);
+                    int place = other.link().pos() == null ? 1
+                            : ConsoleLayout.compareFixtures(facing, seen(other.link().pos()), seen);
                     order += place < 0 || place == 0 && i < index ? 1 : 0;
                 }
             }
             return order;
+        }
+
+        /**
+         * The block of the console's own block space the fixture at {@code pos} is in now: itself, unless one of the
+         * two is on a Sable sub-level the other is not on, whose blocks keep their positions in a far-off plot.
+         */
+        private BlockPos seen(BlockPos pos) {
+            return level == null || SableCompat.sameSubLevel(level, worldPosition, pos) ? pos : BlockPos.containing(
+                    SableCompat.toBlockSpace(level, worldPosition, SableCompat.toWorld(level, pos, pos.getCenter())));
         }
 
         /**
