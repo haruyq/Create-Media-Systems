@@ -42,8 +42,18 @@ public final class LightingMidi {
      * Akai-APCMini-mk2.qxi and KORG-nanoKONTROL2.qxi). The APC mini's pads are notes 0 to 63 from the bottom left, the
      * keys under its faders 64 to 71 and those beside its pads 82 to 89, top down; the mk2's are 100 to 107 and 112 to
      * 119, so one map takes both. The nanoKONTROL2's keys are control changes: S 32 to 39, M 48 to 55, R 64 to 71.
+     *
+     * <p>The Pioneer DJ DDJ-FLX4's is as Mixxx's mapping lists it (Pioneer-DDJ-FLX4.midi.xml): its decks send the same
+     * numbers, the left on channel 1 and the right on 2, their pads on 8 and 10 (hot cues 0 to 7, the sampler's 48 to
+     * 55), and the mixer's filter knobs on 7. The left deck works the selected group (its fader the brightness, its
+     * equaliser the colour, its pads the group), the right the whole console (its fader the master, its pads the
+     * presets, and the sampler's the colour slots); the filter knobs, level at their middle, aim.
      */
     static final List<String> BUILT_IN = List.of(
+            "DDJ-FLX4: ch1.cc19=selected ch2.cc19=master ch1.cc7=red ch1.cc11=green ch1.cc15=blue"
+                    + " ch2.cc7=range ch2.cc11=spread ch2.cc15=speed ch7.cc23=pan ch7.cc24=tilt"
+                    + " ch8.note0-5=group ch10.note0-5=preset ch10.note48-55=slot ch1.note11=enabled ch1.note12=strobe"
+                    + " ch1.note88=motion ch2.note11=audio ch2.note12=cycle ch2.note88=pattern",
             "APC mini: cc48-53=brightness cc54=pan cc55=tilt cc56=master note0-63=color"
                     + " note64-69=group note70=motion note71=pattern note82-87=preset note88=strobe note89=enabled"
                     + " note100-105=group note106=motion note107=pattern note112-117=preset note118=strobe note119=enabled",
@@ -52,10 +62,14 @@ public final class LightingMidi {
                     + " cc44=pattern cc45=strobe cc46=cycle cc58=mapping cc59=count cc60=video cc61=band cc62=target");
 
     private static final ModConfigSpec.ConfigValue<List<? extends String>> CONTROLLERS = ClientConfig.BUILDER
-            .comment("MIDI controllers that work the lighting console you point at, beside the Akai APC mini and the KORG nanoKONTROL2, which work as they are. Each entry is part of the device's name, a colon, then what its controls work: 'X-TOUCH: cc1-6=brightness cc9=master note8-13=group'. cc and note numbers are those the device sends; a range works the groups, slots or keys in turn, and a number after a name starts from that one ('cc20=brightness3'). Faders and knobs: brightness (6 groups), master, red, green, blue, range, spread, speed, pan, tilt. Keys: group (6), preset (6), slot (8), color (the 64 palette cells, from the bottom left), enabled, audio, band, cycle, pattern, motion, target, strobe, count, mapping, video. An entry here comes before the built-in ones; one with nothing after the colon keeps that device closed.")
+            .comment("MIDI controllers that work the lighting console you point at, beside the Akai APC mini, the KORG nanoKONTROL2 and the Pioneer DJ DDJ-FLX4, which work as they are. Each entry is part of the device's name, a colon, then what its controls work: 'X-TOUCH: cc1-6=brightness cc9=master note8-13=group'. cc and note numbers are those the device sends, on any MIDI channel, or on one alone with it in front ('ch2.cc19=master'); a range works the groups, slots or keys in turn, and a number after a name starts from that one ('cc20=brightness3'). Faders and knobs: brightness (6 groups), selected (the selected group's brightness), master, red, green, blue, range, spread, speed, pan, tilt. Keys: group (6), preset (6), slot (8), color (the 64 palette cells, from the bottom left), enabled, audio, band, cycle, pattern, motion, target, strobe, count, mapping, video. An entry here comes before the built-in ones; one with nothing after the colon keeps that device closed.")
             .defineListAllowEmpty("lightingMidiControllers", List.of(), () -> "", entry -> entry instanceof String);
 
-    private static final Pattern BOUND = Pattern.compile("(cc|note)(\\d{1,3})(?:-(\\d{1,3}))?=([a-z]+)(\\d{0,2})");
+    /** A binding: its channel if it has one, cc or note, its number or range, and what it works, from which. */
+    private static final Pattern BOUND = Pattern.compile(
+            "(?<![\\w.])(?:ch(\\d{1,2})\\.)?(cc|note)(\\d{1,3})(?:-(\\d{1,3}))?=([a-z]+)(\\d{0,2})");
+    /** A brightness binding's index for the selected group's, whichever that is. */
+    static final int SELECTED = -1;
     /** What MidiPort's status says once its input is open. */
     private static final String CONNECTED = "keyboard.midi_connected";
 
@@ -84,11 +98,20 @@ public final class LightingMidi {
 
     /** A controller's map: part of its device's name (lower case), and its bindings by key (see key). */
     record Profile(String device, Map<Integer, Binding> map) {
+        /** What the control sending {@code number} on {@code channel} (1 to 16) works: that channel's, else any channel's. */
+        @Nullable
+        Binding binding(int channel, boolean note, int number) {
+            Binding own = map.get(key(channel, note, number));
+            return own != null ? own : map.get(key(0, note, number));
+        }
     }
 
-    /** A control change's or a note's place in a map: as QLC+ numbers its MIDI channels, notes after the 128 controls. */
-    static int key(boolean note, int number) {
-        return note ? 128 + number : number;
+    /**
+     * A control change's or a note's place in a map: as QLC+ numbers its MIDI channels, notes after the 128 controls,
+     * and those of one MIDI channel ({@code channel} 1 to 16; 0 for any) 256 on for each.
+     */
+    static int key(int channel, boolean note, int number) {
+        return channel << 8 | (note ? 128 + number : number);
     }
 
     /** {@code entries}' maps (lightingMidiControllers), then the built-in ones. */
@@ -112,17 +135,18 @@ public final class LightingMidi {
         Map<Integer, Binding> map = new HashMap<>();
         Matcher bound = BOUND.matcher(colon < 0 ? "" : entry.substring(colon + 1).toLowerCase(Locale.ROOT));
         while (bound.find()) {
-            Binding first = target(bound.group(4));
-            if (first == null) {
+            Binding first = target(bound.group(5));
+            int channel = bound.group(1) == null ? 0 : Integer.parseInt(bound.group(1));
+            if (first == null || bound.group(1) != null && (channel < 1 || channel > 16)) {
                 continue;
             }
-            int from = Integer.parseInt(bound.group(2));
-            int to = bound.group(3) == null ? from : Integer.parseInt(bound.group(3));
-            int start = first.index() + (bound.group(5).isEmpty() ? 0 : Integer.parseInt(bound.group(5)) - 1);
+            int from = Integer.parseInt(bound.group(3));
+            int to = bound.group(4) == null ? from : Integer.parseInt(bound.group(4));
+            int start = first.index() + (bound.group(6).isEmpty() ? 0 : Integer.parseInt(bound.group(6)) - 1);
             for (int number = from; number <= Math.min(to, 127); number++) {
-                int index = start + number - from;
-                if (index >= 0 && index < count(first.control())) {
-                    map.put(key(bound.group(1).equals("note"), number), new Binding(first.control(), index));
+                int index = first.index() == SELECTED ? SELECTED : start + number - from;
+                if (index == SELECTED || index >= 0 && index < count(first.control())) {
+                    map.put(key(channel, bound.group(2).equals("note"), number), new Binding(first.control(), index));
                 }
             }
         }
@@ -138,6 +162,9 @@ public final class LightingMidi {
         }
         if (name.equals("pan") || name.equals("tilt")) {
             return new Binding(Control.AIM, name.equals("pan") ? 0 : 1);
+        }
+        if (name.equals("selected")) {
+            return new Binding(Control.BRIGHTNESS, SELECTED);
         }
         for (Control control : Control.values()) {
             // Not the sources' key: all it does is unlink them.
@@ -173,7 +200,7 @@ public final class LightingMidi {
         int group = settings.selectedGroup;
         float level = value / 127f;
         return switch (control) {
-            case BRIGHTNESS -> new Change(console, index, control, 0, level, 0);
+            case BRIGHTNESS -> new Change(console, index == SELECTED ? group : index, control, 0, level, 0);
             case MASTER -> new Change(console, group, control, 0, level, 0);
             case RANGE -> new Change(console, group, control, 0, travel(LightingSettings.RANGE, level), 0);
             case SPREAD -> new Change(console, group, control, 0, travel(LightingSettings.SPREAD, level), 0);
@@ -213,7 +240,7 @@ public final class LightingMidi {
         boolean note = command == ShortMessage.NOTE_ON || command == ShortMessage.NOTE_OFF;
         Profile profile = from == null || !note && command != ShortMessage.CONTROL_CHANGE ? null
                 : profile(profiles, from.status().selected());
-        Binding binding = profile == null ? null : profile.map().get(key(note, message.getData1()));
+        Binding binding = profile == null ? null : profile.binding(message.getChannel() + 1, note, message.getData1());
         if (binding == null) {
             return;
         }
