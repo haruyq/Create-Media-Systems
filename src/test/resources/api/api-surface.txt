@@ -218,6 +218,16 @@ org/haruyq/createmediasystems/api/media/MediaSources class 16
 org/haruyq/createmediasystems/api/media/MediaSources static hold (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Z)Z
 org/haruyq/createmediasystems/api/media/MediaSources static playing (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lorg/haruyq/createmediasystems/api/media/MediaSources$Track;
 org/haruyq/createmediasystems/api/media/MediaSources static rewind (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z
+org/haruyq/createmediasystems/api/media/MediaSources static screens (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Ljava/util/List;
+org/haruyq/createmediasystems/api/media/MediaSources$Screen <init> (Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/core/Direction;DD)V
+org/haruyq/createmediasystems/api/media/MediaSources$Screen class 16
+org/haruyq/createmediasystems/api/media/MediaSources$Screen equals (Ljava/lang/Object;)Z
+org/haruyq/createmediasystems/api/media/MediaSources$Screen facing ()Lnet/minecraft/core/Direction;
+org/haruyq/createmediasystems/api/media/MediaSources$Screen hashCode ()I
+org/haruyq/createmediasystems/api/media/MediaSources$Screen height ()D
+org/haruyq/createmediasystems/api/media/MediaSources$Screen middle ()Lnet/minecraft/world/phys/Vec3;
+org/haruyq/createmediasystems/api/media/MediaSources$Screen toString ()Ljava/lang/String;
+org/haruyq/createmediasystems/api/media/MediaSources$Screen width ()D
 org/haruyq/createmediasystems/api/media/MediaSources$Track <init> (Ljava/lang/String;JIJ)V
 org/haruyq/createmediasystems/api/media/MediaSources$Track class 16
 org/haruyq/createmediasystems/api/media/MediaSources$Track equals (Ljava/lang/Object;)Z

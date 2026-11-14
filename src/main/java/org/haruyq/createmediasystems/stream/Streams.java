@@ -385,6 +385,16 @@ public final class Streams {
     public record RelayView(Sound sound, int listeners) {
     }
 
+    /**
+     * The block entities in {@code level} that relay the track of the source at {@code source} now (its speakers,
+     * its displays): each from its first relay of the track, within RELAY_TICKS of it starting, until the source
+     * stops or the emitter is removed.
+     */
+    public static List<BlockEntity> emitters(Level level, BlockPos source) {
+        return RELAYS.entrySet().stream().filter(entry -> relays(entry, level, source))
+                .map(entry -> (BlockEntity) entry.getKey()).toList();
+    }
+
     public static List<RelayView> relays() {
         return RELAYS.values().stream().map(relay -> new RelayView(relay.sound, relay.listeners.size())).toList();
     }
