@@ -283,29 +283,45 @@ public final class LightingPackets {
         },
         /**
          * Value: flashes a second, 0 for none. Its row steps on past 10 Hz to lighting one, three, five, then eight
-         * at random on the beat (see CHASE), and from there round to off.
+         * at random on the beat (see CHASE), then a run of one or three stepping along the group (see CHASE_STEP),
+         * and from there round to off.
          */
         STROBE(25, "strobe", Press.STEP,
                 (s, g, i, step, fine) -> flash(g, step).value(),
-                view -> view.group().chase > 0 ? LightingText.message(LightingText.NUMBER, "chase", view.group().chase)
+                view -> view.group().chase > 0 ? LightingText.message(LightingText.NUMBER,
+                        view.group().chaseStep ? "step" : "chase", view.group().chase)
                         : view.group().strobe <= 0 ? LightingText.on(false)
                         : LightingText.number(Math.round(view.group().strobe) + " Hz"),
                 (console, s, g, change, value, player) -> set(() -> {
                     g.strobe = change.value;
                     if (g.strobe > 0) {
                         g.chase = 0;
+                        g.chaseStep = false;
                     }
                 })),
         /** Value: how many of the group's lights are lit at once, at random on each beat; 0 for all. Not with a strobe. */
         CHASE(26, "chase", Press.NONE, null, view -> LightingText.number(view.group().chase),
                 (console, s, g, change, value, player) -> set(() -> {
                     g.chase = value;
+                    g.chaseStep = false;
+                    if (value > 0) {
+                        g.strobe = 0;
+                    }
+                })),
+        /**
+         * Value: how many of the group's lights are lit at once, a run of neighbours that steps one light along the
+         * group on each beat; 0 for all. Not with a strobe.
+         */
+        CHASE_STEP(27, "chase", Press.NONE, null, view -> LightingText.number(view.group().chase),
+                (console, s, g, change, value, player) -> set(() -> {
+                    g.chase = value;
+                    g.chaseStep = value > 0;
                     if (value > 0) {
                         g.strobe = 0;
                     }
                 }));
 
-        private static final Control[] BY_ID = new Control[27];
+        private static final Control[] BY_ID = new Control[28];
 
         static {
             for (Control control : values()) {
@@ -361,19 +377,28 @@ public final class LightingPackets {
                     control.step.next(settings, group, index, step, fine));
         }
 
-        /** The strobe row's step: off, 1 to 10 Hz, one at random on the beat, three, five, eight, and round. */
+        /**
+         * The strobe row's step: off, 1 to 10 Hz, one at random on the beat, three, five, eight, a run of one
+         * stepping along, of three, and round.
+         */
         private static Stepped flash(Group group, int step) {
             int strobes = (int) LightingSettings.STROBE.max();
             int[] chases = {1, 3, 5, 8};
+            int[] steps = {1, 3};
             int at = Math.round(group.strobe);
             if (group.chase > 0) {
                 // The row's place of its chase, or the next above it (a mod may set any).
-                at = strobes + chases.length;
-                for (int i = chases.length - 1; i >= 0; i--) {
-                    at = chases[i] >= group.chase ? strobes + 1 + i : at;
+                int[] row = group.chaseStep ? steps : chases;
+                int first = strobes + 1 + (group.chaseStep ? chases.length : 0);
+                at = first + row.length - 1;
+                for (int i = row.length - 1; i >= 0; i--) {
+                    at = row[i] >= group.chase ? first + i : at;
                 }
             }
-            int next = Math.floorMod(at + step, strobes + 1 + chases.length);
+            int next = Math.floorMod(at + step, strobes + 1 + chases.length + steps.length);
+            if (next > strobes + chases.length) {
+                return new Stepped(CHASE_STEP, 0, steps[next - strobes - chases.length - 1]);
+            }
             if (next > strobes) {
                 return new Stepped(CHASE, 0, chases[next - strobes - 1]);
             }

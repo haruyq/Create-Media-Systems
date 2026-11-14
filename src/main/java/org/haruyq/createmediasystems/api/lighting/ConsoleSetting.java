@@ -6,5 +6,7 @@ import org.jetbrains.annotations.ApiStatus;
 @ApiStatus.Experimental
 public enum ConsoleSetting {
     GROUP, BRIGHTNESS, MASTER, COLOR, SLOT, COUNT, RGB, MAPPING, VIDEO, AUDIO, BAND, MOTION, PATTERN, RANGE, SPREAD,
-    SPEED, AIM, ENABLED, CYCLE, TARGET, PRESET, SOURCES, RANGE_ALL, STROBE, CHASE
+    SPEED, AIM, ENABLED, CYCLE, TARGET, PRESET, SOURCES, RANGE_ALL, STROBE, CHASE,
+    /** As CHASE, its lights a run of neighbours that steps one light along the group on each beat. */
+    CHASE_STEP
 }

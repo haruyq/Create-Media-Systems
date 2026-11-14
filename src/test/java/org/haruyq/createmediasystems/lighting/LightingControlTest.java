@@ -72,7 +72,7 @@ class LightingControlTest {
         // Ids clients and servers of other versions send: the enum's order before ids were declared.
         String[] wire = {"GROUP", "BRIGHTNESS", "MASTER", "COLOR", "SLOT", "COUNT", "RGB", "MAPPING", "VIDEO", "AUDIO",
                 "BAND", "MOTION", "PATTERN", "RANGE", "SPREAD", "SPEED", "AIM", "ENABLED", "CYCLE", "TARGET", "PRESET",
-                "SOURCES", null, null, "RANGE_ALL", "STROBE", "CHASE"};
+                "SOURCES", null, null, "RANGE_ALL", "STROBE", "CHASE", "CHASE_STEP"};
         for (int id = 0; id < wire.length; id++) {
             Control control = Control.byId(id);
             assertEquals(wire[id], control == null ? null : control.name(), "id " + id);
@@ -80,10 +80,10 @@ class LightingControlTest {
     }
 
     @Test
-    void theStrobeRowStepsThroughTheStrobeThenTheRandomLightsAndRound() {
+    void theStrobeRowStepsThroughTheStrobeThenTheRandomLightsThenTheSteppingRunAndRound() {
         LightingSettings settings = new LightingSettings();
         assertEquals(new LightingPackets.Stepped(Control.STROBE, 0, 1), Control.STROBE.step(settings, 0, 1, false));
-        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 8), Control.STROBE.step(settings, 0, -1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE_STEP, 0, 3), Control.STROBE.step(settings, 0, -1, false));
         settings.selected().strobe = LightingSettings.STROBE.max();
         assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 1), Control.STROBE.step(settings, 0, 1, false));
         settings.selected().strobe = 0;
@@ -93,12 +93,22 @@ class LightingControlTest {
                 Control.STROBE.step(settings, 0, -1, false));
         settings.selected().chase = 3;
         assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 5), Control.STROBE.step(settings, 0, 1, false));
+        // Past eight at random: a run of one stepping along the group, then of three, then off.
         settings.selected().chase = 8;
-        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE_STEP, 0, 1), Control.STROBE.step(settings, 0, 1, false));
         // One a mod set between the row's: the next above it, and on from there.
         settings.selected().chase = 6;
-        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE_STEP, 0, 1), Control.STROBE.step(settings, 0, 1, false));
         assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 5), Control.STROBE.step(settings, 0, -1, false));
+        settings.selected().chase = 1;
+        settings.selected().chaseStep = true;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE_STEP, 0, 3), Control.STROBE.step(settings, 0, 1, false));
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 8), Control.STROBE.step(settings, 0, -1, false));
+        settings.selected().chase = 3;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
+        // A longer run a mod set: the row's last place.
+        settings.selected().chase = 5;
+        assertEquals(new LightingPackets.Stepped(Control.CHASE, 0, 0), Control.STROBE.step(settings, 0, 1, false));
     }
 
     @Test
@@ -110,7 +120,7 @@ class LightingControlTest {
                 new LightingPackets.Change(BlockPos.ZERO, -1, rgb, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, LightingSettings.GROUPS, rgb, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, -1, 0, 0, 0),
-                new LightingPackets.Change(BlockPos.ZERO, 0, 27, 0, 0, 0),
+                new LightingPackets.Change(BlockPos.ZERO, 0, 28, 0, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, -1, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, 64, 0, 0),
                 new LightingPackets.Change(BlockPos.ZERO, 0, rgb, 0, Float.NaN, 0),

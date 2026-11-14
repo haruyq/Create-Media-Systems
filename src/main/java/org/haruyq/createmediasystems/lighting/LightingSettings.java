@@ -75,7 +75,12 @@ public final class LightingSettings {
          * Its lights lit at random (see CHASE) are then a run of neighbours, so they read as one burst of beams
          * rather than beams scattered along the row. Last: a saved one is its ordinal.
          */
-        RANDOM("motion.4");
+        RANDOM("motion.4"),
+        /**
+         * A sweep with every other light of the group going the other way, so their beams cross and part again:
+         * scissors. Last: a saved one is its ordinal.
+         */
+        CROSS("motion.5");
 
         private final String key;
 
@@ -92,7 +97,12 @@ public final class LightingSettings {
     public enum Pattern implements Mode {
         SPOT("pattern.0"), BEAM("pattern.1"), LASER_RAY("pattern.2"), LASER_FAN("pattern.3"), LASER_SHEET("pattern.4"),
         /** A wide cone fading from its middle out, with hardly a beam in the air. Last: a saved one is its ordinal. */
-        WASH("pattern.5");
+        WASH("pattern.5"),
+        /**
+         * A laser's rays in a ring round where it points, a cone of light between them, as wide as the group's
+         * spread: a tunnel. Last: a saved one is its ordinal.
+         */
+        LASER_TUNNEL("pattern.6");
 
         private final String key;
 
@@ -245,6 +255,8 @@ public final class LightingSettings {
         public float tilt = TILT.initial();
         public float strobe = STROBE.initial();
         public int chase;
+        /** Its chase's lights are a run that steps one light along the group on each beat, not chosen at random. */
+        public boolean chaseStep;
         public UUID target;
 
         /** Takes {@code preset}'s effect; a tracking one follows {@code player}, if given. */
@@ -259,6 +271,7 @@ public final class LightingSettings {
             spread = preset.spread;
             strobe = STROBE.initial();
             chase = 0;
+            chaseStep = false;
             if (preset.motion == LightingSettings.Motion.TRACK && player != null) {
                 target = player;
             }
@@ -283,6 +296,7 @@ public final class LightingSettings {
             TILT.save(tag, tilt);
             STROBE.save(tag, strobe);
             tag.putInt("Chase", chase);
+            tag.putBoolean("ChaseStep", chaseStep);
             if (target != null) {
                 tag.putUUID("Target", target);
             }
@@ -308,6 +322,7 @@ public final class LightingSettings {
             tilt = TILT.load(tag);
             strobe = STROBE.load(tag);
             chase = tag.getInt("Chase");
+            chaseStep = tag.getBoolean("ChaseStep");
             target = tag.hasUUID("Target") ? tag.getUUID("Target") : null;
             normalize();
         }
@@ -325,6 +340,7 @@ public final class LightingSettings {
             tilt = TILT.bounded(tilt);
             strobe = STROBE.bounded(strobe);
             chase = (int) CHASE.bounded(chase);
+            chaseStep &= chase > 0;
         }
 
         /** The colour it is showing in slot {@code slot}'s place (the selected one, say). */
@@ -413,6 +429,11 @@ public final class LightingSettings {
         }
 
         @Override
+        public boolean chaseStep() {
+            return chaseStep;
+        }
+
+        @Override
         @Nullable
         public UUID target() {
             return target;
@@ -478,6 +499,15 @@ public final class LightingSettings {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the light {@code order}th of {@code count} is among the {@code chase} lit after {@code beats} beats
+     * (a count of them, see LightingRenderer.beat) by a chase that steps: a run of neighbours that moves one light
+     * along the group on each beat, off its end and in again at its start. Always, at 0.
+     */
+    public static boolean chaseStepLit(int chase, int order, int count, long beats) {
+        return chase <= 0 || chase >= count || Math.floorMod(order - beats, count) < chase;
     }
 
     /**

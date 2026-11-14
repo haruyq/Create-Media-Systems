@@ -11,11 +11,13 @@ import org.jetbrains.annotations.Nullable;
 public interface GroupView {
     /**
      * RANDOM: on each beat its lights point somewhere new at random, all the same way; those lit at random (see
-     * chase) are then neighbours, a run of them somewhere along the group.
+     * chase) are then neighbours, a run of them somewhere along the group. CROSS: a sweep, every other light going
+     * the other way, so their beams cross.
      */
-    enum Motion { FIXED, SWEEP, CIRCLE, TRACK, RANDOM }
+    enum Motion { FIXED, SWEEP, CIRCLE, TRACK, RANDOM, CROSS }
 
-    enum Pattern { SPOT, BEAM, LASER_RAY, LASER_FAN, LASER_SHEET, WASH }
+    /** LASER_TUNNEL: a laser's rays in a ring, a cone of light as wide as the spread. */
+    enum Pattern { SPOT, BEAM, LASER_RAY, LASER_FAN, LASER_SHEET, WASH, LASER_TUNNEL }
 
     enum Mapping { SEQUENCE, SPLIT, GRADIENT, PER_FIXTURE }
 
@@ -68,6 +70,12 @@ public interface GroupView {
      * or under Motion.RANDOM a run of neighbours.
      */
     int chase();
+
+    /**
+     * Whether those lit (see chase) are a run of neighbours that steps one light along the group on each beat,
+     * rather than chosen at random.
+     */
+    boolean chaseStep();
 
     /** The player its lights follow (Motion.TRACK); null for none. */
     @Nullable
