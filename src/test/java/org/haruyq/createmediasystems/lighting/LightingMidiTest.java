@@ -52,6 +52,38 @@ class LightingMidiTest {
     }
 
     @Test
+    void theDdjFlx4sDecksSendTheSameNumbersOnTheirOwnChannelsAsMixxxListsThem() {
+        Profile flx4 = LightingMidi.profile(KNOWN, "DDJ-FLX4");
+        // The channel faders: 0xB0 and 0xB1, 0x13.
+        assertEquals(new Binding(Control.BRIGHTNESS, LightingMidi.SELECTED), flx4.binding(1, false, 0x13));
+        assertEquals(new Binding(Control.MASTER, 0), flx4.binding(2, false, 0x13));
+        assertNull(flx4.binding(1, false, 0x33), "a fader's fine half works nothing");
+        assertEquals(new Binding(Control.RGB, 0), flx4.binding(1, false, 0x07));
+        assertEquals(new Binding(Control.RANGE, 0), flx4.binding(2, false, 0x07));
+        assertEquals(new Binding(Control.AIM, 1), flx4.binding(7, false, 0x18));
+        // The pads: 0x97 and 0x99, with Shift 0x98 and 0x9A.
+        assertEquals(new Binding(Control.GROUP, 5), flx4.binding(8, true, 5));
+        assertEquals(new Binding(Control.PRESET, 5), flx4.binding(10, true, 5));
+        assertEquals(new Binding(Control.SLOT, 7), flx4.binding(10, true, 0x37));
+        assertNull(flx4.binding(9, true, 0));
+        assertNull(flx4.binding(8, true, 6));
+        assertEquals(new Binding(Control.ENABLED, 0), flx4.binding(1, true, 0x0B));
+        assertEquals(new Binding(Control.PATTERN, 0), flx4.binding(2, true, 0x58));
+    }
+
+    @Test
+    void aBindingOnOneChannelComesBeforeThatOnAny() {
+        Profile own = LightingMidi.parse("x: ch2.cc7=master cc7=speed ch16.note1=audio ch17.cc8=master ch0.cc9=master"
+                + " ch100.cc10=master ch3.cc1-2=selected");
+        assertEquals(new Binding(Control.MASTER, 0), own.binding(2, false, 7));
+        assertEquals(new Binding(Control.SPEED, 0), own.binding(1, false, 7));
+        assertEquals(new Binding(Control.AUDIO, 0), own.binding(16, true, 1));
+        assertNull(own.binding(15, true, 1));
+        assertEquals(new Binding(Control.BRIGHTNESS, LightingMidi.SELECTED), own.binding(3, false, 2));
+        assertEquals(5, own.map().size(), "a channel there isn't binds nothing, on any channel either");
+    }
+
+    @Test
     void onlyAControllerWithAMapIsKnownAndAPlayersOwnComesFirst() {
         assertNull(LightingMidi.profile(KNOWN, "A-88MKII"));
         List<Profile> own = LightingMidi.profiles(List.of("apc:", "x-touch: cc1=master"));
@@ -79,6 +111,7 @@ class LightingMidiTest {
         settings.selectedColor = 3;
         settings.selected().tilt = 20;
         assertEquals(new Change(BlockPos.ZERO, 4, Control.BRIGHTNESS, 0, 1, 0), change(Control.BRIGHTNESS, 4, 127));
+        assertEquals(new Change(BlockPos.ZERO, 2, Control.BRIGHTNESS, 0, 1, 0), change(Control.BRIGHTNESS, LightingMidi.SELECTED, 127));
         assertEquals(new Change(BlockPos.ZERO, 2, Control.MASTER, 0, 0, 0), change(Control.MASTER, 0, 0));
         assertEquals(LightingSettings.RANGE.max(), change(Control.RANGE, 0, 127).value());
         assertEquals(LightingSettings.SPEED.min(), change(Control.SPEED, 0, 0).value());
