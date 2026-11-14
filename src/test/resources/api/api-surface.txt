@@ -219,6 +219,17 @@ org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract block (
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract normal ()Lnet/minecraft/world/phys/Vec3;
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit abstract point ()Lnet/minecraft/world/phys/Vec3;
 org/haruyq/createmediasystems/api/lighting/client/LightRays$Hit class 512
+org/haruyq/createmediasystems/api/media/MediaBlock abstract media ()Lorg/haruyq/createmediasystems/api/media/MediaPlayer;
+org/haruyq/createmediasystems/api/media/MediaBlock class 512
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract load (Lnet/minecraft/nbt/CompoundTag;)V
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract play (Ljava/lang/String;ILnet/minecraft/world/entity/player/Player;)Z
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract playing ()Z
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract save (Lnet/minecraft/nbt/CompoundTag;)V
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract show (Ljava/lang/String;)Z
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract stop ()V
+org/haruyq/createmediasystems/api/media/MediaPlayer abstract tick ()V
+org/haruyq/createmediasystems/api/media/MediaPlayer class 512
+org/haruyq/createmediasystems/api/media/MediaPlayer static of (Lnet/minecraft/world/level/block/entity/BlockEntity;)Lorg/haruyq/createmediasystems/api/media/MediaPlayer;
 org/haruyq/createmediasystems/api/media/MediaSources class 16
 org/haruyq/createmediasystems/api/media/MediaSources static hold (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Z)Z
 org/haruyq/createmediasystems/api/media/MediaSources static playing (Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lorg/haruyq/createmediasystems/api/media/MediaSources$Track;

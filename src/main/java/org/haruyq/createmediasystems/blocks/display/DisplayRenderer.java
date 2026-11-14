@@ -154,6 +154,13 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         float lighting = display.lighting();
         shine(display, texture != null ? lighting * frame.brightness() : 0);
         if (texture == null || shadow) {
+            Images.Picture still = shadow ? null : image(display);
+            if (still != null) {
+                // ponytail: a still picture is drawn alone and lights nothing around it; give it the glow and
+                // DisplayLight, with a brightness of its own, if a slideshow should light a room as a video does.
+                fit(display, buffers.getBuffer(RenderType.textPolygonOffset(still.texture)), matrix, screen, width, height,
+                        still.width, still.height, still.texture, 0);
+            }
             return;
         }
         if (seen) {
@@ -367,6 +374,12 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     @Nullable
     static VideoFrame frame(DisplayBlock.Entity display) {
         return display.source().map(NativeAudio::playback).map(NativeAudio.Playback::frame).orElse(null);
+    }
+
+    /** The still picture {@code display} shows for its source; null for none, or while it isn't loaded yet. */
+    @Nullable
+    static Images.Picture image(DisplayBlock.Entity display) {
+        return display.image().isEmpty() ? null : Images.get(display.image());
     }
 
     @Override

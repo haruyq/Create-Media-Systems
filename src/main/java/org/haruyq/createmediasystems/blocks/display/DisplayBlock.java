@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.haruyq.createmediasystems.stream.Emitter;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
+import org.haruyq.createmediasystems.stream.UrlPolicy;
 import org.haruyq.createmediasystems.stream.VideoSource;
 
 import org.jetbrains.annotations.Nullable;
@@ -174,6 +175,8 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         private Link source = Link.NONE;
         /** Its Blu-ray player's lighting in percent, kept here so every client has it (see VideoPlayerBlock). */
         private int lighting = 100;
+        /** Its source's still picture (see VideoSource#image), kept here so every client has it; empty for none. */
+        private String image = "";
 
         public Entity(BlockPos pos, BlockState state) {
             super(DisplayFeature.DISPLAY_ENTITY.get(), pos, state);
@@ -186,6 +189,11 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         /** How brightly it lights its surroundings as it plays, 0..1, as its Blu-ray player is set. */
         public float lighting() {
             return lighting / 100f;
+        }
+
+        /** The link of the still picture it shows while it shows no video; empty for none. */
+        public String image() {
+            return image;
         }
 
         /** Links it to the Blu-ray player at {@code source}, or unlinks it; its viewers start over. */
@@ -220,6 +228,12 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
                     .orElse(null) instanceof VideoSource found ? found : null;
             if (videoPlayer != null && Math.round(videoPlayer.lighting() * 100) != lighting) {
                 lighting = Math.round(videoPlayer.lighting() * 100);
+                changed();
+            }
+            // Every client fetches the image itself: a link the server no longer allows reaches none of them.
+            String shown = videoPlayer != null && UrlPolicy.isAllowed(videoPlayer.image()) ? videoPlayer.image() : "";
+            if (!shown.equals(image)) {
+                image = shown;
                 changed();
             }
             Streams.relay(level, this, linked, center(), Optional.empty(), Streams.Channel.MIX, videoPlayer == null ? 0 : 1);
@@ -259,6 +273,9 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             super.saveAdditional(tag, registries);
             source.save(tag, "Source", "SourceId");
             tag.putInt("Lighting", lighting);
+            if (!image.isEmpty()) {
+                tag.putString("SourceImage", image);
+            }
         }
 
         @Override
@@ -266,6 +283,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             super.loadAdditional(tag, registries);
             source = Link.load(tag, "Source", "SourceId");
             lighting = tag.contains("Lighting") ? Mth.clamp(tag.getInt("Lighting"), 0, 100) : 100;
+            image = tag.getString("SourceImage");
         }
     }
 }
