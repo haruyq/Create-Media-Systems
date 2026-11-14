@@ -70,7 +70,8 @@ public class StageLightBlock extends HorizontalDirectionalBlock implements Entit
                 LightingSettings.Pattern.SPOT, LightingSettings.Pattern.WASH), 0.65f, false);
         /** A laser projector: laser patterns only. */
         public static final Spec LASER = new Spec(0.18f, 0.075f, List.of(LightingSettings.Pattern.LASER_RAY,
-                LightingSettings.Pattern.LASER_FAN, LightingSettings.Pattern.LASER_SHEET), 0.12f, false);
+                LightingSettings.Pattern.LASER_FAN, LightingSettings.Pattern.LASER_SHEET,
+                LightingSettings.Pattern.LASER_TUNNEL), 0.12f, false);
         /** A strip light: a wash, whatever its group is set to. */
         public static final Spec STRIP = new Spec(0.47f, 0.06f, List.of(LightingSettings.Pattern.WASH), 0.65f, true);
 

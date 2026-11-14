@@ -241,6 +241,9 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         } else if (group.motion == Motion.CIRCLE) {
             pan += (float) Math.sin(phase) * 48;
             tilt += (float) Math.cos(phase) * 22;
+        } else if (group.motion == Motion.CROSS) {
+            // Every other light the other way: neighbours' beams cross as they pass.
+            pan += (float) Math.sin(phase) * 55 * (lamp.order() % 2 == 0 ? 1 : -1);
         } else if (group.motion == Motion.RANDOM && console != null) {
             // Somewhere new on each beat, the head swinging over to it (see LightingMotion).
             float[] aim = LightingSettings.randomAim(beat(console, audio, level.getGameTime()) * 31L + lamp.group());
@@ -334,8 +337,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         // doesn't stop; and steady for a player who has lightning flashes hidden.
         boolean dark = group.strobe > 0 && !LightingSettings.strobeLit(gameSeconds, group.strobe)
                 && !Minecraft.getInstance().options.hideLightningFlash().get()
-                || group.chase > 0 && console != null && !LightingSettings.chaseLit(group.chase, lamp.order(), count,
-                beat(console, audio, level.getGameTime()) * 31L + lamp.group(), group.motion == Motion.RANDOM);
+                || group.chase > 0 && console != null && !(group.chaseStep
+                ? LightingSettings.chaseStepLit(group.chase, lamp.order(), count, beat(console, audio, level.getGameTime()))
+                : LightingSettings.chaseLit(group.chase, lamp.order(), count,
+                beat(console, audio, level.getGameTime()) * 31L + lamp.group(), group.motion == Motion.RANDOM));
         VertexConsumer screen = new QuadOutput(buffers, QuadOutput.FLAT);
         double lens = front - 0.002;
         quad(screen, new Matrix4f(model).mul(head), new Vec3(-spec.lensWidth(), -spec.lensHeight(), lens),
@@ -373,14 +378,17 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         } else if (!dark) {
             boolean fixtureColor = pattern == Pattern.LASER_RAY
                     || group.mapping == LightingSettings.Mapping.PER_FIXTURE;
+            // A tunnel's rays stand in a ring, a sheet from each to the next and from the last round to the first.
+            boolean ring = pattern == Pattern.LASER_TUNNEL;
             for (int i = 0; i < trace.ends.length; i++) {
                 int rayColor = fixtureColor ? color : LightingSettings.color(group, i, trace.ends.length, seconds,
                         videoLeft, videoRight, video);
-                if (pattern == Pattern.LASER_SHEET && i + 1 < trace.ends.length) {
-                    int nextColor = fixtureColor ? color : LightingSettings.color(group, i + 1, trace.ends.length, seconds,
+                if (ring || pattern == Pattern.LASER_SHEET && i + 1 < trace.ends.length) {
+                    int next = (i + 1) % trace.ends.length;
+                    int nextColor = fixtureColor ? color : LightingSettings.color(group, next, trace.ends.length, seconds,
                             videoLeft, videoRight, video);
-                    sheet(beam, model, origin, trace.ends[i], trace.ends[i + 1], rayColor, nextColor, strength,
-                            trace.planes[i], trace.planes[i + 1], trace.middle[i]);
+                    sheet(beam, model, origin, trace.ends[i], trace.ends[next], rayColor, nextColor, ring ? strength / 2 : strength,
+                            trace.planes[i], trace.planes[next], trace.middle[i]);
                 }
                 if (pattern != Pattern.LASER_SHEET || i == 0 || i == trace.ends.length - 1) {
                     ray(beam, model, frame, trace.ends[i], rayColor, strength, 0.012f, trace.planes[i]);
@@ -525,7 +533,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 intersections = new LightingRaycast.Hit[count];
                 planes = new LightingBeams.Clip[count];
             }
-            int sectors = cone ? SIDES : pattern == Pattern.LASER_SHEET ? RAYS - 1 : 0;
+            int sectors = cone ? SIDES : pattern == Pattern.LASER_SHEET ? RAYS - 1 : pattern == Pattern.LASER_TUNNEL ? RAYS : 0;
             if (middle.length != sectors) {
                 middle = new LightingBeams.Clip[sectors];
             }
@@ -538,6 +546,10 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 } else if (pattern == Pattern.LASER_FAN || pattern == Pattern.LASER_SHEET) {
                     double angle = Math.toRadians(Math.max(8, spread)) * (i / (double) (count - 1) - 0.5);
                     aim = forward.scale(Math.cos(angle)).add(right.scale(Math.sin(angle))).normalize();
+                } else if (pattern == Pattern.LASER_TUNNEL) {
+                    double angle = Math.PI * 2 * i / count;
+                    double wide = Math.tan(Math.toRadians(Math.max(8, spread)) / 2);
+                    aim = forward.add(right.scale(Math.cos(angle) * wide)).add(up.scale(Math.sin(angle) * wide)).normalize();
                 }
                 directions[i] = aim;
                 Vec3 end = frame.origin.add(aim.scale(range));
@@ -547,7 +559,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
                 planes[i] = frame.plane(hit);
             }
             for (int i = 0; i < sectors; i++) {
-                int next = cone ? (i + 1) % SIDES : i + 1;
+                int next = cone ? (i + 1) % SIDES : (i + 1) % count;
                 Vec3 aim = directions[i].add(directions[next]).normalize();
                 middle[i] = frame.plane(frame.clip(frame.origin, frame.origin.add(aim.scale(range))));
             }

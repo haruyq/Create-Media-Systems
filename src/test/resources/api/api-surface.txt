@@ -55,6 +55,7 @@ org/haruyq/createmediasystems/api/lighting/ConsoleSetting static AUDIO Lorg/haru
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static BAND Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static BRIGHTNESS Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static CHASE Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
+org/haruyq/createmediasystems/api/lighting/ConsoleSetting static CHASE_STEP Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static COLOR Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static COUNT Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
 org/haruyq/createmediasystems/api/lighting/ConsoleSetting static CYCLE Lorg/haruyq/createmediasystems/api/lighting/ConsoleSetting;
@@ -110,6 +111,7 @@ org/haruyq/createmediasystems/api/lighting/GroupView abstract audio ()Z
 org/haruyq/createmediasystems/api/lighting/GroupView abstract audioBand ()Lorg/haruyq/createmediasystems/api/lighting/GroupView$Band;
 org/haruyq/createmediasystems/api/lighting/GroupView abstract brightness ()F
 org/haruyq/createmediasystems/api/lighting/GroupView abstract chase ()I
+org/haruyq/createmediasystems/api/lighting/GroupView abstract chaseStep ()Z
 org/haruyq/createmediasystems/api/lighting/GroupView abstract color (I)I
 org/haruyq/createmediasystems/api/lighting/GroupView abstract colorCount ()I
 org/haruyq/createmediasystems/api/lighting/GroupView abstract colorCycle ()Z
@@ -141,6 +143,7 @@ org/haruyq/createmediasystems/api/lighting/GroupView$Mapping static valueOf (Lja
 org/haruyq/createmediasystems/api/lighting/GroupView$Mapping static values ()[Lorg/haruyq/createmediasystems/api/lighting/GroupView$Mapping;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion class 16400
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static CIRCLE Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
+org/haruyq/createmediasystems/api/lighting/GroupView$Motion static CROSS Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static FIXED Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static RANDOM Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
 org/haruyq/createmediasystems/api/lighting/GroupView$Motion static SWEEP Lorg/haruyq/createmediasystems/api/lighting/GroupView$Motion;
@@ -152,6 +155,7 @@ org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static BEAM Lorg/ha
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_FAN Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_RAY Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_SHEET Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
+org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static LASER_TUNNEL Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static SPOT Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static WASH Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;
 org/haruyq/createmediasystems/api/lighting/GroupView$Pattern static valueOf (Ljava/lang/String;)Lorg/haruyq/createmediasystems/api/lighting/GroupView$Pattern;

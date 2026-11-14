@@ -333,6 +333,59 @@ class LightingSettingsTest {
     }
 
     @Test
+    void aSteppingChaseLightsARunThatMovesOneLightAlongOnEachBeatAndRound() {
+        // Three of eight: lights 0 to 2, then 1 to 3, ... and off the end in again at the start.
+        for (long beats = 0; beats < 20; beats++) {
+            StringBuilder lit = new StringBuilder();
+            for (int order = 0; order < 8; order++) {
+                if (LightingSettings.chaseStepLit(3, order, 8, beats)) {
+                    lit.append(order);
+                }
+            }
+            int first = (int) (beats % 8);
+            assertEquals("" + first + (first + 1) % 8 + (first + 2) % 8, sorted(lit.toString(), first), "beat " + beats);
+        }
+        assertTrue(LightingSettings.chaseStepLit(0, 5, 8, 3) && LightingSettings.chaseStepLit(8, 5, 8, 3));
+        // Kept with the group; off with the chase, and with a built-in preset.
+        LightingSettings.Group group = new LightingSettings.Group();
+        group.chase = 3;
+        group.chaseStep = true;
+        LightingSettings.Group restored = new LightingSettings.Group();
+        restored.load(group.save());
+        assertTrue(restored.chaseStep() && restored.chase() == 3);
+        group.chase = 0;
+        group.normalize();
+        assertFalse(group.chaseStep);
+        restored.preset(LightingSettings.Preset.SWEEP, null);
+        assertFalse(restored.chaseStep);
+    }
+
+    /** {@code lit}'s lights in the order a run from {@code first} has them (round the end). */
+    private static String sorted(String lit, int first) {
+        return lit.chars().mapToObj(c -> c - '0').sorted(java.util.Comparator.comparingInt(order -> Math.floorMod(order - first, 8)))
+                .map(String::valueOf).collect(java.util.stream.Collectors.joining());
+    }
+
+    @Test
+    void theCrossingSweepAndTheLaserTunnelAreKeptAndReadByName() {
+        LightingSettings.Group group = new LightingSettings.Group();
+        group.motion = Motion.CROSS;
+        group.pattern = LightingSettings.Pattern.LASER_TUNNEL;
+        LightingSettings.Group restored = new LightingSettings.Group();
+        restored.load(group.save());
+        assertEquals(Motion.CROSS, restored.motion);
+        assertEquals(org.haruyq.createmediasystems.api.lighting.GroupView.Motion.CROSS, restored.motion());
+        assertEquals(org.haruyq.createmediasystems.api.lighting.GroupView.Pattern.LASER_TUNNEL, restored.pattern());
+        // Saved before them, a group's motion and pattern are what they were: the new ones are last.
+        assertEquals(5, Motion.CROSS.ordinal());
+        assertEquals(6, LightingSettings.Pattern.LASER_TUNNEL.ordinal());
+        // A laser projector draws the tunnel; a stage light set to it draws its own first pattern, a strip its wash.
+        assertEquals(LightingSettings.Pattern.LASER_TUNNEL, StageLightBlock.Spec.LASER.pattern(LightingSettings.Pattern.LASER_TUNNEL));
+        assertEquals(LightingSettings.Pattern.BEAM, StageLightBlock.Spec.LIGHT.pattern(LightingSettings.Pattern.LASER_TUNNEL));
+        assertFalse(LightingSettings.Pattern.LASER_TUNNEL.cone());
+    }
+
+    @Test
     void aBeatLightsAsManyAtRandomAndAnotherBeatOthers() {
         java.util.Set<String> picks = new java.util.HashSet<>();
         for (long beat = 0; beat < 50; beat++) {
