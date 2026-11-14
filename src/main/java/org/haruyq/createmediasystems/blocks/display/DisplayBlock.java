@@ -195,7 +195,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         }
 
         /** The middle of its picture, where its sound comes from, in its block space. */
-        private Vec3 center() {
+        public Vec3 center() {
             return Vec3.atLowerCornerOf(worldPosition)
                     .add(new Screen(facing()).at((float) width() / 2, (float) height() / 2, 0));
         }
