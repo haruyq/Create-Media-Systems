@@ -11,6 +11,8 @@ import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -18,6 +20,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
@@ -41,6 +44,8 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
 
     static void register(IEventBus bus) {
         ArmPoses.add(WearableRenderer::arms);
+        bus.addListener((RegisterClientReloadListenersEvent event) ->
+                event.registerReloadListener((ResourceManagerReloadListener) KeytarMesh::reload));
         bus.addListener((EntityRenderersEvent.AddLayers event) -> {
             for (var skin : event.getSkins()) {
                 if (event.getSkin(skin) instanceof PlayerRenderer renderer) renderer.addLayer(new WearableRenderer(renderer));
@@ -63,7 +68,8 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
         long now = System.nanoTime();
         view.animate(player, now);
         if (view.strapped(player)) {
-            KeytarWear.arms(model, view.ready, view.seconds, view.handX, view.travel(Kind.KEYTAR, view.notes.lastNote(), now));
+            int note = view.notes.lastNote();
+            KeytarWear.arms(model, view.ready, view.seconds, view.handX, note, view.travel(Kind.KEYTAR, note, now));
         }
         if (view.carriesMelodica(player)) {
             MelodicaWear.arms(model, view.play, view.handX, view.travel(Kind.MELODICA, view.notes.lastNote(), now));
@@ -76,9 +82,10 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
         var model = getParentModel();
         var view = WearableClient.view(player);
         long now = System.nanoTime();
-        if (view.strapped(player)) {
+        var placement = view.strapped(player) ? KeytarWear.placement(model, view.ready, view.seconds) : null;
+        if (placement != null) {
             pose.pushPose();
-            Worn.place(pose, KeytarWear.placement(model, view.ready, view.seconds));
+            Worn.place(pose, placement);
             draw(pose, buffers, light, player, view, Kind.KEYTAR, now);
             pose.popPose();
             KeytarWear.strap(pose, buffers, light, model, view.ready, view.seconds);
@@ -115,9 +122,10 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
         pose.pushPose();
         if (keyboard) {
             float ready = Worn.ease(view.ready);
-            pose.translate(Mth.lerp(ready, .56f, .07f), Mth.lerp(ready, -.82f, -.48f), -.91f);
+            pose.translate(Mth.lerp(ready, .56f, .07f), Mth.lerp(ready, -.82f, -.415f), -.91f);
             pose.mulPose(Axis.ZP.rotationDegrees(Mth.lerp(ready, 49, -7)));
             pose.mulPose(Axis.XP.rotationDegrees(Mth.lerp(ready, 57, 106)));
+            pose.mulPose(Axis.YP.rotationDegrees(180));
             pose.scale(.59f, .59f, .59f);
         } else {
             float play = Worn.ease(view.play);
@@ -134,7 +142,8 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
             Kind kind, long now) {
         if (kind == Kind.KEYTAR) {
             float bend = view.notes.kind == kind ? (view.notes.bend() - InstrumentState.CENTER_BEND) / 8192f : 0;
-            KeytarMesh.draw(pose, buffers, light, note -> view.travel(kind, note, now), view.powered(player), bend, view.notes.tone());
+            KeytarMesh.draw(pose, buffers, light, OverlayTexture.NO_OVERLAY, note -> view.travel(kind, note, now),
+                    view.powered(player), bend, view.notes.kind == kind ? view.notes.tone() : 0);
         } else {
             MelodicaMesh.draw(pose, buffers, light, note -> view.travel(kind, note, now));
         }
@@ -150,9 +159,7 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
             pose.pushPose();
             pose.translate(.5, .5, .5);
             if (stack.is(WearableInstruments.KEYTAR.get())) {
-                pose.scale(.75f, .75f, .75f);
-                pose.translate(.14, 0, 0);
-                KeytarMesh.draw(pose, buffers, light, note -> 0, ChargeableItem.energy(stack) > 0, 0, 0);
+                KeytarMesh.draw(pose, buffers, light, overlay, note -> 0, ChargeableItem.energy(stack) > 0, 0, 0);
             } else {
                 pose.scale(1.55f, 1.55f, 1.55f);
                 pose.translate(.03, 0, 0);
