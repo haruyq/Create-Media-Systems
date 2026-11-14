@@ -63,32 +63,36 @@ public class LightingLinkShipGameTests {
         BlockPos plot = ship.getPlot().getCenterBlock();
         BlockPos movedAboard = plot.offset(aboard.subtract(origin));
         BlockPos movedVideo = plot.offset(video.subtract(origin));
-        check(helper, plot, movedAboard, ground, audio, movedVideo, operator);
+        // The console faces south, so its player sees east as right: the ground light, west of the one aboard, is first.
+        check(helper, plot, movedAboard, ground, audio, movedVideo, operator, false);
         helper.assertTrue(((LightingConsoleBlock.Entity) level.getBlockEntity(plot)).settings.groups[2].colors[0] == 0x123456,
                 "palette survives console assembly");
 
         ServerSubLevel second = SubLevelAssemblyHelper.assembleBlocks(level, ground, List.of(ground),
                 new BoundingBox3i(ground.getX(), ground.getY(), ground.getZ(), ground.getX(), ground.getY(), ground.getZ()));
         BlockPos secondPlot = second.getPlot().getCenterBlock();
-        check(helper, plot, movedAboard, secondPlot, audio, movedVideo, operator);
+        check(helper, plot, movedAboard, secondPlot, audio, movedVideo, operator, false);
         ship.logicalPose().orientation().rotationY(Math.PI / 2);
         ship.logicalPose().position().add(10, 0, 15);
         second.logicalPose().orientation().rotationY(-Math.PI / 4);
         second.logicalPose().position().add(4, 0, 8);
-        check(helper, plot, movedAboard, secondPlot, audio, movedVideo, operator);
+        // Turned a quarter and moved off south-east, the console's ship has the ground light out past its own.
+        check(helper, plot, movedAboard, secondPlot, audio, movedVideo, operator, true);
 
         BlockPos destination = origin.south(8);
         var transform = new SubLevelAssemblyHelper.AssemblyTransform(plot, destination, 1, Rotation.COUNTERCLOCKWISE_90, level);
         List<BlockPos> moved = blocks.stream().map(pos -> plot.offset(pos.subtract(origin))).toList();
         SubLevelAssemblyHelper.moveBlocks(level, transform, moved);
         remove(level, ship);
-        check(helper, destination, transform.apply(movedAboard), secondPlot, audio, transform.apply(movedVideo), operator);
+        // Back on the ground facing east, its player sees south as left, where the ground light's ship is.
+        check(helper, destination, transform.apply(movedAboard), secondPlot, audio, transform.apply(movedVideo), operator, false);
         remove(level, second);
         helper.succeed();
     }
 
+    /** {@code first} and {@code second} are the fixtures as linked; {@code firstLeft} is whether the first is the further left. */
     private static void check(GameTestHelper helper, BlockPos console, BlockPos first, BlockPos second,
-                              BlockPos audio, BlockPos video, Player operator) {
+                              BlockPos audio, BlockPos video, Player operator, boolean firstLeft) {
         ServerLevel level = helper.getLevel();
         LightingConsoleBlock.Entity root = (LightingConsoleBlock.Entity) level.getBlockEntity(console);
         helper.assertTrue(root != null, "console exists at its relocated position");
@@ -99,8 +103,9 @@ public class LightingLinkShipGameTests {
         StageLightBlock.Entity a = (StageLightBlock.Entity) level.getBlockEntity(first);
         StageLightBlock.Entity b = (StageLightBlock.Entity) level.getBlockEntity(second);
         helper.assertTrue(a.controller() == root && b.controller() == root, "ground and ship fixtures keep their console");
-        helper.assertTrue(a.group() == 2 && b.group() == 2 && a.order() == 0 && b.order() == 1 && root.groupSize(2) == 2,
-                "group assignment and order survive relocation");
+        helper.assertTrue(a.group() == 2 && b.group() == 2 && root.groupSize(2) == 2, "group assignment survives relocation");
+        helper.assertTrue(a.order() == (firstLeft ? 0 : 1) && b.order() == (firstLeft ? 1 : 0),
+                "order runs left to right as the console sees the fixtures, wherever each is");
         helper.assertTrue(audio.equals(root.audioSource()) && video.equals(root.videoSource()), "media references follow their own source");
         helper.assertTrue(LightingLinkItem.selected(operator) == root, "link item follows console identity");
     }
