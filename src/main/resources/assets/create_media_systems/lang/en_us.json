@@ -1,6 +1,7 @@
 {
   "block.create_media_systems.grand_piano": "Concert Grand Piano",
   "create_media_systems.keys.note_trails": "Note lights",
+  "create_media_systems.keys.note_speed": "Note speed %s",
   "piano.midi_scanning": "Looking for MIDI inputs…",
   "piano.midi_none": "MIDI input off",
   "piano.midi_missing": "Waiting for MIDI keyboard…",

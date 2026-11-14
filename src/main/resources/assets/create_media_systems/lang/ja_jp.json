@@ -1,6 +1,7 @@
 {
   "block.create_media_systems.grand_piano": "コンサートグランドピアノ",
   "create_media_systems.keys.note_trails": "ノーツ発光",
+  "create_media_systems.keys.note_speed": "ノーツ速度 %s",
   "piano.midi_scanning": "MIDI入力を検索中…",
   "piano.midi_none": "MIDI入力なし",
   "piano.midi_missing": "MIDIキーボードの接続待ち…",

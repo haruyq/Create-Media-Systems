@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NoteTrailsTest {
     @Test void manyPlayersKeepTheirColorsAndLanesWhenTheyShareAKey() {
-        var trails = new NoteTrails();
+        var trails = new NoteTrails(now -> now);
         var colors = new HashSet<Integer>();
         long start = 10_000_000_000L;
         for (int player = 1; player <= 64; player++) trails.press(player, player, 60, 100, start);
@@ -28,12 +28,28 @@ class NoteTrailsTest {
     }
 
     @Test void shortNotesRemainVisibleThenLeaveFromTheTop() {
-        var trails = new NoteTrails();
+        var trails = new NoteTrails(now -> now);
         long start = 3_000_000_000L;
         trails.press(1, 1, 60, 22, start);
         trails.release(1, 60, start + 10_000_000);
         var shortNote = trails.visible(start + 100_000_000).getFirst();
         assertTrue(shortNote.velocity() < .3f && shortNote.head() > shortNote.tail() && shortNote.tail() > 0);
         assertTrue(trails.visible(start + NoteTrails.TRAVEL + 100_000_000).isEmpty());
+    }
+
+    @Test void changingSpeedKeepsCurrentNotesInPlaceAndChangesHowFastTheyMove() {
+        var clock = new NoteTrails.Clock(0);
+        int[] speed = {100};
+        var trails = new NoteTrails(now -> clock.at(now, speed[0]));
+        trails.press(1, 1, 60, 100, 0);
+        trails.release(1, 60, 100_000_000);
+        long change = 250_000_000;
+        var before = trails.visible(change).getFirst();
+        speed[0] = 200;
+        assertEquals(before, trails.visible(change).getFirst());
+        var faster = trails.visible(change + 100_000_000).getFirst();
+        assertEquals(200_000_000f / NoteTrails.TRAVEL, faster.head() - before.head(), 1e-6f);
+        assertEquals(200_000_000f / NoteTrails.TRAVEL, faster.tail() - before.tail(), 1e-6f);
+        assertTrue(trails.visible(change + NoteTrails.TRAVEL / 2).isEmpty());
     }
 }

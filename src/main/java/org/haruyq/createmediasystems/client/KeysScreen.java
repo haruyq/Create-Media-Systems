@@ -68,6 +68,8 @@ public abstract class KeysScreen extends Screen {
     private final List<Face> faces = new ArrayList<>();
     @Nullable
     private Face grabbed;
+    @Nullable
+    private Face trailSpeed;
 
     /**
      * {@code stripKeys} is how high the strip of controls is, and {@code deckKeys} the gap between it and the keys,
@@ -82,6 +84,7 @@ public abstract class KeysScreen extends Screen {
     /** Lays it out. An instrument adds its faces and widgets after this, unless it is {@link #hidden}. */
     @Override
     protected void init() {
+        saveTrailSpeed();
         faces.clear();
         grabbed = null;
         pixel = minecraft.getWindow().getGuiScale();
@@ -100,6 +103,15 @@ public abstract class KeysScreen extends Screen {
         stripWidth = keyWidth * Layout.WHITE_KEYS;
         stripHeight = Math.round(keyWidth * stripKeys);
         stripY = keysY - deck - stripHeight;
+        trailSpeed = null;
+        if (hasNoteTrails() && !hidden) {
+            var at = trailToggle(toggle());
+            int right = at[0] - Math.max(3, keyWidth / 4);
+            int sliderWidth = Math.round(font.width(trailSpeedText(250)) * textScale) + keyWidth * 2;
+            trailSpeed = slider((right - sliderWidth - keysX) / (float) keyWidth, (at[1] - stripY) / (float) keyWidth,
+                    (right - keysX) / (float) keyWidth, (at[3] - stripY) / (float) keyWidth, KeysScreen::trailSpeedText,
+                    25, 250, NoteTrailRenderer::speed, NoteTrailRenderer::speed);
+        }
     }
 
     /** How high a line of the small lettering is. */
@@ -161,6 +173,10 @@ public abstract class KeysScreen extends Screen {
 
     protected boolean hasNoteTrails() { return false; }
 
+    private static Component trailSpeedText(int percentage) {
+        return Component.translatable("create_media_systems.keys.note_speed", percentage + "%");
+    }
+
     private int[] trailToggle(int[] hide) {
         var label = Component.translatable("create_media_systems.keys.note_trails");
         int right = hide[0] - Math.max(3, keyWidth / 4);
@@ -206,7 +222,7 @@ public abstract class KeysScreen extends Screen {
     protected void drawHeader(GuiGraphics g, String name, String status, int statusColor, String right, int rightColor) {
         float y = stripY + keyWidth * 0.75f;
         var hide = toggle();
-        int inset = keyWidth / 3, end = (hasNoteTrails() ? trailToggle(hide)[0] : hide[0]) - inset;
+        int inset = keyWidth / 3, end = (trailSpeed == null ? hide[0] : trailSpeed.place()[0]) - inset;
         float from = keysX + inset + (font.width(name) + 8) * textScale;
         write(g, name, keysX + inset, y, textScale, faint, LEFT);
         write(g, status, from, y, textScale, statusColor, LEFT);
@@ -422,8 +438,19 @@ public abstract class KeysScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        saveTrailSpeed();
         grabbed = null;
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public void removed() {
+        saveTrailSpeed();
+        super.removed();
+    }
+
+    private void saveTrailSpeed() {
+        if (trailSpeed != null && grabbed == trailSpeed) ClientConfig.PIANO_NOTE_SPEED.save();
     }
 
     /** A button of the strip, or a slider. */

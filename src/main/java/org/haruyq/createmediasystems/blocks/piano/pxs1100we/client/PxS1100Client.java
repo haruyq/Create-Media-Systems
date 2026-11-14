@@ -20,6 +20,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.blocks.piano.client.NoteTrails;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock;
@@ -53,7 +54,7 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
 
     static final class Instrument {
         final Target target;
-        final NoteTrails trails = new NoteTrails();
+        final NoteTrails trails = new NoteTrails(NoteTrailRenderer::time);
         private final Map<Integer, Voice> voices = new HashMap<>();
         final KeyMotion motion = new KeyMotion(KeyboardLayout.FIRST, KeyboardLayout.LAST - KeyboardLayout.FIRST + 1);
         CompoundTag view = new CompoundTag();

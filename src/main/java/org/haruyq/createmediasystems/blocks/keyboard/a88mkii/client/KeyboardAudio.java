@@ -25,6 +25,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
 import org.haruyq.createmediasystems.blocks.piano.client.NoteTrails;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 import org.haruyq.createmediasystems.playback.CmsStream;
 import org.haruyq.createmediasystems.playback.StreamPump;
 import org.haruyq.createmediasystems.stream.EmitterRange;
@@ -149,7 +150,7 @@ public final class KeyboardAudio {
 
     private static final class Performance {
         final Map<Integer, Part> parts = new HashMap<>();
-        final NoteTrails trails = new NoteTrails();
+        final NoteTrails trails = new NoteTrails(NoteTrailRenderer::time);
         volatile List<Synth> synths = List.of();
 
         void updateSynths() {

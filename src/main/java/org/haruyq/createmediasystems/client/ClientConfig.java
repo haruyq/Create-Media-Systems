@@ -23,8 +23,11 @@ public final class ClientConfig {
             .comment("Nearest portable music sources (launched CDs, PartyBoxes, megaphones) played at once on this computer, all kinds together. Every source's server playback clock keeps running, including outside this voice budget. Returning sources seek to their own current position.")
             .defineInRange("maxAudibleDiscProjections", 12, 1, 64);
     public static final ModConfigSpec.BooleanValue PIANO_NOTE_TRAILS = BUILDER
-            .comment("Show colored rising notes on electronic keyboards and in their performance screens.")
+            .comment("Show colored rising notes above electronic keyboards in the world.")
             .define("pianoNoteTrails", true);
+    public static final ModConfigSpec.IntValue PIANO_NOTE_SPEED = BUILDER
+            .comment("Travel speed of the electronic keyboards' note lights, as a percentage.")
+            .defineInRange("pianoNoteSpeed", 100, 25, 250);
     private static final ModConfigSpec.IntValue MAX_VIDEO_HEIGHT = BUILDER
             .comment("Tallest video (in pixels) displays pick when a page offers several, so this computer can decode it in time (4K AV1 can't be, in software, on most). 0 picks the best there is.")
             .defineInRange("maxVideoHeight", 1080, 0, 4320);
