@@ -297,13 +297,49 @@ class LightingSettingsTest {
     }
 
     @Test
+    void aGroupAimedAtRandomLightsARunOfNeighboursAndPointsSomewhereNewOnEachBeat() {
+        java.util.Set<Integer> firsts = new java.util.HashSet<>();
+        java.util.Set<String> aims = new java.util.HashSet<>();
+        for (long beat = 0; beat < 60; beat++) {
+            // Three of eight, side by side, somewhere along the row.
+            int first = -1;
+            int lit = 0;
+            for (int order = 0; order < 8; order++) {
+                if (LightingSettings.chaseLit(3, order, 8, beat, true)) {
+                    first = first < 0 ? order : first;
+                    lit++;
+                    assertTrue(order - first < 3, "beat " + beat + " lights " + order + " apart from " + first);
+                }
+            }
+            assertEquals(3, lit, "beat " + beat);
+            firsts.add(first);
+            // Aimed within a sweep's reach across and a circle's up and down, the same for the whole beat.
+            float[] aim = LightingSettings.randomAim(beat);
+            assertTrue(Math.abs(aim[0]) <= 55 && Math.abs(aim[1]) <= 22, aim[0] + " / " + aim[1]);
+            assertArrayEquals(aim, LightingSettings.randomAim(beat));
+            aims.add(Math.round(aim[0] / 10) + "/" + Math.round(aim[1] / 10));
+        }
+        assertEquals(java.util.Set.of(0, 1, 2, 3, 4, 5), firsts, "the run starts anywhere it fits");
+        assertTrue(aims.size() > 15, "and points many ways: " + aims);
+        // As many as there are, or none asked for: all lit, as ever.
+        assertTrue(LightingSettings.chaseLit(8, 7, 8, 1, true) && LightingSettings.chaseLit(0, 7, 8, 1, true));
+        // The motion is kept with the group, and a mod reads it by its name.
+        LightingSettings.Group group = new LightingSettings.Group();
+        group.motion = Motion.RANDOM;
+        LightingSettings.Group restored = new LightingSettings.Group();
+        restored.load(group.save());
+        assertEquals(Motion.RANDOM, restored.motion);
+        assertEquals(org.haruyq.createmediasystems.api.lighting.GroupView.Motion.RANDOM, restored.motion());
+    }
+
+    @Test
     void aBeatLightsAsManyAtRandomAndAnotherBeatOthers() {
         java.util.Set<String> picks = new java.util.HashSet<>();
         for (long beat = 0; beat < 50; beat++) {
             for (int chase : new int[]{1, 3, 5}) {
                 StringBuilder lit = new StringBuilder();
                 for (int order = 0; order < 8; order++) {
-                    if (LightingSettings.chaseLit(chase, order, 8, beat)) {
+                    if (LightingSettings.chaseLit(chase, order, 8, beat, false)) {
                         lit.append(order);
                     }
                 }
@@ -313,8 +349,8 @@ class LightingSettingsTest {
         }
         assertTrue(picks.size() > 20, picks.size() + " different picks");
         // As many or fewer lights than it lights: all of them; and none chosen: all of them.
-        assertTrue(LightingSettings.chaseLit(3, 1, 2, 7));
-        assertTrue(LightingSettings.chaseLit(0, 5, 8, 7));
+        assertTrue(LightingSettings.chaseLit(3, 1, 2, 7, false));
+        assertTrue(LightingSettings.chaseLit(0, 5, 8, 7, false));
     }
 
     @Test

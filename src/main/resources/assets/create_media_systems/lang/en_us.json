@@ -126,6 +126,7 @@
   "create_media_systems.lighting.motion.1": "Sweep",
   "create_media_systems.lighting.motion.2": "Circle",
   "create_media_systems.lighting.motion.3": "Track",
+  "create_media_systems.lighting.motion.4": "Random aim",
   "item.create_media_systems.custom_disc": "Custom Disc",
   "item.create_media_systems.announcement_schedule": "Announcement Schedule",
   "block.create_media_systems.train_disc_reader": "Train Disc Reader",

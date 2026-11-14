@@ -233,6 +233,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         LightingMotion motion = MOTION.computeIfAbsent(lamp, ignored -> new LightingMotion());
         float pan = group.pan;
         float tilt = group.tilt;
+        AnalysisFrame audio = console == null ? null : console.audio(level.getGameTime());
         double phase = (group.audio && console != null && console.audioSource() != null
                 ? console.playhead.phase(now, gameSeconds) : seconds) * group.speed + lamp.order() * 0.35;
         if (group.motion == Motion.SWEEP) {
@@ -240,6 +241,11 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         } else if (group.motion == Motion.CIRCLE) {
             pan += (float) Math.sin(phase) * 48;
             tilt += (float) Math.cos(phase) * 22;
+        } else if (group.motion == Motion.RANDOM && console != null) {
+            // Somewhere new on each beat, the head swinging over to it (see LightingMotion).
+            float[] aim = LightingSettings.randomAim(beat(console, audio, level.getGameTime()) * 31L + lamp.group());
+            pan += aim[0];
+            tilt += aim[1];
         }
         boolean hanging = lamp.getBlockState().getValue(StageLightBlock.HANGING);
         float facing = (float) Math.toRadians(180 - lamp.getBlockState().getValue(StageLightBlock.FACING).toYRot());
@@ -302,7 +308,6 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
             return;
         }
         float strength = enabled ? console.settings.master * group.brightness : 0;
-        AnalysisFrame audio = console == null ? null : console.audio(level.getGameTime());
         if (group.audio && audio != null) {
             float energy = switch (group.audioBand) {
                 case BASS -> audio.bass();
@@ -330,7 +335,7 @@ public final class LightingRenderer implements BlockEntityRenderer<StageLightBlo
         boolean dark = group.strobe > 0 && !LightingSettings.strobeLit(gameSeconds, group.strobe)
                 && !Minecraft.getInstance().options.hideLightningFlash().get()
                 || group.chase > 0 && console != null && !LightingSettings.chaseLit(group.chase, lamp.order(), count,
-                beat(console, audio, level.getGameTime()) * 31L + lamp.group());
+                beat(console, audio, level.getGameTime()) * 31L + lamp.group(), group.motion == Motion.RANDOM);
         VertexConsumer screen = new QuadOutput(buffers, QuadOutput.FLAT);
         double lens = front - 0.002;
         quad(screen, new Matrix4f(model).mul(head), new Vec3(-spec.lensWidth(), -spec.lensHeight(), lens),
