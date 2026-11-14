@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
+import org.haruyq.createmediasystems.items.instrument.KeytarFinish;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 import org.haruyq.createmediasystems.items.instrument.WearablePackets;
@@ -46,6 +47,7 @@ public final class WearableClient implements WearablePackets.Client {
     static final class View {
         final WearableAudio audio = new WearableAudio();
         int flags, session;
+        KeytarFinish finish = KeytarFinish.DEFAULT;
         boolean listed;
         InstrumentState notes = new InstrumentState(Kind.KEYTAR);
         KeyMotion motion = new KeyMotion(Kind.KEYTAR.first, Kind.KEYTAR.keys);
@@ -76,6 +78,11 @@ public final class WearableClient implements WearablePackets.Client {
         boolean strapped(Player player) {
             return player == Minecraft.getInstance().player ? WearableInstruments.strapsKeytar(player)
                     : ready(player) || has(WearableInstruments.STRAPPED);
+        }
+
+        KeytarFinish finish(Player player) {
+            if (player == Minecraft.getInstance().player) return KeytarFinish.of(WearableInstruments.wornKeytar(player));
+            return finish;
         }
 
         boolean carriesMelodica(Player player) {
@@ -140,6 +147,7 @@ public final class WearableClient implements WearablePackets.Client {
         var view = VIEWS.computeIfAbsent(packet.player(), ignored -> new View());
         boolean wasPowered = view.has(WearableInstruments.POWERED);
         view.flags = packet.flags();
+        view.finish = packet.finish();
         if (packet.snapshot() || view.session != packet.session()) {
             view.audio.stop();
             view.session = packet.session();

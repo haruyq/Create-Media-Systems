@@ -8,10 +8,12 @@ import org.haruyq.createmediasystems.Feature;
 import org.haruyq.createmediasystems.items.power.ChargeableItem;
 import org.jetbrains.annotations.Nullable;
 
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
@@ -26,6 +28,12 @@ public final class WearableInstruments implements Feature {
     public static final DeferredItem<InstrumentItem> KEYTAR = CreateMediaSystems.ITEMS.register("keytar", InstrumentItem.Keytar::new);
     public static final DeferredItem<InstrumentItem> MELODICA = CreateMediaSystems.ITEMS.register("melodica",
             () -> new InstrumentItem(Kind.MELODICA));
+
+    public static final Supplier<DataComponentType<KeytarFinish>> KEYTAR_FINISH = CreateMediaSystems.COMPONENTS
+            .registerComponentType("keytar_finish", builder -> builder.persistent(KeytarFinish.CODEC)
+                    .networkSynchronized(KeytarFinish.STREAM_CODEC));
+    public static final Supplier<KeytarFinishRecipe.Serializer> KEYTAR_FINISH_RECIPE = CreateMediaSystems.RECIPE_SERIALIZERS
+            .register("keytar_finish", KeytarFinishRecipe.Serializer::new);
 
     public static final int STRAPPED = 1, READY = 2, CARRIED = 4, POWERED = 8;
     private static final int ENERGY_INTERVAL = 10;
@@ -46,9 +54,11 @@ public final class WearableInstruments implements Feature {
         boolean contains(int note) { return note >= first && note <= last(); }
     }
 
+    private record Appearance(int flags, KeytarFinish finish) {}
+
     private static final class Outfit {
         @Nullable Session session;
-        int previousFlags;
+        Appearance previous = new Appearance(0, KeytarFinish.DEFAULT);
     }
 
     private static final class Session {
@@ -103,8 +113,10 @@ public final class WearableInstruments implements Feature {
         NeoForge.EVENT_BUS.addListener((PlayerEvent.StartTracking event) -> {
             if (event.getEntity() instanceof ServerPlayer listener && event.getTarget() instanceof ServerPlayer player) {
                 Outfit outfit = player.getData(OUTFIT);
-                int flags = flags(player, outfit.session);
-                if (flags != 0) PacketDistributor.sendToPlayer(listener, update(player, outfit.session, flags, true, List.of()));
+                var visible = appearance(player, outfit.session);
+                if (visible.flags() != 0) {
+                    PacketDistributor.sendToPlayer(listener, update(player, outfit.session, visible, true, List.of()));
+                }
             }
         });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
@@ -124,8 +136,25 @@ public final class WearableInstruments implements Feature {
                 && (player.getMainHandItem().is(MELODICA.get()) || player.getOffhandItem().is(MELODICA.get()));
     }
 
-    public static boolean strapsKeytar(Player player) {
-        return player.isAlive() && !player.isSpectator() && player.getInventory().contains(stack -> stack.is(KEYTAR.get()));
+    public static ItemStack wornKeytar(Player player) {
+        if (!player.isAlive() || player.isSpectator()) return ItemStack.EMPTY;
+        if (player.getMainHandItem().is(KEYTAR.get())) return player.getMainHandItem();
+        if (player.getOffhandItem().is(KEYTAR.get())) return player.getOffhandItem();
+        for (var stack : player.getInventory().items) {
+            if (stack.is(KEYTAR.get())) return stack;
+        }
+        return ItemStack.EMPTY;
+    }
+
+    public static boolean strapsKeytar(Player player) { return !wornKeytar(player).isEmpty(); }
+
+    public static void addKeytarFinishes(CreativeModeTab.Output output) {
+        for (var finish : List.of(new KeytarFinish(false, DyeColor.YELLOW), new KeytarFinish(true, DyeColor.LIGHT_GRAY),
+                new KeytarFinish(true, DyeColor.RED))) {
+            var stack = new ItemStack(KEYTAR.get());
+            finish.applyTo(stack);
+            output.accept(stack);
+        }
     }
 
     static void begin(ServerPlayer player, InteractionHand hand, Kind kind) {
@@ -134,7 +163,7 @@ public final class WearableInstruments implements Feature {
         Outfit outfit = player.getData(OUTFIT);
         Session session = new Session(player, hand, kind);
         outfit.session = session;
-        broadcast(player, outfit, true, List.of());
+        broadcast(player, outfit, appearance(player, session), true);
         PacketDistributor.sendToPlayer(player, new WearablePackets.Open(session.token, hand == InteractionHand.MAIN_HAND,
                 kind == Kind.KEYTAR));
     }
@@ -149,9 +178,9 @@ public final class WearableInstruments implements Feature {
         }
         if (!session.allows() || !session.notes.apply(message)) return;
         session.pay(player);
-        int flags = flags(player, session);
-        if (flags != outfit.previousFlags) broadcast(player, outfit, false, List.of());
-        PacketDistributor.sendToPlayersTrackingEntity(player, update(player, session, flags, false, List.of(message)));
+        var visible = appearance(player, session);
+        if (!visible.equals(outfit.previous)) broadcast(player, outfit, visible, false);
+        PacketDistributor.sendToPlayersTrackingEntity(player, update(player, session, visible, false, List.of(message)));
     }
 
     private static void tick(ServerPlayer player) {
@@ -162,35 +191,38 @@ public final class WearableInstruments implements Feature {
             return;
         }
         if (session != null) session.pay(player);
-        int flags = flags(player, session);
-        if (flags != outfit.previousFlags) broadcast(player, outfit, false, List.of());
+        var visible = appearance(player, session);
+        if (!visible.equals(outfit.previous)) broadcast(player, outfit, visible, false);
     }
 
     private static void finish(ServerPlayer player, Outfit outfit) {
         if (outfit.session == null) return;
         outfit.session = null;
-        broadcast(player, outfit, true, List.of());
+        broadcast(player, outfit, appearance(player, null), true);
     }
 
-    private static int flags(ServerPlayer player, @Nullable Session session) {
-        int flags = strapsKeytar(player) ? STRAPPED : 0;
+    private static Appearance appearance(ServerPlayer player, @Nullable Session session) {
+        var keytar = wornKeytar(player);
+        int flags = keytar.isEmpty() ? 0 : STRAPPED;
         if (ready(player)) {
-            flags |= READY | STRAPPED;
-            if (session != null ? session.powered(player) : ChargeableItem.energy(player.getMainHandItem()) > 0) flags |= POWERED;
+            flags |= READY;
+            boolean powered = session != null && session.notes.kind == Kind.KEYTAR && session.valid(player)
+                    ? session.powered(player) : ChargeableItem.energy(keytar) > 0;
+            if (powered) flags |= POWERED;
         }
         if (carriesMelodica(player)) flags |= CARRIED;
-        return flags;
+        return new Appearance(flags, KeytarFinish.of(keytar));
     }
 
-    private static void broadcast(ServerPlayer player, Outfit outfit, boolean snapshot, List<Integer> messages) {
-        int flags = flags(player, outfit.session);
-        outfit.previousFlags = flags;
-        PacketDistributor.sendToPlayersTrackingEntityAndSelf(player, update(player, outfit.session, flags, snapshot, messages));
+    private static void broadcast(ServerPlayer player, Outfit outfit, Appearance visible, boolean snapshot) {
+        outfit.previous = visible;
+        PacketDistributor.sendToPlayersTrackingEntityAndSelf(player, update(player, outfit.session, visible, snapshot, List.of()));
     }
 
-    private static WearablePackets.Update update(ServerPlayer player, @Nullable Session session, int flags, boolean snapshot,
-            List<Integer> messages) {
+    private static WearablePackets.Update update(ServerPlayer player, @Nullable Session session, Appearance visible,
+            boolean snapshot, List<Integer> messages) {
         if (snapshot && session != null) messages = session.notes.snapshot();
-        return new WearablePackets.Update(player.getUUID(), session == null ? 0 : session.token, flags, snapshot, messages);
+        return new WearablePackets.Update(player.getUUID(), session == null ? 0 : session.token, visible.flags(), visible.finish(),
+                snapshot, messages);
     }
 }

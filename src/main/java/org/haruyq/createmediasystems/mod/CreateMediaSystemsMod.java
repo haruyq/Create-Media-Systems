@@ -52,7 +52,10 @@ public final class CreateMediaSystemsMod {
                 Set<Item> items = new LinkedHashSet<>();
                 sections().values().forEach(section -> section.forEach(item -> items.add(item.get())));
                 CreateMediaSystems.ITEMS.getEntries().forEach(item -> items.add(item.get()));
-                items.forEach(output::accept);
+                items.forEach(item -> {
+                    output.accept(item);
+                    if (item == WearableInstruments.KEYTAR.get()) WearableInstruments.addKeytarFinishes(output);
+                });
             })
             .build());
 

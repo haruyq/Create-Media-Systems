@@ -13,9 +13,11 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.DyeColor;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.Worn;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
+import org.haruyq.createmediasystems.items.instrument.KeytarFinish;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -25,9 +27,9 @@ import org.joml.Vector3f;
 public final class KeytarMesh {
     private static final Kind RANGE = Kind.KEYTAR;
     private static final ResourceLocation GEOMETRY = CreateMediaSystems.id("models/item/ax_edge/ax_edge.mesh.json");
-    private static final ResourceLocation TEXTURE = CreateMediaSystems.id("textures/item/ax_edge/black_red.png");
-    private static final RenderType BODY = RenderType.entityCutoutNoCull(TEXTURE);
-    private static final RenderType LAMPS = RenderType.entityTranslucentEmissive(TEXTURE, false);
+    private static final Materials WHITE_SILVER = materials("white_silver"), WHITE_GOLD = materials("white_gold");
+    private static final Materials BLACK_SILVER = materials("black_silver"), BLACK_RED = materials("black_red");
+    private static final float PAINT_U = 1807.5f / 2048, PAINT_V = 544.5f / 1024;
     @Nullable private static volatile Rig rig;
 
     @FunctionalInterface
@@ -35,7 +37,8 @@ public final class KeytarMesh {
         float travel(int note);
     }
 
-    record Quad(float[][] vertices, float[] normal, boolean emissive) {}
+    record Quad(float[][] vertices, float[] normal, boolean emissive, boolean paintable) {}
+    private record Materials(RenderType body, RenderType lamps) {}
     record Part(String name, String motion, int index, float[] pivot, float angle, float[] front,
                 float travel, boolean accidental, List<Quad> quads) {}
     record Mount(float[] translation, float[] rotation, List<float[]> strap) {
@@ -50,6 +53,11 @@ public final class KeytarMesh {
                List<float[]> backStrap, Vector3f tailPin, Vector3f neckPin) {}
 
     private KeytarMesh() {}
+
+    private static Materials materials(String filename) {
+        var texture = CreateMediaSystems.id("textures/item/ax_edge/" + filename + ".png");
+        return new Materials(RenderType.entityCutoutNoCull(texture), RenderType.entityTranslucentEmissive(texture, false));
+    }
 
     public static void reload(ResourceManager resources) {
         try (var reader = resources.openAsReader(GEOMETRY)) {
@@ -105,15 +113,20 @@ public final class KeytarMesh {
     }
 
     public static void draw(PoseStack pose, MultiBufferSource buffers, int light, int overlay,
-            Keys keys, boolean powered, float bend, int program) {
+            Keys keys, boolean powered, float bend, int program, KeytarFinish finish) {
         var model = rig;
         if (model == null) return;
-        draw(pose, buffers.getBuffer(BODY), model.parts, light, overlay, keys, powered, bend, program, false);
-        if (powered) draw(pose, buffers.getBuffer(LAMPS), model.parts, Mesh.FULL_BRIGHT, overlay, keys, true, bend, program, true);
+        Materials layers = finish.dark() ? (finish.blade() == DyeColor.RED ? BLACK_RED : BLACK_SILVER)
+                : (finish.blade() == DyeColor.YELLOW ? WHITE_GOLD : WHITE_SILVER);
+        int pigment = finish.usesDyedBlade() ? finish.blade().getTextureDiffuseColor() & 0xFFFFFF : -1;
+        draw(pose, buffers.getBuffer(layers.body), model.parts, light, overlay, keys, powered, bend, program, false, pigment);
+        if (powered) {
+            draw(pose, buffers.getBuffer(layers.lamps), model.parts, Mesh.FULL_BRIGHT, overlay, keys, true, bend, program, true, -1);
+        }
     }
 
     private static void draw(PoseStack pose, VertexConsumer out, List<Part> parts, int light, int overlay,
-            Keys keys, boolean powered, float bend, int program, boolean emissive) {
+            Keys keys, boolean powered, float bend, int program, boolean emissive, int pigment) {
         for (Part part : parts) {
             if ("program_led".equals(part.motion) && (!powered || part.index != program)) continue;
             float amount = travel(part, keys, powered, bend);
@@ -124,8 +137,12 @@ public final class KeytarMesh {
             for (Quad quad : part.quads) {
                 if (quad.emissive != emissive) continue;
                 float[] normal = quad.normal;
+                boolean painted = pigment >= 0 && quad.paintable;
                 for (float[] v : quad.vertices) {
-                    Mesh.vertex(pose, out, v[0], v[1], v[2], v[3], v[4], 0xFFFFFF, normal[0], normal[1], normal[2], light, overlay);
+                    float u = painted ? PAINT_U : v[3];
+                    float texY = painted ? PAINT_V + Mth.clamp(.5f - v[1] / .291f, 0, 1) * (255f / 1024) : v[4];
+                    Mesh.vertex(pose, out, v[0], v[1], v[2], u, texY, painted ? pigment : 0xFFFFFF,
+                            normal[0], normal[1], normal[2], light, overlay);
                 }
             }
             if (amount != 0) pose.popPose();

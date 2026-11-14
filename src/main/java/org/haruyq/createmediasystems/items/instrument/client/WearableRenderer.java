@@ -29,6 +29,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.client.ArmPoses;
 import org.haruyq.createmediasystems.client.Worn;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
+import org.haruyq.createmediasystems.items.instrument.KeytarFinish;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 import org.haruyq.createmediasystems.items.keytar.client.KeytarMesh;
@@ -143,7 +144,7 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
         if (kind == Kind.KEYTAR) {
             float bend = view.notes.kind == kind ? (view.notes.bend() - InstrumentState.CENTER_BEND) / 8192f : 0;
             KeytarMesh.draw(pose, buffers, light, OverlayTexture.NO_OVERLAY, note -> view.travel(kind, note, now),
-                    view.powered(player), bend, view.notes.kind == kind ? view.notes.tone() : 0);
+                    view.powered(player), bend, view.notes.kind == kind ? view.notes.tone() : 0, view.finish(player));
         } else {
             MelodicaMesh.draw(pose, buffers, light, note -> view.travel(kind, note, now));
         }
@@ -159,7 +160,8 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
             pose.pushPose();
             pose.translate(.5, .5, .5);
             if (stack.is(WearableInstruments.KEYTAR.get())) {
-                KeytarMesh.draw(pose, buffers, light, overlay, note -> 0, ChargeableItem.energy(stack) > 0, 0, 0);
+                KeytarMesh.draw(pose, buffers, light, overlay, note -> 0, ChargeableItem.energy(stack) > 0, 0, 0,
+                        KeytarFinish.of(stack));
             } else {
                 pose.scale(1.55f, 1.55f, 1.55f);
                 pose.translate(.03, 0, 0);

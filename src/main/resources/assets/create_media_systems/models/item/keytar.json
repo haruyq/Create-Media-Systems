@@ -2,7 +2,7 @@
   "parent": "minecraft:builtin/entity",
   "gui_light": "side",
   "textures": {
-    "particle": "create_media_systems:item/ax_edge/black_red"
+    "particle": "create_media_systems:item/ax_edge/white_silver"
   },
   "display": {
     "gui": {

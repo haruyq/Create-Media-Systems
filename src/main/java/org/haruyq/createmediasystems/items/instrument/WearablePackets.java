@@ -42,11 +42,12 @@ public final class WearablePackets {
         @Override public Type<Input> type() { return TYPE; }
     }
 
-    public record Update(UUID player, int session, int flags, boolean snapshot, List<Integer> events) implements CustomPacketPayload {
+    public record Update(UUID player, int session, int flags, KeytarFinish finish, boolean snapshot, List<Integer> events)
+            implements CustomPacketPayload {
         static final Type<Update> TYPE = new Type<>(CreateMediaSystems.id("wearable_update"));
         static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(UUIDUtil.STREAM_CODEC, Update::player,
                 ByteBufCodecs.VAR_INT, Update::session, ByteBufCodecs.BYTE.map(Byte::intValue, Integer::byteValue), Update::flags,
-                ByteBufCodecs.BOOL, Update::snapshot, EVENTS, Update::events, Update::new);
+                KeytarFinish.STREAM_CODEC, Update::finish, ByteBufCodecs.BOOL, Update::snapshot, EVENTS, Update::events, Update::new);
         @Override public Type<Update> type() { return TYPE; }
     }
 

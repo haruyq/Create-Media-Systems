@@ -56,6 +56,8 @@ public class InstrumentItem extends Item {
         @Override
         public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
             super.appendHoverText(stack, context, lines, flag);
+            lines.add(KeytarFinish.of(stack).description().withStyle(ChatFormatting.GRAY));
+            if (flag.isAdvanced()) lines.add(Component.translatable("wearable.finish.hint").withStyle(ChatFormatting.GRAY));
             lines.add(Component.translatable("wearable.energy_hint", ChargeableItem.energy(stack), CAPACITY)
                     .withStyle(ChatFormatting.AQUA));
         }
