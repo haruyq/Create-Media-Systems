@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import javax.sound.midi.MidiDevice;
 import javax.sound.midi.MidiMessage;
@@ -28,6 +29,7 @@ public final class MidiPort implements AutoCloseable {
 
     private final Consumer<ShortMessage> receive;
     private final Runnable disconnected;
+    private final Predicate<Input> wanted;
     private final AtomicBoolean scanning = new AtomicBoolean();
     private volatile Status status = new Status(List.of(), "", "keyboard.midi_scanning");
     private volatile String requested;
@@ -38,9 +40,15 @@ public final class MidiPort implements AutoCloseable {
     private String connected = "";
 
     public MidiPort(String preferred, Consumer<ShortMessage> receive, Runnable disconnected) {
+        this(preferred, receive, disconnected, input -> true);
+    }
+
+    /** With no {@code preferred} input, takes the first that {@code wanted} accepts, waiting for one if there is none. */
+    public MidiPort(String preferred, Consumer<ShortMessage> receive, Runnable disconnected, Predicate<Input> wanted) {
         requested = preferred;
         this.receive = receive;
         this.disconnected = disconnected;
+        this.wanted = wanted;
     }
 
     public Status status() { return status; }
@@ -57,7 +65,7 @@ public final class MidiPort implements AutoCloseable {
             try {
                 if (closed) return;
                 var inputs = inputs();
-                if (requested == null && !inputs.isEmpty()) requested = inputs.getFirst().id();
+                if (requested == null) inputs.stream().filter(wanted).findFirst().ifPresent(input -> requested = input.id());
                 String chosen = requested == null ? "" : requested;
                 var selected = inputs.stream().filter(input -> input.id().equals(chosen)).findFirst().orElse(null);
                 if (selected == null) {

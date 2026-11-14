@@ -50,6 +50,7 @@
   "create_media_systems.lighting.hint_video": "右クリックで音声と映像を接続します。Shift＋右クリックでは映像だけを接続します",
   "create_media_systems.lighting.hint_audio": "右クリックで音声を接続します",
   "create_media_systems.lighting.link_removed": "灯具の接続を解除しました",
+  "create_media_systems.lighting.midi_connected": "%s でこの照明制御卓を操作できます",
   "create_media_systems.lighting.preset_saved": "%s に%s の設定を保存しました",
   "create_media_systems.lighting.preset_loaded": "%s を%s に適用しました",
   "create_media_systems.lighting.preset_help": "%s・右クリックで適用",

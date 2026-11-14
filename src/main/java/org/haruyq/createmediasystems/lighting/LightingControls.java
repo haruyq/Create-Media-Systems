@@ -44,12 +44,15 @@ public final class LightingControls {
     private static LightingConsoleBlock.Entity presetConsole;
     private static boolean customPresets;
     private static int savingGroup = -1;
+    /** The console this player last pointed at, while they stay within reach of it: the one a MIDI controller works. */
+    private static LightingConsoleBlock.Entity focused;
 
     private LightingControls() {
     }
 
     public static void register() {
         LightingLinkHandler.register();
+        LightingMidi.register();
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         WorldEvents.onLevelChanged(() -> {
             held = null;
@@ -57,6 +60,7 @@ public final class LightingControls {
             hovered = null;
             activated = null;
             presetConsole = null;
+            focused = null;
             savingGroup = -1;
             noticeUntil = 0;
         });
@@ -126,10 +130,21 @@ public final class LightingControls {
         return LightingText.presetName(console, slot, customPresets(console));
     }
 
-    private static boolean hand() {
+    @Nullable
+    static LightingConsoleBlock.Entity focused() {
+        return focused;
+    }
+
+    static boolean hand() {
         Minecraft mc = Minecraft.getInstance();
         return mc.player != null && mc.level != null && mc.screen == null
                 && (mc.player.getMainHandItem().isEmpty() || mc.player.getMainHandItem().is(AllItems.WRENCH.get()));
+    }
+
+    /** Whether {@code console} still stands, within this player's reach. */
+    private static boolean near(LightingConsoleBlock.Entity console) {
+        return !console.isRemoved() && console.formed
+                && distance(console, new Vec3(ConsoleLayout.BAYS / 2.0, 1, 0.75)) <= Reach.HAND * Reach.HAND;
     }
 
     @Nullable
@@ -370,8 +385,12 @@ public final class LightingControls {
         }
         drag(false);
         hovered = hand() ? held != null ? held : hit() : null;
-        if (presetConsole != null && (!hand() || presetConsole.isRemoved() || !presetConsole.formed
-                || distance(presetConsole, new Vec3(ConsoleLayout.BAYS / 2.0, 1, 0.75)) > Reach.HAND * Reach.HAND)) {
+        if (hovered != null) {
+            focused = hovered.console;
+        } else if (focused != null && !near(focused)) {
+            focused = null;
+        }
+        if (presetConsole != null && (!hand() || !near(presetConsole))) {
             presetConsole = null;
             savingGroup = -1;
         }
@@ -450,12 +469,17 @@ public final class LightingControls {
         feedback(hit, LightingText.message("hover", label(hit), scope(hit), value(hit)));
     }
 
+    /** Says {@code message} above the hotbar, for a moment in place of what is pointed at. */
+    static void notice(Component message) {
+        notice = message;
+        noticeUntil = Util.getMillis() + 1800;
+        Minecraft.getInstance().player.displayClientMessage(notice, true);
+    }
+
     private static void feedback(Hit hit, Component message) {
         activated = hit;
         activatedAt = Util.getMillis();
-        notice = message;
-        noticeUntil = activatedAt + 1800;
-        Minecraft.getInstance().player.displayClientMessage(notice, true);
+        notice(message);
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.2f, 0.2f));
     }
 }

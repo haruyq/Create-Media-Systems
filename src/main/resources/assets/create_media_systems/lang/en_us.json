@@ -50,6 +50,7 @@
   "create_media_systems.lighting.hint_video": "Right-click to link its sound and picture; Shift+right-click for its picture alone",
   "create_media_systems.lighting.hint_audio": "Right-click to link its sound",
   "create_media_systems.lighting.link_removed": "Fixture unlinked",
+  "create_media_systems.lighting.midi_connected": "%s now works this console",
   "create_media_systems.lighting.preset_saved": "Saved %2$s to %1$s",
   "create_media_systems.lighting.preset_loaded": "Applied %s to %s",
   "create_media_systems.lighting.preset_help": "%s · Right-click to apply",
