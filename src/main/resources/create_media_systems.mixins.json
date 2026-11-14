@@ -13,6 +13,7 @@
   "client": [
     "CreativeModeInventoryScreenAccessor",
     "HumanoidModelMixin",
+    "WearableHandLayerMixin",
     "ItemPickerMenuMixin",
     "LevelRendererMixin"
   ]

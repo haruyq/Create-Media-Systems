@@ -52,6 +52,7 @@ public abstract class KeysScreen extends Screen {
 
     /** How high the strip is, and the gap between it and the keys (0 for two lines of lettering), in white keys. */
     private final float stripKeys, deckKeys;
+    private final int firstNote, lastNote, firstKey, whiteKeyCount;
     /** How many of the window's pixels one of the GUI's is. */
     protected double pixel = 1;
     /** The keys: their left edge and top, a white key's width and length. The strip of controls is as wide, above them. */
@@ -76,9 +77,21 @@ public abstract class KeysScreen extends Screen {
      * in white keys; with 0 the gap has room for two lines of lettering.
      */
     protected KeysScreen(Component title, float stripKeys, float deckKeys) {
+        this(title, stripKeys, deckKeys, Layout.LOWEST, Layout.KEYS);
+    }
+
+    protected KeysScreen(Component title, float stripKeys, float deckKeys, int first, int keys) {
         super(title);
         this.stripKeys = stripKeys;
         this.deckKeys = deckKeys;
+        firstNote = first;
+        lastNote = first + keys - 1;
+        firstKey = Layout.across(firstNote);
+        whiteKeyCount = Layout.across(lastNote) - firstKey + 1;
+    }
+
+    protected int whiteKeyCount() {
+        return whiteKeyCount;
     }
 
     /** Lays it out. An instrument adds its faces and widgets after this, unless it is {@link #hidden}. */
@@ -92,15 +105,15 @@ public abstract class KeysScreen extends Screen {
         int margin = (int) Math.round(8 * pixel);
         // Every key a whole number of pixels wide: as many as fit across the window, or as leave the world a third
         // of its height above the strip. The rest follows from that.
-        keyWidth = Mth.clamp(Math.min((wide - 2 * margin) / Layout.WHITE_KEYS, (int) (high * 0.7 / (stripKeys + 8 + Math.max(1, deckKeys)))), 8, 48);
+        keyWidth = Mth.clamp(Math.min((wide - 2 * margin) / whiteKeyCount, (int) (high * 0.7 / (stripKeys + 8 + Math.max(1, deckKeys)))), 8, 48);
         keysHeight = keyWidth * 8;
-        keysX = (wide - keyWidth * Layout.WHITE_KEYS) / 2;
+        keysX = (wide - keyWidth * whiteKeyCount) / 2;
         keysY = high - margin - keysHeight;
         // The lettering in half steps of the font's own pixels, which keeps it crisp.
         textScale = Math.max(1, Math.round(keyWidth / 7f) / 2f);
         felt = Math.max(2, keyWidth / 6);
         deck = (deckKeys > 0 ? Math.round(deckKeys * keyWidth) : 2 * lineHeight() + 5) + felt;
-        stripWidth = keyWidth * Layout.WHITE_KEYS;
+        stripWidth = keyWidth * whiteKeyCount;
         stripHeight = Math.round(keyWidth * stripKeys);
         stripY = keysY - deck - stripHeight;
         trailSpeed = null;
@@ -310,12 +323,12 @@ public abstract class KeysScreen extends Screen {
         int blackWidth = Math.max(3, Math.round(key * Layout.BLACK_WIDTH)), blackLength = Math.round(keysHeight * Layout.BLACK_LENGTH);
         int side = Math.max(1, blackWidth / 6), slope = Math.max(3, keyWidth / 2), shade = Math.max(1, key / 8);
         for (int pass = 0; pass < 2; pass++) {
-            for (int note = Layout.LOWEST; note <= Layout.HIGHEST; note++) {
+            for (int note = firstNote; note <= lastNote; note++) {
                 if (Layout.black(note) != (pass == 1)) {
                     continue;
                 }
                 boolean pressed = down.test(note);
-                int x = keysX + (Layout.across(note) - firstWhite) * key;
+                int x = keysX + (Layout.across(note) - firstKey - firstWhite) * key;
                 if (pass == 0) {
                     int[] face = pressed ? whiteDown : white;
                     part(g, x, keysY, x + key - gap, bottom, corner, face);
@@ -342,10 +355,11 @@ public abstract class KeysScreen extends Screen {
 
     /** The note of the key at ({@code x}, {@code y}) of the window; -1 off the keys. */
     protected int keyAt(double x, double y) {
-        if (hidden || x < keysX || x >= keysX + stripWidth) {
+        if (hidden || x < keysX || x >= keysX + stripWidth || y < keysY || y > keysY + keysHeight) {
             return -1;
         }
-        return Layout.keyAt((float) (x - keysX) / (keyWidth * zoom) + firstWhite, (float) (y - keysY) / keysHeight);
+        int note = Layout.keyAt((float) (x - keysX) / (keyWidth * zoom) + firstKey + firstWhite, (float) (y - keysY) / keysHeight);
+        return note < firstNote || note > lastNote ? -1 : note;
     }
 
     /**
