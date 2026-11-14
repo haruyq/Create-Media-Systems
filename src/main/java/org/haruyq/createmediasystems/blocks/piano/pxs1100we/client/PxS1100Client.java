@@ -19,6 +19,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrails;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock;
@@ -40,38 +42,75 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
     private final Map<Target, Instrument> instruments = new HashMap<>();
     private volatile Instrument local;
 
+    private static final class Voice {
+        KeyboardKeys keys = new KeyboardKeys();
+        KeyboardAudio audio;
+
+        void close() {
+            if (audio != null) audio.close();
+            audio = null;
+        }
+    }
+
     static final class Instrument {
         final Target target;
-        volatile KeyboardKeys keys = new KeyboardKeys();
+        final NoteTrails trails = new NoteTrails(NoteTrailRenderer::time);
+        private final Map<Integer, Voice> voices = new HashMap<>();
         final KeyMotion motion = new KeyMotion(KeyboardLayout.FIRST, KeyboardLayout.LAST - KeyboardLayout.FIRST + 1);
         CompoundTag view = new CompoundTag();
         KeyboardSettings settings = new KeyboardSettings();
         Frame frame;
         Routing routing = Routing.INTERNAL;
-        KeyboardAudio audio;
         int token;
+        int color;
         long received;
 
         Instrument(Target target) { this.target = target; }
 
         synchronized void stopAudio() {
-            if (audio != null) audio.close();
-            audio = null;
+            voices.values().forEach(Voice::close);
         }
 
-        void apply(List<KeyboardMidi> events, boolean snapshot) {
+        synchronized boolean pressed(int note) {
+            for (var voice : voices.values()) if (voice.keys.pressed(note)) return true;
+            return false;
+        }
+
+        synchronized int pedalAmount(int controller) {
+            int amount = 0;
+            for (var voice : voices.values()) amount = Math.max(amount, voice.keys.pedalAmount(controller));
+            return amount;
+        }
+
+        boolean pedal() {
+            return pedalAmount(SUSTAIN) > 0 || pedalAmount(SOSTENUTO) > 0 || pedalAmount(SOFT) > 0;
+        }
+
+        void apply(int token, int color, Voice voice, List<KeyboardMidi> events, boolean snapshot) {
             if (!snapshot && events.isEmpty()) return;
             long now = System.nanoTime();
-            if (snapshot) keys = new KeyboardKeys();
+            if (snapshot) {
+                trails.release(token, now);
+                voice.keys = new KeyboardKeys();
+            }
             for (var event : events) {
                 if (event.metronome()) continue;
-                keys.apply(event);
-                if (snapshot) continue;
+                voice.keys.apply(event);
                 int note = event.key();
                 switch (event.command()) {
-                    case ON, OFF -> updateMotion(note, now);
+                    case ON, OFF -> {
+                        if (event.command() == ON && event.value() > 0 && view.getBoolean("Powered")) {
+                            trails.press(token, color, note, event.value(), now);
+                        } else if (!voice.keys.pressed(note)) trails.release(token, note, now);
+                        if (!snapshot) updateMotion(note, now);
+                    }
                     case CONTROL -> {
-                        if (note == SILENCE || note == NOTES_OFF) updateMotion(now);
+                        if (note == SILENCE || note == NOTES_OFF) {
+                            for (int n = KeyboardLayout.FIRST; n <= KeyboardLayout.LAST; n++) {
+                                if (!voice.keys.pressed(n)) trails.release(token, n, now);
+                            }
+                            if (!snapshot) updateMotion(now);
+                        }
                     }
                 }
             }
@@ -85,8 +124,42 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         }
 
         private void updateMotion(int note, long now) {
-            if (keys.pressed(note)) motion.press(note, now);
+            if (pressed(note)) motion.press(note, now);
             else motion.release(note, now);
+        }
+
+        void forget(int token) {
+            trails.release(token, System.nanoTime());
+            var voice = voices.remove(token);
+            if (voice != null) {
+                voice.close();
+                updateMotion(System.nanoTime());
+            }
+        }
+
+        void play(int token, int color, Voice voice, List<KeyboardMidi> events, boolean snapshot) {
+            boolean reopen = voice.audio == null || !voice.audio.matches(settings);
+            var initial = snapshot ? events : reopen ? voice.keys.snapshot() : null;
+            apply(token, color, voice, events, snapshot);
+            if (!view.getBoolean("Powered")) {
+                trails.release(token, System.nanoTime());
+                voice.close();
+                return;
+            }
+            if (reopen && events.isEmpty() && (initial == null || initial.isEmpty()) && !voice.keys.active()) return;
+            if (reopen) {
+                voice.close();
+                voice.audio = new KeyboardAudio(settings, frame);
+            }
+            voice.audio.update(settings, initial, snapshot ? List.of() : events, voice.keys::snapshot);
+        }
+
+        void tickAudio(Minecraft mc) {
+            if (frame == null) return;
+            var at = frame(mc, this);
+            for (var voice : voices.values()) {
+                if (voice.audio != null) voice.audio.tick(mc, at, routing);
+            }
         }
     }
 
@@ -116,6 +189,7 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         var instrument = instruments.computeIfAbsent(packet.target(), Instrument::new);
         synchronized (instrument) {
             instrument.token = packet.token();
+            instrument.color = packet.color();
             instrument.received = mc.level.getGameTime();
         }
         if (local == instrument && mc.screen instanceof KeyboardScreen screen && screen.instrument() == instrument) {
@@ -137,21 +211,16 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
             instrument.received = mc.level.getGameTime();
             instrument.view = packet.view();
             instrument.settings = KeyboardSettings.load(packet.view().getCompound("Settings"));
-            boolean reopen = instrument.audio == null || !instrument.audio.matches(instrument.settings);
-            var initial = packet.snapshot() ? packet.events() : reopen ? instrument.keys.snapshot() : null;
-            instrument.apply(packet.events(), packet.snapshot());
-            if (!packet.view().getBoolean("Powered")) {
-                instrument.stopAudio();
-                return;
+            if (packet.snapshot() || !packet.events().isEmpty()) {
+                instrument.play(packet.token(), packet.color(), instrument.voices.computeIfAbsent(packet.token(), token -> new Voice()),
+                        packet.events(), packet.snapshot());
             }
-            if (instrument.audio == null && instrument != local && !packet.view().getBoolean("Live") && packet.events().isEmpty()) return;
-            if (reopen) {
-                instrument.stopAudio();
-                instrument.audio = new KeyboardAudio(instrument.settings, packet.frame());
+            for (var entry : instrument.voices.entrySet()) {
+                if (entry.getKey() != packet.token() || !packet.snapshot() && packet.events().isEmpty()) {
+                    instrument.play(entry.getKey(), 0, entry.getValue(), List.of(), false);
+                }
             }
-            instrument.audio.update(instrument.settings, initial, packet.snapshot() ? List.of() : packet.events(),
-                    instrument.keys::snapshot);
-            instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
+            instrument.tickAudio(mc);
         }
     }
 
@@ -162,6 +231,8 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         if (packet.token() == 0) {
             instrument.stopAudio();
             instruments.remove(packet.target());
+        } else {
+            synchronized (instrument) { instrument.forget(packet.token()); }
         }
     }
 
@@ -170,10 +241,8 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
         synchronized (instrument) {
             var connection = Minecraft.getInstance().getConnection();
             if (local != instrument || connection == null || instrument.view.getBoolean("Playing")) return;
-            instrument.apply(events, false);
-            if (instrument.audio != null) {
-                instrument.audio.update(instrument.settings, null, events, instrument.keys::snapshot);
-            }
+            instrument.play(instrument.token, instrument.color, instrument.voices.computeIfAbsent(instrument.token, token -> new Voice()),
+                    events, false);
             for (int i = 0; i < events.size(); i += KeyboardPackets.BATCH) {
                 connection.send(new KeyboardPackets.Play(instrument.target, instrument.token,
                         List.copyOf(events.subList(i, Math.min(i + KeyboardPackets.BATCH, events.size())))));
@@ -188,7 +257,10 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
             if (connection != null) {
                 connection.send(new KeyboardPackets.Command(instrument.target, instrument.token, action.ordinal(), first, second, text));
             }
-            if (action == Action.CLOSE) local = null;
+            if (action == Action.CLOSE) {
+                local = null;
+                instrument.forget(instrument.token);
+            }
         }
     }
 
@@ -216,9 +288,7 @@ public final class PxS1100Client implements ClientFeature, KeyboardPackets.Clien
                 instrument.stopAudio();
                 return true;
             }
-            if (instrument.audio != null && instrument.frame != null) {
-                instrument.audio.tick(mc, frame(mc, instrument), instrument.routing);
-            }
+            synchronized (instrument) { instrument.tickAudio(mc); }
             return false;
         });
     }

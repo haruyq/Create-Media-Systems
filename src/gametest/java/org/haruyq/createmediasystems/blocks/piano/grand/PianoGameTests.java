@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.blocks.piano.grand;
 
+import java.util.List;
+
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.contraptions.StructureTransform;
 import com.simibubi.create.content.contraptions.bearing.MechanicalBearingBlockEntity;
@@ -11,6 +13,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
@@ -25,10 +28,43 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
+import org.haruyq.createmediasystems.blocks.piano.PianoTestPlayers;
+import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
 public class PianoGameTests {
+    @GameTest(template = "empty")
+    public static void closingTheFallboardKillsOnlyCurrentPlayers(GameTestHelper test) {
+        var level = test.getLevel();
+        var origin = Vec3.atCenterOf(test.absolutePos(new BlockPos(2, 2, 2)));
+        var active = PianoTestPlayers.near(test, origin);
+        var alsoActive = PianoTestPlayers.near(test, origin);
+        var idle = PianoTestPlayers.near(test, origin);
+        var bystander = PianoTestPlayers.near(test, origin);
+        var open = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var session = new PianoSession(level, PianoPackets.Target.placed(BlockPos.containing(origin)),
+                () -> new PianoPackets.Frame(origin, false), open::get, action -> {
+                    if (action == Action.KEYBOARD_LID) open.set(!open.get());
+                });
+        active.getInventory().armor.set(2, new ItemStack(Items.NETHERITE_CHESTPLATE));
+        active.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.TOTEM_OF_UNDYING));
+        var first = session.interact(active, Action.PLAY);
+        var second = session.interact(alsoActive, Action.PLAY);
+        var idleSession = session.interact(idle, Action.PLAY);
+        test.assertTrue(first != 0 && second != 0 && first != second && idleSession != 0, "Three performers can open independent sessions");
+        session.play(active, first, List.of(PianoEvent.press(60, 100)));
+        session.play(alsoActive, second, List.of(PianoEvent.press(60, 70), PianoEvent.release(60, 30)));
+        session.interact(bystander, Action.ROOF);
+        test.assertTrue(active.isAlive() && alsoActive.isAlive(), "The roof is harmless");
+        session.interact(bystander, Action.KEYBOARD_LID);
+        test.assertTrue(!open.get() && !active.isAlive() && !alsoActive.isAlive(),
+                "The fallboard caught both performers despite armor and a totem");
+        test.assertTrue(idle.isAlive() && bystander.isAlive(), "Idle players and bystanders survive");
+        test.assertTrue(session.interact(idle, Action.PLAY) == 0, "A closed keyboard cannot be played");
+        test.succeed();
+    }
+
     @GameTest(template = "empty")
     public static void bearingCarriesTheEntirePianoWithOneGluedPart(GameTestHelper helper) {
         var level = helper.getLevel();

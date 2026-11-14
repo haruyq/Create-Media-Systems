@@ -1,21 +1,22 @@
 package org.haruyq.createmediasystems.blocks.piano.grand;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
-import org.jetbrains.annotations.Nullable;
 
 final class PianoSession {
     static final int AUDIBLE_RANGE = 64;
@@ -23,91 +24,113 @@ final class PianoSession {
     private static final AtomicInteger SESSIONS = new AtomicInteger();
     private static final int MAX_EVENTS_PER_TICK = 384;
     private static final int UPDATE_INTERVAL = 10;
-
+    private static final int BETWEEN_NOTES_TICKS = 20;
     private final ServerLevel level;
     private final PianoPackets.Target target;
     private final Supplier<PianoPackets.Frame> currentFrame;
+    private final BooleanSupplier keyboardOpen;
     private final Consumer<Action> moveLid;
-    private final Set<ServerPlayer> listeners = new HashSet<>();
-    @Nullable private UUID performer;
-    private PianoState keys = new PianoState();
-    private int session, eventsThisTick;
-    private long budgetTick = Long.MIN_VALUE;
+    private final Map<UUID, Take> performers = new LinkedHashMap<>();
 
-    PianoSession(ServerLevel level, PianoPackets.Target target, Supplier<PianoPackets.Frame> currentFrame, Consumer<Action> moveLid) {
+    private static final class Take {
+        final int id = SESSIONS.incrementAndGet();
+        final PianoState keys = new PianoState();
+        final Set<ServerPlayer> listeners = new HashSet<>();
+        long budgetTick = Long.MIN_VALUE;
+        long lastStrike = -BETWEEN_NOTES_TICKS - 1;
+        int eventsThisTick;
+    }
+
+    PianoSession(ServerLevel level, PianoPackets.Target target, Supplier<PianoPackets.Frame> currentFrame,
+            BooleanSupplier keyboardOpen, Consumer<Action> moveLid) {
         this.level = level;
         this.target = target;
         this.currentFrame = currentFrame;
+        this.keyboardOpen = keyboardOpen;
         this.moveLid = moveLid;
     }
 
-    void interact(ServerPlayer player, Action action) {
+    int interact(ServerPlayer player, Action action) {
         var frame = currentFrame.get();
-        if (!inReach(player, frame.origin())) return;
-        if (performer != null && !performer.equals(player.getUUID())) {
-            player.displayClientMessage(Component.translatable("piano.busy"), true);
-            return;
-        }
+        if (!inReach(player, frame.origin())) return 0;
         if (action != Action.PLAY) {
             toggle(action);
-            return;
+            return 0;
         }
-        close();
-        session = SESSIONS.incrementAndGet();
-        performer = player.getUUID();
-        keys = new PianoState();
-        budgetTick = Long.MIN_VALUE;
-        PacketDistributor.sendToPlayer(player, new PianoPackets.Open(target, session, frame));
+        if (!keyboardOpen.getAsBoolean()) return 0;
+        var previous = performers.remove(player.getUUID());
+        if (previous != null) end(player.getUUID(), previous);
+        var take = new Take();
+        performers.put(player.getUUID(), take);
+        PacketDistributor.sendToPlayer(player, new PianoPackets.Open(target, take.id, frame));
+        return take.id;
     }
 
     void play(ServerPlayer player, int session, List<PianoEvent> events) {
-        if (!player.getUUID().equals(performer) || this.session != session || events.isEmpty()) return;
+        var take = performers.get(player.getUUID());
+        if (take == null || take.id != session || events.isEmpty()) return;
         var frame = currentFrame.get();
         if (!inReach(player, frame.origin())) {
-            close();
+            leave(player.getUUID());
             return;
         }
         long now = level.getGameTime();
-        if (now != budgetTick) {
-            budgetTick = now;
-            eventsThisTick = 0;
+        if (now != take.budgetTick) {
+            take.budgetTick = now;
+            take.eventsThisTick = 0;
         }
-        eventsThisTick += events.size();
-        if (eventsThisTick > MAX_EVENTS_PER_TICK) {
-            close();
+        take.eventsThisTick += events.size();
+        if (take.eventsThisTick > MAX_EVENTS_PER_TICK) {
+            leave(player.getUUID());
             return;
         }
 
-        refreshAudience(frame);
-        events.forEach(keys::apply);
-        var update = new PianoPackets.Update(target, session, frame, false, events);
-        listeners.forEach(listener -> PacketDistributor.sendToPlayer(listener, update));
+        refreshAudience(player.getUUID(), take, frame);
+        for (var event : events) {
+            take.keys.apply(event);
+            if (event.kind() == PianoEvent.Kind.ON) take.lastStrike = now;
+        }
+        broadcast(take, frame, events);
     }
 
     void command(ServerPlayer player, int session, Action action) {
-        if (this.session != session || !player.getUUID().equals(performer)) return;
-        if (action == Action.CLOSE || !inReach(player, currentFrame.get().origin())) {
-            close();
-        } else {
-            toggle(action);
-        }
+        var take = performers.get(player.getUUID());
+        if (take == null || take.id != session) return;
+        if (action == Action.CLOSE || !inReach(player, currentFrame.get().origin())) leave(player.getUUID());
+        else toggle(action);
     }
 
     private void toggle(Action action) {
+        boolean closingKeyboard = action == Action.KEYBOARD_LID && keyboardOpen.getAsBoolean();
         moveLid.accept(action);
-        if (action == Action.KEYBOARD_LID) close();
+        if (!closingKeyboard) return;
+        var origin = currentFrame.get().origin();
+        long now = level.getGameTime();
+        var caught = performers.entrySet().stream()
+                .filter(entry -> entry.getValue().keys.anyKeyDown() || now - entry.getValue().lastStrike <= BETWEEN_NOTES_TICKS)
+                .map(entry -> level.getPlayerByUUID(entry.getKey()))
+                .filter(player -> player instanceof ServerPlayer server && inReach(server, origin))
+                .toList();
+        close();
+        caught.forEach(net.minecraft.world.entity.Entity::kill);
     }
 
     void tick() {
-        if (performer == null) return;
+        if (performers.isEmpty()) return;
         var frame = currentFrame.get();
-        if (!(level.getPlayerByUUID(performer) instanceof ServerPlayer player) || !inReach(player, frame.origin())) {
-            close();
-        } else if (level.getGameTime() % UPDATE_INTERVAL == 0) {
-            refreshAudience(frame);
-            var update = new PianoPackets.Update(target, session, frame, false, List.of());
-            PacketDistributor.sendToPlayer(player, update);
-            listeners.forEach(listener -> PacketDistributor.sendToPlayer(listener, update));
+        boolean update = level.getGameTime() % UPDATE_INTERVAL == 0;
+        var entries = performers.entrySet().iterator();
+        while (entries.hasNext()) {
+            var entry = entries.next();
+            var take = entry.getValue();
+            if (!(level.getPlayerByUUID(entry.getKey()) instanceof ServerPlayer player) || !inReach(player, frame.origin())) {
+                entries.remove();
+                end(entry.getKey(), take);
+            } else if (update) {
+                refreshAudience(entry.getKey(), take, frame);
+                PacketDistributor.sendToPlayer(player, new PianoPackets.Update(target, take.id, frame, false, List.of()));
+                broadcast(take, frame, List.of());
+            }
         }
     }
 
@@ -116,35 +139,47 @@ final class PianoSession {
                 && SableCompat.eye(player, 1).distanceToSqr(origin) <= PLAYING_REACH * PLAYING_REACH;
     }
 
-    private void refreshAudience(PianoPackets.Frame frame) {
-        var end = new PianoPackets.End(target, session);
-        listeners.removeIf(listener -> {
+    private void refreshAudience(UUID performer, Take take, PianoPackets.Frame frame) {
+        var end = new PianoPackets.End(target, take.id);
+        take.listeners.removeIf(listener -> {
             if (listener.isRemoved() || listener.level() != level) return true;
             if (inRange(listener, frame.origin())) return false;
             PacketDistributor.sendToPlayer(listener, end);
             return true;
         });
         for (ServerPlayer listener : level.players()) {
-            if (!listener.getUUID().equals(performer) && inRange(listener, frame.origin()) && listeners.add(listener)) {
-                PacketDistributor.sendToPlayer(listener, new PianoPackets.Update(target, session, frame, true, keys.snapshot()));
+            if (!listener.getUUID().equals(performer) && inRange(listener, frame.origin()) && take.listeners.add(listener)) {
+                PacketDistributor.sendToPlayer(listener, new PianoPackets.Update(target, take.id, frame, true, take.keys.snapshot()));
             }
         }
+    }
+
+    private void broadcast(Take take, PianoPackets.Frame frame, List<PianoEvent> events) {
+        var packet = new PianoPackets.Update(target, take.id, frame, false, events);
+        take.listeners.forEach(listener -> PacketDistributor.sendToPlayer(listener, packet));
     }
 
     private static boolean inRange(ServerPlayer player, Vec3 origin) {
         return SableCompat.eye(player, 1).distanceToSqr(origin) <= AUDIBLE_RANGE * AUDIBLE_RANGE;
     }
 
-    void close() {
-        if (performer == null) return;
-        var end = new PianoPackets.End(target, session);
+    private void leave(UUID player) {
+        var take = performers.remove(player);
+        if (take != null) end(player, take);
+    }
+
+    private void end(UUID performer, Take take) {
+        var end = new PianoPackets.End(target, take.id);
         if (level.getPlayerByUUID(performer) instanceof ServerPlayer player && !player.isRemoved()) {
             PacketDistributor.sendToPlayer(player, end);
         }
-        for (ServerPlayer listener : listeners) {
+        for (var listener : take.listeners) {
             if (!listener.isRemoved() && listener.level() == level) PacketDistributor.sendToPlayer(listener, end);
         }
-        listeners.clear();
-        performer = null;
+    }
+
+    void close() {
+        performers.forEach(this::end);
+        performers.clear();
     }
 }

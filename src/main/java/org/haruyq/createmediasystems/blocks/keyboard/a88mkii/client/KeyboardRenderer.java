@@ -16,6 +16,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout.Control;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Panel;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -89,11 +90,26 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
         PonderPerformance.pose(keyboard);
         draw(pose, buffers, light, keyboard.facing(), KeyboardClient.look(keyboard), keyboard.keysDown.get(0),
                 keyboard.keysDown.get(1), keyboard.bend, keyboard.modulation, near);
+        if (near && NoteTrailRenderer.enabled()) {
+            var trails = KeyboardAudio.trails(keyboard.getBlockPos()).visible(System.nanoTime());
+            pose.pushPose();
+            pose.translate(.5, 0, .5);
+            pose.mulPose(Axis.YP.rotationDegrees(-keyboard.facing().toYRot()));
+            pose.scale(1 / 16f, 1 / 16f, 1 / 16f);
+            pose.translate(-WIDTH / 2, 0, -DEPTH / 2);
+            NoteTrailRenderer.world(pose, buffers, trails, 16, note -> {
+                boolean black = Layout.black(note);
+                float x = KEYS_LEFT + (Layout.across(note) + (black ? 0 : .5f)) * WHITE;
+                return new NoteTrailRenderer.Key(x, black ? BLACK_TOP : WHITE_TOP,
+                        black ? 4.65f : 6.9f, Layout.width(note) * WHITE);
+            });
+            pose.popPose();
+        }
     }
 
     @Override
     public AABB getRenderBoundingBox(MidiKeyboardBlock.Entity keyboard) {
-        return MidiKeyboardBlock.body(keyboard.getBlockPos(), keyboard.facing()).inflate(0.1);
+        return MidiKeyboardBlock.body(keyboard.getBlockPos(), keyboard.facing()).inflate(.1, 1.85, .1);
     }
 
     /**

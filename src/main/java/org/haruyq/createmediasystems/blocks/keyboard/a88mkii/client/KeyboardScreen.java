@@ -106,6 +106,7 @@ final class KeyboardScreen extends KeysScreen {
     @Override
     public void removed() {
         KeyboardClient.closed(playing);
+        super.removed();
     }
 
     @Override
@@ -116,6 +117,8 @@ final class KeyboardScreen extends KeysScreen {
         drawControls(g, look, keyboard);
         drawKeys(g, look.panel(), keyboard);
     }
+
+    @Override protected boolean hasNoteTrails() { return true; }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
@@ -361,6 +364,7 @@ final class KeyboardScreen extends KeysScreen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (super.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         double x = mouseX * pixel, y = mouseY * pixel;
         if (mouseNote >= 0) {
             int note = keyAt(x, y);
@@ -379,6 +383,7 @@ final class KeyboardScreen extends KeysScreen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        super.mouseReleased(mouseX, mouseY, button);
         if (mouseNote >= 0) {
             controller.key(mouseNote, 0);
             mouseNote = -1;

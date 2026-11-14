@@ -34,7 +34,7 @@ public final class KeyboardKeys {
         return amount;
     }
 
-    boolean active() {
+    public synchronized boolean active() {
         if (pedal()) return true;
         for (int[] channel : down) for (int velocity : channel) if (velocity != 0) return true;
         return false;
@@ -121,6 +121,16 @@ public final class KeyboardKeys {
             }
             if (velocityPrefixes[channel] != 0) {
                 events.add(new KeyboardMidi(CONTROL | channel, VELOCITY_PREFIX, velocityPrefixes[channel]));
+            }
+        }
+        return events;
+    }
+
+    synchronized List<KeyboardMidi> releaseHeld() {
+        var events = new ArrayList<KeyboardMidi>();
+        for (int channel = 0; channel < 16; channel++) {
+            for (int note = 0; note < 128; note++) {
+                if (down[channel][note] != 0) events.add(new KeyboardMidi(OFF | channel, note, 0));
             }
         }
         return events;

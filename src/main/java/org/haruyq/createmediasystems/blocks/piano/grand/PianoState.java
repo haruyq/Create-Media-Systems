@@ -14,6 +14,10 @@ public final class PianoState {
     private int volume = 127, expression = 127;
 
     public boolean pressed(int note) { return pressed[note - FIRST_NOTE] != 0; }
+    boolean anyKeyDown() {
+        for (int velocity : pressed) if (velocity != 0) return true;
+        return false;
+    }
     public int pedal(int controller) {
         return switch (controller) {
             case DAMPER -> damper;

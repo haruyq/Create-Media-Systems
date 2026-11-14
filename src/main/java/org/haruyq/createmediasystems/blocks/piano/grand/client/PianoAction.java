@@ -1,5 +1,7 @@
 package org.haruyq.createmediasystems.blocks.piano.grand.client;
 
+import java.util.Arrays;
+
 import net.minecraft.util.Mth;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoState;
@@ -41,6 +43,24 @@ final class PianoAction {
     float pedal(int controller) {
         for (int i = 0; i < PEDALS.length; i++) if (PEDALS[i] == controller) return pedal[i];
         return 0;
+    }
+
+    void clearMotion() {
+        Arrays.fill(key, 0);
+        Arrays.fill(hammer, 0);
+        Arrays.fill(damper, 0);
+        Arrays.fill(ring, 0);
+        Arrays.fill(pedal, 0);
+    }
+
+    void mergeMotion(PianoAction other) {
+        for (int i = 0; i < KEYS; i++) {
+            key[i] = Math.max(key[i], other.key[i]);
+            hammer[i] = Math.max(hammer[i], other.hammer[i]);
+            damper[i] = Math.max(damper[i], other.damper[i]);
+            ring[i] = Math.max(ring[i], other.ring[i]);
+        }
+        for (int i = 0; i < pedal.length; i++) pedal[i] = Math.max(pedal[i], other.pedal[i]);
     }
 
     /** Seconds from a key starting down to its hammer meeting the string: a hard blow lands several times sooner. */

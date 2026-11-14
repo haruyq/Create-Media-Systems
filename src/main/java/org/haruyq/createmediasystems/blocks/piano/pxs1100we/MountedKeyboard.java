@@ -138,7 +138,7 @@ final class MountedKeyboard implements MovementBehaviour {
 
         void broadcast() {
             PacketDistributor.sendToPlayersTrackingEntity(carrier,
-                    new KeyboardPackets.Update(target, frame(), runtime.view(), false, List.of(), KeyboardPackets.Routing.INTERNAL));
+                    new KeyboardPackets.Update(target, frame(), runtime.view(), false, List.of(), KeyboardPackets.Routing.INTERNAL, 0, 0));
         }
 
         @Override public void changed(boolean sync) {

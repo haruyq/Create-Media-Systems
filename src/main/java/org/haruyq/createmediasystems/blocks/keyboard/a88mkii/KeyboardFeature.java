@@ -31,6 +31,6 @@ public final class KeyboardFeature implements Feature {
 
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
-        KeyboardPackets.register(registrar);
+        KeyboardPackets.register(registrar.versioned("28"));
     }
 }

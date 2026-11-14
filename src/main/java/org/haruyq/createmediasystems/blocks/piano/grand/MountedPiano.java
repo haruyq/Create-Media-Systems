@@ -84,6 +84,7 @@ final class MountedPiano implements MovementBehaviour {
             if (!(context.temporaryData instanceof PianoSession)) {
                 context.temporaryData = new PianoSession(server.serverLevel(), new PianoPackets.Target(carrier.getId(), root),
                         () -> frame(carrier, root, carrier.getContraption().getBlocks().get(root).state()),
+                        () -> carrier.getContraption().getBlocks().get(root).state().getValue(GrandPianoBlock.KEYBOARD_OPEN),
                         action -> toggle(carrier, root, action));
             }
             var action = GrandPianoBlock.interaction(player, block.state().getValue(GrandPianoBlock.PART), rootBlock.state());

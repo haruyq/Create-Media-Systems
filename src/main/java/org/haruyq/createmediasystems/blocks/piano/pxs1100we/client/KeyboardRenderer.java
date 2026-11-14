@@ -35,7 +35,7 @@ import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlock;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlockEntity;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardKeys;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardLayout;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
@@ -45,7 +45,6 @@ import org.jetbrains.annotations.Nullable;
 
 final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity> {
     private static final KeyboardLayout MODEL = KeyboardLayout.PX;
-    private static final KeyboardKeys REST = new KeyboardKeys();
     private static final List<String> LEDS = List.of("power", "function", "sound_mode", "metronome", "play", "rec",
             "grand_piano", "elec_piano");
     private static final RenderType LAYER = RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS);
@@ -77,7 +76,6 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         var view = demo != null ? demo.view : instrument == null ? keyboard.clientView() : instrument.view;
         var settings = demo != null ? demo.settings
                 : instrument == null ? KeyboardSettings.load(view.getCompound("Settings")) : instrument.settings;
-        var keys = instrument == null ? REST : instrument.keys;
         var demoKeys = demo == null ? null : demo.keys();
         var motion = instrument == null ? null : instrument.motion;
         long renderTime = System.nanoTime();
@@ -116,8 +114,8 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
             pose.pushPose();
             pose.translate(KeyboardLayout.PEDAL.x, KeyboardLayout.PEDAL.y, KeyboardLayout.PEDAL.z);
             int pedal = demoKeys == null
-                    ? Math.max(keys.pedalAmount(KeyboardMidi.SUSTAIN),
-                            Math.max(keys.pedalAmount(KeyboardMidi.SOSTENUTO), keys.pedalAmount(KeyboardMidi.SOFT)))
+                    ? instrument == null ? 0 : Math.max(instrument.pedalAmount(KeyboardMidi.SUSTAIN),
+                            Math.max(instrument.pedalAmount(KeyboardMidi.SOSTENUTO), instrument.pedalAmount(KeyboardMidi.SOFT)))
                     : Math.max(demoKeys.pedal(PianoEvent.DAMPER),
                             Math.max(demoKeys.pedal(PianoEvent.SOSTENUTO), demoKeys.pedal(PianoEvent.SOFT)));
             if (pedal > 0) {
@@ -141,6 +139,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         pose.translate(MODEL.power.x, MODEL.power.y + (now < view.getLong("Flash") ? MODEL.powerTravel : 0), MODEL.power.z);
         draw("power_button", pose, out, light, overlay);
         pose.popPose();
+        pose.pushPose();
         if (powered) {
             pose.translate(0, .001, 0);
             for (String led : LEDS) {
@@ -157,6 +156,16 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
                 };
                 if (on) draw("led_" + led, pose, out, LightTexture.FULL_BRIGHT, overlay);
             }
+        }
+        pose.popPose();
+        if (instrument != null && distance < 144 && NoteTrailRenderer.enabled()) {
+            float units = state.getValue(KeyboardBlock.FULL_SIZE) ? 1 / MODEL.fullScale : 1;
+            NoteTrailRenderer.world(pose, buffers, instrument.trails.visible(renderTime), units, note -> {
+                var key = MODEL.keys.get(note - KeyboardLayout.FIRST);
+                var hit = key.hits().getFirst();
+                return new NoteTrailRenderer.Key((float) ((hit.minX() + hit.maxX()) / 2), (float) hit.y(),
+                        (float) ((hit.minZ() + hit.maxZ()) / 2), (float) (hit.maxX() - hit.minX()));
+            });
         }
         pose.popPose();
     }
@@ -243,7 +252,7 @@ final class KeyboardRenderer implements BlockEntityRenderer<KeyboardBlockEntity>
         var state = keyboard.state();
         var bounds = new AABB(pos);
         for (var part : KeyboardBlock.parts(state)) bounds = bounds.minmax(new AABB(part.at(pos, state)));
-        return bounds.inflate(.15);
+        return bounds.inflate(.15, 1.9, .15);
     }
 
 }

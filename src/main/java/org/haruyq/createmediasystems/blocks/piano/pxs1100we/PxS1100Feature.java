@@ -60,6 +60,7 @@ public final class PxS1100Feature implements Feature {
                     lines.add(Component.translatable("px_s1100.adapter.connection").withStyle(ChatFormatting.GRAY));
                     lines.add(Component.translatable("px_s1100.adapter.inputs", KeyboardPowerAdapter.MIN_RPM,
                             KeyboardPowerAdapter.TRANSFER).withStyle(ChatFormatting.GRAY));
+                    lines.add(Component.translatable("px_s1100.adapter.fuel_help").withStyle(ChatFormatting.GRAY));
                 }
             });
     public static final Supplier<BlockEntityType<KeyboardPowerAdapter.Supply>> ADAPTER_ENTITY = CreateMediaSystems.BLOCK_ENTITIES.register(
@@ -103,7 +104,7 @@ public final class PxS1100Feature implements Feature {
     }
 
     @Override public void registerPayloads(PayloadRegistrar registrar) {
-        KeyboardPackets.register(registrar.versioned("4"));
+        KeyboardPackets.register(registrar.versioned("5"));
     }
 
     private record EnergyPort(KeyboardBlockEntity keyboard, BlockPos pos, KeyboardBlock.Part part, @Nullable Direction side)

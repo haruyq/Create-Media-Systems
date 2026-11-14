@@ -71,19 +71,29 @@ public final class KeyboardPackets {
                 Routing::outputs, Routing::new);
     }
 
-    public record Open(Target target, int token, boolean browser) implements CustomPacketPayload {
+    public record Open(Target target, int token, boolean browser, int color) implements CustomPacketPayload {
         static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("keyboard_open"));
         static final StreamCodec<ByteBuf, Open> CODEC = StreamCodec.composite(Target.CODEC, Open::target,
-                ByteBufCodecs.VAR_INT, Open::token, ByteBufCodecs.BOOL, Open::browser, Open::new);
+                ByteBufCodecs.VAR_INT, Open::token, ByteBufCodecs.BOOL, Open::browser, ByteBufCodecs.VAR_INT, Open::color, Open::new);
         @Override public Type<Open> type() { return TYPE; }
     }
 
-    public record Update(Target target, Frame frame, CompoundTag view, boolean snapshot, List<KeyboardMidi> events, Routing routing)
+    public record Update(Target target, Frame frame, CompoundTag view, boolean snapshot, List<KeyboardMidi> events,
+            Routing routing, int token, int color)
             implements CustomPacketPayload {
         static final Type<Update> TYPE = new Type<>(CreateMediaSystems.id("keyboard_update"));
-        static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(Target.CODEC, Update::target,
-                Frame.CODEC, Update::frame, ByteBufCodecs.COMPOUND_TAG, Update::view, ByteBufCodecs.BOOL, Update::snapshot,
-                STATE, Update::events, Routing.CODEC, Update::routing, Update::new);
+        static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.of((buf, packet) -> {
+            Target.CODEC.encode(buf, packet.target);
+            Frame.CODEC.encode(buf, packet.frame);
+            ByteBufCodecs.COMPOUND_TAG.encode(buf, packet.view);
+            buf.writeBoolean(packet.snapshot);
+            STATE.encode(buf, packet.events);
+            Routing.CODEC.encode(buf, packet.routing);
+            ByteBufCodecs.VAR_INT.encode(buf, packet.token);
+            ByteBufCodecs.VAR_INT.encode(buf, packet.color);
+        }, buf -> new Update(Target.CODEC.decode(buf), Frame.CODEC.decode(buf), ByteBufCodecs.COMPOUND_TAG.decode(buf),
+                buf.readBoolean(), STATE.decode(buf), Routing.CODEC.decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
+                ByteBufCodecs.VAR_INT.decode(buf)));
         @Override public Type<Update> type() { return TYPE; }
     }
 
