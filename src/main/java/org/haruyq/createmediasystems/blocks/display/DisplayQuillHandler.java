@@ -115,7 +115,11 @@ final class DisplayQuillHandler {
             return picture != null ? picture.width / (double) picture.height : DisplayBlock.Ratio.WIDE.value;
         }
         VideoFrame frame = DisplayRenderer.frame((DisplayBlock.Entity) screen);
-        return frame != null && frame.height() > 0 ? frame.width() / (double) frame.height() : DisplayBlock.Ratio.WIDE.value;
+        if (frame != null && frame.height() > 0) {
+            return frame.width() / (double) frame.height();
+        }
+        Images.Picture still = DisplayRenderer.image((DisplayBlock.Entity) screen);
+        return still != null ? still.width / (double) still.height : DisplayBlock.Ratio.WIDE.value;
     }
 
     private static void resize(ScreenEntity display, int width, int height, DisplayBlock.Ratio ratio) {
