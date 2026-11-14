@@ -19,10 +19,12 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Controller;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardFeature;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardPackets;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrails;
 import org.haruyq.createmediasystems.playback.CmsStream;
 import org.haruyq.createmediasystems.playback.StreamPump;
 import org.haruyq.createmediasystems.stream.EmitterRange;
@@ -49,8 +51,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * The sound of the keyboards near, made on this client: each keyboard someone plays has a {@link Synth} of its own
- * here, fed its player's messages as they arrive (see {@link #played}), and heard from the keyboard itself or from
+ * The sound of keyboards nearby: each performer has a {@link Synth} fed their messages as they arrive
+ * (see {@link #played}). Their parts are mixed and heard from the keyboard itself or from
  * each speaker linked to it. Nothing is streamed and nothing waits for a tick: a message is in the sound a few
  * milliseconds after it arrives (see {@link Tap}).
  */
@@ -59,9 +61,11 @@ public final class KeyboardAudio {
     private static final ResourceLocation BANK = CreateMediaSystems.id("keyboard/a88mkii/generaluser_gs.sf3");
     /** The speakers of one keyboard heard at once, the nearest first. */
     private static final int MAX_OUTPUTS = 6;
+    private static final int[] EMPTY_SETUP = new int[0];
 
     /** Any thread reads these: a player's messages come in on the network thread. */
     private static final Map<BlockPos, Instance> PLAYING = new ConcurrentHashMap<>();
+    private static final Map<BlockPos, Performance> PERFORMANCES = new ConcurrentHashMap<>();
     private static volatile Map<BlockPos, MidiKeyboardBlock.Entity> near = Map.of();
     @Nullable
     private static volatile SoundFont bank;
@@ -75,6 +79,10 @@ public final class KeyboardAudio {
         return near;
     }
 
+    static NoteTrails trails(BlockPos pos) {
+        return PERFORMANCES.computeIfAbsent(pos, ignored -> new Performance()).trails;
+    }
+
     /** What the bank calls {@code program} (a drum kit's, for {@code drums}); null while it has none to tell. */
     @Nullable
     static String programName(int program, boolean drums) {
@@ -86,23 +94,84 @@ public final class KeyboardAudio {
      * The player of the keyboard at {@code pos} played {@code message} (see Controller): its keys, pads and lever
      * move, and its synth, if it sounds here, plays it. Any thread.
      */
-    static void played(BlockPos pos, int message) {
-        int data1 = message >> 8 & 127, data2 = message >> 16 & 127;
+    static void played(BlockPos pos, int player, int message) {
         MidiKeyboardBlock.Entity keyboard = near.get(pos);
-        if (keyboard != null) {
-            if ((message & 0xFF) == Controller.KEY) {
-                keyboard.keysDown.getAndUpdate(data1 >> 6, keys -> data2 > 0 ? keys | 1L << data1 : keys & ~(1L << data1));
-            } else if ((message & 0xFF) == Controller.PAD) {
-                keyboard.padsDown = data2 > 0 ? keyboard.padsDown | 1 << data1 : keyboard.padsDown & ~(1 << data1);
-            } else if ((message & 0xF0) == Controller.BEND) {
-                keyboard.bend = data1 | data2 << 7;
-            } else if ((message & 0xF0) == Controller.CONTROL && data1 == 1) {
-                keyboard.modulation = data2;
+        if (keyboard == null && message == KeyboardPackets.END && !PERFORMANCES.containsKey(pos)) return;
+        var performance = PERFORMANCES.computeIfAbsent(pos, ignored -> new Performance());
+        synchronized (performance) {
+            if (message == KeyboardPackets.END) {
+                performance.parts.remove(player);
+                performance.trails.release(player, System.nanoTime());
+            } else {
+                var part = performance.parts.computeIfAbsent(player, ignored -> new Part());
+                var previous = part.synth;
+                part.play(message, bank, part.synth == null && keyboard != null ? keyboard.setup() : EMPTY_SETUP);
+                if (previous != part.synth) performance.updateSynths();
+                if ((message & 255) == Controller.KEY) {
+                    int note = message >> 8 & 127, velocity = message >> 16 & 127;
+                    long now = System.nanoTime();
+                    if (velocity > 0) performance.trails.press(player, player, note, velocity, now);
+                    else performance.trails.release(player, note, now);
+                }
+            }
+            if (message == KeyboardPackets.END) performance.updateSynths();
+            performance.updateModel(keyboard);
+        }
+    }
+
+    private static final class Part {
+        final long[] keys = new long[2];
+        int pads, bend = 8192, modulation;
+        Synth synth;
+
+        void play(int message, @Nullable SoundFont font, int[] setup) {
+            int key = message >> 8 & 127, value = message >> 16 & 127;
+            switch (message & 255) {
+                case Controller.KEY -> {
+                    int part = key >> 6;
+                    keys[part] = value > 0 ? keys[part] | 1L << key : keys[part] & ~(1L << key);
+                }
+                case Controller.PAD -> pads = value > 0 ? pads | 1 << key : pads & ~(1 << key);
+                default -> {
+                    if ((message & 0xF0) == Controller.BEND) bend = key | value << 7;
+                    if ((message & 0xF0) == Controller.CONTROL && key == 1) modulation = value;
+                    if ((message & 0x80) != 0 && font != null) {
+                        if (synth == null) {
+                            synth = new Synth(font);
+                            for (int initial : setup) synth.send(initial);
+                        }
+                        synth.send(message);
+                    }
+                }
             }
         }
-        Instance instance = PLAYING.get(pos);
-        if (instance != null && (message & 0x80) != 0) {
-            instance.synth.send(message);
+    }
+
+    private static final class Performance {
+        final Map<Integer, Part> parts = new HashMap<>();
+        final NoteTrails trails = new NoteTrails();
+        volatile List<Synth> synths = List.of();
+
+        void updateSynths() {
+            synths = parts.values().stream().map(part -> part.synth).filter(java.util.Objects::nonNull).toList();
+        }
+
+        void updateModel(@Nullable MidiKeyboardBlock.Entity keyboard) {
+            if (keyboard == null) return;
+            long low = 0, high = 0;
+            int pads = 0, bend = 8192, modulation = 0;
+            for (var part : parts.values()) {
+                low |= part.keys[0];
+                high |= part.keys[1];
+                pads |= part.pads;
+                modulation = Math.max(modulation, part.modulation);
+                if (Math.abs(part.bend - 8192) > Math.abs(bend - 8192)) bend = part.bend;
+            }
+            keyboard.keysDown.set(0, low);
+            keyboard.keysDown.set(1, high);
+            keyboard.padsDown = pads;
+            keyboard.modulation = modulation;
+            keyboard.bend = bend;
         }
     }
 
@@ -116,14 +185,15 @@ public final class KeyboardAudio {
             }
         }
         near = loaded;
+        PERFORMANCES.keySet().retainAll(loaded.keySet());
         if (!loaded.isEmpty()) {
             bank(mc);
         }
         Vec3 ear = loaded.isEmpty() ? Vec3.ZERO : mc.gameRenderer.getMainCamera().getPosition();
         PLAYING.values().removeIf(instance -> {
             MidiKeyboardBlock.Entity keyboard = loaded.get(instance.keyboard.getBlockPos());
-            boolean played = keyboard != null && keyboard.performer().isPresent();
-            if (keyboard == instance.keyboard && (played || !instance.synth.silent())
+            boolean played = keyboard != null && !keyboard.performers().isEmpty();
+            if (keyboard == instance.keyboard && (played || instance.performance.synths.stream().anyMatch(synth -> !synth.silent()))
                     && heard(instance.keyboard, ear, EmitterRange.DROP_MARGIN).findAny().isPresent()) {
                 return false;
             }
@@ -132,22 +202,26 @@ public final class KeyboardAudio {
         });
         for (MidiKeyboardBlock.Entity keyboard : loaded.values()) {
             Instance instance = PLAYING.get(keyboard.getBlockPos());
-            boolean played = keyboard.performer().isPresent();
-            if (!played) {
-                keyboard.keysDown.set(0, 0);
-                keyboard.keysDown.set(1, 0);
-                keyboard.padsDown = keyboard.modulation = 0;
-                keyboard.bend = 8192;
-            }
+            boolean played = !keyboard.performers().isEmpty();
+            var performance = PERFORMANCES.computeIfAbsent(keyboard.getBlockPos(), ignored -> new Performance());
+            synchronized (performance) { performance.updateModel(keyboard); }
             SoundFont font = bank;
             if (instance == null && played && font != null && heard(keyboard, ear, 0).findAny().isPresent()) {
-                instance = new Instance(keyboard, font);
+                instance = new Instance(keyboard, performance);
                 PLAYING.put(keyboard.getBlockPos(), instance);
             }
             if (instance != null) {
-                instance.follow(mc, ear, played);
+                instance.follow(mc, ear);
             }
         }
+    }
+
+    static void clear() {
+        var mc = Minecraft.getInstance();
+        PLAYING.values().forEach(instance -> instance.sounds.values().forEach(sound -> end(mc, sound)));
+        PLAYING.clear();
+        PERFORMANCES.clear();
+        near = Map.of();
     }
 
     /** The sound bank; null until it has been read, which the first call starts. */
@@ -209,31 +283,17 @@ public final class KeyboardAudio {
     /** One keyboard as it sounds here. */
     private static final class Instance {
         final MidiKeyboardBlock.Entity keyboard;
-        final Synth synth;
+        final Performance performance;
         final Tap tap;
         final Map<BlockPos, LiveSound> sounds = new HashMap<>();
-        boolean played = true;
 
-        Instance(MidiKeyboardBlock.Entity keyboard, SoundFont font) {
+        Instance(MidiKeyboardBlock.Entity keyboard, Performance performance) {
             this.keyboard = keyboard;
-            synth = new Synth(font);
-            for (int message : keyboard.setup()) {
-                synth.send(message);
-            }
-            tap = new Tap(synth);
+            this.performance = performance;
+            tap = new Tap(performance);
         }
 
-        void follow(Minecraft mc, Vec3 ear, boolean played) {
-            if (this.played && !played) {
-                // Its player got up: what they held is let go.
-                for (int channel = 0; channel < 16; channel++) {
-                    synth.send(Synth.message(Synth.CONTROL, channel, Synth.SUSTAIN_PEDAL, 0));
-                    synth.send(Synth.message(Synth.CONTROL, channel, Synth.SOSTENUTO_PEDAL, 0));
-                    synth.send(Synth.message(Synth.CONTROL, channel, Synth.ALL_NOTES_OFF, 0));
-                    synth.send(Synth.message(Synth.BEND, channel, 0, 64));
-                }
-            }
-            this.played = played;
+        void follow(Minecraft mc, Vec3 ear) {
             Level level = keyboard.getLevel();
             List<Heard> wanted = heard(keyboard, ear, EmitterRange.DROP_MARGIN)
                     .sorted(Comparator.comparingDouble(heard -> heard.distance(level, ear))).limit(MAX_OUTPUTS).toList();
@@ -255,8 +315,8 @@ public final class KeyboardAudio {
     }
 
     /**
-     * A synth's sound as its streams read it. Every stream of one keyboard (one per speaker) reads the same frames,
-     * so the synth renders them once, into a ring the others then read from; it renders only as a stream asks for
+     * The keyboard's mix as its streams read it. Every stream (one per speaker) reads the same frames,
+     * so the synths render them once, into a ring the others then read from; they render as a stream asks for
      * more, {@link #chunk} frames at a time, so what a message has to wait behind is the few chunks queued. All on
      * the sound thread.
      */
@@ -264,8 +324,9 @@ public final class KeyboardAudio {
         static final int SIZE = 1 << 14, MAX_CHUNK = 2048;
         /** Chunks a channel keeps queued (see Channel#pumpBuffers). */
         static final int QUEUED = 4;
-        final Synth synth;
+        final Performance performance;
         final float[] left = new float[SIZE], right = new float[SIZE];
+        final float[] mixLeft = new float[Synth.BLOCK], mixRight = new float[Synth.BLOCK];
         long rendered;
         /**
          * Frames read at a time: as few as keep a source from running dry (see {@link #fit}), and more whenever one
@@ -274,13 +335,23 @@ public final class KeyboardAudio {
         int chunk = 4 * Synth.BLOCK;
         private long grownAt;
 
-        Tap(Synth synth) {
-            this.synth = synth;
+        Tap(Performance performance) {
+            this.performance = performance;
         }
 
         void read(long from, int frames, Streams.Channel side, ByteBuffer out) {
             while (rendered < from + frames) {
-                synth.render(left, right, (int) (rendered & SIZE - 1), 1);
+                int at = (int) (rendered & SIZE - 1);
+                var parts = performance.synths;
+                java.util.Arrays.fill(left, at, at + Synth.BLOCK, 0);
+                java.util.Arrays.fill(right, at, at + Synth.BLOCK, 0);
+                for (var synth : parts) {
+                    synth.render(mixLeft, mixRight, 0, 1);
+                    for (int i = 0; i < Synth.BLOCK; i++) {
+                        left[at + i] += mixLeft[i];
+                        right[at + i] += mixRight[i];
+                    }
+                }
                 rendered += Synth.BLOCK;
             }
             out.clear();

@@ -27,6 +27,7 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
     private static final float OPEN_ANGLE = 43;
     private static final float FALLBOARD_OPEN_ANGLE = 96;
     private final Map<PianoBlockEntity, Lids> lids = new WeakHashMap<>();
+    private final PianoAction combined = new PianoAction();
 
     static void register(IEventBus bus) {
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
@@ -81,8 +82,7 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
             float scale = GrandPianoBlock.FULL_SCALE;
             pose.scale(scale, scale, scale);
         }
-        var action = PianoClient.action(piano.target());
-        if (action != PianoAction.REST) action.advance(PianoClient.keys(piano.target()), System.nanoTime());
+        var action = PianoClient.action(piano.target(), combined);
         new PianoMesh(pose, buffers, light).draw(action, lid, fallboard);
         pose.popPose();
     }

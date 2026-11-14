@@ -10,6 +10,7 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
+import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -139,6 +140,7 @@ public abstract class KeysScreen extends Screen {
                         body[0], body[1]);
                 faces.forEach(face -> draw(g, face));
                 draw(g, x, y);
+                drawTrailToggle(g, at, x, y);
             }
             box(g, at[0], at[1], at[2], at[3], lineHeight() / 3, true, button[0], button[1]);
             write(g, toggleName(), (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale, text, MIDDLE);
@@ -156,6 +158,25 @@ public abstract class KeysScreen extends Screen {
 
     /** The instrument's own part of it, over the body and its faces; the mouse is at ({@code x}, {@code y}) of the window. */
     protected abstract void draw(GuiGraphics g, double x, double y);
+
+    protected boolean hasNoteTrails() { return false; }
+
+    private int[] trailToggle(int[] hide) {
+        var label = Component.translatable("create_media_systems.keys.note_trails");
+        int right = hide[0] - Math.max(3, keyWidth / 4);
+        int width = Math.round(font.width(label) * textScale) + keyWidth;
+        return new int[] {right - width, hide[1], right, hide[3]};
+    }
+
+    private void drawTrailToggle(GuiGraphics g, int[] hide, double x, double y) {
+        if (!hasNoteTrails()) return;
+        int[] at = trailToggle(hide);
+        int[] color = NoteTrailRenderer.enabled() ? lit : in(at, x, y) ? held : button;
+        box(g, at[0], at[1], at[2], at[3], lineHeight() / 3, true, color[0], color[1]);
+        write(g, Component.translatable("create_media_systems.keys.note_trails").getString(),
+                (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale,
+                NoteTrailRenderer.enabled() ? ink : text, MIDDLE);
+    }
 
     private String toggleName() {
         return Component.translatable(hidden ? "create_media_systems.keys.show" : "create_media_systems.keys.hide").getString();
@@ -184,7 +205,8 @@ public abstract class KeysScreen extends Screen {
      */
     protected void drawHeader(GuiGraphics g, String name, String status, int statusColor, String right, int rightColor) {
         float y = stripY + keyWidth * 0.75f;
-        int inset = keyWidth / 3, end = toggle()[0] - inset;
+        var hide = toggle();
+        int inset = keyWidth / 3, end = (hasNoteTrails() ? trailToggle(hide)[0] : hide[0]) - inset;
         float from = keysX + inset + (font.width(name) + 8) * textScale;
         write(g, name, keysX + inset, y, textScale, faint, LEFT);
         write(g, status, from, y, textScale, statusColor, LEFT);
@@ -368,6 +390,10 @@ public abstract class KeysScreen extends Screen {
             return true;
         }
         if (hidden) {
+            return true;
+        }
+        if (button == 0 && hasNoteTrails() && in(trailToggle(toggle()), x, y)) {
+            NoteTrailRenderer.toggle();
             return true;
         }
         Face face = faceAt(x, y);

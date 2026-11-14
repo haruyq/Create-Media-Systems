@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.blocks.keyboard.a88mkii;
 
-import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 
@@ -66,49 +65,40 @@ public class KeyboardGameTests {
         }
     }
 
-    private static KeyboardPackets.Played played(MidiKeyboardBlock.Entity keyboard, int message) {
-        return new KeyboardPackets.Played(keyboard.getBlockPos(), message);
+    private static KeyboardPackets.Played played(MidiKeyboardBlock.Entity keyboard, KeyboardPackets.Session session, int message) {
+        return new KeyboardPackets.Played(keyboard.getBlockPos(), session.part, message);
     }
 
     @GameTest(template = "empty")
-    public static void onePlayerAtATimePlaysItAndAloneWorksIt(GameTestHelper helper) {
+    public static void playersShareTheKeyboardAndLeaveIndependently(GameTestHelper helper) {
         MidiKeyboardBlock.Entity keyboard = keyboard(helper);
         ServerPlayer first = player(helper, "keyboard_first"), second = player(helper, "keyboard_second");
         keyboard.sit(first);
         keyboard.sit(second);
-        helper.assertTrue(keyboard.performer().filter(first.getUUID()::equals).isPresent(), "the first to sit down plays it");
+        var firstPart = KeyboardPackets.session(first.getUUID());
+        var secondPart = KeyboardPackets.session(second.getUUID());
+        helper.assertTrue(keyboard.performers().size() == 2 && firstPart != null && secondPart != null
+                && firstPart.part != secondPart.part, "two players can sit down with distinct parts");
 
         Panel panel = new Panel();
         panel.octave = 2;
         keyboard.setPanel(second, panel.bytes());
-        helper.assertTrue(keyboard.panel().octave == 0, "nobody else sets its panel");
-        keyboard.setPanel(first, panel.bytes());
-        helper.assertTrue(keyboard.panel().octave == 2, "its player does");
+        helper.assertTrue(keyboard.panel().octave == 2, "either performer can work the panel");
 
-        int program = Controller.message(Controller.PROGRAM, 0, 19, 0), note = Controller.message(Controller.NOTE_ON, 0, 60, 100);
-        KeyboardPackets.relay(second, played(keyboard, program));
-        KeyboardPackets.relay(first, played(keyboard, note));
-        KeyboardPackets.relay(first, played(keyboard, Controller.message(Controller.CONTROL, 0, 91, 80)));
-        helper.runAfterDelay(2, () -> {
-            helper.assertTrue(Arrays.equals(keyboard.setup(), new int[]{Controller.message(Controller.CONTROL, 0, 91, 80)}),
-                    "what its player set its sound to is kept, not their notes nor what others send: " + Arrays.toString(keyboard.setup()));
-            keyboard.leave(second);
-            helper.assertTrue(keyboard.performer().isPresent(), "nobody else gets them up");
-            keyboard.leave(first);
-            keyboard.sit(second);
-            helper.assertTrue(keyboard.performer().filter(second.getUUID()::equals).isPresent(), "once they got up the next sits down");
-            KeyboardPackets.relay(first, played(keyboard, program));
-            KeyboardPackets.relay(second, played(keyboard, program));
-            helper.runAfterDelay(2, () -> {
-                helper.assertTrue(keyboard.setup().length == 2 && keyboard.setup()[1] == program, "the programs come after the controllers");
-                // Walked off: the keyboard is free again at its next relay.
-                second.setPos(second.position().add(0, 0, -20));
-                helper.runAfterDelay(Streams.RELAY_TICKS + 1, () -> {
-                    helper.assertTrue(keyboard.performer().isEmpty(), "a player who walks off has got up");
-                    helper.assertTrue(KeyboardPackets.session(second.getUUID()) == null, "and plays nothing any more");
-                    helper.succeed();
-                });
-            });
+        int note = Controller.message(Controller.NOTE_ON, 0, 60, 100);
+        KeyboardPackets.relay(first, played(keyboard, firstPart, note));
+        KeyboardPackets.relay(second, played(keyboard, secondPart, note));
+        helper.assertTrue(firstPart.held.containsValue(note) && secondPart.held.containsValue(note), "both can play middle C");
+        KeyboardPackets.relay(first, played(keyboard, secondPart, Controller.message(Controller.NOTE_OFF, 0, 60, 0)));
+        helper.assertTrue(secondPart.held.containsValue(note), "an input cannot release another performer's note");
+        keyboard.leave(first);
+        helper.assertTrue(KeyboardPackets.session(first.getUUID()) == null && secondPart.held.containsValue(note)
+                && keyboard.performers().contains(second.getUUID()), "a performer leaving keeps the other part");
+        second.setPos(second.position().add(0, 0, -20));
+        helper.runAfterDelay(Streams.RELAY_TICKS + 1, () -> {
+            helper.assertTrue(keyboard.performers().isEmpty() && KeyboardPackets.session(second.getUUID()) == null,
+                    "the last performer walked away");
+            helper.succeed();
         });
     }
 

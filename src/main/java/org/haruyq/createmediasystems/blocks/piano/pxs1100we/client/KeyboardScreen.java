@@ -123,6 +123,8 @@ final class KeyboardScreen extends KeysScreen {
     PxS1100Client.Instrument instrument() { return instrument; }
     void openTones() { switchTab(Tab.TONES); }
 
+    @Override protected boolean hasNoteTrails() { return true; }
+
     @Override protected void init() {
         super.init();
         search = null;
@@ -167,8 +169,8 @@ final class KeyboardScreen extends KeysScreen {
         cell(1, 2, 1, () -> t(flag("Playing") ? "stop" : "playback"), () -> action(Action.PLAY)).lit(() -> flag("Playing"));
         cell(2, 2, 1, () -> t(flag("Recording") ? "stop" : "rec"), () -> action(Action.RECORD)).lit(() -> flag("Recording"));
         cell(3, 2, 1, () -> t("metro_toggle", flag("Metro") ? "●" : "○"), () -> action(Action.METRONOME)).lit(() -> flag("Metro"));
-        cell(4, 2, 1, () -> t("pedal_toggle", instrument.keys.pedal() ? "●" : "○"), this::togglePedal)
-                .lit(() -> instrument.keys.pedal()).hint(t("pedal_help"));
+        cell(4, 2, 1, () -> t("pedal_toggle", instrument.pedal() ? "●" : "○"), this::togglePedal)
+                .lit(instrument::pedal).hint(t("pedal_help"));
         cell(5, 2, 1, () -> t("zoom", zoom), () -> zoom(zoom == 4 ? 1 : zoom * 2)).hint(t("zoom_help"));
     }
 
@@ -649,7 +651,7 @@ final class KeyboardScreen extends KeysScreen {
             // Which of the keys are in sight, under the panel's marks for all of them.
             g.fill(keysX + firstWhite * keyWidth, keysY - felt - 3, keysX + (firstWhite + whites()) * keyWidth, keysY - felt - 1, lamp);
         }
-        drawKeys(g, note -> instrument.keys.pressed(note) || pcHolds(note));
+        drawKeys(g, note -> instrument.pressed(note) || pcHolds(note));
     }
 
     private void drawTones(GuiGraphics g, double x, double y) {

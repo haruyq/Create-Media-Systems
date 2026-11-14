@@ -11,8 +11,14 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Mirror;
@@ -21,6 +27,9 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -84,6 +93,33 @@ public final class KeyboardPowerAdapter extends KineticBlock implements IBE<Keyb
         return face == Direction.DOWN;
     }
 
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+            Player player, InteractionHand hand, BlockHitResult hit) {
+        if (!AdapterFuel.accepts(stack)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Supply supply) {
+            supply.loadFuel(player, stack);
+        }
+        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
+        if (!level.isClientSide && level.getBlockEntity(pos) instanceof Supply supply) {
+            supply.fuelAction(player);
+        }
+        return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    @Override
+    protected List<ItemStack> getDrops(BlockState state, LootParams.Builder loot) {
+        var drops = new java.util.ArrayList<>(super.getDrops(state, loot));
+        if (loot.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof Supply supply) {
+            supply.fuel.addDrops(drops);
+        }
+        return drops;
+    }
+
     static int stored(CompoundTag tag) {
         return Math.clamp(tag.getInt(ENERGY), 0, CAPACITY);
     }
@@ -96,6 +132,7 @@ public final class KeyboardPowerAdapter extends KineticBlock implements IBE<Keyb
     }
 
     public static final class Supply extends KineticBlockEntity {
+        final AdapterFuel fuel = new AdapterFuel();
         private final EnergyStorage buffer = new EnergyStorage(CAPACITY, 256, TRANSFER) {
             @Override public int receiveEnergy(int amount, boolean simulate) {
                 int accepted = super.receiveEnergy(amount, simulate);
@@ -110,6 +147,26 @@ public final class KeyboardPowerAdapter extends KineticBlock implements IBE<Keyb
 
         @Override public void addBehaviours(List<BlockEntityBehaviour> behaviours) {}
         @Override public float calculateStressApplied() { return lastStressApplied = 4; }
+
+        void loadFuel(Player player, ItemStack stack) {
+            if (player.isSpectator()) return;
+            int consumed = fuel.insert(stack);
+            stack.consume(consumed, player);
+            if (consumed > 0) setChanged();
+            player.displayClientMessage(Component.translatable(consumed > 0 ? "px_s1100.adapter.fuel_loaded"
+                    : "px_s1100.adapter.fuel_full", consumed), true);
+        }
+
+        void fuelAction(Player player) {
+            if (player.isSpectator()) return;
+            if (player.isShiftKeyDown() && fuel.hasContents()) {
+                player.getInventory().placeItemBackInInventory(fuel.take());
+                setChanged();
+            } else {
+                player.displayClientMessage(Component.translatable("px_s1100.adapter.fuel_status",
+                        (fuel.remaining() + 19) / 20, buffer.getEnergyStored()), true);
+            }
+        }
 
         @Nullable IEnergyStorage input(@Nullable Direction face) {
             if (face != null && face != output(getBlockState()).getOpposite()) return null;
@@ -135,6 +192,7 @@ public final class KeyboardPowerAdapter extends KineticBlock implements IBE<Keyb
             var target = worldPosition.relative(direction);
             var back = direction.getOpposite();
             boolean kinetic = Math.abs(getSpeed()) >= MIN_RPM;
+            if (!kinetic) buffer.receiveEnergy(fuel.generate(CAPACITY - buffer.getEnergyStored()), false);
             int available = kinetic ? TRANSFER : Math.min(TRANSFER, buffer.getEnergyStored());
             boolean active = false;
             if (available > 0 && level.isLoaded(target) && SableCompat.sameSubLevel(level, worldPosition, target)
@@ -157,11 +215,13 @@ public final class KeyboardPowerAdapter extends KineticBlock implements IBE<Keyb
         @Override protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.write(tag, registries, clientPacket);
             tag.putInt(ENERGY, buffer.getEnergyStored());
+            if (!clientPacket) fuel.write(tag, registries);
         }
 
         @Override protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
             super.read(tag, registries, clientPacket);
             buffer.deserializeNBT(registries, net.minecraft.nbt.IntTag.valueOf(stored(tag)));
+            if (!clientPacket) fuel.read(tag, registries);
         }
 
         @Override public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {

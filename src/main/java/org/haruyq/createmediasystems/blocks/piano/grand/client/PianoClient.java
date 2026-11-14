@@ -31,8 +31,7 @@ import org.jetbrains.annotations.Nullable;
 
 public final class PianoClient implements PianoPackets.Client {
     private static final PianoClient INSTANCE = new PianoClient();
-    private static final PianoState IDLE = new PianoState();
-    private final Map<PianoPackets.Target, Instrument> instruments = new HashMap<>();
+    private final Map<PianoPackets.Target, Map<Integer, Instrument>> instruments = new HashMap<>();
     @Nullable private Instrument local;
 
     static final class Instrument {
@@ -86,14 +85,25 @@ public final class PianoClient implements PianoPackets.Client {
         WorldEvents.onLevelChanged(INSTANCE::clear);
     }
 
-    static PianoState keys(PianoPackets.Target target) {
-        var instrument = INSTANCE.instruments.get(target);
-        return instrument == null ? IDLE : instrument.keys;
+    static PianoAction action(PianoPackets.Target target, PianoAction combined) {
+        var takes = INSTANCE.instruments.get(target);
+        if (takes == null) return PianoAction.REST;
+        long now = System.nanoTime();
+        combined.clearMotion();
+        for (var instrument : takes.values()) {
+            instrument.action.advance(instrument.keys, now);
+            combined.mergeMotion(instrument.action);
+        }
+        return combined;
     }
 
-    static PianoAction action(PianoPackets.Target target) {
-        var instrument = INSTANCE.instruments.get(target);
-        return instrument == null ? PianoAction.REST : instrument.action;
+    boolean pressed(PianoPackets.Target target, int note) {
+        var takes = instruments.get(target);
+        if (takes == null) return false;
+        for (var instrument : takes.values()) {
+            if (instrument.keys.pressed(note)) return true;
+        }
+        return false;
     }
 
     @Nullable
@@ -106,7 +116,7 @@ public final class PianoClient implements PianoPackets.Client {
         if (mc.level == null) return;
         if (local != null) command(local, Action.CLOSE);
         var instrument = new Instrument(packet.target(), packet.session(), packet.frame(), mc.level.getGameTime());
-        instruments.put(packet.target(), instrument);
+        instruments.computeIfAbsent(packet.target(), target -> new HashMap<>()).put(packet.session(), instrument);
         local = instrument;
         mc.setScreen(new PianoScreen(this, instrument));
         audio(mc);
@@ -115,13 +125,15 @@ public final class PianoClient implements PianoPackets.Client {
     @Override public void update(PianoPackets.Update packet) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;
-        var instrument = instruments.get(packet.target());
+        var takes = instruments.computeIfAbsent(packet.target(), target -> new HashMap<>());
+        var instrument = takes.get(packet.session());
         long now = mc.level.getGameTime();
         if (packet.snapshot()) {
             if (instrument != null && instrument == local) return;
             instrument = new Instrument(packet.target(), packet.session(), packet.frame(), now);
-            instruments.put(packet.target(), instrument);
-        } else if (instrument == null || instrument.session != packet.session()) {
+            takes.put(packet.session(), instrument);
+        } else if (instrument == null) {
+            if (takes.isEmpty()) instruments.remove(packet.target());
             return;
         }
         instrument.frame = packet.frame();
@@ -130,9 +142,11 @@ public final class PianoClient implements PianoPackets.Client {
     }
 
     @Override public void end(PianoPackets.End packet) {
-        var instrument = instruments.get(packet.target());
-        if (instrument == null || instrument.session != packet.session()) return;
-        instruments.remove(packet.target());
+        var takes = instruments.get(packet.target());
+        if (takes == null) return;
+        var instrument = takes.remove(packet.session());
+        if (instrument == null) return;
+        if (takes.isEmpty()) instruments.remove(packet.target());
         if (instrument == local) {
             local = null;
             var mc = Minecraft.getInstance();
@@ -158,8 +172,7 @@ public final class PianoClient implements PianoPackets.Client {
         }
         if (action == Action.CLOSE) {
             local = null;
-            instruments.remove(instrument.target, instrument);
-            audio(mc);
+            end(new PianoPackets.End(instrument.target, instrument.session));
         }
     }
 
@@ -170,7 +183,10 @@ public final class PianoClient implements PianoPackets.Client {
         if (local != null && now - local.received > 60) {
             end(new PianoPackets.End(local.target, local.session));
         }
-        instruments.values().removeIf(instrument -> now - instrument.received > 60);
+        instruments.values().removeIf(takes -> {
+            takes.values().removeIf(instrument -> now - instrument.received > 60);
+            return takes.isEmpty();
+        });
         audio(mc);
     }
 
@@ -186,16 +202,19 @@ public final class PianoClient implements PianoPackets.Client {
         float volume = mc.isPaused() ? 0 : mc.options.getSoundSourceVolume(SoundSource.RECORDS)
                 * mc.options.getSoundSourceVolume(SoundSource.MASTER);
         List<PianoAudio.Source> audible = new ArrayList<>();
-        for (var instrument : instruments.values()) {
-            var frame = frame(mc, instrument);
+        for (var takes : instruments.values()) {
+            var frame = frame(mc, takes.values().iterator().next());
             Vec3 offset = frame.origin().subtract(ear);
             double distance = offset.length();
             double range = PianoBlockEntity.AUDIBLE_RANGE;
             float gain = (float) (volume * Math.clamp((range - distance) / 10, 0, 1)
                     / (1 + distance * distance / 196));
             float pan = (float) (right.dot(offset.normalize()) * Math.min(.92, distance / 3));
-            instrument.sound.position = new PianoAudio.Position(gain, pan, frame.lidOpen());
-            audible.add(instrument.sound);
+            var position = new PianoAudio.Position(gain, pan, frame.lidOpen());
+            for (var instrument : takes.values()) {
+                instrument.sound.position = position;
+                audible.add(instrument.sound);
+            }
         }
         PianoAudio.INSTANCE.sources(audible);
     }

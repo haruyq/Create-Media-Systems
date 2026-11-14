@@ -21,21 +21,32 @@ final class MountedKeyboardAdapter implements MovementBehaviour {
         var facing = KeyboardPowerAdapter.output(state);
         var pos = context.localPos.relative(facing);
         var port = contraption.getBlocks().get(pos);
-        int energy = KeyboardPowerAdapter.stored(context.blockEntityData);
+        int stored = KeyboardPowerAdapter.stored(context.blockEntityData);
+        int energy = stored;
+        if (!context.disabled) {
+            var fuel = new AdapterFuel();
+            var registries = level.registryAccess();
+            fuel.read(context.blockEntityData, registries);
+            int generated = fuel.generate(KeyboardPowerAdapter.CAPACITY - energy);
+            if (generated > 0) {
+                energy += generated;
+                fuel.write(context.blockEntityData, registries);
+                if (block.nbt() != null && block.nbt() != context.blockEntityData) fuel.write(block.nbt(), registries);
+            }
+        }
         boolean active = false;
         if (!context.disabled && energy > 0 && port != null && KeyboardBlock.isAdapterPort(pos, port.state(), facing.getOpposite())) {
             var target = new Target(carrier.getId(), KeyboardBlock.root(pos, port.state()));
             var keyboard = MountedKeyboard.find(level, target);
             if (keyboard != null) {
                 int moved = keyboard.charge(Math.min(energy, KeyboardPowerAdapter.TRANSFER), false);
-                if (moved > 0) {
-                    context.blockEntityData.putInt(KeyboardPowerAdapter.ENERGY, energy - moved);
-                    if (block.nbt() != null && block.nbt() != context.blockEntityData) {
-                        block.nbt().putInt(KeyboardPowerAdapter.ENERGY, energy - moved);
-                    }
-                }
+                energy -= moved;
                 active = moved > 0 || keyboard.energy() == KeyboardRuntime.CAPACITY;
             }
+        }
+        if (energy != stored) {
+            context.blockEntityData.putInt(KeyboardPowerAdapter.ENERGY, energy);
+            if (block.nbt() != null && block.nbt() != context.blockEntityData) block.nbt().putInt(KeyboardPowerAdapter.ENERGY, energy);
         }
         if (state.getValue(BlockStateProperties.POWERED) != active) {
             carrier.setBlock(context.localPos, new StructureBlockInfo(context.localPos,

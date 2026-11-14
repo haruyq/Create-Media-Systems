@@ -117,6 +117,8 @@ final class KeyboardScreen extends KeysScreen {
         drawKeys(g, look.panel(), keyboard);
     }
 
+    @Override protected boolean hasNoteTrails() { return true; }
+
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         super.render(g, mouseX, mouseY, partialTick);

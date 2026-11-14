@@ -23,14 +23,12 @@ import org.jetbrains.annotations.Nullable;
 import com.mojang.serialization.MapCodec;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -58,7 +56,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * An 88-key MIDI keyboard, three blocks wide in one block: its body reaches a block to either side of the block it
- * stands in, its keys towards {@code FACING}. One player at a time plays it (see {@link Entity#sit}); what they play
+ * stands in, its keys towards {@code FACING}. Players can share it (see {@link Entity#sit}); what they play
  * is made into sound on each client near (see keyboard.client), from the keyboard itself or the speakers linked to it.
  */
 public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable {
@@ -173,9 +171,9 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
          */
         public static final Set<Entity> LOADED = Collections.newSetFromMap(new WeakHashMap<>());
 
-        @Nullable
-        private UUID performer;
-        private String performerName = "";
+        private final Map<UUID, KeyboardPackets.Session> sessions = new HashMap<>();
+        private Map<UUID, Integer> clientPerformers = Map.of();
+        private int nextPart;
         private byte[] panel = new Panel().bytes();
         @Nullable
         private Panel panelRead;
@@ -184,11 +182,10 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
          * client that comes near later plays first, to sound as everyone else's does.
          */
         private final Map<Integer, Integer> setup = new LinkedHashMap<>();
+        private volatile int[] clientSetup = {};
         private final Map<BlockPos, Output> outputs = new HashMap<>();
         /** The game time each output last said it was there. */
         private final Map<BlockPos, Long> heardAt = new HashMap<>();
-        @Nullable
-        private KeyboardPackets.Session session;
         private boolean changed;
 
         /** On a client, as its player's messages say: the keys and pads held down, and where the lever is. */
@@ -199,12 +196,12 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
             super(KeyboardFeature.KEYBOARD_ENTITY.get(), pos, state);
         }
 
-        public Optional<UUID> performer() {
-            return Optional.ofNullable(performer);
+        public Set<UUID> performers() {
+            return level != null && level.isClientSide ? clientPerformers.keySet() : Set.copyOf(sessions.keySet());
         }
 
-        public String performerName() {
-            return performerName;
+        public int part(UUID player) {
+            return clientPerformers.getOrDefault(player, 0);
         }
 
         public Panel panel() {
@@ -220,6 +217,10 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
 
         /** Its setup as messages in the order to play them: controllers, then programs. */
         public int[] setup() {
+            return level != null && level.isClientSide ? clientSetup : orderedSetup();
+        }
+
+        private int[] orderedSetup() {
             List<Integer> messages = new ArrayList<>(setup.values());
             messages.sort((a, b) -> (a & 0xF0) - (b & 0xF0));
             return messages.stream().mapToInt(Integer::intValue).toArray();
@@ -235,41 +236,35 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
                     .add(place(facing(), Layout.WIDTH / 2, Layout.HEIGHT, Layout.DEPTH / 2)));
         }
 
-        /** {@code player} sits down to play it, unless someone else is: one player at a time, who alone works it. */
+        /** {@code player} joins the performers at this keyboard. */
         public void sit(ServerPlayer player) {
-            if (player.getUUID().equals(performer)) {
+            var id = player.getUUID();
+            if (sessions.containsKey(id) || !inReach(player)) {
                 return;
             }
-            if (performer != null) {
-                player.displayClientMessage(Component.translatable("create_media_systems.keyboard.in_use", performerName)
-                        .withStyle(ChatFormatting.RED), true);
-                return;
-            }
-            if (player.position().distanceTo(center()) > REACH) {
-                return;
-            }
-            performer = player.getUUID();
-            performerName = player.getGameProfile().getName();
-            session = KeyboardPackets.open(player, worldPosition);
+            var session = KeyboardPackets.open(player, worldPosition, ++nextPart);
+            sessions.put(id, session);
             session.listeners = listeners(player);
             sync();
         }
 
-        /** Its player gets up: {@code player}, or whoever it is for null. */
-        public void leave(@Nullable ServerPlayer player) {
-            if (performer == null || player != null && !player.getUUID().equals(performer)) {
-                return;
+        public void leave(ServerPlayer player) {
+            var id = player.getUUID();
+            var session = sessions.remove(id);
+            if (session != null) {
+                KeyboardPackets.close(id, session);
+                sync();
             }
-            KeyboardPackets.close(performer, session);
-            performer = null;
-            performerName = "";
-            session = null;
-            sync();
+        }
+
+        private boolean inReach(ServerPlayer player) {
+            return player.level() == level && player.isAlive() && !player.isSpectator()
+                    && SableCompat.eye(player, 1).distanceToSqr(center()) <= REACH * REACH;
         }
 
         /** Its player set its panel to {@code bytes}. */
         public void setPanel(ServerPlayer player, byte[] bytes) {
-            if (player.getUUID().equals(performer)) {
+            if (sessions.containsKey(player.getUUID()) && inReach(player)) {
                 panel = new Panel(bytes).bytes();
                 panelRead = null;
                 sync();
@@ -278,7 +273,7 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
 
         public void tick(ServerLevel level) {
             long now = level.getGameTime();
-            if (session != null) {
+            for (var session : sessions.values()) {
                 for (Integer message; (message = session.setup.poll()) != null;) {
                     setup.put(message & ((message & 0xF0) == Controller.PROGRAM ? 0xFF : 0xFFFF), message);
                     changed = true;
@@ -287,13 +282,18 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
             if (!Streams.relayDue(level)) {
                 return;
             }
-            if (performer != null) {
-                ServerPlayer player = level.getServer().getPlayerList().getPlayer(performer);
-                if (player == null || !player.isAlive() || player.level() != level || KeyboardPackets.session(performer) != session
-                        || player.position().distanceTo(center()) > REACH) {
-                    leave(null);
+            var entries = sessions.entrySet().iterator();
+            while (entries.hasNext()) {
+                var entry = entries.next();
+                var id = entry.getKey();
+                var session = entry.getValue();
+                ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
+                if (player == null || !inReach(player) || KeyboardPackets.session(id) != session) {
+                    entries.remove();
+                    KeyboardPackets.close(id, session);
+                    changed = true;
                 } else {
-                    session.listeners = listeners(player);
+                    KeyboardPackets.audience(session, listeners(player));
                 }
             }
             // A speaker says it is there every relay: one that has not for two is gone, or linked elsewhere.
@@ -358,20 +358,21 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
             if (level != null && level.isClientSide) {
                 LOADED.remove(this);
             }
-            if (performer != null && level != null && !level.isClientSide) {
-                KeyboardPackets.close(performer, session);
-                performer = null;
-                session = null;
-            }
+            sessions.forEach(KeyboardPackets::close);
+            sessions.clear();
         }
 
         @Override
         public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
             CompoundTag tag = saveWithoutMetadata(registries);
-            if (performer != null) {
-                tag.putUUID("Performer", performer);
-                tag.putString("PerformerName", performerName);
-            }
+            var performers = new ListTag();
+            sessions.forEach((id, playing) -> {
+                var performer = new CompoundTag();
+                performer.putUUID("Player", id);
+                performer.putInt("Part", playing.part);
+                performers.add(performer);
+            });
+            tag.put("Performers", performers);
             ListTag heard = new ListTag();
             for (Output output : outputs.values()) {
                 CompoundTag speaker = new CompoundTag();
@@ -414,9 +415,14 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
                     setup.put(message & ((message & 0xF0) == Controller.PROGRAM ? 0xFF : 0xFFFF), message);
                 }
             }
+            clientSetup = orderedSetup();
             // Who plays it and through what is told to clients alone: a keyboard read from disk has nobody at it.
-            performer = tag.hasUUID("Performer") ? tag.getUUID("Performer") : null;
-            performerName = tag.getString("PerformerName");
+            var performers = new HashMap<UUID, Integer>();
+            for (var entry : tag.getList("Performers", Tag.TAG_COMPOUND)) {
+                var performer = (CompoundTag) entry;
+                if (performer.hasUUID("Player")) performers.put(performer.getUUID("Player"), performer.getInt("Part"));
+            }
+            clientPerformers = Map.copyOf(performers);
             if (tag.contains("Outputs", Tag.TAG_LIST)) {
                 outputs.clear();
                 for (Tag entry : tag.getList("Outputs", Tag.TAG_COMPOUND)) {

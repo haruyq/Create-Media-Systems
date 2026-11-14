@@ -32,7 +32,8 @@ public final class PianoBlockEntity extends BlockEntity {
 
     void interact(ServerPlayer player, Action action) {
         if (!(level instanceof ServerLevel server)) return;
-        if (session == null) session = new PianoSession(server, target, this::frame, this::moveLid);
+        if (session == null) session = new PianoSession(server, target, this::frame,
+                () -> getBlockState().getValue(GrandPianoBlock.KEYBOARD_OPEN), this::moveLid);
         session.interact(player, action);
     }
 

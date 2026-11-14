@@ -309,7 +309,7 @@ final class PianoScreen extends KeysScreen {
         int left = keysX + (stripWidth - wide) / 2, above = (top + bottom - high) / 2;
         g.fill(keysX, top, keysX + stripWidth, bottom, LACQUER);
         picture(g, FALLBOARD, left, above, left + wide, above + high, NAME[0], NAME[1], NAME[2], NAME[3], 1024, 256);
-        drawKeys(g, instrument.keys::pressed);
+        drawKeys(g, note -> client.pressed(instrument.target, note));
     }
 
     @Override public void removed() {

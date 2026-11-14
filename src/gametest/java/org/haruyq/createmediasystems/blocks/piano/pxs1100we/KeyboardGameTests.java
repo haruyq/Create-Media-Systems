@@ -33,12 +33,62 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
+import org.haruyq.createmediasystems.blocks.piano.PianoTestPlayers;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.Streams;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class KeyboardGameTests {
+    @GameTest(template = "empty")
+    public static void fuelKeepsPoweringTheDcJackAfterReload(GameTestHelper test) {
+        var level = test.getLevel();
+        var root = test.absolutePos(new BlockPos(3, 2, 3));
+        var state = PxS1100Feature.BLOCK.get().defaultBlockState();
+        test.assertTrue(KeyboardBlock.place(level, root, state), "Could not place the keyboard");
+        var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
+        var direction = state.getValue(KeyboardBlock.FACING);
+        var back = direction.getOpposite();
+        var pos = KeyboardBlock.dcInput(state).at(root, state).relative(back);
+        level.setBlockAndUpdate(pos, PxS1100Feature.ADAPTER.get().defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, direction));
+        var adapter = (KeyboardPowerAdapter.Supply) level.getBlockEntity(pos);
+        var coal = new ItemStack(Items.COAL, 2);
+        test.assertTrue(adapter.fuel.insert(new ItemStack(Items.STICK)) == 1, "A vanilla burnable item was rejected");
+        test.assertTrue(adapter.fuel.insert(coal) == 0 && adapter.fuel.take().is(Items.STICK), "Mixed fuel corrupted the slot");
+        test.assertTrue(adapter.fuel.insert(coal) == 2, "Coal was rejected");
+        adapter.tick();
+        test.assertTrue(keyboard.runtime().energy() == 20 && adapter.fuel.remaining() == 1599, "Coal did not power the keyboard");
+        var saved = adapter.saveWithoutMetadata(level.registryAccess());
+        adapter.loadWithComponents(saved, level.registryAccess());
+        adapter.tick();
+        test.assertTrue(keyboard.runtime().energy() == 40 && adapter.fuel.remaining() == 1598, "Fuel did not resume at its saved position");
+        test.assertTrue(adapter.fuel.take().getCount() == 1 && adapter.fuel.take().isEmpty(), "A consumed fuel item was duplicated");
+        test.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void hayacioKeepsSeparatePerformerSessions(GameTestHelper test) {
+        var level = test.getLevel();
+        var root = test.absolutePos(new BlockPos(3, 2, 3));
+        test.assertTrue(KeyboardBlock.place(level, root, PxS1100Feature.BLOCK.get().defaultBlockState()), "Could not place the keyboard");
+        var keyboard = (KeyboardBlockEntity) level.getBlockEntity(root);
+        var runtime = keyboard.runtime();
+        var first = PianoTestPlayers.near(test, keyboard.frame().centre());
+        var second = PianoTestPlayers.near(test, keyboard.frame().centre());
+        var a = runtime.open(first, false);
+        var b = runtime.open(second, false);
+        test.assertTrue(a != 0 && b != 0 && a != b, "Each player should get a session");
+        runtime.play(first, a, List.of(KeyboardMidi.note(60, 90)));
+        runtime.play(second, b, List.of(KeyboardMidi.note(60, 70)));
+        runtime.command(first, a, KeyboardPackets.Action.CLOSE, 0, 0, "");
+        test.assertTrue(runtime.view().getBoolean("Live") && runtime.open(second, false) == b,
+                "The second performer lost their session when the first left");
+        runtime.command(second, b, KeyboardPackets.Action.CLOSE, 0, 0, "");
+        test.assertTrue(!runtime.view().getBoolean("Live"), "The last performer could not leave");
+        test.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void keyboardAdapterPowersItsDcJackFromFeOrRotation(GameTestHelper test) {
         var level = test.getLevel();

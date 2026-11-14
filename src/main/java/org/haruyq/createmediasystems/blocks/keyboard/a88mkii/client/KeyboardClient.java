@@ -11,6 +11,7 @@ import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.ControlDrag;
+import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Controller;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardFeature;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardPackets;
@@ -67,18 +68,20 @@ public final class KeyboardClient implements ClientFeature {
     /** This client's player at a keyboard: what they play goes to the synth here and to the server, at once. */
     static final class Playing implements Controller.Out {
         final BlockPos pos;
+        final int part;
         final Controller controller;
         private volatile boolean panelChanged;
 
-        Playing(MidiKeyboardBlock.Entity keyboard) {
+        Playing(MidiKeyboardBlock.Entity keyboard, UUID player) {
             pos = keyboard.getBlockPos();
+            part = keyboard.part(player);
             controller = new Controller(new Panel(keyboard.panel().bytes()), this);
         }
 
         @Override
         public void send(int message) {
-            KeyboardAudio.played(pos, message);
-            tell(new KeyboardPackets.Played(pos, message));
+            KeyboardAudio.played(pos, part, message);
+            tell(new KeyboardPackets.Played(pos, part, message));
         }
 
         @Override
@@ -92,6 +95,7 @@ public final class KeyboardClient implements ClientFeature {
         KeyboardRenderer.register(modBus);
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         ControlDrag.onUse(KeyboardClient::use);
+        WorldEvents.onLevelChanged(KeyboardAudio::clear);
     }
 
     @Override
@@ -105,7 +109,7 @@ public final class KeyboardClient implements ClientFeature {
         CreateSceneBuilder scene = plate(builder, "midi_keyboard", "The MIDI Keyboard");
         Vec3 keys = desk(scene, util);
         scene.overlay().showControls(keys, Pointing.DOWN, 50).rightClick();
-        say(scene, 120, keys, "The keyboard is three blocks wide in one block: set it on a desk with room to either side. Right-click it to sit down and play. One player plays it at a time, until they close the screen.");
+        say(scene, 120, keys, "The keyboard is three blocks wide in one block: set it on a desk with room to either side. Right-click it to play, or join someone already playing.");
         say(scene, 120, keys, PonderPalette.GREEN, "Its keys, pads, knobs and buttons are worked with the mouse, and the keys with the computer's keyboard too. A real MIDI keyboard plugged into the computer plays it as well.");
 
         for (int side = -1; side <= 1; side += 2) {
@@ -143,8 +147,8 @@ public final class KeyboardClient implements ClientFeature {
     }
 
     /** The player of the keyboard at {@code pos} played {@code message}, as the server passed it on. Network thread. */
-    public static void played(BlockPos pos, int message) {
-        KeyboardAudio.played(pos, message);
+    public static void played(BlockPos pos, int part, int message) {
+        KeyboardAudio.played(pos, part, message);
     }
 
     /** How {@code keyboard}'s panel looks here: as this player has it, if they play it, a tick ahead of the server. */
@@ -175,7 +179,7 @@ public final class KeyboardClient implements ClientFeature {
         UUID me = mc.player == null ? null : mc.player.getUUID();
         MidiKeyboardBlock.Entity mine = null;
         for (MidiKeyboardBlock.Entity keyboard : KeyboardAudio.near().values()) {
-            if (keyboard.performer().filter(performer -> performer.equals(me)).isPresent()) {
+            if (me != null && keyboard.performers().contains(me)) {
                 mine = keyboard;
             }
         }
@@ -186,7 +190,7 @@ public final class KeyboardClient implements ClientFeature {
             stop(mc);
         }
         if (playing == null && mine != null && !mine.getBlockPos().equals(left) && mc.screen == null) {
-            playing = new Playing(mine);
+            playing = new Playing(mine, me);
             playing.controller.sendPrograms();
             listen(playing);
             mc.setScreen(new KeyboardScreen(playing));
@@ -216,12 +220,13 @@ public final class KeyboardClient implements ClientFeature {
 
     private static void stop(Minecraft mc) {
         Playing was = playing;
+        MidiInput.close();
         was.controller.releaseKeys();
+        KeyboardAudio.played(was.pos, was.part, KeyboardPackets.END);
         if (was.panelChanged) {
             sendPanel();
         }
         playing = null;
-        MidiInput.close();
         if (mc.screen instanceof KeyboardScreen screen && screen.playing == was) {
             mc.setScreen(null);
         }
