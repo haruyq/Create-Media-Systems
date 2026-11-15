@@ -104,10 +104,12 @@ class DiscStreamTest {
         long viewer = 13_000_000, second = 1_000_000_000L;
         DiscStream.Adaptive rate = new DiscStream.Adaptive();
         assertEquals(viewer, rate.budget(viewer), "a fast enough encoder keeps the viewer's budget");
-        rate.encoded(2L * DiscSource.SEGMENT_SECONDS * second, viewer, 0);
-        long reduced = rate.budget(viewer);
         DiscStream.Adaptive slower = new DiscStream.Adaptive();
-        slower.encoded(4L * DiscSource.SEGMENT_SECONDS * second, viewer, 0);
+        for (int i = 0; i < DiscStream.Adaptive.SLOW_SEGMENTS; i++) {
+            rate.encoded(2L * DiscSource.SEGMENT_SECONDS * second, viewer, 0);
+            slower.encoded(4L * DiscSource.SEGMENT_SECONDS * second, viewer, 0);
+        }
+        long reduced = rate.budget(viewer);
         assertTrue(reduced < viewer, "a slow encoder lowers the budget");
         assertEquals(2, reduced / (double) slower.budget(viewer), 0.01, "twice as slow, half the budget");
         assertTrue(DiscSource.Quality.forBudget(reduced).height() < DiscSource.Quality.forBudget(viewer).height());
@@ -123,6 +125,27 @@ class DiscStreamTest {
         rate.encoded(second, reduced, now + second);
         assertEquals(stepped, rate.budget(viewer), "not a step every segment");
         assertEquals(1_000_000, rate.budget(1_000_000), "never above what the viewer can take");
+    }
+
+    @Test
+    void aSegmentOrTwoTheDriveWasSlowWithKeepTheQuality() {
+        long viewer = 13_000_000, second = 1_000_000_000L;
+        DiscStream.Adaptive rate = new DiscStream.Adaptive();
+        // As a Blu-ray played: its first segment off the drive, then two seeks, each a slow segment or two among
+        // ones that take under three seconds whatever their quality.
+        double[] seconds = {1.0, 1.5, 1.5, 6.4, 3.2, 2.9, 2.7, 4.5, 4.8, 2.7, 2.6, 3.6, 2.4, 5.1, 3.3, 2.6, 2.4, 3.7, 2.9};
+        long now = 0;
+        for (double took : seconds) {
+            now += 4 * second;
+            rate.encoded((long) (took * second), viewer, now);
+            assertEquals(viewer, rate.budget(viewer), "after a segment of " + took + " s");
+        }
+        // An encoder that can't keep up is slow with every segment: the third says so.
+        rate.encoded(5 * second, viewer, now += 4 * second);
+        rate.encoded(5 * second, viewer, now += 4 * second);
+        assertEquals(viewer, rate.budget(viewer));
+        rate.encoded(5 * second, viewer, now + 4 * second);
+        assertTrue(rate.budget(viewer) < viewer);
     }
 
     @Test
