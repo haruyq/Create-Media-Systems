@@ -64,7 +64,7 @@ public final class DeviceClock {
      * there, will be heard (System.nanoTime): from where the source is now, or from {@code startAt} if it hasn't
      * started yet, at the source's pitch, plus the device's latency.
      */
-    static long presentationTime(int source, long startAt, long queuedFrames, float rate) {
+    public static long presentationTime(int source, long startAt, long queuedFrames, float rate) {
         long now = System.nanoTime();
         double pitch = Math.max(.01, AL10.alGetSourcef(source, AL10.AL_PITCH));
         double queued = queuedFrames / (double) rate;

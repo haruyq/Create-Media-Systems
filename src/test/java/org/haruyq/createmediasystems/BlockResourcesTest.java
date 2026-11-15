@@ -59,6 +59,7 @@ class BlockResourcesTest {
             Map.entry("lighting_console", new Row(Tool.PICKAXE, false, true)),
             Map.entry("lighting_monitor", new Row(Tool.PICKAXE, false, true)),
             Map.entry("midi_keyboard", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("steelpan_low_c", new Row(Tool.PICKAXE, false, true)),
             Map.entry("px_s1100", new Row(Tool.PICKAXE, false, true)),
             Map.entry("px_s1100_power_adapter", new Row(Tool.PICKAXE, false, true)),
             // Legacy and invisible: old saves only clear it away.
