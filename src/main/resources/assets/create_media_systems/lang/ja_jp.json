@@ -589,6 +589,8 @@
   "partybox.pack": "収納する",
   "death.attack.cms_disc": "%1$sは%2$sのディスク弾で倒された",
   "death.attack.cms_disc.item": "%1$sは%2$sのディスク弾で倒された [%3$s]",
+  "death.attack.cms_piano_fallboard": "%1$sは%2$sが閉めたピアノの蓋に挟まれて死んだ",
+  "death.attack.cms_piano_fallboard.self": "%1$sは自分で閉めたピアノの蓋に挟まれて死んだ",
   "item.create_media_systems.megaphone_white": "SBL メガホン30・ホワイト",
   "item.create_media_systems.megaphone_black": "SBL メガホン30・ブラック",
   "megaphone.hint": "右クリックで再生操作画面を開く",

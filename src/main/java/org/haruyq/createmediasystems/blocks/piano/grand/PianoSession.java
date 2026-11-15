@@ -11,8 +11,11 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.SableCompat;
@@ -54,7 +57,7 @@ final class PianoSession {
         var frame = currentFrame.get();
         if (!inReach(player, frame.origin())) return 0;
         if (action != Action.PLAY) {
-            toggle(action);
+            toggle(player, action);
             return 0;
         }
         if (!keyboardOpen.getAsBoolean()) return 0;
@@ -97,10 +100,10 @@ final class PianoSession {
         var take = performers.get(player.getUUID());
         if (take == null || take.id != session) return;
         if (action == Action.CLOSE || !inReach(player, currentFrame.get().origin())) leave(player.getUUID());
-        else toggle(action);
+        else toggle(player, action);
     }
 
-    private void toggle(Action action) {
+    private void toggle(ServerPlayer closer, Action action) {
         boolean closingKeyboard = action == Action.KEYBOARD_LID && keyboardOpen.getAsBoolean();
         moveLid.accept(action);
         if (!closingKeyboard) return;
@@ -112,7 +115,18 @@ final class PianoSession {
                 .filter(player -> player instanceof ServerPlayer server && inReach(server, origin))
                 .toList();
         close();
-        caught.forEach(net.minecraft.world.entity.Entity::kill);
+
+        // Player-sourced damage would apply PvP and team rules to the fallboard.
+        var source = new DamageSource(level.damageSources().genericKill().typeHolder()) {
+            @Override
+            public Component getLocalizedDeathMessage(LivingEntity victim) {
+                if (victim == closer) {
+                    return Component.translatable("death.attack.cms_piano_fallboard.self", victim.getDisplayName());
+                }
+                return Component.translatable("death.attack.cms_piano_fallboard", victim.getDisplayName(), closer.getDisplayName());
+            }
+        };
+        caught.forEach(player -> player.hurt(source, Float.MAX_VALUE));
     }
 
     void tick() {
