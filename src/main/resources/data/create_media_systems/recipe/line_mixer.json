@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "SES"
+  ],
+  "key": {
+    "L": {
+      "item": "minecraft:lever"
+    },
+    "S": {
+      "item": "create:iron_sheet"
+    },
+    "E": {
+      "item": "create:electron_tube"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:line_mixer",
+    "count": 1
+  }
+}

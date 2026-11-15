@@ -82,9 +82,16 @@ public final class AudioFeature implements Feature {
     public static final Supplier<BlockEntityType<SpeakerBlock.Entity>> SPEAKER_ENTITY = BLOCK_ENTITIES.register(
             "speaker", () -> BlockEntityType.Builder.of(SpeakerBlock.Entity::new, SPEAKER.get()).build(null));
 
+    public static final DeferredBlock<LineMixerBlock> LINE_MIXER = BLOCKS.register("line_mixer",
+            () -> new LineMixerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).strength(1.5f).noOcclusion()));
+    public static final DeferredItem<?> LINE_MIXER_ITEM = ITEMS.registerSimpleBlockItem("line_mixer", LINE_MIXER);
+    public static final Supplier<BlockEntityType<LineMixerBlock.Entity>> LINE_MIXER_ENTITY = BLOCK_ENTITIES.register(
+            "line_mixer", () -> BlockEntityType.Builder.of(LineMixerBlock.Entity::new, LINE_MIXER.get()).build(null));
+
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
         RangeQuill.registerPayloads(registrar);
+        LineMixerBlock.registerPayloads(registrar);
         CustomDiscItem.registerPayloads(registrar);
     }
 }

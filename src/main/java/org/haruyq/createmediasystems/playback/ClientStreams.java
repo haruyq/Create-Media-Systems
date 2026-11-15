@@ -49,10 +49,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 public final class ClientStreams {
     private static final Set<Slot> PLAYING = new LinkedHashSet<>();
-    /** Live range per emitter block; RetuneAtBlock updates it without restarting the audio. */
-    private static final Map<BlockPos, EmitterRange> RANGES = new HashMap<>();
+    /**
+     * Live range per emitter block and source it plays (one linked to a mixer plays several); RetuneAtBlock updates
+     * it without restarting the audio.
+     */
+    private static final Map<StreamPackets.Target.Block, EmitterRange> RANGES = new HashMap<>();
     private static final Map<Side, Group> GROUPS = new HashMap<>();
-    private static final Map<BlockPos, Side> SIDES = new HashMap<>();
+    private static final Map<StreamPackets.Target.Block, Side> SIDES = new HashMap<>();
 
     /**
      * One side (see Streams.Channel) of the track of the source at {@code source}. Every emitter playing it here is
@@ -182,9 +185,10 @@ public final class ClientStreams {
                     continue;
                 }
                 present = true;
-                nearby |= inRange(pos, sound.origin());
+                EmitterRange range = RANGES.getOrDefault(new StreamPackets.Target.Block(pos, sound.source()),
+                        EmitterRange.DEFAULT);
+                nearby |= inRange(range, pos, sound.origin());
                 Vec3 ear = toBlockSpace(pos, camera);
-                EmitterRange range = range(pos);
                 double volume = profile.outdoor() ? range.volume() : range.gain(pos, sound.origin(), ear);
                 mix.add(world, volume * sound.directivity(ear));
             }
@@ -416,9 +420,10 @@ public final class ClientStreams {
     public static void play(StreamPackets.PlayAtBlock payload) {
         BlockPos pos = payload.pos().immutable();
         Streams.Sound sound = payload.sound();
-        RANGES.put(pos, payload.range());
+        StreamPackets.Target.Block emitter = new StreamPackets.Target.Block(pos, sound.source());
+        RANGES.put(emitter, payload.range());
         Side side = new Side(sound.source(), sound.channel(), sound.profile());
-        Side was = SIDES.put(pos, side);
+        Side was = SIDES.put(emitter, side);
         if (was != null && !was.equals(side)) {
             leave(was, pos);
         }
@@ -446,8 +451,8 @@ public final class ClientStreams {
                 // Through any one of its emitters: the server tells the source's listeners, not each emitter's.
                 seconds -> Minecraft.getInstance().execute(() -> {
                     LogUtils.getLogger().info("CMS stream {} loaded, {}s long (0: unknown)", side, seconds);
-                    fresh.emitters.keySet().stream().findFirst()
-                            .ifPresent(at -> PacketDistributor.sendToServer(new StreamPackets.Started(at, (float) seconds)));
+                    fresh.emitters.keySet().stream().findFirst().ifPresent(at -> PacketDistributor.sendToServer(
+                            new StreamPackets.Started(new StreamPackets.Target.Block(at, side.source()), (float) seconds)));
                 })).from(side.source(), payload.load(), payload.video().orElse(null));
         if (side.profile().outdoor()) {
             spec = spec.decorated(opened -> BroadcastAudioStream.wrap(opened, side.profile(), () -> fresh.path));
@@ -473,11 +478,11 @@ public final class ClientStreams {
     }
 
     public static void retune(StreamPackets.RetuneAtBlock payload) {
-        RANGES.put(payload.pos(), payload.range());
+        RANGES.put(new StreamPackets.Target.Block(payload.pos(), payload.source()), payload.range());
     }
 
     public static void sync(StreamPackets.SyncAtBlock payload) {
-        Side side = SIDES.get(payload.pos());
+        Side side = SIDES.get(new StreamPackets.Target.Block(payload.pos(), payload.source()));
         Group group = side == null ? null : GROUPS.get(side);
         StreamSound sound = group == null ? null : group.slot.sound;
         var mc = Minecraft.getInstance();
@@ -489,8 +494,9 @@ public final class ClientStreams {
     }
 
     public static void stop(StreamPackets.StopAtBlock payload) {
-        RANGES.remove(payload.pos());
-        Side side = SIDES.remove(payload.pos());
+        StreamPackets.Target.Block emitter = new StreamPackets.Target.Block(payload.pos(), payload.source());
+        RANGES.remove(emitter);
+        Side side = SIDES.remove(emitter);
         if (side != null) {
             leave(side, payload.pos());
         }
@@ -503,10 +509,6 @@ public final class ClientStreams {
                 Reports.show(Component.translatable("create_media_systems.stream.interrupted", reason), false);
             }
         });
-    }
-
-    private static EmitterRange range(BlockPos pos) {
-        return RANGES.getOrDefault(pos, EmitterRange.DEFAULT);
     }
 
     /**
@@ -589,8 +591,9 @@ public final class ClientStreams {
                 Group group = slot.side == null ? null : GROUPS.remove(slot.side);
                 if (group != null) {
                     group.emitters.keySet().forEach(pos -> {
-                        SIDES.remove(pos, slot.side);
-                        RANGES.remove(pos);
+                        StreamPackets.Target.Block emitter = new StreamPackets.Target.Block(pos, slot.side.source());
+                        SIDES.remove(emitter, slot.side);
+                        RANGES.remove(emitter);
                     });
                 }
             }
@@ -605,9 +608,9 @@ public final class ClientStreams {
     }
 
     /** Within the range past which the server stops tracking us (it resends on return): the server's own check. */
-    private static boolean inRange(BlockPos pos, Vec3 origin) {
+    private static boolean inRange(EmitterRange range, BlockPos pos, Vec3 origin) {
         var player = Minecraft.getInstance().player;
-        return player != null && range(pos).hears(player.level(), pos, origin, player.position(), EmitterRange.DROP_MARGIN);
+        return player != null && range.hears(player.level(), pos, origin, player.position(), EmitterRange.DROP_MARGIN);
     }
 
     /** Where the block-space position {@code local} is in the world now (see SableCompat). */

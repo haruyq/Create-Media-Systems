@@ -68,17 +68,21 @@ public final class StreamPackets {
         @Nullable
         CustomPacketPayload stop();
 
-        record Block(BlockPos pos) implements Target {
-            static final StreamCodec<ByteBuf, Block> CODEC = BlockPos.STREAM_CODEC.map(Block::new, Block::pos);
+        /** The emitter at {@code pos} as it plays the source at {@code source}: one linked to a mixer plays several. */
+        record Block(BlockPos pos, BlockPos source) implements Target {
+            static final StreamCodec<ByteBuf, Block> CODEC = StreamCodec.composite(
+                    BlockPos.STREAM_CODEC, Block::pos,
+                    BlockPos.STREAM_CODEC, Block::source,
+                    Block::new);
 
             @Override
             public CustomPacketPayload sync(float seconds) {
-                return new SyncAtBlock(pos, seconds);
+                return new SyncAtBlock(pos, source, seconds);
             }
 
             @Override
             public CustomPacketPayload stop() {
-                return new StopAtBlock(pos);
+                return new StopAtBlock(pos, source);
             }
         }
 
@@ -139,11 +143,15 @@ public final class StreamPackets {
         }
     }
 
-    /** Server → client: the stream from the block at {@code pos} keeps playing with new range and volume. */
-    public record RetuneAtBlock(BlockPos pos, EmitterRange range) implements CustomPacketPayload {
+    /**
+     * Server → client: the stream of the source at {@code source} from the block at {@code pos} keeps playing with
+     * new range and volume.
+     */
+    public record RetuneAtBlock(BlockPos pos, BlockPos source, EmitterRange range) implements CustomPacketPayload {
         public static final Type<RetuneAtBlock> TYPE = new Type<>(CreateMediaSystems.id("retune_at_block"));
         public static final StreamCodec<ByteBuf, RetuneAtBlock> CODEC = StreamCodec.composite(
                 BlockPos.STREAM_CODEC, RetuneAtBlock::pos,
+                BlockPos.STREAM_CODEC, RetuneAtBlock::source,
                 EmitterRange.STREAM_CODEC, RetuneAtBlock::range,
                 RetuneAtBlock::new);
 
@@ -164,10 +172,6 @@ public final class StreamPackets {
                 ByteBufCodecs.FLOAT, Started::duration,
                 Started::new);
 
-        public Started(BlockPos pos, float duration) {
-            this(new Target.Block(pos), duration);
-        }
-
         @Override
         public Type<Started> type() {
             return TYPE;
@@ -175,14 +179,15 @@ public final class StreamPackets {
     }
 
     /**
-     * Server → client: play the stream of the block at {@code pos} that Started said was loaded, from
-     * {@code seconds} in: the top, once every listener of a fresh track has it, or where it is, for one that loaded it
-     * later or joined it playing (see Streams#started).
+     * Server → client: play the stream of the source at {@code source} from the block at {@code pos} that Started
+     * said was loaded, from {@code seconds} in: the top, once every listener of a fresh track has it, or where it is,
+     * for one that loaded it later or joined it playing (see Streams#started).
      */
-    public record SyncAtBlock(BlockPos pos, float seconds) implements CustomPacketPayload {
+    public record SyncAtBlock(BlockPos pos, BlockPos source, float seconds) implements CustomPacketPayload {
         public static final Type<SyncAtBlock> TYPE = new Type<>(CreateMediaSystems.id("sync_at_block"));
         public static final StreamCodec<ByteBuf, SyncAtBlock> CODEC = StreamCodec.composite(
                 BlockPos.STREAM_CODEC, SyncAtBlock::pos,
+                BlockPos.STREAM_CODEC, SyncAtBlock::source,
                 ByteBufCodecs.FLOAT, SyncAtBlock::seconds,
                 SyncAtBlock::new);
 
@@ -192,11 +197,13 @@ public final class StreamPackets {
         }
     }
 
-    /** Server → client: the block at {@code pos} stopped streaming. */
-    public record StopAtBlock(BlockPos pos) implements CustomPacketPayload {
+    /** Server → client: the block at {@code pos} stopped streaming the source at {@code source}. */
+    public record StopAtBlock(BlockPos pos, BlockPos source) implements CustomPacketPayload {
         public static final Type<StopAtBlock> TYPE = new Type<>(CreateMediaSystems.id("stop_at_block"));
-        public static final StreamCodec<ByteBuf, StopAtBlock> CODEC =
-                BlockPos.STREAM_CODEC.map(StopAtBlock::new, StopAtBlock::pos);
+        public static final StreamCodec<ByteBuf, StopAtBlock> CODEC = StreamCodec.composite(
+                BlockPos.STREAM_CODEC, StopAtBlock::pos,
+                BlockPos.STREAM_CODEC, StopAtBlock::source,
+                StopAtBlock::new);
 
         @Override
         public Type<StopAtBlock> type() {

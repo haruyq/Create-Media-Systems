@@ -21,6 +21,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
@@ -29,6 +30,7 @@ public final class AudioClient implements ClientFeature {
     @Override
     public void register(IEventBus modBus) {
         RangeQuillHandler.register();
+        LineMixerClient.register(modBus);
     }
 
     @Override
@@ -37,6 +39,84 @@ public final class AudioClient implements ClientFeature {
                 .addStoryBoard(Create.asResource("redstone_link"), AudioClient::jukebox);
         helper.forComponents(AudioFeature.SPEAKER.getId(), AudioFeature.DISC_READER.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), AudioClient::speakers);
+        helper.forComponents(AudioFeature.LINE_MIXER.getId())
+                .addStoryBoard(Create.asResource("redstone_link"), AudioClient::lineMixer);
+    }
+
+    /** Where the point (x, z) of the panel of the mixer at {@code mixer}, its front to the north, is in a scene. */
+    private static Vec3 onPanel(BlockPos mixer, float x, float z) {
+        return Vec3.atLowerCornerOf(mixer).add(LineMixerBlock.place(Direction.NORTH, x, LineMixerBlock.HEIGHT, z));
+    }
+
+    private static void lineMixer(SceneBuilder builder, SceneBuildingUtil util) {
+        CreateSceneBuilder scene = plate(builder, "line_mixer", "Mixing Sources with the Line Mixer");
+        ItemStack quill = new ItemStack(AudioFeature.RANGE_QUILL.get());
+
+        // Its front to the camera, so its right half is to the west.
+        BlockState facingCamera = AudioFeature.LINE_MIXER.get().defaultBlockState()
+                .setValue(LineMixerBlock.FACING, Direction.NORTH);
+        BlockPos mixer = util.grid().at(1, 1, 2);
+        scene.world().setBlock(mixer, facingCamera, false);
+        scene.world().setBlock(mixer.west(), facingCamera.setValue(LineMixerBlock.RIGHT, true), false);
+        scene.world().showSection(util.select().fromTo(0, 1, 2, 1, 1, 2), Direction.DOWN);
+        scene.idle(15);
+        say(scene, 90, onPanel(mixer, 16, 8), "A Line Mixer, two blocks wide, mixes several sources into one line for the speakers linked to it.");
+
+        BlockPos reader = util.grid().at(2, 1, 4);
+        BlockPos jukebox = util.grid().at(0, 1, 4);
+        scene.world().setBlock(reader, AudioFeature.DISC_READER.get().defaultBlockState(), false);
+        scene.world().setBlock(jukebox, Blocks.JUKEBOX.defaultBlockState().setValue(JukeboxBlock.HAS_RECORD, true), false);
+        scene.world().showSection(util.select().position(reader), Direction.DOWN);
+        scene.idle(5);
+        scene.world().showSection(util.select().position(jukebox), Direction.DOWN);
+        scene.idle(10);
+        BlockPos[] sources = {reader, jukebox};
+        for (int channel = 0; channel < sources.length; channel++) {
+            BlockPos source = sources[channel];
+            String key = "Input" + channel;
+            scene.overlay().showControls(util.vector().topOf(source), Pointing.DOWN, 25).rightClick().withItem(quill);
+            scene.overlay().chaseBoundingBoxOutline(PonderPalette.OUTPUT, source, new AABB(source), 50);
+            scene.idle(30);
+            scene.overlay().showControls(onPanel(mixer, 2.5f + 4 * channel, 9), Pointing.DOWN, 25).rightClick().withItem(quill);
+            scene.idle(10);
+            scene.world().modifyBlockEntityNBT(util.select().position(mixer), LineMixerBlock.Entity.class,
+                    nbt -> nbt.putLong(key, source.asLong()));
+            scene.idle(20);
+        }
+        say(scene, 110, onPanel(mixer, 4.5f, 9), "With the Range Quill, pick a source, then right-click a channel of the mixer to plug it in. Its lamp lights. Doing the same again unplugs it.");
+
+        BlockPos speaker = util.grid().at(4, 1, 4);
+        scene.world().setBlock(speaker, AudioFeature.SPEAKER.get().defaultBlockState()
+                .setValue(SpeakerBlock.FACING, Direction.NORTH), false);
+        scene.world().showSection(util.select().position(speaker), Direction.DOWN);
+        scene.idle(10);
+        scene.overlay().showControls(onPanel(mixer, 26.5f, 9), Pointing.DOWN, 25).rightClick().withItem(quill);
+        scene.overlay().chaseBoundingBoxOutline(PonderPalette.OUTPUT, mixer, new AABB(mixer).minmax(new AABB(mixer.west()))
+                .setMaxY(mixer.getY() + LineMixerBlock.HEIGHT / 16), 60);
+        scene.idle(30);
+        scene.overlay().showControls(util.vector().topOf(speaker), Pointing.DOWN, 25).rightClick().withItem(quill);
+        scene.world().modifyBlockEntityNBT(util.select().position(speaker), SpeakerBlock.Entity.class,
+                nbt -> nbt.putLong("Source", mixer.asLong()));
+        notes(scene, SpeakerBlock.mouth(speaker, Direction.NORTH), 80);
+        say(scene, 110, onPanel(mixer, 26.5f, 9), PonderPalette.GREEN, "Right-click its master section to pick the mixer itself, then each speaker to link it. The speakers play everything plugged in.");
+
+        scene.overlay().showControls(onPanel(mixer, 2.5f, 5), Pointing.DOWN, 40).rightClick();
+        scene.idle(10);
+        for (int step = 1; step <= 12; step++) {
+            float position = 1 - step * 0.05f;
+            scene.world().modifyBlockEntityNBT(util.select().position(mixer), LineMixerBlock.Entity.class,
+                    nbt -> nbt.putFloat("Fader0", position));
+            scene.idle(1);
+        }
+        say(scene, 120, onPanel(mixer, 2.5f, 9), "Point at a fader, hold right-click and look along it: the knob follows, and everyone hears it at once. A channel's fader sets how loud its source is, the master's how loud they all are.");
+        say(scene, 90, onPanel(mixer, 24, 9), "The meter beside each fader shows what its channel passes on, and the master's what the mixer does, to whoever hears it.");
+
+        BlockPos extension = mixer.east(2);
+        scene.world().setBlock(extension, facingCamera, false);
+        scene.world().setBlock(extension.west(), facingCamera.setValue(LineMixerBlock.RIGHT, true), false);
+        scene.world().showSection(util.select().fromTo(2, 1, 2, 3, 1, 2), Direction.DOWN);
+        scene.idle(15);
+        say(scene, 120, onPanel(extension, 16, 8), PonderPalette.GREEN, "Another Line Mixer set against its left side is an extension: seven more channels under the same master. More can follow it.");
     }
 
     private static void jukebox(SceneBuilder builder, SceneBuildingUtil util) {

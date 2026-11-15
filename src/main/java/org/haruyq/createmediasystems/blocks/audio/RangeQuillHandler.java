@@ -166,6 +166,15 @@ public final class RangeQuillHandler {
             return true;
         }
         BlockState hovered = hoveredBlock == null ? null : player.level().getBlockState(hoveredBlock);
+        if (firstPos == null && hovered != null && hovered.is(AudioFeature.LINE_MIXER.get())) {
+            // A picked source goes into the channel pointed at; anywhere else on it picks the mixer, for its speakers.
+            BlockPos mixer = LineMixerBlock.root(hoveredBlock, hovered);
+            int channel = source == null || source.equals(mixer) ? -1 : LineMixerClient.channelAimedAt(mixer);
+            if (channel >= 0) {
+                PacketDistributor.sendToServer(new LineMixerBlock.PlugInput(mixer, channel, source));
+                return true;
+            }
+        }
         if (firstPos == null && hovered != null && (hovered.is(AudioFeature.SPEAKER.get())
                 || hovered.getBlock() instanceof BroadcastTowerBlock)) {
             pendingSpeaker = hoveredBlock;
@@ -188,7 +197,8 @@ public final class RangeQuillHandler {
     }
 
     private static boolean pickSource(LocalPlayer player, BlockState hovered) {
-        BlockPos picked = hovered.getBlock() instanceof KeyboardBlock ? KeyboardBlock.root(hoveredBlock, hovered) : hoveredBlock;
+        BlockPos picked = hovered.getBlock() instanceof KeyboardBlock ? KeyboardBlock.root(hoveredBlock, hovered)
+                : hovered.getBlock() instanceof LineMixerBlock ? LineMixerBlock.root(hoveredBlock, hovered) : hoveredBlock;
         if (!(player.level().getBlockEntity(picked) instanceof MediaSource)) return false;
         if (!picked.equals(source)) {
             source = picked;
