@@ -1,7 +1,12 @@
 package org.haruyq.createmediasystems.disc;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.net.InetSocketAddress;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -26,9 +31,6 @@ import java.util.function.Consumer;
 
 import org.haruyq.createmediasystems.p2p.P2pOverlay;
 import org.haruyq.createmediasystems.p2p.Transport;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 
 public final class DiscStream implements AutoCloseable {
     private static final int MAGIC = 0x434d4401;
@@ -56,7 +58,7 @@ public final class DiscStream implements AutoCloseable {
     private final Object fetchLock = new Object();
     private final Semaphore httpSlots = new Semaphore(8);
     private final Adaptive adaptive = new Adaptive();
-    private final HttpServer http;
+    private final ServerSocket http;
     private final String prefix = "/" + UUID.randomUUID() + "/";
     private volatile double duration;
     private volatile boolean closed;
@@ -75,10 +77,8 @@ public final class DiscStream implements AutoCloseable {
         this.source = source;
         this.status = status;
         duration = source == null ? 0 : source.duration();
-        http = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 8);
-        http.createContext(prefix, this::serve);
-        http.setExecutor(workers);
-        http.start();
+        http = new ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"));
+        workers.execute(this::listen);
         encoder.prestartCoreThread();
     }
 
@@ -154,7 +154,7 @@ public final class DiscStream implements AutoCloseable {
         for (var part : ready) {
             await(part);
         }
-        return URI.create("http://127.0.0.1:" + http.getAddress().getPort() + prefix + "index.m3u8");
+        return URI.create("http://127.0.0.1:" + http.getLocalPort() + prefix + "index.m3u8");
     }
 
     private int count() {
@@ -173,52 +173,112 @@ public final class DiscStream implements AutoCloseable {
         return list.append("#EXT-X-ENDLIST\n").toString();
     }
 
-    private void serve(HttpExchange exchange) throws IOException {
-        if (!httpSlots.tryAcquire()) {
-            exchange.sendResponseHeaders(503, -1);
-            exchange.close();
-            return;
-        }
-        try (exchange) {
-            if (!exchange.getRequestMethod().equals("GET") || exchange.getRequestURI().getRawQuery() != null) {
-                exchange.sendResponseHeaders(405, -1);
-                return;
-            }
-            String path = exchange.getRequestURI().getRawPath().substring(prefix.length());
-            byte[] body;
-            if (path.equals("index.m3u8")) {
-                body = playlist(duration).getBytes(StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().set("Content-Type", "application/vnd.apple.mpegurl");
-            } else if (path.matches("[0-9]{1,5}\\.ts")) {
-                int index = Integer.parseInt(path.substring(0, path.length() - 3));
-                if (index >= count()) {
-                    exchange.sendResponseHeaders(404, -1);
-                    return;
+    /**
+     * Answers this computer's player until the stream closes: one request a connection, answered and closed, each on
+     * a thread of its own.
+     *
+     * <p>Not with com.sun.net.httpserver. It keeps for good every connection whose client left before the end of the
+     * answer, with a buffer twice the size of the answer, and a player that seeks or stops does not wait for the
+     * segment on its way to it: some 9 MB of the game's memory each time, at a Blu-ray's 4 MB a segment.
+     */
+    private void listen() {
+        try {
+            while (true) {
+                Socket socket = http.accept();
+                try {
+                    workers.execute(() -> serve(socket));
+                } catch (RuntimeException closing) {
+                    socket.close();
+                    throw closing;
                 }
-                playing = index;
-                sweep();
-                body = await(segment(index));
-                // Ahead only of a player going on from the segment before: each opens at the top first, wherever it
-                // then starts, and a DVD's pass sent on from there seeks away from where the disc plays. And only
-                // where it still is: it may have sought on while this waited.
-                for (int i = index + 1; playing == index && known(index - 1) && i < Math.min(count(), index + 4); i++) {
-                    segment(i, true);
-                }
-                exchange.getResponseHeaders().set("Content-Type", "video/mp2t");
-            } else {
-                exchange.sendResponseHeaders(404, -1);
-                return;
             }
-            exchange.getResponseHeaders().set("Cache-Control", "no-store");
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
-        } catch (IOException failed) {
-            if (!closed && !(failed instanceof Stale)) {
+        } catch (IOException | RuntimeException failed) {
+            // Closed with the stream; stopped any other way, nothing answers the player again.
+            if (!closed) {
                 status.accept("Disc buffering failed: " + failed.getMessage());
             }
-        } finally {
-            httpSlots.release();
         }
+    }
+
+    private void serve(Socket socket) {
+        try (socket) {
+            // A client that sends no request doesn't keep its thread.
+            socket.setSoTimeout(30_000);
+            String[] asked = request(socket.getInputStream());
+            OutputStream out = socket.getOutputStream();
+            if (asked == null) {
+                return;
+            }
+            if (!asked[1].startsWith(prefix)) {
+                answer(out, "404 Not Found", null, new byte[0]);
+            } else if (!httpSlots.tryAcquire()) {
+                answer(out, "503 Service Unavailable", null, new byte[0]);
+            } else {
+                try {
+                    serve(asked[0], asked[1].substring(prefix.length()), out);
+                } catch (IOException failed) {
+                    if (!closed && !(failed instanceof Stale)) {
+                        status.accept("Disc buffering failed: " + failed.getMessage());
+                    }
+                } finally {
+                    httpSlots.release();
+                }
+            }
+        } catch (IOException gone) {
+            // It sent no request, or left before it was told there is nothing for it.
+        }
+    }
+
+    /**
+     * The method and the target of the request {@code in} starts with, read past its headers; null if it is none, or
+     * longer than any player's.
+     */
+    private static String[] request(InputStream in) throws IOException {
+        InputStream buffered = new BufferedInputStream(in);
+        StringBuilder head = new StringBuilder();
+        while (head.length() < 4 || !head.substring(head.length() - 4).equals("\r\n\r\n")) {
+            int next = buffered.read();
+            if (next < 0 || head.length() == 8192) {
+                return null;
+            }
+            head.append((char) next);
+        }
+        String[] line = head.substring(0, head.indexOf("\r\n")).split(" ");
+        return line.length == 3 && line[2].startsWith("HTTP/") ? line : null;
+    }
+
+    private void serve(String method, String path, OutputStream out) throws IOException {
+        if (!method.equals("GET") || path.indexOf('?') >= 0) {
+            answer(out, "405 Method Not Allowed", null, new byte[0]);
+        } else if (path.equals("index.m3u8")) {
+            answer(out, "200 OK", "application/vnd.apple.mpegurl", playlist(duration).getBytes(StandardCharsets.UTF_8));
+        } else if (path.matches("[0-9]{1,5}\\.ts")) {
+            int index = Integer.parseInt(path.substring(0, path.length() - 3));
+            if (index >= count()) {
+                answer(out, "404 Not Found", null, new byte[0]);
+                return;
+            }
+            playing = index;
+            sweep();
+            byte[] body = await(segment(index));
+            // Ahead only of a player going on from the segment before: each opens at the top first, wherever it
+            // then starts, and a DVD's pass sent on from there seeks away from where the disc plays. And only
+            // where it still is: it may have sought on while this waited.
+            for (int i = index + 1; playing == index && known(index - 1) && i < Math.min(count(), index + 4); i++) {
+                segment(i, true);
+            }
+            answer(out, "200 OK", "video/mp2t", body);
+        } else {
+            answer(out, "404 Not Found", null, new byte[0]);
+        }
+    }
+
+    /** Sends {@code body} as the whole of the answer: the connection closes after it. */
+    private static void answer(OutputStream out, String status, String type, byte[] body) throws IOException {
+        out.write(("HTTP/1.1 " + status + "\r\n" + (type == null ? "" : "Content-Type: " + type + "\r\n")
+                + "Cache-Control: no-store\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n")
+                .getBytes(StandardCharsets.ISO_8859_1));
+        out.write(body);
     }
 
     private synchronized boolean known(int index) {
@@ -693,7 +753,10 @@ public final class DiscStream implements AutoCloseable {
             return;
         }
         closed = true;
-        http.stop(0);
+        try {
+            http.close();
+        } catch (IOException ignored) {
+        }
         encoder.shutdownNow();
         workers.shutdownNow();
         DiscRun current = run;
