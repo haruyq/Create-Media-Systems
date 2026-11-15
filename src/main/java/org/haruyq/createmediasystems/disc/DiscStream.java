@@ -735,10 +735,17 @@ public final class DiscStream implements AutoCloseable {
     /**
      * Holds the quality down while this computer encodes segments slower than they play, and lets it back up
      * gradually; how fast each viewer's connection is, the Transport measures (see LinkRate).
+     *
+     * <p>Slower than they play for {@link #SLOW_SEGMENTS} segments in a row, that is. A segment or two take long
+     * whenever the drive has to find its place, at the disc's start and after every seek, and a lower quality reads
+     * no faster: each of those lowered it all the same, and from 360p it was eight minutes coming back.
      */
     static final class Adaptive {
+        static final int SLOW_SEGMENTS = 3;
         private long limit = Long.MAX_VALUE;
         private long recoverAfter;
+        /** How many segments in a row were slow. */
+        private int slow;
 
         synchronized long budget(long measured) {
             return Math.min(measured, limit);
@@ -750,9 +757,14 @@ public final class DiscStream implements AutoCloseable {
 
         synchronized void encoded(long nanos, long budget, long now) {
             if (nanos > 3_500_000_000L) {
-                limit = Math.min(limit, Math.max(500_000, (long) (budget * 3e9 / nanos)));
-                recoverAfter = now + 45_000_000_000L;
-            } else if (limit != Long.MAX_VALUE && now - recoverAfter >= 0) {
+                if (++slow >= SLOW_SEGMENTS) {
+                    limit = Math.min(limit, Math.max(500_000, (long) (budget * 3e9 / nanos)));
+                    recoverAfter = now + 45_000_000_000L;
+                }
+                return;
+            }
+            slow = 0;
+            if (limit != Long.MAX_VALUE && now - recoverAfter >= 0) {
                 limit = Math.min(20_000_000, limit + Math.max(250_000, limit / 10));
                 recoverAfter = now + 15_000_000_000L;
             }
