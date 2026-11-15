@@ -453,9 +453,13 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         if (subtitle < 0) {
             command.addAll(List.of("-map", "0:v:0", "-vf", picture + "," + sized));
         } else {
-            // A disc's subtitles are pictures the size of its video: laid over it before it is scaled.
-            command.addAll(List.of("-filter_complex", "[0:v:0]" + picture + "[v];[v][0:s:" + subtitle + "]overlay,"
-                    + sized + "[out]", "-map", "[out]"));
+            // A disc's subtitles are pictures the size of its video: laid over it before it is scaled. FFmpeg hands
+            // on what is up for every picture it reads, those before the segment too, each turned into the video's
+            // format on its way to the overlay: a Blu-ray's segment, read from twelve seconds before it, took seven
+            // seconds to encode for the four it plays. Those before the segment are dropped first, but for the last
+            // half second of them: what is up as the segment starts. (A DVD's pass starts at zero, and drops none.)
+            command.addAll(List.of("-filter_complex", "[0:v:0]" + picture + "[v];[0:s:" + subtitle
+                    + "]select='gte(t,-0.5)'[s];[v][s]overlay," + sized + "[out]", "-map", "[out]"));
         }
         command.addAll(List.of("-map", "0:a:" + tracks.audio() + "?", "-sn", "-dn",
                 "-c:v", encoder, "-pix_fmt", "yuv420p", "-bf", "0", "-g", Integer.toString(quality.fps() * 2),
