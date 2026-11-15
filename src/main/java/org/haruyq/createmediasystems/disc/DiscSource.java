@@ -73,11 +73,21 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
      */
     public static final class Tracks {
         public final List<Track> audio, subtitles;
+        /**
+         * How many pictures a second its video shows, where each frame is a whole picture (a film's 24); 0 if that
+         * isn't known, or its frames are fields.
+         */
+        public final int frames;
         private volatile int sound, subtitle = -1;
 
         public Tracks(List<Track> audio, List<Track> subtitles) {
+            this(audio, subtitles, 0);
+        }
+
+        public Tracks(List<Track> audio, List<Track> subtitles, int frames) {
             this.audio = List.copyOf(audio);
             this.subtitles = List.copyOf(subtitles);
+            this.frames = frames;
         }
 
         public int audio() {
@@ -160,17 +170,22 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
         DiscSource source = new DiscSource(ffmpeg, root, bluray, title, 0, playlist, access);
         List<String> command = new ArrayList<>(List.of(ffprobe, "-v", "error"));
         command.addAll(source.input());
-        command.addAll(List.of("-show_entries", "format=duration:stream=codec_type,codec_name,channels:stream_tags=language",
+        command.addAll(List.of("-show_entries", "format=duration:stream=codec_type,codec_name,channels,avg_frame_rate,field_order:stream_tags=language",
                 "-of", "json"));
         try {
             var info = JsonParser.parseString(new String(run(command, source.stdin(), 256 * 1024, 60, access), java.nio.charset.StandardCharsets.UTF_8))
                     .getAsJsonObject();
             double duration = playlist == null ? info.getAsJsonObject("format").get("duration").getAsDouble() : playlist.duration();
             boolean video = false;
+            int frames = 0;
             List<Track> audio = new ArrayList<>(), subtitles = new ArrayList<>();
             for (var each : info.getAsJsonArray("streams")) {
                 var stream = each.getAsJsonObject();
                 String type = stream.get("codec_type").getAsString();
+                if (type.equals("video") && !video) {
+                    frames = frames(stream.has("avg_frame_rate") ? stream.get("avg_frame_rate").getAsString() : "",
+                            stream.has("field_order") ? stream.get("field_order").getAsString() : "");
+                }
                 video |= type.equals("video");
                 if (type.equals("audio") || type.equals("subtitle")) {
                     boolean sound = type.equals("audio");
@@ -187,9 +202,23 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
             if (!video || !Double.isFinite(duration) || duration <= 0 || duration > MAX_DURATION) {
                 throw new IOException("The disc title has no video or no usable duration (maximum 12 hours)");
             }
-            return new DiscSource(ffmpeg, root, bluray, title, duration, playlist, access, null, new Tracks(audio, subtitles));
+            return new DiscSource(ffmpeg, root, bluray, title, duration, playlist, access, null, new Tracks(audio, subtitles, frames));
         } catch (RuntimeException invalid) {
             throw new IOException("FFprobe could not read this disc title; check the selected title and FFmpeg's disc support");
+        }
+    }
+
+    /**
+     * How many pictures a second a video stream shows (see Tracks#frames), from the frame rate ("24000/1001") and the
+     * field order FFprobe gives for it: 0 unless its frames are whole pictures ("progressive").
+     */
+    static int frames(String rate, String order) {
+        String[] parts = rate.split("/");
+        try {
+            double value = Double.parseDouble(parts[0]) / (parts.length > 1 ? Double.parseDouble(parts[1]) : 1);
+            return order.equals("progressive") && value >= 1 && value <= 120 ? (int) Math.ceil(value - 0.01) : 0;
+        } catch (NumberFormatException unknown) {
+            return 0;
         }
     }
 
@@ -322,7 +351,14 @@ public record DiscSource(String ffmpeg, Path root, boolean bluray, int title, do
     /** What it is encoded at for a viewer taking {@code budget} bits a second. */
     public Quality quality(long budget) {
         Quality quality = Quality.forBudget(budget);
-        return segmented() || quality.height() <= DVD.height() ? quality : DVD;
+        if (!segmented() && quality.height() > DVD.height()) {
+            return DVD;
+        }
+        // A Blu-ray film's 24 pictures a second, encoded as 60, are each encoded two or three times over, and decoded
+        // as often by every player: two and a half times the work, in a burst as each segment is encoded, for a
+        // picture that moves no more smoothly.
+        return bluray && tracks.frames > 0 && tracks.frames < quality.fps()
+                ? new Quality(quality.height(), tracks.frames, quality.kbps()) : quality;
     }
 
     public String encoder() {

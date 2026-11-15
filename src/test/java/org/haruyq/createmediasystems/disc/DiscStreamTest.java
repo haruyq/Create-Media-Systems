@@ -128,6 +128,30 @@ class DiscStreamTest {
     }
 
     @Test
+    void encodesABlurayFilmAtItsOwnPicturesASecond() {
+        assertEquals(24, DiscSource.frames("24000/1001", "progressive"));
+        assertEquals(24, DiscSource.frames("24/1", "progressive"));
+        assertEquals(30, DiscSource.frames("30000/1001", "progressive"));
+        assertEquals(60, DiscSource.frames("60000/1001", "progressive"));
+        assertEquals(0, DiscSource.frames("30000/1001", "tt"), "fields: twice as many pictures once deinterlaced");
+        assertEquals(0, DiscSource.frames("0/0", "progressive"));
+        assertEquals(0, DiscSource.frames("", ""));
+        java.nio.file.Path root = java.nio.file.Path.of(".");
+        DiscSource film = new DiscSource("ffmpeg", root, true, 1, 60, null, null, null,
+                new DiscSource.Tracks(List.of(), List.of(), 24));
+        assertEquals(new DiscSource.Quality(1080, 24, 8000), film.quality(13_000_000));
+        assertEquals(new DiscSource.Quality(720, 24, 2500), film.quality(5_000_000));
+        // Its frames fields, or not known: as before.
+        DiscSource concert = new DiscSource("ffmpeg", root, true, 1, 60, null, null, null,
+                new DiscSource.Tracks(List.of(), List.of()));
+        assertEquals(new DiscSource.Quality(1080, 60, 8000), concert.quality(13_000_000));
+        // A DVD's one pass is encoded as it was.
+        DiscSource dvd = new DiscSource("ffmpeg", root, false, 1, 60, null, null, null,
+                new DiscSource.Tracks(List.of(), List.of(), 24));
+        assertEquals(new DiscSource.Quality(480, 30, 2500), dvd.quality(13_000_000));
+    }
+
+    @Test
     void aSegmentOrTwoTheDriveWasSlowWithKeepTheQuality() {
         long viewer = 13_000_000, second = 1_000_000_000L;
         DiscStream.Adaptive rate = new DiscStream.Adaptive();

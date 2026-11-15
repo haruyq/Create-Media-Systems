@@ -61,6 +61,7 @@ class DiscReaderIntegrationTest {
         DiscSource source = DiscSource.open("ffmpeg", "ffprobe", Path.of(System.getenv("CMS_DISC_SHORT_FIXTURE")), -1);
         assertTrue(source.bluray());
         assertTrue(source.duration() > 30 && source.duration() < 33);
+        assertEquals(60, source.tracks().frames, "the fixture's video is 60 whole pictures a second");
         byte[] segment = source.encode(3, new DiscSource.Quality(480, 30, 1100), source.encoder());
         assertTrue(segment.length > 10000);
         assertEquals(0x47, segment[0] & 255);
