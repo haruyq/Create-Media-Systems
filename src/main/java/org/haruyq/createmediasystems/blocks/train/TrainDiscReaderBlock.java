@@ -83,7 +83,8 @@ public class TrainDiscReaderBlock extends Block implements IBE<TrainDiscReaderBl
     }
 
     public static class Entity extends SmartBlockEntity implements ItemSlot.Holder {
-        private final ItemSlot item = slot();
+        // The block's slot(), by name: a bare slot() here is this entity's own, which gives back this field, unset.
+        private final ItemSlot item = TrainDiscReaderBlock.slot();
         private ScrollValueBehaviour volume;
 
         public Entity(BlockPos pos, BlockState state) {
