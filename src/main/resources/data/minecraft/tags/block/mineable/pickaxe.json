@@ -23,6 +23,7 @@
     "create_media_systems:midi_keyboard",
     "create_media_systems:px_s1100",
     "create_media_systems:px_s1100_power_adapter",
-    "create_media_systems:steelpan_low_c"
+    "create_media_systems:steelpan_low_c",
+    "create_media_systems:line_mixer"
   ]
 }

@@ -87,7 +87,7 @@ public class VideoPlayerGameTests {
             received.clear();
             listener.setPos(speakerPos.getCenter().add(EmitterRange.DEFAULT_RANGE + EmitterRange.DROP_MARGIN + 1, 0, 0));
             speaker.configure(level, source, 1, Streams.Channel.MIX);
-            helper.assertTrue(received.contains(new StreamPackets.StopAtBlock(speakerPos)),
+            helper.assertTrue(received.contains(new StreamPackets.StopAtBlock(speakerPos, source)),
                     "a listener out of range wasn't told to stop: " + received);
         } finally {
             Streams.stop(speaker);
@@ -152,7 +152,7 @@ public class VideoPlayerGameTests {
             long seekLoad = Streams.loadId(player);
             helper.assertTrue(seekLoad != load, "a seek is a new load");
             for (List<CustomPacketPayload> received : List.of(a, b)) {
-                helper.assertTrue(received.contains(new StreamPackets.StopAtBlock(speakerPos))
+                helper.assertTrue(received.contains(new StreamPackets.StopAtBlock(speakerPos, source))
                         && received.stream().anyMatch(p -> p instanceof StreamPackets.PlayAtBlock play
                         && play.url().equals(url) && play.startSeconds() == 300 && play.load() == seekLoad),
                         "each listener gets the disc again from 300 s: " + received);
@@ -164,7 +164,7 @@ public class VideoPlayerGameTests {
                     "the first to load it waits for the other");
             Streams.started(second, speakerPos, 600);
             for (List<CustomPacketPayload> received : List.of(a, b)) {
-                helper.assertTrue(received.contains(new StreamPackets.SyncAtBlock(speakerPos, 300)),
+                helper.assertTrue(received.contains(new StreamPackets.SyncAtBlock(speakerPos, source, 300)),
                         "both are told to play from 300 s together: " + received);
             }
 

@@ -4,8 +4,10 @@ import java.util.Optional;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
+import org.haruyq.createmediasystems.blocks.broadcast.BroadcastTowerBlock;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.MediaSource;
+import org.haruyq.createmediasystems.stream.MixBus;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.Streams;
 
@@ -167,6 +169,13 @@ public final class RangeQuill {
         BlockPos source = payload.disconnect() ? null : payload.connectTo().or(speaker::source).orElse(null);
         if (source != null && !source.equals(speaker.source().orElse(null))
                 && !Link.linkable(player, source, payload.speaker(), MediaSource.class)) {
+            return;
+        }
+        // A tower broadcasts one source's track over its region: a mixer has none of its own.
+        if (source != null && speaker instanceof BroadcastTowerBlock.Tower
+                && player.level().getBlockEntity(source) instanceof MixBus) {
+            player.displayClientMessage(Component.translatable("create_media_systems.line_mixer.no_tower")
+                    .withStyle(ChatFormatting.RED), true);
             return;
         }
         speaker.configure(player.serverLevel(), source, payload.volume(), payload.channel());

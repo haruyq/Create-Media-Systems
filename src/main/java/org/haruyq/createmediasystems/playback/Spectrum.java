@@ -2,7 +2,11 @@ package org.haruyq.createmediasystems.playback;
 
 import java.util.Arrays;
 
+import org.haruyq.createmediasystems.stream.Streams;
+
 import org.jetbrains.annotations.Nullable;
+
+import net.minecraft.core.BlockPos;
 
 /**
  * What a playback sounds like from moment to moment, for a hi-fi stack's spectrum display and level meters: how loud
@@ -83,8 +87,13 @@ public final class Spectrum implements MediaTap {
     }
 
     /** {@code amplitude} (1 is full scale) as a display shows it: 0 at {@link #FLOOR_DB}, 1 at full scale. */
-    static float level(double amplitude) {
+    public static float level(double amplitude) {
         return (float) Math.clamp(1 - 20 * Math.log10(Math.max(amplitude, 1e-9)) / FLOOR_DB, 0, 1);
+    }
+
+    /** The reverse of {@link #level}: the amplitude (1 is full scale) a display shows as {@code level}; 0 for none. */
+    public static double amplitude(float level) {
+        return level <= 0 ? 0 : Math.pow(10, (1 - level) * FLOOR_DB / 20);
     }
 
     /** The fast Fourier transform of {@code real} and {@code imaginary}, in place; their length is a power of two. */
@@ -122,6 +131,25 @@ public final class Spectrum implements MediaTap {
                 }
             }
         }
+    }
+
+    /**
+     * What the source at {@code source} sounds like here at this moment, before its speakers' volume: from its native
+     * player, else from an API stream of it (its mix if one plays, else whichever side does). Null if it doesn't play
+     * here.
+     */
+    @Nullable
+    public static Frame heard(BlockPos source) {
+        NativeAudio.Playback playback = NativeAudio.playback(source);
+        MediaTaps taps = playback == null ? null : playback.taps();
+        if (taps == null) {
+            for (MediaTaps.Relay relay : MediaTaps.relays(source)) {
+                if (taps == null || relay.channel() == Streams.Channel.MIX) {
+                    taps = relay.taps();
+                }
+            }
+        }
+        return taps == null ? null : taps.get(Spectrum.class, Spectrum::new).sample(taps.now());
     }
 
     /** The frame heard at {@code at} (the playback's clock, µs); null if none is, or the last is over. */

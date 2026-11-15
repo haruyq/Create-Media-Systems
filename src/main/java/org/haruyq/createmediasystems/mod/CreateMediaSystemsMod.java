@@ -70,7 +70,8 @@ public final class CreateMediaSystemsMod {
      */
     public static Map<String, List<Supplier<? extends Item>>> sections() {
         List<Supplier<? extends Item>> audio = new ArrayList<>(List.of(
-                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.RANGE_QUILL));
+                AudioFeature.DISC_READER_ITEM, AudioFeature.SPEAKER_ITEM, AudioFeature.LINE_MIXER_ITEM,
+                AudioFeature.RANGE_QUILL));
         audio.addAll(HifiFeature.hifiUnits());
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
                 KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM,

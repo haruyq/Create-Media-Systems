@@ -1,0 +1,123 @@
+{
+  "parent": "minecraft:builtin/entity",
+  "gui_light": "side",
+  "textures": {
+    "particle": "create_media_systems:block/component/m700/hifi_case"
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        38,
+        215,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.56,
+        0.56,
+        0.56
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.42,
+        0.42,
+        0.42
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        -7
+      ],
+      "scale": [
+        0.462,
+        0.462,
+        0.462
+      ]
+    },
+    "thirdperson_righthand": {
+      "rotation": [
+        75,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.42,
+        0.42,
+        0.42
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        75,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.42,
+        0.42,
+        0.42
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        4,
+        0
+      ],
+      "scale": [
+        0.42,
+        0.42,
+        0.42
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        0,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        4,
+        0
+      ],
+      "scale": [
+        0.42,
+        0.42,
+        0.42
+      ]
+    }
+  }
+}

@@ -24,6 +24,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.ApiHttp;
 import org.haruyq.createmediasystems.blocks.broadcast.BroadcastProfile;
@@ -63,7 +64,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class Streams {
     private static final double UNKNOWN = -1;
 
-    private static final Map<Object, Relay> RELAYS = new WeakHashMap<>();
+    /**
+     * What each emitter relays, by how its listeners' clients name it: its source's track, or one for each source of
+     * the mixer it is linked to (see MixBus).
+     */
+    private static final Map<Object, Map<StreamPackets.Target, Relay>> RELAYS = new WeakHashMap<>();
     /** How often (ticks of game time) emitters relay their source's track, and clocks ask whether it has ended. */
     public static final int RELAY_TICKS = 10;
     /** Longest a track waits for its listeners to load it: what a client waits for the API (see StreamSound). */
@@ -368,17 +373,31 @@ public final class Streams {
      * relays now, so its listeners hear the change at once rather than at the next relay.
      */
     public static void changed(ServerLevel level, BlockPos source) {
-        RELAYS.entrySet().stream().filter(entry -> relays(entry, level, source)).map(Map.Entry::getKey).toList()
-                .forEach(emitter -> {
+        changed(level, List.of(source));
+    }
+
+    /** {@link #changed} for several sources at once (a mixer's, as its master moves): each of their emitters relays once. */
+    public static void changed(ServerLevel level, Collection<BlockPos> sources) {
+        relaying().filter(relaying -> sources.stream().anyMatch(source -> relays(relaying, level, source)))
+                .map(Relaying::emitter).distinct().toList().forEach(emitter -> {
                     if (emitter instanceof Emitter linked && !((BlockEntity) emitter).isRemoved()) {
                         linked.relay(level);
                     }
                 });
     }
 
-    private static boolean relays(Map.Entry<Object, Relay> entry, Level level, BlockPos source) {
-        Sound sound = entry.getValue().sound;
-        return entry.getKey() instanceof BlockEntity emitter && emitter.getLevel() == level && sound != null
+    /** One of an emitter's relays. */
+    private record Relaying(Object emitter, Relay relay) {
+    }
+
+    private static Stream<Relaying> relaying() {
+        return RELAYS.entrySet().stream().flatMap(entry -> entry.getValue().values().stream()
+                .map(relay -> new Relaying(entry.getKey(), relay)));
+    }
+
+    private static boolean relays(Relaying relaying, Level level, BlockPos source) {
+        Sound sound = relaying.relay().sound;
+        return relaying.emitter() instanceof BlockEntity emitter && emitter.getLevel() == level && sound != null
                 && source.equals(sound.source());
     }
 
@@ -391,18 +410,18 @@ public final class Streams {
      * stops or the emitter is removed.
      */
     public static List<BlockEntity> emitters(Level level, BlockPos source) {
-        return RELAYS.entrySet().stream().filter(entry -> relays(entry, level, source))
-                .map(entry -> (BlockEntity) entry.getKey()).toList();
+        return relaying().filter(relaying -> relays(relaying, level, source))
+                .map(relaying -> (BlockEntity) relaying.emitter()).toList();
     }
 
     public static List<RelayView> relays() {
-        return RELAYS.values().stream().map(relay -> new RelayView(relay.sound, relay.listeners.size())).toList();
+        return relaying().map(relaying -> new RelayView(relaying.relay().sound, relaying.relay().listeners.size())).toList();
     }
 
     public static Set<ServerPlayer> listeners(ServerLevel level, BlockPos source) {
         Set<ServerPlayer> players = new HashSet<>();
-        RELAYS.entrySet().stream().filter(entry -> relays(entry, level, source))
-                .forEach(entry -> players.addAll(listening(level, entry.getValue())));
+        relaying().filter(relaying -> relays(relaying, level, source))
+                .forEach(relaying -> players.addAll(listening(level, relaying.relay())));
         return players;
     }
 
@@ -439,7 +458,11 @@ public final class Streams {
      * length of (pages only yt-dlp knows), so a Blu-ray player moves on when they end.
      */
     public static void started(ServerPlayer player, BlockPos pos, float duration) {
-        started(player, new StreamPackets.Target.Block(pos.immutable()), duration);
+        BlockEntity emitter = player.level().isLoaded(pos) ? player.level().getBlockEntity(pos) : null;
+        Map<StreamPackets.Target, Relay> relays = emitter == null ? null : RELAYS.get(emitter);
+        if (relays != null) {
+            List.copyOf(relays.keySet()).forEach(target -> started(player, target, duration));
+        }
     }
 
     public static void started(ServerPlayer player, StreamPackets.Target target, float duration) {
@@ -451,7 +474,8 @@ public final class Streams {
         if (!relay.listeners.contains(player)) {
             // That emitter lost this player (out of its range) while another of the source's still has them: the
             // length they tell is still the only one there may be for a track the API can't tell.
-            if (RELAYS.values().stream().anyMatch(other -> other.sameSource(relay) && listening(level, other).contains(player))) {
+            if (relaying().map(Relaying::relay)
+                    .anyMatch(other -> other.sameSource(relay) && listening(level, other).contains(player))) {
                 learnDuration(relay.playing(level), duration);
             }
             return;
@@ -476,9 +500,10 @@ public final class Streams {
     private static Relay relayOf(Level level, StreamPackets.Target target) {
         if (target instanceof StreamPackets.Target.Block block) {
             BlockEntity emitter = level.isLoaded(block.pos()) ? level.getBlockEntity(block.pos()) : null;
-            return emitter == null ? null : RELAYS.get(emitter);
+            Map<StreamPackets.Target, Relay> relays = emitter == null ? null : RELAYS.get(emitter);
+            return relays == null ? null : relays.get(target);
         }
-        return RELAYS.values().stream().filter(relay -> relay.target.equals(target)).findFirst().orElse(null);
+        return relaying().map(Relaying::relay).filter(relay -> relay.target.equals(target)).findFirst().orElse(null);
     }
 
     private static void send(ServerPlayer player, @Nullable CustomPacketPayload payload) {
@@ -518,12 +543,18 @@ public final class Streams {
      * new range reaches current listeners without restarting their audio.
      */
     public static void relay(ServerLevel level, BlockEntity emitter, Sound sound, EmitterRange range) {
+        only(emitter, Set.of(relayOne(level, emitter, sound, range)));
+    }
+
+    /** {@link #relay}, leaving what else {@code emitter} relays as it is; how its listeners' clients name this one. */
+    private static StreamPackets.Target relayOne(ServerLevel level, BlockEntity emitter, Sound sound, EmitterRange range) {
         BlockPos pos = emitter.getBlockPos();
-        Source playing = update(level, emitter, new Relay(new StreamPackets.Target.Block(pos.immutable()), sound, null));
+        StreamPackets.Target target = new StreamPackets.Target.Block(pos.immutable(), sound.source());
+        Source playing = update(level, emitter, new Relay(target, sound, null));
         if (playing == null) {
-            return;
+            return target;
         }
-        Relay relay = RELAYS.get(emitter);
+        Relay relay = RELAYS.get(emitter).get(target);
         Load load = relay.load(level);
         // Wardens and sculk sensors hear it once a second (jukebox_play is no vibration), like a goat horn: a warden
         // goes to see what it is. Every other relay tick, as emitters all relay on the same ticks.
@@ -540,8 +571,8 @@ public final class Streams {
             boolean keep = !p.isRemoved() && p.level() == level
                     && range.hears(level, pos, sound.origin(), p.position(), EmitterRange.DROP_MARGIN);
             if ((retune || !keep) && !p.isRemoved()) {
-                PacketDistributor.sendToPlayer(p, keep ? new StreamPackets.RetuneAtBlock(pos, range)
-                        : new StreamPackets.StopAtBlock(pos));
+                PacketDistributor.sendToPlayer(p, keep ? new StreamPackets.RetuneAtBlock(pos, sound.source(), range)
+                        : new StreamPackets.StopAtBlock(pos, sound.source()));
             }
             return !keep;
         });
@@ -550,6 +581,16 @@ public final class Streams {
                 join(load, player, new StreamPackets.PlayAtBlock(playing.url(), pos,
                         playing.ticks() / (float) PlaybackClock.TICKS_PER_SECOND, range, sound, Optional.ofNullable(playing.video()), relay.load));
             }
+        }
+        return target;
+    }
+
+    /** {@code emitter} stops what it relays other than {@code targets}: a source it was linked to before. */
+    private static void only(Object emitter, Set<StreamPackets.Target> targets) {
+        Map<StreamPackets.Target, Relay> relays = RELAYS.get(emitter);
+        if (relays != null) {
+            List.copyOf(relays.keySet()).stream().filter(target -> !targets.contains(target))
+                    .forEach(target -> stop(emitter, target));
         }
     }
 
@@ -574,10 +615,11 @@ public final class Streams {
     private static void relay(ServerLevel level, Object emitter, Relay requested, Collection<ServerPlayer> audience,
             BiFunction<Source, Long, CustomPacketPayload> play) {
         Source playing = update(level, emitter, requested);
+        only(emitter, Set.of(requested.target));
         if (playing == null) {
             return;
         }
-        Relay relay = RELAYS.get(emitter);
+        Relay relay = RELAYS.get(emitter).get(requested.target);
         relay.listeners.removeIf(player -> {
             if (player.isRemoved()) return true;
             if (audience.contains(player)) return false;
@@ -602,10 +644,11 @@ public final class Streams {
         Source playing = fresh.playing(level);
         Load load = fresh.load(level);
         long loadId = load == null ? 0 : load.id;
-        Relay relay = RELAYS.get(emitter);
+        Map<StreamPackets.Target, Relay> relays = RELAYS.get(emitter);
+        Relay relay = relays == null ? null : relays.get(fresh.target);
         if (relay != null && (playing == null || !playing.url().equals(relay.url) || playing.ticks() < relay.ticks
                 || relay.load != loadId || !relay.sameAs(fresh))) {
-            stop(emitter);
+            stop(emitter, fresh.target);
             relay = null;
         }
         if (playing == null) {
@@ -613,7 +656,7 @@ public final class Streams {
         }
         if (relay == null) {
             relay = fresh;
-            RELAYS.put(emitter, relay);
+            RELAYS.computeIfAbsent(emitter, key -> new HashMap<>()).put(fresh.target, relay);
         }
         relay.url = playing.url();
         relay.ticks = playing.ticks();
@@ -641,24 +684,45 @@ public final class Streams {
 
     public static <E extends BlockEntity & Emitter> void relay(ServerLevel level, E emitter, Optional<BlockPos> link,
             Vec3 origin, Optional<Direction> facing, Channel channel, float volume, BroadcastProfile profile) {
-        BlockPos source = link.orElse(emitter.getBlockPos());
-        BlockEntity linked = level.isLoaded(source) ? level.getBlockEntity(source) : null;
-        if (linked instanceof LiveSource live) {
-            // It has no track: the relay below only stops what the emitter played before it was linked here.
-            live.heardThrough(level, emitter.getBlockPos(), origin, facing, channel, volume);
+        BlockPos linkedTo = link.orElse(emitter.getBlockPos());
+        // Linked to a mixer, it plays each source the mixer feeds, at that feed's gain on top of its own.
+        List<MixBus.Feed> feeds = level.isLoaded(linkedTo) && level.getBlockEntity(linkedTo) instanceof MixBus bus
+                ? bus.feeds(level) : List.of(new MixBus.Feed(linkedTo, 1));
+        Set<StreamPackets.Target> relayed = new HashSet<>();
+        for (MixBus.Feed feed : feeds) {
+            BlockPos source = feed.source();
+            float heard = volume * feed.gain();
+            BlockEntity linked = level.isLoaded(source) ? level.getBlockEntity(source) : null;
+            if (linked instanceof LiveSource live) {
+                // It has no track: the relay below only stops what the emitter played before it was linked here.
+                live.heardThrough(level, emitter.getBlockPos(), origin, facing, channel, heard);
+            }
+            float sourceGain = linked instanceof MediaSource media ? media.gain() : 1;
+            boolean givenWay = emitter.givesWay() && relaying().anyMatch(other -> other.emitter() != emitter
+                    && relays(other, level, source) && !(other.emitter() instanceof Emitter speaker && speaker.givesWay()));
+            relayed.add(relayOne(level, emitter, new Sound(origin, facing, channel, source, profile),
+                    new EmitterRange(Optional.empty(), givenWay ? 0 : heard * sourceGain, profile.reach)));
         }
-        float sourceGain = linked instanceof MediaSource media ? media.gain() : 1;
-        boolean givenWay = emitter.givesWay() && RELAYS.entrySet().stream().anyMatch(entry -> entry.getKey() != emitter
-                && relays(entry, level, source) && !(entry.getKey() instanceof Emitter other && other.givesWay()));
-        relay(level, emitter, new Sound(origin, facing, channel, source, profile),
-                new EmitterRange(Optional.empty(), givenWay ? 0 : volume * sourceGain, profile.reach));
+        only(emitter, relayed);
     }
 
     public static void stop(Object emitter) {
-        Relay relay = RELAYS.remove(emitter);
-        if (relay != null) {
-            relay.listeners.stream().filter(p -> !p.isRemoved()).forEach(p -> send(p, relay.target.stop()));
+        Map<StreamPackets.Target, Relay> relays = RELAYS.remove(emitter);
+        if (relays != null) {
+            relays.values().forEach(Streams::stopped);
         }
+    }
+
+    private static void stop(Object emitter, StreamPackets.Target target) {
+        Map<StreamPackets.Target, Relay> relays = RELAYS.get(emitter);
+        Relay relay = relays == null ? null : relays.remove(target);
+        if (relay != null) {
+            stopped(relay);
+        }
+    }
+
+    private static void stopped(Relay relay) {
+        relay.listeners.stream().filter(p -> !p.isRemoved()).forEach(p -> send(p, relay.target.stop()));
     }
 
     /**
