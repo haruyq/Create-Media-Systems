@@ -19,6 +19,17 @@ jobs:
       # The tag (v1.2.3 -> 1.2.3) sets the mod version, so the jar and mods.toml match the release. Nothing is
       # released unless the unit and game tests pass.
       - run: ./gradlew build runGameTestServer -Pmod_version=${GITHUB_REF_NAME#v}
-      - run: gh release create "$GITHUB_REF_NAME" build/libs/*.jar --generate-notes
+      - run: |
+          gh release create "$GITHUB_REF_NAME" build/libs/*.jar --generate-notes
+          gh release view "$GITHUB_REF_NAME" --json body -q .body > release-notes.md
         env:
           GH_TOKEN: ${{ github.token }}
+      # Loaders, game versions and the Create dependency are read from the jar's neoforge.mods.toml. Skipped until
+      # the MODRINTH_PROJECT_ID variable and MODRINTH_TOKEN secret are set on the repository.
+      - if: vars.MODRINTH_PROJECT_ID != ''
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: build/libs/*.jar
+          changelog-file: release-notes.md
