@@ -1,6 +1,9 @@
 package org.haruyq.createmediasystems.blocks.piano.grand;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.contraptions.StructureTransform;
@@ -10,6 +13,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -38,17 +43,22 @@ public class PianoGameTests {
     public static void closingTheFallboardKillsOnlyCurrentPlayers(GameTestHelper test) {
         var level = test.getLevel();
         var origin = Vec3.atCenterOf(test.absolutePos(new BlockPos(2, 2, 2)));
-        var active = PianoTestPlayers.near(test, origin);
-        var alsoActive = PianoTestPlayers.near(test, origin);
-        var idle = PianoTestPlayers.near(test, origin);
-        var bystander = PianoTestPlayers.near(test, origin);
-        var open = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var soloistDeath = new AtomicReference<Component>();
+        var partnerDeath = new AtomicReference<Component>();
+        var idleDeath = new AtomicReference<Component>();
+        var closerDeath = new AtomicReference<Component>();
+        var active = PianoTestPlayers.near(test, origin, "Soloist", soloistDeath::set);
+        var alsoActive = PianoTestPlayers.near(test, origin, "DuetPartner", partnerDeath::set);
+        var idle = PianoTestPlayers.near(test, origin, "IdlePianist", idleDeath::set);
+        var bystander = PianoTestPlayers.near(test, origin, "LidCloser", closerDeath::set);
+        var open = new AtomicBoolean(true);
         var session = new PianoSession(level, PianoPackets.Target.placed(BlockPos.containing(origin)),
                 () -> new PianoPackets.Frame(origin, false), open::get, action -> {
                     if (action == Action.KEYBOARD_LID) open.set(!open.get());
                 });
         active.getInventory().armor.set(2, new ItemStack(Items.NETHERITE_CHESTPLATE));
         active.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.TOTEM_OF_UNDYING));
+        active.setLastHurtByPlayer(idle);
         var first = session.interact(active, Action.PLAY);
         var second = session.interact(alsoActive, Action.PLAY);
         var idleSession = session.interact(idle, Action.PLAY);
@@ -62,7 +72,27 @@ public class PianoGameTests {
                 "The fallboard caught both performers despite armor and a totem");
         test.assertTrue(idle.isAlive() && bystander.isAlive(), "Idle players and bystanders survive");
         test.assertTrue(session.interact(idle, Action.PLAY) == 0, "A closed keyboard cannot be played");
+        assertDeathMessage(test, soloistDeath.get(), "death.attack.cms_piano_fallboard",
+                active.getDisplayName(), bystander.getDisplayName());
+        assertDeathMessage(test, partnerDeath.get(), "death.attack.cms_piano_fallboard",
+                alsoActive.getDisplayName(), bystander.getDisplayName());
+
+        session.interact(bystander, Action.KEYBOARD_LID);
+        var closerSession = session.interact(bystander, Action.PLAY);
+        var otherSession = session.interact(idle, Action.PLAY);
+        session.play(bystander, closerSession, List.of(PianoEvent.press(60, 100)));
+        session.play(idle, otherSession, List.of(PianoEvent.press(64, 100)));
+        session.command(bystander, closerSession, Action.KEYBOARD_LID);
+        assertDeathMessage(test, idleDeath.get(), "death.attack.cms_piano_fallboard",
+                idle.getDisplayName(), bystander.getDisplayName());
+        assertDeathMessage(test, closerDeath.get(), "death.attack.cms_piano_fallboard.self", bystander.getDisplayName());
         test.succeed();
+    }
+
+    private static void assertDeathMessage(GameTestHelper test, Component message, String key, Component... names) {
+        test.assertTrue(message != null && message.getContents() instanceof TranslatableContents text
+                && text.getKey().equals(key) && Arrays.equals(text.getArgs(), names),
+                "Expected " + key + " with " + Arrays.toString(names) + ", got " + message);
     }
 
     @GameTest(template = "empty")

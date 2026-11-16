@@ -589,6 +589,8 @@
   "partybox.pack": "PACK UP",
   "death.attack.cms_disc": "%1$s was struck down by %2$s's disc",
   "death.attack.cms_disc.item": "%1$s was struck down by %2$s's disc [%3$s]",
+  "death.attack.cms_piano_fallboard": "%1$s died after getting their fingers caught when %2$s closed the piano lid",
+  "death.attack.cms_piano_fallboard.self": "%1$s died after closing the piano lid on their own fingers",
   "item.create_media_systems.megaphone_white": "SBL Megaphone 30 · White",
   "item.create_media_systems.megaphone_black": "SBL Megaphone 30 · Black",
   "megaphone.hint": "Right-click to open playback controls",
