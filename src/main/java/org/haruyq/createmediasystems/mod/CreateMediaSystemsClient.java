@@ -20,6 +20,14 @@ import org.haruyq.createmediasystems.items.launcher.client.LauncherClient;
 import org.haruyq.createmediasystems.lighting.LightingClient;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.client.MegaphoneClient;
 import org.haruyq.createmediasystems.blocks.piano.grand.client.PianoClient;
+import org.haruyq.createmediasystems.blocks.piano.grand.client.PianoPonder;
+import org.haruyq.createmediasystems.blocks.broadcast.client.BroadcastPonder;
+import org.haruyq.createmediasystems.disc.DrivePonder;
+import org.haruyq.createmediasystems.items.instrument.client.WearablePonder;
+import org.haruyq.createmediasystems.items.launcher.client.LauncherPonder;
+import org.haruyq.createmediasystems.items.megaphone.megaphone30.client.MegaphonePonder;
+import org.haruyq.createmediasystems.items.partybox.stage320.client.PartyBoxPonder;
+import org.haruyq.createmediasystems.blocks.steelpan.client.SteelpanPonder;
 import org.haruyq.createmediasystems.blocks.steelpan.client.SteelpanClient;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.items.partybox.stage320.client.PartyBoxClient;
@@ -43,12 +51,18 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 @Mod(value = CreateMediaSystems.MOD_ID, dist = Dist.CLIENT)
 public final class CreateMediaSystemsClient {
     /** In the order their listeners are added, which is the order they hear an event in. */
-    private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT, LauncherClient::register, PartyBoxClient::register,
-            MegaphoneClient::register, EmitterAudioManager::register, ClientStreams::register, new AudioClient(),
+    private static final List<ClientFeature> FEATURES = List.of(BatteryRenderer.CLIENT,
+            ClientFeature.withPonder(LauncherClient::register, LauncherPonder::register),
+            ClientFeature.withPonder(PartyBoxClient::register, PartyBoxPonder::register),
+            ClientFeature.withPonder(MegaphoneClient::register, MegaphonePonder::register),
+            EmitterAudioManager::register, ClientStreams::register, new AudioClient(),
             PxS1100Client.INSTANCE, new DisplayClient(),
             new VideoClient(), new HifiClient(), new TrainClient(), new LightingClient(), P2pClient::register,
-            DiscClient::register, BroadcastClient::register, new KeyboardClient(), PianoClient::register,
-            WearableClient::register, SteelpanClient::register);
+            ClientFeature.withPonder(DiscClient::register, DrivePonder::register),
+            ClientFeature.withPonder(BroadcastClient::register, BroadcastPonder::register), new KeyboardClient(),
+            ClientFeature.withPonder(PianoClient::register, PianoPonder::register),
+            ClientFeature.withPonder(WearableClient::register, WearablePonder::register),
+            ClientFeature.withPonder(SteelpanClient::register, SteelpanPonder::register));
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));
