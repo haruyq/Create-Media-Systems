@@ -1,7 +1,6 @@
 package org.haruyq.createmediasystems.blocks.piano.pxs1100we.client;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -14,8 +13,6 @@ import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
 import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.createmod.ponder.foundation.PonderScene;
-import net.createmod.ponder.foundation.instruction.RotateSceneInstruction;
-import net.createmod.ponder.foundation.instruction.TickingInstruction;
 import net.createmod.ponder.foundation.ui.PonderUI;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -23,9 +20,11 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
@@ -42,19 +41,18 @@ import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
 import org.haruyq.createmediasystems.stream.Streams.Channel;
 import org.jetbrains.annotations.Nullable;
 
+import static org.haruyq.createmediasystems.client.PonderScenes.notes;
 import static org.haruyq.createmediasystems.client.PonderScenes.plate;
 import static org.haruyq.createmediasystems.client.PonderScenes.say;
 
 final class PxS1100Ponder {
     private static final KeyboardLayout MODEL = KeyboardLayout.PX;
     private static final Map<PonderScene, Demo> DEMOS = new WeakHashMap<>();
-    private static final int AUDIO_TAIL_TICKS = 18;
-    private static final int AUDIO_END_PADDING_TICKS = 12;
-    private record Shot(float scale, float offset, float pitch, float yaw) {}
-
-    private static final Shot STAGE = new Shot(1.23f, -.35f, -35, 145);
-    private static final Shot KEYS = new Shot(12.0f, -.70f - .72f * (MODEL.fullScale - 1), -36, 179);
-    private static final float KEYS_SCREEN_FRACTION = .92f;
+    /** Ticks the last notes ring on after the piece. */
+    private static final int AUDIO_TAIL_TICKS = 40;
+    /** How close the performance comes: the keys over this much of the window's width, but no closer than this. */
+    private static final float KEYS_SCREEN_FRACTION = .92f, MAX_ZOOM = 12;
+    private static final BlockState STATE = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FULL_SIZE, true);
 
     private static PonderScene active;
     private static KeyboardAudio audio;
@@ -64,8 +62,9 @@ final class PxS1100Ponder {
     private PxS1100Ponder() {}
 
     static void register(PonderSceneRegistrationHelper<ResourceLocation> helper) {
-        helper.forComponents(PxS1100Feature.BLOCK.getId())
-                .addStoryBoard(Create.asResource("redstone_link"), PxS1100Ponder::studio);
+        helper.forComponents(PxS1100Feature.BLOCK.getId(), PxS1100Feature.ADAPTER_ITEM.getId())
+                .addStoryBoard(Create.asResource("redstone_link"), PxS1100Ponder::studio)
+                .addStoryBoard(Create.asResource("redstone_link"), PxS1100Ponder::performance);
     }
 
     @Nullable
@@ -73,47 +72,45 @@ final class PxS1100Ponder {
         return keyboard.getLevel() instanceof PonderLevel level ? DEMOS.get(level.scene) : null;
     }
 
-    private static void studio(SceneBuilder builder, SceneBuildingUtil util) {
-        var demo = new Demo();
-        DEMOS.put(builder.getScene(), demo);
-        builder.addInstruction(ponder -> {
-            demo.reset();
-            ponder.builder().scaleSceneView(STAGE.scale());
-            ponder.builder().setSceneOffsetY(STAGE.offset());
-        });
-        var scene = plate(builder, "px_s1100", "Performing with the Hayacio PX-S1100WE");
-        scene.scaleSceneView(STAGE.scale());
-        scene.setSceneOffsetY(STAGE.offset());
-        var root = util.grid().at(2, 1, 2);
-        var state = PxS1100Feature.BLOCK.get().defaultBlockState().setValue(KeyboardBlock.FULL_SIZE, true);
-        var keys = KeyboardBlock.point(root, state, new Vec3(1, .72, .43));
-        var power = KeyboardBlock.point(root, state, MODEL.power);
-        var dcIn = KeyboardBlock.point(root, state, MODEL.dcIn);
-        var usb = KeyboardBlock.point(root, state, MODEL.usbMidi);
-        var lineLeft = KeyboardBlock.point(root, state, MODEL.lineLeft);
-        var lineRight = KeyboardBlock.point(root, state, MODEL.lineRight);
-
-        scene.world().setBlocks(util.select().fromTo(0, 0, 0, 4, 0, 4), Blocks.POLISHED_DEEPSLATE.defaultBlockState(), false);
-        scene.world().setBlocks(util.select().fromTo(1, 0, 1, 4, 0, 3), Blocks.DARK_OAK_PLANKS.defaultBlockState(), false);
-        var rug = util.select().fromTo(1, 1, 1, 3, 1, 1);
-        scene.world().setBlocks(rug, Blocks.RED_CARPET.defaultBlockState(), false);
-        scene.world().showSection(rug, Direction.DOWN);
-        for (var part : KeyboardBlock.parts(state)) {
-            scene.world().setBlock(part.at(root, state), state.setValue(KeyboardBlock.PART, part), false);
+    /** The keyboard on its stand in the middle of the plate, its front to the camera, shown; its root. */
+    private static BlockPos keyboard(CreateSceneBuilder scene, SceneBuildingUtil util) {
+        BlockPos root = util.grid().at(2, 1, 2);
+        for (KeyboardBlock.Part part : KeyboardBlock.parts(STATE)) {
+            scene.world().setBlock(part.at(root, STATE), STATE.setValue(KeyboardBlock.PART, part), false);
         }
         scene.world().showSection(util.select().fromTo(root.offset(-1, 0, 0), root.offset(1, 1, 0)), Direction.DOWN);
-        scene.special().movePointOfInterest(keys);
-        scene.idle(16);
+        scene.idle(15);
+        return root;
+    }
+
+    private static void studio(SceneBuilder builder, SceneBuildingUtil util) {
+        Demo demo = new Demo();
+        DEMOS.put(builder.getScene(), demo);
+        builder.addInstruction(ponder -> demo.reset());
+        CreateSceneBuilder scene = plate(builder, "px_s1100", "The Digital Piano");
+        BlockPos root = keyboard(scene, util);
+        Vec3 keys = KeyboardBlock.point(root, STATE, new Vec3(1, .72, .43));
+        Vec3 power = KeyboardBlock.point(root, STATE, MODEL.power);
+        Vec3 dcIn = KeyboardBlock.point(root, STATE, MODEL.dcIn);
+        Vec3 usb = KeyboardBlock.point(root, STATE, MODEL.usbMidi);
 
         scene.rotateCameraY(180);
-        scene.idle(24);
-        scene.overlay().showControls(dcIn, Pointing.DOWN, 55).rightClick().withItem(new ItemStack(PowerFeature.BATTERY.get()));
-        say(scene, 80, dcIn, "Feed Forge Energy into the rear of the bass side, or use a charged battery.");
-        say(scene, 75, usb, PonderPalette.BLUE, "Connect a MIDI keyboard to your computer. Select the device in Settings.");
+        scene.idle(20);
+        scene.overlay().showControls(dcIn, Pointing.DOWN, 50).rightClick().withItem(new ItemStack(PowerFeature.BATTERY.get()));
+        say(scene, 100, dcIn, "It needs power: feed Forge Energy into the back of its bass side, or right-click it with a charged Battery.");
+
+        BlockPos adapter = KeyboardBlock.Part.BASS.at(root, STATE).relative(STATE.getValue(KeyboardBlock.FACING).getOpposite());
+        scene.world().setBlock(adapter, PxS1100Feature.ADAPTER.get().defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, STATE.getValue(KeyboardBlock.FACING)), false);
+        scene.world().showSection(util.select().position(adapter), Direction.DOWN);
+        scene.idle(15);
+        scene.overlay().showControls(util.vector().topOf(adapter), Pointing.DOWN, 50).rightClick().withItem(new ItemStack(Items.COAL));
+        say(scene, 130, util.vector().topOf(adapter), PonderPalette.GREEN, "Or set an AC Adapter on the floor right behind it. The adapter runs on a shaft turning below it, on Forge Energy, or on furnace fuel right-clicked into it.");
+        say(scene, 100, usb, "A real MIDI keyboard plugged into the computer plays it too: pick the device in the Settings of its screen.");
         scene.rotateCameraY(-180);
         scene.idle(20);
 
-        scene.overlay().showControls(power, Pointing.DOWN, 28).rightClick();
+        scene.overlay().showControls(power, Pointing.DOWN, 30).rightClick();
         scene.addInstruction(ignored -> {
             demo.view.putLong("Flash", Long.MAX_VALUE);
             demo.view.putBoolean("Powered", true);
@@ -121,74 +118,76 @@ final class PxS1100Ponder {
         scene.idle(4);
         scene.addInstruction(ignored -> demo.view.remove("Flash"));
         scene.effects().indicateSuccess(root);
-        scene.overlay().showControls(keys, Pointing.DOWN, 28).rightClick();
-        say(scene, 70, keys, "Right-click to play with the mouse, computer keyboard, or MIDI. Space works the damper.");
+        scene.overlay().showControls(keys, Pointing.DOWN, 30).rightClick();
+        say(scene, 110, keys, "Turn it on with its power button, then right-click it to play with the mouse or the computer's keyboard. Space works the damper.");
         scene.addInstruction(ignored -> demo.keys.apply(PianoEvent.control(PianoEvent.DAMPER, 103)));
         scene.idle(10);
         scene.addInstruction(ignored -> demo.keys.apply(PianoEvent.control(PianoEvent.DAMPER, 0)));
 
-        var left = util.grid().at(4, 1, 3);
-        var right = util.grid().at(0, 1, 3);
-        var speaker = AudioFeature.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, Direction.NORTH);
-        var quill = new ItemStack(AudioFeature.RANGE_QUILL.get());
+        BlockPos left = util.grid().at(4, 1, 3);
+        BlockPos right = util.grid().at(0, 1, 3);
+        BlockState speaker = AudioFeature.SPEAKER.get().defaultBlockState().setValue(SpeakerBlock.FACING, Direction.NORTH);
+        ItemStack quill = new ItemStack(AudioFeature.RANGE_QUILL.get());
         scene.world().setBlock(left, speaker, false);
         scene.world().setBlock(right, speaker, false);
-        scene.world().showSection(util.select().position(left), Direction.WEST);
-        scene.idle(8);
-        scene.world().showSection(util.select().position(right), Direction.EAST);
-        scene.idle(14);
-        scene.overlay().showControls(lineLeft, Pointing.DOWN, 35).rightClick().withItem(quill);
-        say(scene, 80, lineLeft, "Pick the piano with the Jukebox Range Quill, then right-click each Speaker to link it.");
-        connect(scene, util, root, left, lineLeft, Channel.LEFT, PonderPalette.GREEN, quill, "Left");
-        connect(scene, util, root, right, lineRight, Channel.RIGHT, PonderPalette.BLUE, quill, "Right");
-        scene.addInstruction(ignored -> demo.external = true);
-        say(scene, 85, keys, PonderPalette.GREEN, "Set Left and Right for stereo. Use Mix for one speaker. Linked speakers take over the sound.");
-        scene.overlay().showText(75).attachKeyFrame().pointAt(keys.add(0, .48, 0)).placeNearTarget()
-                .text("U.N. Owen Was Her? (MIDI © chishige 2016)");
-        playScore(scene, demo);
-        scene.idle(AUDIO_TAIL_TICKS);
+        scene.world().showSection(util.select().position(left), Direction.DOWN);
+        scene.idle(5);
+        scene.world().showSection(util.select().position(right), Direction.DOWN);
+        scene.idle(10);
+        scene.overlay().showControls(keys, Pointing.DOWN, 30).rightClick().withItem(quill);
+        scene.overlay().chaseBoundingBoxOutline(PonderPalette.OUTPUT, root,
+                new AABB(root.offset(-1, 0, 0)).minmax(new AABB(root.offset(1, 1, 0))), 120);
+        scene.idle(35);
+        link(scene, util, root, left, Channel.LEFT, quill);
+        link(scene, util, root, right, Channel.RIGHT, quill);
+        say(scene, 110, util.vector().centerOf(left), "To play it through speakers, pick it with a Range Quill, then right-click each speaker: set one to the left channel and one to the right.");
+
+        Vec3 leftMouth = SpeakerBlock.mouth(left, Direction.NORTH);
+        Vec3 rightMouth = SpeakerBlock.mouth(right, Direction.NORTH);
+        notes(scene, leftMouth, 80);
+        notes(scene, rightMouth, 80);
+        scene.overlay().showText(40).pointAt(leftMouth).placeNearTarget().text("Left");
+        scene.overlay().showText(40).pointAt(rightMouth).placeNearTarget().text("Right");
+        scene.idle(50);
+        say(scene, 100, keys, PonderPalette.GREEN, "While speakers are linked, the sound comes from them instead of the piano. Leave one on Mix to play it all from one speaker.");
         scene.addInstruction(ignored -> demo.view.putBoolean("Powered", false));
-        scene.markAsFinished();
     }
 
-    private static void connect(CreateSceneBuilder scene, SceneBuildingUtil util, BlockPos root, BlockPos speaker,
-            Vec3 jack, Channel channel, PonderPalette color, ItemStack quill, String name) {
-        var mouth = SpeakerBlock.mouth(speaker, Direction.NORTH);
+    private static void link(CreateSceneBuilder scene, SceneBuildingUtil util, BlockPos root, BlockPos speaker, Channel channel,
+            ItemStack quill) {
         scene.overlay().showControls(util.vector().topOf(speaker), Pointing.DOWN, 30).rightClick().withItem(quill);
         scene.world().modifyBlockEntityNBT(util.select().position(speaker), SpeakerBlock.Entity.class, tag -> {
             tag.putLong("Source", root.asLong());
             tag.putInt("Channel", channel.ordinal());
         });
-        scene.overlay().showLine(color, jack, mouth, 45);
-        scene.overlay().showText(38).colored(color).pointAt(mouth).placeNearTarget().text(name);
-        scene.idle(26);
+        scene.idle(30);
     }
 
-    private static void zoom(CreateSceneBuilder scene, Shot from, Shot to, int ticks) {
-        scene.addInstruction(new RotateSceneInstruction(to.pitch(), to.yaw(), false));
-        scene.addInstruction(new TickingInstruction(false, ticks) {
-            @Override public void tick(PonderScene ponder) {
-                super.tick(ponder);
-                float progress = 1 - remainingTicks / (float) totalTicks;
-                float smooth = progress * progress * (3 - 2 * progress);
-                var camera = ponder.builder();
-                var window = Minecraft.getInstance().getWindow();
-                float fitted = Math.min(KEYS.scale() / MODEL.fullScale, KEYS_SCREEN_FRACTION * window.getGuiScaledWidth()
-                        / (30 * (float) MODEL.body.getXsize() * MODEL.fullScale));
-                float fromScale = from == KEYS ? Math.max(STAGE.scale(), fitted) : from.scale();
-                float toScale = to == KEYS ? Math.max(STAGE.scale(), fitted) : to.scale();
-                camera.scaleSceneView(Mth.lerp(smooth, fromScale, toScale));
-                camera.setSceneOffsetY(Mth.lerp(smooth, from.offset(), to.offset()));
-            }
+    /**
+     * A scene of its own, so the long piece leaves the other scene's timeline alone: the piano seen from where its
+     * player sits, close enough that its keys fill most of the window's width, playing the piece to its end.
+     */
+    private static void performance(SceneBuilder builder, SceneBuildingUtil util) {
+        Demo demo = new Demo();
+        DEMOS.put(builder.getScene(), demo);
+        builder.addInstruction(ponder -> {
+            demo.reset();
+            demo.view.putBoolean("Powered", true);
+            float width = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+            ponder.builder().scaleSceneView(Math.max(1, Math.min(MAX_ZOOM / MODEL.fullScale,
+                    KEYS_SCREEN_FRACTION * width / (30 * (float) MODEL.body.getXsize() * MODEL.fullScale))));
+            ponder.builder().setSceneOffsetY(-.70f - .72f * (MODEL.fullScale - 1));
+            ponder.getTransform().xRotation.startWithValue(-36);
+            ponder.getTransform().yRotation.startWithValue(180);
         });
-    }
-
-    private static void playScore(CreateSceneBuilder scene, Demo demo) {
-        scene.idle(40);
+        CreateSceneBuilder scene = plate(builder, "px_s1100_performance", "Playing a Piece");
+        BlockPos root = keyboard(scene, util);
+        Vec3 keys = KeyboardBlock.point(root, STATE, new Vec3(1, .72, .43));
+        scene.overlay().showText(100).attachKeyFrame().pointAt(keys).placeNearTarget()
+                .text("Here is a piano piece played on it: U.N. Owen Was Her? (MIDI © chishige 2016)");
         scene.addInstruction(ponder -> demo.start = ponder.getCurrentTime());
-        zoom(scene, STAGE, KEYS, 24);
-        scene.idle(demo.score.duration() + AUDIO_END_PADDING_TICKS);
-        zoom(scene, KEYS, STAGE, AUDIO_TAIL_TICKS);
+        scene.idle(demo.score.duration() + AUDIO_TAIL_TICKS);
+        scene.addInstruction(ignored -> demo.view.putBoolean("Powered", false));
     }
 
     static void tick(Minecraft mc) {
