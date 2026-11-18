@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -54,15 +55,28 @@ import dev.onvoid.webrtc.RTCDataChannelBuffer;
 import dev.onvoid.webrtc.RTCDataChannelInit;
 import dev.onvoid.webrtc.RTCDataChannelObserver;
 import dev.onvoid.webrtc.RTCDataChannelState;
+import dev.onvoid.webrtc.RTCEncodedVideoFrameInjector;
+import dev.onvoid.webrtc.RTCEncodedVideoFrameInjectorObserver;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCOfferOptions;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
+import dev.onvoid.webrtc.RTCRtpCodecCapability;
+import dev.onvoid.webrtc.RTCRtpTransceiver;
+import dev.onvoid.webrtc.RTCRtpTransceiverDirection;
+import dev.onvoid.webrtc.RTCRtpTransceiverInit;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.SetSessionDescriptionObserver;
+import dev.onvoid.webrtc.media.MediaStreamTrack;
+import dev.onvoid.webrtc.media.MediaType;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSink;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.audio.HeadlessAudioDeviceModule;
+import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
 /**
  * A client's direct P2P session (see P2p): signals through the API's WebSocket with its ticket, then holds a WebRTC
@@ -137,6 +151,17 @@ public final class Transport implements AutoCloseable {
     private volatile long budgetBps;
     private volatile long received;
     private volatile long backlog;
+    /**
+     * A screen share's sound (host): one track every viewer's sender plays, each encoding it for itself. Its video is
+     * encoded once, elsewhere, and injected into each (see {@link #video}).
+     */
+    private CustomAudioSource screenSound;
+    private AudioTrack screenSoundTrack;
+    /** A viewer joined or lost a picture, so the screen share's next frame must be a key frame (see #keyFrameWanted). */
+    private final AtomicBoolean keyFrame = new AtomicBoolean();
+    /** What watches the host's screen share here (viewer): its pictures and its sound, as they are decoded. */
+    private final Set<VideoTrackSink> pictures = ConcurrentHashMap.newKeySet();
+    private final Set<AudioTrackSink> sounds = ConcurrentHashMap.newKeySet();
 
     /**
      * A session signalling with {@code signal}, which delivers the API's messages to {@link #signal(String)}, and
@@ -402,6 +427,60 @@ public final class Transport implements AutoCloseable {
         return queue(peer, CONTROL, payload);
     }
 
+    /**
+     * Hands every connected viewer one H.264 frame of the host's screen share, encoded once for all of them (see
+     * ScreenShare): {@code rtp} is its RTP time (90 kHz). A viewer takes frames from its first key frame on.
+     */
+    public synchronized void video(ByteBuffer frame, long rtp, boolean key, int width, int height) {
+        if (state == State.CLOSED || !ticket.host()) {
+            return;
+        }
+        for (Link link : links.values()) {
+            if (link.open && link.injector != null) {
+                link.injector.injectFrame(frame.duplicate(), rtp, key, width, height);
+            }
+        }
+    }
+
+    /** Whether a viewer has asked for a key frame of the screen share since this was last asked (host). */
+    public boolean keyFrameWanted() {
+        return keyFrame.getAndSet(false);
+    }
+
+    /** Hands every viewer 10 ms of the screen share's sound: 480 frames of 16-bit 48 kHz stereo (host). */
+    public synchronized void sound(byte[] chunk) {
+        if (state != State.CLOSED && screenSound != null) {
+            screenSound.pushAudio(chunk, 16, 48_000, 2, 480);
+        }
+    }
+
+    /**
+     * {@code picture} and {@code sound} are given the host's screen share as it is decoded here (viewer), on WebRTC's
+     * threads; null leaves either out. Frames are only valid during the call.
+     */
+    public void watch(VideoTrackSink picture, AudioTrackSink sound) {
+        if (picture != null) {
+            pictures.add(picture);
+        }
+        if (sound != null) {
+            sounds.add(sound);
+        }
+    }
+
+    public void unwatch(VideoTrackSink picture, AudioTrackSink sound) {
+        if (picture != null) {
+            pictures.remove(picture);
+        }
+        if (sound != null) {
+            sounds.remove(sound);
+        }
+    }
+
+    /** A browser's ask for stereo Opus, which WebRTC otherwise sends as mono; both sides' descriptions carry it. */
+    static String stereo(String sdp) {
+        return sdp.contains("stereo=1") ? sdp : sdp.replace("useinbandfec=1", "useinbandfec=1;stereo=1;sprop-stereo=1");
+    }
+
     private boolean queue(UUID peer, byte type, byte[] payload) {
         Link link = links.get(peer);
         if (state == State.CLOSED || link == null || !link.open || link.queued + payload.length + 1 > MAX_QUEUED) {
@@ -545,6 +624,7 @@ public final class Transport implements AutoCloseable {
         Link link = new Link(viewer);
         RTCDataChannelInit init = new RTCDataChannelInit();
         link.attach(link.pc.createDataChannel("cms", init));
+        link.screen();
         link.pc.createOffer(new RTCOfferOptions(), link.created("offer"));
     }
 
@@ -609,7 +689,10 @@ public final class Transport implements AutoCloseable {
         if (now - link.openedAt < PROBE_NANOS) {
             byte[] frame = new byte[PROBE_FRAME + 1];
             frame[0] = PROBE;
-            while (link.channel.getBufferedAmount() < PROBE_BUFFER && link.sendNow(frame)) {
+            // At most the bound a tick, under the session's lock: a channel that drains as fast as it is filled
+            // (in-process, with a screen share's sound beside it) would otherwise never let go.
+            for (int sent = 0; sent < PROBE_BUFFER && link.channel.getBufferedAmount() < PROBE_BUFFER && link.sendNow(frame);
+                    sent += frame.length) {
                 // Filled up to the bound, or dropped.
             }
             return false;
@@ -733,6 +816,12 @@ public final class Transport implements AutoCloseable {
                 release(channel::dispose);
             }
             handed.clear();
+            if (screenSoundTrack != null) {
+                release(screenSoundTrack::dispose);
+                release(screenSound::dispose);
+            }
+            pictures.clear();
+            sounds.clear();
             if (factory != null) {
                 release(factory::dispose);
             }
@@ -820,6 +909,9 @@ public final class Transport implements AutoCloseable {
         long rttNanos, backlog;
         boolean probeEnded;
         String route = "direct";
+        /** The screen share's senders to this viewer (host), and what puts its encoded video on one, once open. */
+        RTCRtpTransceiver video;
+        RTCEncodedVideoFrameInjector injector;
 
         Link(UUID peer) {
             this.peer = peer;
@@ -870,6 +962,21 @@ public final class Transport implements AutoCloseable {
                             route = type(local) + "/" + type(remote);
                         }
                     });
+                }
+
+                /** The host's screen share (viewer): handed on to what watches it, from WebRTC's threads. */
+                @Override
+                public void onTrack(RTCRtpTransceiver transceiver) {
+                    if (ticket.host()) {
+                        return;
+                    }
+                    MediaStreamTrack track = transceiver.getReceiver().getTrack();
+                    if (track instanceof VideoTrack video) {
+                        video.addSink(frame -> pictures.forEach(sink -> sink.onVideoFrame(frame)));
+                    } else if (track instanceof AudioTrack sound) {
+                        sound.addSink((data, bits, rate, channels, frames) ->
+                                sounds.forEach(sink -> sink.onData(data, bits, rate, channels, frames)));
+                    }
                 }
 
                 @Override
@@ -942,12 +1049,50 @@ public final class Transport implements AutoCloseable {
             }, () -> inbound.addAndGet(-cost));
         }
 
+        /**
+         * Host: a screen share's video (H.264, which encodes in software far faster than WebRTC's default VP8) and
+         * sound, send only, offered to every viewer whether or not anything is shared yet, so a share starting later
+         * needs no new offer. The sound plays from the session's one track; the video is injected (see #video).
+         */
+        void screen() {
+            RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();
+            init.direction = RTCRtpTransceiverDirection.SEND_ONLY;
+            // Streams of their own, which WebRTC does not hold in step: the host delays the video itself (see ScreenShare).
+            init.streamIds = List.of("screen-video");
+            video = pc.addTransceiver(MediaType.VIDEO, init);
+            List<RTCRtpCodecCapability> h264 = factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs().stream()
+                    .filter(c -> c.getMimeType().equalsIgnoreCase("video/H264") || c.getMimeType().endsWith("rtx")).toList();
+            video.setCodecPreferences(h264);
+            RTCRtpTransceiverInit soundInit = new RTCRtpTransceiverInit();
+            soundInit.direction = RTCRtpTransceiverDirection.SEND_ONLY;
+            soundInit.streamIds = List.of("screen-sound");
+            RTCRtpTransceiver sound = pc.addTransceiver(MediaType.AUDIO, soundInit);
+            if (screenSound == null) {
+                screenSound = new CustomAudioSource();
+                screenSoundTrack = factory.createAudioTrack("screen-sound", screenSound);
+            }
+            sound.getSender().replaceTrack(screenSoundTrack);
+        }
+
         /** Follows the channel's state; a viewer's may be open already when it is handed over. */
         void opened() {
             RTCDataChannelState now = channel.getState();
             if (now == RTCDataChannelState.OPEN && !open) {
                 open = true;
                 openedAt = System.nanoTime();
+                if (video != null) {
+                    injector = video.getSender().createEncodedVideoFrameInjector(new RTCEncodedVideoFrameInjectorObserver() {
+                        @Override
+                        public void onKeyFrameRequest() {
+                            keyFrame.set(true);
+                        }
+
+                        @Override
+                        public void onBitrateChange(int allocated, int available) {
+                        }
+                    });
+                    keyFrame.set(true);
+                }
                 LOGGER.info("Connected directly to {}.", name(peer));
             } else if (now == RTCDataChannelState.CLOSED) {
                 drop(this, "The connection to " + name(peer) + " closed.");
@@ -985,7 +1130,8 @@ public final class Transport implements AutoCloseable {
         CreateSessionDescriptionObserver created(String type) {
             return new CreateSessionDescriptionObserver() {
                 @Override
-                public void onSuccess(RTCSessionDescription description) {
+                public void onSuccess(RTCSessionDescription created) {
+                    RTCSessionDescription description = new RTCSessionDescription(created.sdpType, stereo(created.sdp));
                     later(() -> pc.setLocalDescription(description, new SetSessionDescriptionObserver() {
                         @Override
                         public void onSuccess() {
@@ -1040,6 +1186,11 @@ public final class Transport implements AutoCloseable {
             open = false;
             queue.clear();
             queued = 0;
+            if (injector != null) {
+                // Under the session's lock, as video() is: no frame is being injected into it.
+                release(injector::dispose);
+                injector = null;
+            }
             if (channel != null) {
                 release(channel::unregisterObserver);
                 release(channel::close);

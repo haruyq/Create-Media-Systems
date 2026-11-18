@@ -65,6 +65,8 @@ class BlockResourcesTest {
             Map.entry("px_s1100_power_adapter", new Row(Tool.PICKAXE, false, true)),
             // Legacy and invisible: old saves only clear it away.
             Map.entry("reload_glow", new Row(Tool.NONE, false, false)),
+            Map.entry("screen_share_monitor", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("screen_share_server", new Row(Tool.PICKAXE, false, true)),
             Map.entry("speaker", new Row(Tool.AXE, false, true)),
             Map.entry("stage_light", new Row(Tool.PICKAXE, false, true)),
             Map.entry("strip_light", new Row(Tool.PICKAXE, false, true)),
@@ -133,6 +135,23 @@ class BlockResourcesTest {
             assertTrue(keys.containsAll(named), language + " lacks a block's name: " + difference(named, keys));
             assertTrue(registered().keySet().containsAll(keys),
                     language + " names a block that isn't registered: " + difference(keys, registered().keySet()));
+        }
+    }
+
+    @Test
+    void ponderTextsFormat() throws IOException {
+        // Ponder shows its texts through I18n.get, which String.formats them: a lone % shows "Format error".
+        for (String language : List.of("en_us", "ja_jp")) {
+            for (var entry : json(RESOURCES.resolve("assets/" + NS + "/lang/" + language + ".json")).getAsJsonObject().entrySet()) {
+                if (entry.getKey().startsWith(NS + ".ponder.")) {
+                    String text = entry.getValue().getAsString();
+                    try {
+                        String.format(text);
+                    } catch (java.util.IllegalFormatException e) {
+                        throw new AssertionError(language + " " + entry.getKey() + " needs %% for a %: " + e, e);
+                    }
+                }
+            }
         }
     }
 

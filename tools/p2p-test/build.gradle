@@ -27,6 +27,7 @@ sourceSets.main.java.srcDir(sharedSources)
 dependencies {
     implementation('com.google.code.gson:gson:2.10.1')
     implementation('org.slf4j:slf4j-api:2.0.9')
+    compileOnly('org.jetbrains:annotations:24.1.0')
     runtimeOnly('org.slf4j:slf4j-simple:2.0.9')
     implementation("dev.onvoid.webrtc:webrtc-java:${webrtcVersion}") { transitive = false }
     // Its native library and licenses; webrtc-java unpacks the library from this jar itself.

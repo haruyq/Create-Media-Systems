@@ -23,6 +23,8 @@ import org.haruyq.createmediasystems.blocks.piano.grand.client.PianoClient;
 import org.haruyq.createmediasystems.blocks.piano.grand.client.PianoPonder;
 import org.haruyq.createmediasystems.blocks.broadcast.client.BroadcastPonder;
 import org.haruyq.createmediasystems.disc.DrivePonder;
+import org.haruyq.createmediasystems.screen.ScreenClient;
+import org.haruyq.createmediasystems.screen.ScreenPonder;
 import org.haruyq.createmediasystems.items.instrument.client.WearablePonder;
 import org.haruyq.createmediasystems.items.launcher.client.LauncherPonder;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.client.MegaphonePonder;
@@ -62,7 +64,8 @@ public final class CreateMediaSystemsClient {
             ClientFeature.withPonder(BroadcastClient::register, BroadcastPonder::register), new KeyboardClient(),
             ClientFeature.withPonder(PianoClient::register, PianoPonder::register),
             ClientFeature.withPonder(WearableClient::register, WearablePonder::register),
-            ClientFeature.withPonder(SteelpanClient::register, SteelpanPonder::register));
+            ClientFeature.withPonder(SteelpanClient::register, SteelpanPonder::register),
+            ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register));
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

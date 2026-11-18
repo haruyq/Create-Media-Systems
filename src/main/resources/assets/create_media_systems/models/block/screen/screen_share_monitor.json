@@ -1,0 +1,59 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "front": "create_media_systems:block/screen/screen_share_monitor_front",
+    "body": "create_media_systems:block/screen/screen_share_monitor_body",
+    "particle": "create_media_systems:block/screen/screen_share_monitor_body"
+  },
+  "elements": [
+    {
+      "name": "panel",
+      "from": [0, 4, 7],
+      "to": [16, 13.5, 8.5],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 9.5], "texture": "#front"},
+        "east": {"texture": "#body"},
+        "south": {"texture": "#body"},
+        "west": {"texture": "#body"},
+        "up": {"texture": "#body"},
+        "down": {"texture": "#body"}
+      }
+    },
+    {
+      "name": "back",
+      "from": [4, 6, 8.5],
+      "to": [12, 12, 9.5],
+      "faces": {
+        "east": {"texture": "#body"},
+        "south": {"texture": "#body"},
+        "west": {"texture": "#body"},
+        "up": {"texture": "#body"},
+        "down": {"texture": "#body"}
+      }
+    },
+    {
+      "name": "neck",
+      "from": [7, 1, 9],
+      "to": [9, 7, 10],
+      "faces": {
+        "north": {"texture": "#body"},
+        "east": {"texture": "#body"},
+        "south": {"texture": "#body"},
+        "west": {"texture": "#body"}
+      }
+    },
+    {
+      "name": "foot",
+      "from": [4, 0, 5],
+      "to": [12, 1, 11],
+      "faces": {
+        "north": {"texture": "#body"},
+        "east": {"texture": "#body"},
+        "south": {"texture": "#body"},
+        "west": {"texture": "#body"},
+        "up": {"texture": "#body"},
+        "down": {"texture": "#body", "cullface": "down"}
+      }
+    }
+  ]
+}

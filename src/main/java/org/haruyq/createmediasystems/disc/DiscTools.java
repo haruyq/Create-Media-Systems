@@ -25,7 +25,7 @@ import java.util.zip.ZipFile;
 
 import com.sun.jna.Platform;
 
-final class DiscTools {
+public final class DiscTools {
     private static final String VERSION = "9.0.2-cms-dvd1";
     private static final String ROOT = "ffmpeg-" + VERSION + "/";
     private static final URI DOWNLOAD = URI.create("https://github.com/haruyq/Create-Media-Systems/releases/download/disc-ffmpeg-"
@@ -36,12 +36,12 @@ final class DiscTools {
     private static final int MAX_DOWNLOAD = 256 * 1024 * 1024;
     private static final int MAX_UNPACKED = 768 * 1024 * 1024;
 
-    record Installed(String ffmpeg, String ffprobe) {}
+    public record Installed(String ffmpeg, String ffprobe) {}
 
     private DiscTools() {
     }
 
-    static Installed ensure(Path directory, String ffmpeg, String ffprobe, Runnable downloading) throws IOException {
+    public static Installed ensure(Path directory, String ffmpeg, String ffprobe, Runnable downloading) throws IOException {
         boolean autoFfmpeg = automatic(directory, ffmpeg, "ffmpeg"), autoFfprobe = automatic(directory, ffprobe, "ffprobe");
         if (!autoFfmpeg && !autoFfprobe) {
             return new Installed(ffmpeg, ffprobe);

@@ -19,6 +19,7 @@ import org.haruyq.createmediasystems.client.Reports;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
 import org.haruyq.createmediasystems.stream.StreamFeature;
+import org.haruyq.createmediasystems.stream.MediaKind;
 import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
@@ -268,8 +269,9 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 if (missing != null) {
                     throw new IOException(missing);
                 }
-                AudioStream opened = NativeAudio.play(
-                        () -> new VlcPlayer(spec.video(), requestedAt, spec.startSeconds()),
+                boolean screen = MediaKind.of(spec.track()) == MediaKind.SCREEN;
+                AudioStream opened = NativeAudio.play(() -> screen ? new ScreenPlayer(spec.video())
+                                : new VlcPlayer(spec.video(), requestedAt, spec.startSeconds()),
                         spec, requestedAt, () -> released, go);
                 direct = opened;
                 if (released) {

@@ -21,6 +21,7 @@ import org.haruyq.createmediasystems.items.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.MegaphoneFeature;
 import org.haruyq.createmediasystems.p2p.P2pFeature;
+import org.haruyq.createmediasystems.screen.ScreenFeature;
 import org.haruyq.createmediasystems.items.partybox.stage320.PartyBoxFeature;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanFeature;
@@ -44,7 +45,7 @@ public final class CreateMediaSystemsMod {
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new PxS1100Feature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
-            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new SteelpanFeature());
+            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new SteelpanFeature(), new ScreenFeature());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -87,7 +88,7 @@ public final class CreateMediaSystemsMod {
                 AudioFeature.CUSTOM_DISC, DiscFeature.CD, DiscFeature.CASSETTE, DiscFeature.DVD, DiscFeature.BLU_RAY));
         sections.put("audio", audio);
         sections.put("video", List.of(
-                VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM, VideoFeature.EQUALIZER_ITEM,
+                VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM, ScreenFeature.SERVER_ITEM, ScreenFeature.MONITOR_ITEM, VideoFeature.EQUALIZER_ITEM,
                 DisplayFeature.DISPLAY_ITEM, DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL));
         sections.put("lighting", List.of(
                 LightingFeature.STAGE_LIGHT_ITEM, LightingFeature.STRIP_LIGHT_ITEM, LightingFeature.LASER_PROJECTOR_ITEM,

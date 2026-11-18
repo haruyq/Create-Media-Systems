@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "create_media_systems:block/screen/screen_share_server_top",
+    "front": "create_media_systems:block/screen/screen_share_server_front_on",
+    "side": "create_media_systems:block/screen/screen_share_server_side"
+  }
+}

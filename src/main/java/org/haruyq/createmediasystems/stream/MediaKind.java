@@ -20,7 +20,12 @@ public enum MediaKind {
      * A disc a player shares over P2P (see DiscUrl): allowed whatever the host list says, as it never leaves the
      * players, and waited for as long as a track may load, since joining its host and its first segment take a while.
      */
-    DISC(false, Streams.MAX_LOAD_TICKS, "DVD / Blu-ray");
+    DISC(false, Streams.MAX_LOAD_TICKS, "DVD / Blu-ray"),
+    /**
+     * A player's screen, shared live over P2P (see DiscUrl#screen): like a disc, allowed whatever the host list says
+     * and waited for as long as a track may load, as joining its host takes a while.
+     */
+    SCREEN(false, Streams.MAX_LOAD_TICKS, "Screen share");
 
     /** Whether only a host on the server's list (or a subdomain of one) may be played (see UrlPolicy). */
     final boolean listedHost;
@@ -42,8 +47,9 @@ public enum MediaKind {
         if (url == null) {
             return null;
         }
-        if (DiscUrl.parse(url) != null) {
-            return DISC;
+        DiscUrl shared = DiscUrl.parse(url);
+        if (shared != null) {
+            return shared.screen() ? SCREEN : DISC;
         }
         URI uri = uri(url);
         if (uri == null || uri.getHost() == null || uri.getScheme() == null) {
@@ -62,7 +68,10 @@ public enum MediaKind {
         return (kind == null ? WEB : kind).barrierTicks;
     }
 
-    /** Whether {@code player} may put {@code url} on a disc or a drive: a shared disc only its host may; any other, anyone. */
+    /**
+     * Whether {@code player} may put {@code url} on a disc or a drive: a shared disc or screen only its host may; any
+     * other, anyone.
+     */
     public static boolean writableBy(String url, UUID player) {
         DiscUrl disc = DiscUrl.parse(url);
         return disc == null || disc.owner().equals(player);

@@ -115,18 +115,21 @@ final class VlcAudio {
     }
 
     private void play(Pointer samples, int sampleCount, long pts) {
-        if (sampleCount <= 0) {
-            return;
+        if (sampleCount > 0) {
+            play(samples.getByteArray(0, sampleCount * 4), sampleCount, pts);
         }
+    }
+
+    /** {@code count} interleaved stereo samples (S16N), heard at {@code pts} on VLC's clock; {@code stereo} is taken. */
+    void play(byte[] stereo, int count, long pts) {
         long now = System.nanoTime();
         lastSamples = now;
         if (firstSamples == 0) {
             firstSamples = now;
         }
         if (!streams.isEmpty()) {
-            byte[] stereo = samples.getByteArray(0, sampleCount * 4);
             equalizer.process(stereo);
-            offer(stereo, sampleCount, pts);
+            offer(stereo, count, pts);
         }
     }
 

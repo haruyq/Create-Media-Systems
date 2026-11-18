@@ -46,6 +46,9 @@ public final class ClientConfig {
     public static final ModConfigSpec.ConfigValue<String> DISC_DRIVE = BUILDER
             .comment("The real drive a disc drive emulator shows, like 'E:/'; a folder holding BDMV, VIDEO_TS or a CD image (.bin) works too. Empty takes the first optical drive of this computer with a disc in it.")
             .define("discDrive", "");
+    public static final ModConfigSpec.ConfigValue<String> SCREEN_AUDIO_PATH = BUILDER
+            .comment("cms-screen-audio.exe, which takes the sound a screen share sends (an app's or the PC's on Windows 11, a microphone's on any Windows). Empty uses the one bundled with the mod; a path overrides it.")
+            .define("screenAudioPath", "");
 
     private ClientConfig() {
     }

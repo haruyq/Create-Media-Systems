@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "create_media_systems:block/screen/screen_share_monitor"
+    },
+    "facing=east": {
+      "model": "create_media_systems:block/screen/screen_share_monitor",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "create_media_systems:block/screen/screen_share_monitor",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "create_media_systems:block/screen/screen_share_monitor",
+      "y": 270
+    }
+  }
+}
