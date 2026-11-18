@@ -60,7 +60,7 @@ public final class ScreenPonder {
 
         scene.overlay().showControls(top, Pointing.DOWN, 50).rightClick();
         scene.idle(10);
-        say(scene, 130, top, "Right-click the server and pick an app's window or a whole screen. Set the resolution, the frame rate, the bitrate, where its sound comes from (the app, the whole computer, or a microphone) and how loud it goes out, up to 200%.");
+        say(scene, 130, top, "Right-click the server and pick an app's window or a whole screen. Set the resolution, the frame rate, the bitrate, where its sound comes from (the app, the whole computer, or a microphone) and how loud it goes out, up to 200%%.");
         scene.world().modifyBlock(server, state -> state.setValue(ScreenServerBlock.LIT, true), false);
         scene.idle(10);
         say(scene, 120, util.vector().centerOf(player), PonderPalette.GREEN, "Once you go live, your computer sends it straight to every player watching, and the server shows you a preview of what they see.");

@@ -139,6 +139,23 @@ class BlockResourcesTest {
     }
 
     @Test
+    void ponderTextsFormat() throws IOException {
+        // Ponder shows its texts through I18n.get, which String.formats them: a lone % shows "Format error".
+        for (String language : List.of("en_us", "ja_jp")) {
+            for (var entry : json(RESOURCES.resolve("assets/" + NS + "/lang/" + language + ".json")).getAsJsonObject().entrySet()) {
+                if (entry.getKey().startsWith(NS + ".ponder.")) {
+                    String text = entry.getValue().getAsString();
+                    try {
+                        String.format(text);
+                    } catch (java.util.IllegalFormatException e) {
+                        throw new AssertionError(language + " " + entry.getKey() + " needs %% for a %: " + e, e);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     void blocksThatDropThemselvesHaveTheirLootTable() throws IOException {
         Set<String> dropping = rows(row -> row.dropsItself);
         for (String id : dropping) {

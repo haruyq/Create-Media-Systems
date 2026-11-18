@@ -66,7 +66,7 @@ public final class VideoClient implements ClientFeature {
 
         scene.overlay().showControls(util.vector().topOf(player), Pointing.DOWN, 50).rightClick()
                 .withItem(AllItems.WRENCH.asStack());
-        say(scene, 100, util.vector().topOf(player), "Its volume is set like any Create value: hold right-click on its top with a Wrench. It turns its displays and its speakers up or down alike. Its front sets how brightly its displays light their surroundings, the same for everyone; 0% turns it off.");
+        say(scene, 100, util.vector().topOf(player), "Its volume is set like any Create value: hold right-click on its top with a Wrench. It turns its displays and its speakers up or down alike. Its front sets how brightly its displays light their surroundings, the same for everyone; 0%% turns it off.");
 
         scene.overlay().showControls(util.vector().topOf(player), Pointing.DOWN, 50).rightClick().whileSneaking()
                 .withItem(new ItemStack(VideoFeature.REMOTE.get()));
