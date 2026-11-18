@@ -112,6 +112,11 @@ dependencies {
         version { strictly "[${webrtc_version}]" }
         transitive = false
     }
+    // Dev runs see a library that isn't a mod only from here: without it, runClient fails on the first WebRTC class
+    // (logging out loads the screen share's).
+    additionalRuntimeClasspath("dev.onvoid.webrtc:webrtc-java:${webrtc_version}") {
+        transitive = false
+    }
 
     if (sableTests) {
         implementation('maven.modrinth:sable:2.0.6+mc1.21.1') { transitive = false }

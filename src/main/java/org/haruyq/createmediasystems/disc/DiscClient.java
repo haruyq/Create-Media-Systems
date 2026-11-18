@@ -294,20 +294,7 @@ public final class DiscClient {
         if (url == null) {
             throw new IOException("Not a disc's link");
         }
-        var mc = Minecraft.getInstance();
-        CompletableFuture<Boolean> joined = new CompletableFuture<>();
-        mc.execute(() -> joined.complete(P2pClient.connect(url.owner())));
-        try {
-            if (!joined.get(10, TimeUnit.SECONDS)) {
-                throw new IOException("Could not join the disc host's P2P session");
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Disc loading was cancelled");
-        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException failed) {
-            throw new IOException("Could not join the disc host");
-        }
-        Transport connected = connection(url.owner());
+        Transport connected = join(url.owner());
         DiscStream current;
         synchronized (DiscClient.class) {
             // Its room's session went while this waited: left, logged out, or the host's ended.
@@ -330,6 +317,26 @@ public final class DiscClient {
                 : List.of(":network-caching=2000", String.format(java.util.Locale.ROOT, ":start-time=%.3f", startSeconds)));
     }
 
+    /**
+     * Joins {@code owner}'s P2P session (or, as {@code owner}, hosts one) and waits for its direct connection; off the
+     * game thread. Fails with a reason safe to show.
+     */
+    public static Transport join(UUID owner) throws IOException {
+        CompletableFuture<Boolean> joined = new CompletableFuture<>();
+        Minecraft.getInstance().execute(() -> joined.complete(P2pClient.connect(owner)));
+        try {
+            if (!joined.get(10, TimeUnit.SECONDS)) {
+                throw new IOException("Could not join the host's P2P session");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Loading was cancelled");
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException failed) {
+            throw new IOException("Could not join the host");
+        }
+        return connection(owner);
+    }
+
     private static Transport connection(UUID owner) throws IOException {
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(40);
         while (System.nanoTime() < until) {
@@ -345,7 +352,7 @@ public final class DiscClient {
                 throw new IOException("Disc connection was cancelled");
             }
         }
-        throw new IOException("Could not connect directly to the disc host; check /cms p2p status");
+        throw new IOException("Could not connect directly to the host; check /cms p2p status");
     }
 
     /** Stops reading and sharing this player's disc: the others' it plays go on. */

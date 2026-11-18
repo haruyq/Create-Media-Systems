@@ -20,6 +20,9 @@ import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
+import dev.onvoid.webrtc.media.FourCC;
+import dev.onvoid.webrtc.media.video.VideoBufferConverter;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.ResourceLocation;
@@ -34,6 +37,9 @@ public final class VideoFrame {
     private static final AtomicInteger IDS = new AtomicInteger();
 
     private final Object guard = new Object();
+    /** Held by Java while it writes a picture (see #put); close waits it out, and none is written after. */
+    private final Object writer = new Object();
+    private boolean closed;
     /** Guarded by guard: buffers[back] is VLC's to write, the other holds the latest picture. */
     private final Memory[] buffers = new Memory[2];
     private int back;
@@ -83,9 +89,14 @@ public final class VideoFrame {
         chroma.write(0, "RGBA".getBytes(StandardCharsets.US_ASCII), 0, 4);
         pitches.setInt(0, w * 4);
         lines.setInt(0, h);
+        return resize(w, h) ? 1 : 0;
+    };
+
+    /** New pictures are {@code w} by {@code h}: both buffers are made that size, once the render thread is done. */
+    private boolean resize(int w, int h) {
         synchronized (guard) {
             if (!awaitReading()) {
-                return 0;
+                return false;
             }
             for (int i = 0; i < 2; i++) {
                 if (buffers[i] != null) {
@@ -101,8 +112,46 @@ public final class VideoFrame {
             this.height = h;
             lastPicture = 0;
         }
-        return 1;
-    };
+        return true;
+    }
+
+    /** A frame of its own, not a player's: the host's preview of what it shares (see ShareScreen). */
+    public static VideoFrame standalone() {
+        return new VideoFrame(new MediaTaps(() -> System.nanoTime() / 1000));
+    }
+
+    /**
+     * A picture WebRTC decoded or captured (a screen share's, see ScreenPlayer), converted into the back buffer as VLC
+     * would write one; only valid during the call that hands it over.
+     */
+    public void put(dev.onvoid.webrtc.media.video.VideoFrame picture) {
+        int w = picture.buffer.getWidth(), h = picture.buffer.getHeight();
+        synchronized (writer) {
+            if (closed) {
+                return;
+            }
+            Memory target;
+            synchronized (guard) {
+                if ((w != width || h != height || buffers[back] == null) && !resize(w, h)) {
+                    return;
+                }
+                missed = false;
+                writing = true;
+                target = buffers[back];
+            }
+            try {
+                // libyuv's ABGR is R, G, B, A in memory, as VLC's RGBA is.
+                VideoBufferConverter.convertFromI420(picture.buffer, target.getByteBuffer(0, (long) w * h * 4), FourCC.ABGR);
+            } catch (Exception failed) {
+                // ponytail: a picture that won't convert is skipped, its buffer as it was; log it if that ever shows
+            } finally {
+                synchronized (guard) {
+                    writing = false;
+                }
+            }
+            display.invoke(null, null);
+        }
+    }
     final Vlc.VideoLock lock = (opaque, planes) -> {
         synchronized (guard) {
             missed = false;
@@ -292,7 +341,10 @@ public final class VideoFrame {
     }
 
     /** The player is gone: frees the pictures now and the texture on the render thread. */
-    void close() {
+    public void close() {
+        synchronized (writer) {
+            closed = true;
+        }
         freePictures();
         Minecraft.getInstance().execute(() -> {
             for (ResourceLocation each : ids) {

@@ -9,6 +9,7 @@ import org.haruyq.createmediasystems.PercentSetting;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.disc.DriveEmulatorBlock;
+import org.haruyq.createmediasystems.screen.ScreenServerBlock;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.DiscTransport;
@@ -304,8 +305,14 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             tooltip.add(Component.literal("     ").append(state()).withStyle(playlist.isEmpty() ? ChatFormatting.GRAY
                     : !playing ? ChatFormatting.RED : transport.paused() ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
             DriveEmulatorBlock.Entity beside = cd.isEmpty() ? DriveEmulatorBlock.beside(level, worldPosition) : null;
+            // A live screen share: what it shows and whose it is, not its link, its place in a list or a position.
+            ScreenServerBlock.Entity sharing = beside == null && !playlist.isEmpty()
+                    ? ScreenServerBlock.sharing(level, worldPosition, playlist.get(shownIndex())) : null;
             if (beside != null) {
                 beside.describe(tooltip);
+                tooltip.add(Component.empty());
+            } else if (sharing != null) {
+                sharing.describe(tooltip);
                 tooltip.add(Component.empty());
             } else if (!playlist.isEmpty()) {
                 tooltip.add(Component.literal("     ").append(track()).withStyle(ChatFormatting.GOLD));
@@ -316,7 +323,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             if (playing && !transport.paused() && level != null && level.isClientSide) {
                 NativeAudio.Playback playback = NativeAudio.playback(worldPosition);
                 NativeAudio.Progress progress = playback == null ? null : playback.progress();
-                if (progress != null) {
+                if (progress != null && (sharing == null || progress.loading())) {
                     tooltip.add(Component.literal("     ").append(progress.loading()
                             ? Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW)
                             : Component.translatable("create_media_systems.video_player.position", value(PlaybackClock.format(progress.seconds())

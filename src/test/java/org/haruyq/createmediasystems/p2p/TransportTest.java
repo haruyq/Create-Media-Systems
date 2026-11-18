@@ -137,6 +137,63 @@ class TransportTest {
         assertEquals(Transport.State.CLOSED, viewer.state(), "nothing reopens a closed session");
     }
 
+    /** The host's screen share: its encoded pictures and its stereo sound reach what watches it on the viewer. */
+    @Test
+    @EnabledOnOs(value = OS.WINDOWS, architectures = {"amd64", "x86_64"})
+    void carriesTheScreenShareToTheViewer() throws Exception {
+        Transport.loadNatives(Path.of("build", "p2p-test-natives"));
+        List<String> said = new CopyOnWriteArrayList<>();
+        Transport[] peers = new Transport[2];
+        Transport host = peers[0] = new Transport(Protocol.Ticket.parse(P2pTest.ticket("host", HOST, "")), said::add,
+                text -> forward(text, HOST, peers[1]), () -> { });
+        Transport viewer = peers[1] = new Transport(Protocol.Ticket.parse(P2pTest.ticket("viewer", VIEWER, "")), said::add,
+                text -> forward(text, VIEWER, peers[0]), () -> { });
+        // One 32x32 red H264 key frame, constrained baseline, as FFmpeg's libx264 encodes it.
+        byte[] picture = Base64.getDecoder().decode("AAAAAWdCwB/ZCWwEQAAAAwBAAAAMg8YMkgAAAAFoy4PLIAAAAWWIhArxGKAAJAMcAAQ644AAl8SddeA=");
+        List<Integer> widths = new CopyOnWriteArrayList<>();
+        int[] channels = new int[1];
+        long[] loud = new long[1];
+        dev.onvoid.webrtc.media.video.VideoTrackSink pictures = frame -> widths.add(frame.buffer.getWidth());
+        dev.onvoid.webrtc.media.audio.AudioTrackSink sound = (data, bits, rate, count, frames) -> {
+            channels[0] = count;
+            for (int i = 0; i + 1 < data.length; i += 2) {
+                if (Math.abs((short) (data[i] & 0xFF | data[i + 1] << 8)) > 1000) {
+                    loud[0]++;
+                }
+            }
+        };
+        try {
+            viewer.watch(pictures, sound);
+            viewer.signal(peers(HOST));
+            host.signal(peers(HOST, VIEWER));
+            await(() -> host.connected().equals(List.of(VIEWER)) && viewer.connected().equals(List.of(HOST)), 20_000, said);
+            assertTrue(host.keyFrameWanted(), "a new viewer asks for a key frame");
+            byte[] tone = new byte[1920];
+            for (int i = 0; i < 480; i++) {
+                short s = (short) (Math.sin(i * 2 * Math.PI * 440 / 48_000) * 12_000);
+                for (int c = 0; c < 2; c++) {
+                    tone[i * 4 + c * 2] = (byte) s;
+                    tone[i * 4 + c * 2 + 1] = (byte) (s >> 8);
+                }
+            }
+            for (int tick = 0; tick < 300 && (widths.isEmpty() || loud[0] == 0); tick++) {
+                host.sound(tone);
+                if (tick % 3 == 0) {
+                    host.video(ByteBuffer.wrap(picture), tick * 900L, true, 32, 32);
+                }
+                Thread.sleep(10);
+            }
+            assertFalse(widths.isEmpty(), "no picture reached the viewer " + said);
+            assertEquals(32, widths.getFirst());
+            assertTrue(loud[0] > 0, "no sound reached the viewer " + said);
+            assertEquals(2, channels[0], "the sound stays stereo");
+        } finally {
+            viewer.unwatch(pictures, sound);
+            host.close();
+            viewer.close();
+        }
+    }
+
     /** A peer that sends a frame too large, or more than a busy listener keeps up with, is dropped once and holds nothing. */
     @Test
     @EnabledOnOs(value = OS.WINDOWS, architectures = {"amd64", "x86_64"})

@@ -190,6 +190,10 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         Stability(ChatFormatting color) {
             this.color = color;
         }
+
+        public ChatFormatting color() {
+            return color;
+        }
     }
 
     /**

@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "create:electron_tube"
+    },
+    {
+      "item": "create:brass_casing"
+    },
+    {
+      "item": "minecraft:glass_pane"
+    }
+  ],
+  "result": {
+    "id": "create_media_systems:screen_share_server",
+    "count": 1
+  }
+}
