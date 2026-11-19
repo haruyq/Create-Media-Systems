@@ -1,13 +1,12 @@
 package org.haruyq.createmediasystems.lighting;
 
-import java.util.List;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.radio.RadioLink;
 import org.haruyq.createmediasystems.stream.Link;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
@@ -15,7 +14,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 
@@ -37,6 +35,9 @@ public class LightingLinkItem extends Item {
     /** Does what {@code player}'s right-click on {@code pos} does (see LinkAction), on the server. */
     public static void link(Player player, BlockPos pos) {
         Level level = player.level();
+        if (RadioLink.perform(player, pos)) {
+            return;
+        }
         if (level.isLoaded(pos) && level.getBlockEntity(pos) instanceof LightingConsoleBlock.Entity part && !part.formed) {
             part.updateStructure();
         }
@@ -81,11 +82,5 @@ public class LightingLinkItem extends Item {
             follow(player, player);
         }
         return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
-    }
-
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(LightingText.message(LightingText.MUTED, "link_help"));
-        tooltip.add(LightingText.message(LightingText.MUTED, "track_help"));
     }
 }

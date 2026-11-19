@@ -5,6 +5,9 @@ import java.util.List;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.audio.AudioClient;
 import org.haruyq.createmediasystems.blocks.broadcast.client.BroadcastClient;
+import org.haruyq.createmediasystems.blocks.radio.client.RadioClient;
+import org.haruyq.createmediasystems.blocks.radio.client.RadioPonder;
+import org.haruyq.createmediasystems.items.walkman.nws310.client.LoudmanClient;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.PointLights;
@@ -65,7 +68,8 @@ public final class CreateMediaSystemsClient {
             ClientFeature.withPonder(PianoClient::register, PianoPonder::register),
             ClientFeature.withPonder(WearableClient::register, WearablePonder::register),
             ClientFeature.withPonder(SteelpanClient::register, SteelpanPonder::register),
-            ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register));
+            ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register),
+            ClientFeature.withPonder(RadioClient::register, RadioPonder::register), LoudmanClient::register);
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

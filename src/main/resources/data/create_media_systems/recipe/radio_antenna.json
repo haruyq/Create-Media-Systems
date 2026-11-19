@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    " R ",
+    "CMC",
+    " M "
+  ],
+  "key": {
+    "R": {
+      "item": "minecraft:redstone_torch"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "M": {
+      "item": "create_media_systems:radio_mast"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:radio_antenna",
+    "count": 1
+  }
+}

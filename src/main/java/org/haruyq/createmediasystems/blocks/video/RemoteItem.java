@@ -98,12 +98,12 @@ public class RemoteItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         GlobalPos target = stack.get(VideoFeature.REMOTE_TARGET.get());
-        tooltip.add(stack.has(VideoFeature.REMOTE_ENTITY.get())
-                ? Component.translatable("create_media_systems.remote.partybox").withStyle(ChatFormatting.GRAY)
-                : target == null
-                ? Component.translatable("create_media_systems.remote.unpaired").withStyle(ChatFormatting.DARK_GRAY)
-                : Component.translatable("create_media_systems.remote.target", target.pos().getX(), target.pos().getY(),
-                        target.pos().getZ()).withStyle(ChatFormatting.GRAY));
+        if (stack.has(VideoFeature.REMOTE_ENTITY.get())) {
+            tooltip.add(Component.translatable("create_media_systems.remote.partybox").withStyle(ChatFormatting.GRAY));
+        } else if (target != null) {
+            tooltip.add(Component.translatable("create_media_systems.remote.target", target.pos().getX(), target.pos().getY(),
+                    target.pos().getZ()).withStyle(ChatFormatting.GRAY));
+        }
     }
 
     /** Client → server: a remote's button for what it is paired with. */

@@ -94,6 +94,11 @@
       "create_media_systems:launcher/disc_headshot"
     ]
   },
+  "radio_static": {
+    "sounds": [
+      "create_media_systems:radio/static"
+    ]
+  },
   "drive_spin": {
     "subtitle": "subtitles.create_media_systems.drive_spin",
     "sounds": [

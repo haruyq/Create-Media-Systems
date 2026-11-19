@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.blocks.piano.pxs1100we;
 
-import java.util.List;
 import java.util.function.Supplier;
 
 import com.simibubi.create.api.behaviour.interaction.MovingInteractionBehaviour;
@@ -9,13 +8,9 @@ import com.simibubi.create.api.contraption.BlockMovementChecks;
 import com.simibubi.create.api.contraption.BlockMovementChecks.CheckResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.ChatFormatting;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -55,14 +50,7 @@ public final class PxS1100Feature implements Feature {
             () -> new KeyboardPowerAdapter(BlockBehaviour.Properties.of().strength(2, 4).sound(SoundType.METAL)
                     .noOcclusion().requiresCorrectToolForDrops()));
     public static final DeferredItem<BlockItem> ADAPTER_ITEM = CreateMediaSystems.ITEMS.register("px_s1100_power_adapter",
-            () -> new BlockItem(ADAPTER.get(), new Item.Properties()) {
-                @Override public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
-                    lines.add(Component.translatable("px_s1100.adapter.connection").withStyle(ChatFormatting.GRAY));
-                    lines.add(Component.translatable("px_s1100.adapter.inputs", KeyboardPowerAdapter.MIN_RPM,
-                            KeyboardPowerAdapter.TRANSFER).withStyle(ChatFormatting.GRAY));
-                    lines.add(Component.translatable("px_s1100.adapter.fuel_help").withStyle(ChatFormatting.GRAY));
-                }
-            });
+            () -> new BlockItem(ADAPTER.get(), new Item.Properties()));
     public static final Supplier<BlockEntityType<KeyboardPowerAdapter.Supply>> ADAPTER_ENTITY = CreateMediaSystems.BLOCK_ENTITIES.register(
             "px_s1100_power_adapter", () -> BlockEntityType.Builder.of(KeyboardPowerAdapter.Supply::new, ADAPTER.get()).build(null));
 

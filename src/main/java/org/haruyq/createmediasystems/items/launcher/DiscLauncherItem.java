@@ -146,15 +146,15 @@ public final class DiscLauncherItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         DiscCellTier tier = LauncherMagazine.tier(stack);
-        tooltip.add(LauncherMagazine.cell(stack).isEmpty() ? Component.translatable("cell.create_media_systems.no_cell")
-                : Component.translatable("cell.create_media_systems.stats", tier.level, LauncherMagazine.count(stack),
+        if (!LauncherMagazine.cell(stack).isEmpty()) {
+            tooltip.add(Component.translatable("cell.create_media_systems.stats", tier.level, LauncherMagazine.count(stack),
                     tier.shots, (int) tier.damage).withStyle(ChatFormatting.GOLD));
+        }
         if (LauncherMagazine.reloading(stack)) {
             tooltip.add(Component.translatable("create_media_systems.launcher.reloading").withStyle(ChatFormatting.YELLOW));
         }
         if (hasAimModule(stack)) {
             tooltip.add(Component.translatable("create_media_systems.launcher.aim_module").withStyle(ChatFormatting.LIGHT_PURPLE));
         }
-        tooltip.add(Component.translatable("create_media_systems.launcher.controls").withStyle(ChatFormatting.GRAY));
     }
 }

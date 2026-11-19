@@ -604,8 +604,11 @@ public final class Streams {
         relay(level, emitter, new Relay(target, null, source), audience, play);
     }
 
-    /** A moving broadcaster uses a stable network target even though its pose changes. */
-    public static void relayMoving(ServerLevel level, Object emitter, StreamPackets.Target.Mobile target,
+    /**
+     * {@link #relay} of the block source at {@code source} to an audience the emitter picks: a moving broadcaster's,
+     * under a stable network target even though its pose changes, or a radio transmitter's tuned receivers.
+     */
+    public static void relayMoving(ServerLevel level, Object emitter, StreamPackets.Target target,
             BlockPos source, Channel channel, BroadcastProfile profile, Collection<ServerPlayer> audience,
             BiFunction<Source, Long, CustomPacketPayload> play) {
         relay(level, emitter, new Relay(target, new Sound(Vec3.ZERO, Optional.empty(), channel, source, profile), null),

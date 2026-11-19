@@ -12,6 +12,8 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Feature;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import org.haruyq.createmediasystems.blocks.broadcast.BroadcastFeature;
+import org.haruyq.createmediasystems.blocks.radio.RadioFeature;
+import org.haruyq.createmediasystems.items.walkman.nws310.LoudmanFeature;
 import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import org.haruyq.createmediasystems.blocks.component.m700.HifiFeature;
@@ -45,7 +47,8 @@ public final class CreateMediaSystemsMod {
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new PxS1100Feature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
-            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new SteelpanFeature(), new ScreenFeature());
+            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new SteelpanFeature(), new ScreenFeature(),
+            new RadioFeature(), new LoudmanFeature());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -81,6 +84,7 @@ public final class CreateMediaSystemsMod {
                 WearableInstruments.KEYTAR, WearableInstruments.MELODICA, PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY,
                 MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
                 LauncherFeature.DISC_LAUNCHER, LauncherFeature.LAUNCHER_AIM_MODULE_ITEM, LauncherFeature.DISC_CELL_CHARGER_ITEM));
+        portable.addAll(LoudmanFeature.all());
         portable.addAll(LauncherFeature.DISC_CELLS);
 
         Map<String, List<Supplier<? extends Item>>> sections = new LinkedHashMap<>();
@@ -96,6 +100,7 @@ public final class CreateMediaSystemsMod {
         sections.put("broadcast", List.of(
                 BroadcastFeature.BASE_ITEM, BroadcastFeature.MAST_ITEM, BroadcastFeature.HORN_ITEM,
                 BroadcastFeature.DIGITAL_HORN_ITEM, BroadcastFeature.ARRAY_ITEM,
+                RadioFeature.TRANSMITTER_ITEM, RadioFeature.MAST_ITEM, RadioFeature.ANTENNA_ITEM,
                 TrainFeature.TRAIN_DISC_READER_ITEM, TrainFeature.TRAIN_SPEAKER_ITEM, TrainFeature.TRAIN_DETECTOR_ITEM,
                 TrainFeature.TRAIN_SIGNAL_RECEIVER_ITEM, TrainFeature.ANNOUNCEMENT_SCHEDULE));
         sections.put("portable", portable);
