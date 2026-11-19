@@ -11,6 +11,7 @@ import java.util.function.Supplier;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Feature;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
+import org.haruyq.createmediasystems.blocks.boombox.zsrs81bt.BoomboxFeature;
 import org.haruyq.createmediasystems.blocks.broadcast.BroadcastFeature;
 import org.haruyq.createmediasystems.blocks.radio.RadioFeature;
 import org.haruyq.createmediasystems.items.walkman.nws310.LoudmanFeature;
@@ -48,7 +49,7 @@ public final class CreateMediaSystemsMod {
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
             new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new SteelpanFeature(), new ScreenFeature(),
-            new RadioFeature(), new LoudmanFeature());
+            new RadioFeature(), new LoudmanFeature(), new BoomboxFeature());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -100,7 +101,7 @@ public final class CreateMediaSystemsMod {
         sections.put("broadcast", List.of(
                 BroadcastFeature.BASE_ITEM, BroadcastFeature.MAST_ITEM, BroadcastFeature.HORN_ITEM,
                 BroadcastFeature.DIGITAL_HORN_ITEM, BroadcastFeature.ARRAY_ITEM,
-                RadioFeature.TRANSMITTER_ITEM, RadioFeature.MAST_ITEM, RadioFeature.ANTENNA_ITEM,
+                RadioFeature.TRANSMITTER_ITEM, RadioFeature.MAST_ITEM, RadioFeature.ANTENNA_ITEM, BoomboxFeature.ITEM,
                 TrainFeature.TRAIN_DISC_READER_ITEM, TrainFeature.TRAIN_SPEAKER_ITEM, TrainFeature.TRAIN_DETECTOR_ITEM,
                 TrainFeature.TRAIN_SIGNAL_RECEIVER_ITEM, TrainFeature.ANNOUNCEMENT_SCHEDULE));
         sections.put("portable", portable);

@@ -24,6 +24,11 @@ import org.haruyq.createmediasystems.VideoPlayerGameTests;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import org.haruyq.createmediasystems.blocks.audio.DiscReaderBlock;
 import org.haruyq.createmediasystems.blocks.audio.LineMixerBlock;
+import org.haruyq.createmediasystems.blocks.boombox.zsrs81bt.BoomboxBlock;
+import org.haruyq.createmediasystems.blocks.boombox.zsrs81bt.BoomboxFeature;
+import org.haruyq.createmediasystems.blocks.boombox.zsrs81bt.BoomboxKey;
+import org.haruyq.createmediasystems.blocks.display.DisplayBlock;
+import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import org.haruyq.createmediasystems.blocks.piano.PianoTestPlayers;
 import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 import org.haruyq.createmediasystems.blocks.video.VideoPlayerBlock;
@@ -31,6 +36,7 @@ import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.items.walkman.nws310.LoudmanFeature;
 import org.haruyq.createmediasystems.items.walkman.nws310.LoudmanItem;
 import org.haruyq.createmediasystems.stream.DiscUrl;
+import org.haruyq.createmediasystems.stream.StreamPackets;
 import org.haruyq.createmediasystems.stream.Streams;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
@@ -156,6 +162,62 @@ public final class RadioGameTests {
                     h.assertTrue(Math.abs(volume - own * (source.equals(first) ? 1 : 0.25f)) < 1e-4,
                             "Each as loud as its fader has it: " + volume);
                 }
+            } finally {
+                level.removePlayerImmediately(listener, Entity.RemovalReason.DISCARDED);
+            }
+            h.succeed();
+        });
+    }
+
+    /**
+     * A CD radio on a station's frequency plays the station's source to whoever is near it, with no Loudman, and a
+     * display linked to that source keeps its own sound beside it. Tuned away, the set stops and hisses.
+     */
+    @GameTest(batch = "launcher", template = "empty", timeoutTicks = 100)
+    public static void aCdRadioOnTheStationsFrequencyPlaysItToThoseNearIt(GameTestHelper h) {
+        var transmitter = station(h, 1);
+        var level = h.getLevel();
+        var at = transmitter.getBlockPos();
+        var source = at.south();
+        // A Blu-ray player: a display plays the sound of none but a source with a picture.
+        level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        var disc = new ItemStack(DiscFeature.BLU_RAY.get());
+        disc.set(DiscFeature.PLAYLIST.get(), List.of("cms-disc://" + UUID.randomUUID() + "/" + UUID.randomUUID()));
+        ((VideoPlayerBlock.Entity) level.getBlockEntity(source)).insert(disc, null);
+        transmitter.configure(level, source, 1, Streams.Channel.MIX);
+        BlockPos anchor = h.absolutePos(new BlockPos(6, 2, 1)), setPos = h.absolutePos(new BlockPos(4, 2, 4));
+        level.setBlockAndUpdate(anchor, DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, Direction.NORTH));
+        var display = (DisplayBlock.Entity) level.getBlockEntity(anchor);
+        display.link(source);
+        level.setBlockAndUpdate(setPos, BoomboxFeature.BLOCK.get().defaultBlockState());
+        var set = (BoomboxBlock.Entity) level.getBlockEntity(setPos);
+
+        List<CustomPacketPayload> received = new ArrayList<>();
+        var listener = VideoPlayerGameTests.listener(level, setPos, received);
+        // A frequency of its own, one step above where the set is first tuned.
+        RadioTransmitterBlock.setFrequency(listener, new RadioPackets.SetFrequency(at, 933));
+        CompoundTag tuned = set.saveWithoutMetadata(level.registryAccess());
+        tuned.putInt("Frequency", 932);
+        set.loadCustomOnly(tuned, level.registryAccess());
+        set.press(listener, BoomboxKey.NEXT);
+        h.assertTrue(set.frequency() == 932, "Switched off, its keys do nothing");
+        set.press(listener, BoomboxKey.POWER);
+        set.press(listener, BoomboxKey.NEXT);
+        h.runAfterDelay(2 * Streams.RELAY_TICKS, () -> {
+            try {
+                display.relay(level);
+                h.assertTrue(set.frequency() == 933 && set.signal() == 1 && set.hiss() == 0, "Beside the tower it receives the station in full");
+                h.assertTrue(received.stream().anyMatch(p -> p instanceof StreamPackets.PlayAtBlock play && play.pos().equals(setPos)
+                        && play.sound().source().equals(source) && play.range().volume() > 0),
+                        "The listener, who carries no Loudman, is sent the source's track from the set: " + received);
+                float shown = (float) received.stream().mapToDouble(p -> p instanceof StreamPackets.PlayAtBlock play
+                        && play.pos().equals(anchor) ? play.range().volume() : p instanceof StreamPackets.RetuneAtBlock retune
+                        && retune.pos().equals(anchor) ? retune.range().volume() : -1).filter(volume -> volume >= 0)
+                        .reduce(-1, (before, last) -> last);
+                h.assertTrue(shown > 0, "The source's display keeps its sound beside the set: " + shown);
+                set.press(listener, BoomboxKey.NEXT);
+                h.assertTrue(set.signal() == 0 && set.hiss() > 0 && !Streams.emitters(level, source).contains(set),
+                        "Tuned away, it stops the station and hisses");
             } finally {
                 level.removePlayerImmediately(listener, Entity.RemovalReason.DISCARDED);
             }

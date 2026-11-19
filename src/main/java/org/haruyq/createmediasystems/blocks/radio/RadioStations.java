@@ -94,33 +94,58 @@ public final class RadioStations extends SavedData {
             if (frequency == 0) {
                 continue;
             }
-            Vec3 ear = SableCompat.eye(player, 1);
-            BlockPos best = null;
-            float strongest = 0;
-            // ponytail: every receiver against every station, each relay tick; index stations by frequency if a
-            // server ever runs hundreds of them.
-            for (var entry : stations.entrySet()) {
-                Station station = entry.getValue();
-                float signal = station.frequency() != frequency ? 0
-                        : station.signal(SableCompat.toWorld(level, station.antenna(), station.antenna().getCenter()), ear);
-                if (signal > strongest) {
-                    strongest = signal;
-                    best = entry.getKey();
-                }
-            }
+            Reception best = strongest(level, frequency, SableCompat.eye(player, 1));
             if (best != null) {
-                audiences.computeIfAbsent(best, pos -> new HashMap<>()).put(player, strongest);
+                audiences.computeIfAbsent(best.transmitter(), pos -> new HashMap<>()).put(player, best.signal());
             }
             // Also with nothing received, or a station that plays nothing: the receiver hisses by it.
-            PacketDistributor.sendToPlayer(player, new RadioPackets.Signal(strongest));
+            PacketDistributor.sendToPlayer(player, new RadioPackets.Signal(best == null ? 0 : best.signal()));
         }
-        for (BlockPos transmitter : audiences.keySet()) {
-            Station station = stations.get(transmitter);
-            keepLoaded(level, transmitter, transmitter);
-            keepLoaded(level, station.antenna(), transmitter);
-            if (station.source() != null) {
-                keepLoaded(level, station.source(), transmitter);
+        audiences.keySet().forEach(transmitter -> keepLoaded(level, transmitter));
+    }
+
+    /** A station as it is received somewhere: its transmitter, and how strong (0..1]. */
+    public record Reception(BlockPos transmitter, Station station, float signal) {
+    }
+
+    /** The station of {@code frequency} (tenths of a MHz) that reaches {@code ear} (in the world) strongest; null for none. */
+    @Nullable
+    private Reception strongest(ServerLevel level, int frequency, Vec3 ear) {
+        Reception best = null;
+        // ponytail: every receiver against every station, each relay tick; index stations by frequency if a
+        // server ever runs hundreds of them.
+        for (var entry : stations.entrySet()) {
+            Station station = entry.getValue();
+            float signal = station.frequency() != frequency ? 0
+                    : station.signal(SableCompat.toWorld(level, station.antenna(), station.antenna().getCenter()), ear);
+            if (signal > (best == null ? 0 : best.signal())) {
+                best = new Reception(entry.getKey(), station, signal);
             }
+        }
+        return best;
+    }
+
+    /**
+     * What a radio set standing at {@code ear} (in the world) receives on {@code frequency} (tenths of a MHz); null
+     * for no station. While somebody hears the set ({@code heard}), the station's chunks stay loaded, as they do for
+     * a Loudman's carrier. A set asks every relay tick.
+     */
+    @Nullable
+    public static Reception receive(ServerLevel level, int frequency, Vec3 ear, boolean heard) {
+        RadioStations radio = get(level);
+        Reception best = radio.strongest(level, frequency, ear);
+        if (best != null && heard) {
+            radio.keepLoaded(level, best.transmitter());
+        }
+        return best;
+    }
+
+    private void keepLoaded(ServerLevel level, BlockPos transmitter) {
+        Station station = stations.get(transmitter);
+        keepLoaded(level, transmitter, transmitter);
+        keepLoaded(level, station.antenna(), transmitter);
+        if (station.source() != null) {
+            keepLoaded(level, station.source(), transmitter);
         }
     }
 
