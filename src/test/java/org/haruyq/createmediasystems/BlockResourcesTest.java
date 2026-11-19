@@ -68,6 +68,7 @@ class BlockResourcesTest {
             Map.entry("radio_antenna", new Row(Tool.PICKAXE, false, true)),
             Map.entry("radio_mast", new Row(Tool.PICKAXE, false, true)),
             Map.entry("radio_transmitter", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("zs_rs81bt", new Row(Tool.PICKAXE, false, true)),
             Map.entry("screen_share_monitor", new Row(Tool.PICKAXE, false, true)),
             Map.entry("screen_share_server", new Row(Tool.PICKAXE, false, true)),
             Map.entry("speaker", new Row(Tool.AXE, false, true)),

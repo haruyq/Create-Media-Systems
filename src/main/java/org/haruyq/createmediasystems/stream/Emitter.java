@@ -14,4 +14,12 @@ public interface Emitter {
     default boolean givesWay() {
         return false;
     }
+
+    /**
+     * Whether it plays its source somewhere else, as a radio set does a station's: the source's displays then keep
+     * their own sound, which they give up only to speakers of their own (see givesWay).
+     */
+    default boolean apart() {
+        return false;
+    }
 }

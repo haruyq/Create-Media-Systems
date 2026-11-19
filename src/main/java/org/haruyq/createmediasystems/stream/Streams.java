@@ -702,7 +702,8 @@ public final class Streams {
             }
             float sourceGain = linked instanceof MediaSource media ? media.gain() : 1;
             boolean givenWay = emitter.givesWay() && relaying().anyMatch(other -> other.emitter() != emitter
-                    && relays(other, level, source) && !(other.emitter() instanceof Emitter speaker && speaker.givesWay()));
+                    && relays(other, level, source)
+                    && !(other.emitter() instanceof Emitter speaker && (speaker.givesWay() || speaker.apart())));
             relayed.add(relayOne(level, emitter, new Sound(origin, facing, channel, source, profile),
                     new EmitterRange(Optional.empty(), givenWay ? 0 : heard * sourceGain, profile.reach)));
         }

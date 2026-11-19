@@ -17,6 +17,7 @@
     "create_media_systems:grand_piano",
     "create_media_systems:line_mixer",
     "create_media_systems:screen_share_server",
-    "create_media_systems:screen_share_monitor"
+    "create_media_systems:screen_share_monitor",
+    "create_media_systems:zs_rs81bt"
   ]
 }
