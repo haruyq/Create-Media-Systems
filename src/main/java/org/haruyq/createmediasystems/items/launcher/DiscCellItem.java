@@ -126,9 +126,10 @@ public final class DiscCellItem extends Item implements ChargeableItem {
         tooltip.add(Component.translatable("cell.create_media_systems.stats", tier.level, shots(stack), tier.shots,
                 (int) tier.damage).withStyle(ChatFormatting.AQUA));
         ItemStack master = master(stack);
-        tooltip.add(master.isEmpty() ? Component.translatable("cell.create_media_systems.empty").withStyle(ChatFormatting.YELLOW)
-                : Component.translatable("cell.create_media_systems.master", master.getOrDefault(AudioFeature.TITLE.get(),
-                        master.getHoverName().getString())).withStyle(ChatFormatting.WHITE));
+        if (!master.isEmpty()) {
+            tooltip.add(Component.translatable("cell.create_media_systems.master", master.getOrDefault(AudioFeature.TITLE.get(),
+                    master.getHoverName().getString())).withStyle(ChatFormatting.WHITE));
+        }
         tooltip.add(Component.translatable("cell.create_media_systems.energy", ChargeableItem.energy(stack), capacity())
                 .withStyle(ChatFormatting.GRAY));
         int seconds = startSeconds(stack);
@@ -136,7 +137,5 @@ public final class DiscCellItem extends Item implements ChargeableItem {
             tooltip.add(Component.translatable("cell.create_media_systems.start_at", formatStartTime(seconds))
                     .withStyle(ChatFormatting.AQUA));
         }
-        tooltip.add(Component.translatable("cell.create_media_systems.controls").withStyle(ChatFormatting.DARK_GRAY));
-        if (tier.optional()) tooltip.add(Component.translatable("cell.create_media_systems.chemi").withStyle(ChatFormatting.GREEN));
     }
 }

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.lighting;
 import java.util.List;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.radio.RadioLink;
 import org.haruyq.createmediasystems.client.Quill;
 
 import org.jetbrains.annotations.Nullable;
@@ -58,13 +59,18 @@ final class LightingLinkHandler {
         LightingConsoleBlock.Entity picked = LightingLinkItem.selected(mc.player);
         BlockHitResult trace = mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.ENTITY ? null : Quill.pointedAt();
         BlockPos pos = trace == null ? null : trace.getBlockPos();
-        Component hint = pos == null ? null : LinkAction.resolve(mc.player, pos).hint();
+        Component radio = pos == null ? null : RadioLink.hint(mc.player, pos);
+        Component hint = pos == null ? null : radio != null ? radio : LinkAction.resolve(mc.player, pos).hint();
         hovered = hint == null ? null : pos;
         if (hovered != null && !hovered.equals(hinted)) {
             mc.player.displayClientMessage(hint, true);
         }
         hinted = hovered;
 
+        BlockPos transmitter = RadioLink.picked(mc.player.getMainHandItem(), mc.level);
+        if (transmitter != null) {
+            outline(CONSOLE_OUTLINE, new AABB(transmitter), Quill.PICKED, Quill.LINE_WIDTH);
+        }
         if (picked != null) {
             outline(CONSOLE_OUTLINE, box(picked), Quill.PICKED, Quill.LINE_WIDTH);
             for (BlockPos fixture : picked.fixtures()) {

@@ -113,7 +113,7 @@ public final class LightingClient implements ClientFeature {
     }
 
     private static void stageLights(SceneBuilder builder, SceneBuildingUtil util) {
-        CreateSceneBuilder scene = plate(builder, "stage_lights", "Stage Lights and the LED Tuning Wrench");
+        CreateSceneBuilder scene = plate(builder, "stage_lights", "Stage Lights and the Tuning Wrench");
 
         BlockPos origin = util.grid().at(4, 1, 3);
         BlockPos head = util.grid().at(3, 1, 1);
@@ -135,7 +135,7 @@ public final class LightingClient implements ClientFeature {
         BlockPos desk = ConsoleLayout.at(origin, Direction.NORTH, 1, 0, 0);
         scene.overlay().showControls(util.vector().topOf(desk), Pointing.DOWN, 40).rightClick().withItem(link);
         scene.overlay().chaseBoundingBoxOutline(PonderPalette.OUTPUT, origin, new AABB(1, 1, 3, 5, 3, 5), 260);
-        say(scene, 90, util.vector().topOf(desk), "Hold a LED Tuning Wrench and right-click a finished console to pick it.");
+        say(scene, 90, util.vector().topOf(desk), "Hold a Tuning Wrench and right-click a finished console to pick it.");
 
         scene.overlay().showControls(util.vector().topOf(head), Pointing.DOWN, 30).rightClick().withItem(link);
         scene.overlay().chaseBoundingBoxOutline(PonderPalette.GREEN, head, new AABB(head), 160);
@@ -154,7 +154,7 @@ public final class LightingClient implements ClientFeature {
         scene.overlay().showControls(util.vector().topOf(head), Pointing.DOWN, 40).scroll();
         say(scene, 110, util.vector().topOf(head), "Looking at a fixture with an empty hand, scroll to move it to another group. Shift+scroll changes its place in the group's order, and Ctrl+scroll the colour it takes from the group.");
 
-        say(scene, 110, util.vector().topOf(laser), "Right-click a player with the LED Tuning Wrench to have the selected group follow them, or Shift+right-click the air to be followed yourself.");
+        say(scene, 110, util.vector().topOf(laser), "Right-click a player with the Tuning Wrench to have the selected group follow them, or Shift+right-click the air to be followed yourself.");
 
         say(scene, 80, util.vector().topOf(head), "Place a fixture under a ceiling to hang it upside down. Through Engineer's Goggles it shows its group and order.");
     }

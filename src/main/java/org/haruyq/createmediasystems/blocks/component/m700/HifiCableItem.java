@@ -1,7 +1,6 @@
 package org.haruyq.createmediasystems.blocks.component.m700;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -14,8 +13,6 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
 
 public class HifiCableItem extends Item {
     /** How far (blocks) a speaker cable reaches. */
@@ -50,10 +47,5 @@ public class HifiCableItem extends Item {
 
     static void done(ServerPlayer player) {
         PICKED.remove(player.getUUID());
-    }
-
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("create_media_systems.hifi.cable.hint").withStyle(ChatFormatting.GRAY));
     }
 }

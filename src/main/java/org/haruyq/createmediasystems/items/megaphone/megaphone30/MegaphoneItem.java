@@ -2,10 +2,7 @@ package org.haruyq.createmediasystems.items.megaphone.megaphone30;
 
 import org.haruyq.createmediasystems.HeldItemMenu;
 import org.haruyq.createmediasystems.stream.Portable;
-import java.util.List;
 import java.util.UUID;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.Entity;
@@ -41,8 +38,4 @@ public final class MegaphoneItem extends Item implements Portable.Held {
         };
     }
     @Override public boolean shouldCauseReequipAnimation(ItemStack old,ItemStack next,boolean slotChanged){return slotChanged || !ItemStack.isSameItem(old,next);}
-    @Override public void appendHoverText(ItemStack item,TooltipContext context,List<Component> lines,TooltipFlag flag) {
-        lines.add(Component.translatable("megaphone.hint").withStyle(ChatFormatting.AQUA));
-        lines.add(Component.translatable("megaphone.character").withStyle(ChatFormatting.GRAY));
-    }
 }

@@ -25,8 +25,6 @@ import org.haruyq.createmediasystems.Feature;
 import com.mojang.serialization.Codec;
 
 import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.entity.EntityType;
@@ -37,7 +35,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.component.ItemContainerContents;
-import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -111,9 +108,7 @@ public final class LauncherFeature implements Feature {
     public static final DeferredItem<DiscLauncherItem> DISC_LAUNCHER = ITEMS.register("disc_launcher",
             () -> new DiscLauncherItem(new Item.Properties().stacksTo(1).component(LAUNCHER_AIM_MODULE.get(), false)));
     public static final DeferredItem<Item> LAUNCHER_AIM_MODULE_ITEM = ITEMS.register("launcher_aim_module",
-            () -> new Item(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)
-                    .component(DataComponents.LORE, new ItemLore(List.of(
-                            Component.translatable("item.create_media_systems.launcher_aim_module.install"))))));
+            () -> new Item(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)));
     public static final DeferredHolder<EntityType<?>, EntityType<DiscProjectile>> DISC_PROJECTILE =
             ENTITIES.register("disc_projectile", () -> EntityType.Builder.<DiscProjectile>of(
                     DiscProjectile::new, MobCategory.MISC).sized(.35f, .12f)

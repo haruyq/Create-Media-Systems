@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.stream;
 import java.util.UUID;
 import net.minecraft.core.UUIDUtil;
 import org.haruyq.createmediasystems.blocks.broadcast.MovingBroadcastPackets;
+import org.haruyq.createmediasystems.blocks.radio.RadioPackets;
 
 import java.util.Optional;
 
@@ -53,10 +54,12 @@ public final class StreamPackets {
             case Block ignored -> 0;
             case Channel ignored -> 1;
             case Mobile ignored -> 2;
+            case Radio ignored -> 3;
         }, id -> switch (id) {
             case 0 -> Block.CODEC;
             case 1 -> Channel.CODEC;
             case 2 -> Mobile.CODEC;
+            case 3 -> Radio.CODEC;
             default -> throw new IllegalArgumentException("Unknown stream target " + id);
         });
 
@@ -113,6 +116,24 @@ public final class StreamPackets {
             @Override
             public CustomPacketPayload stop() {
                 return new MovingBroadcastPackets.Stop(id);
+            }
+        }
+
+        /** The radio transmitter at {@code pos} as it sends the source at {@code source} to the receivers tuned to it. */
+        record Radio(BlockPos pos, BlockPos source) implements Target {
+            public static final StreamCodec<ByteBuf, Radio> CODEC = StreamCodec.composite(
+                    BlockPos.STREAM_CODEC, Radio::pos,
+                    BlockPos.STREAM_CODEC, Radio::source,
+                    Radio::new);
+
+            @Override
+            public CustomPacketPayload sync(float seconds) {
+                return new RadioPackets.Sync(this, seconds);
+            }
+
+            @Override
+            public CustomPacketPayload stop() {
+                return new RadioPackets.Stop(this);
             }
         }
     }

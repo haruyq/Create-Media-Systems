@@ -65,6 +65,9 @@ class BlockResourcesTest {
             Map.entry("px_s1100_power_adapter", new Row(Tool.PICKAXE, false, true)),
             // Legacy and invisible: old saves only clear it away.
             Map.entry("reload_glow", new Row(Tool.NONE, false, false)),
+            Map.entry("radio_antenna", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("radio_mast", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("radio_transmitter", new Row(Tool.PICKAXE, false, true)),
             Map.entry("screen_share_monitor", new Row(Tool.PICKAXE, false, true)),
             Map.entry("screen_share_server", new Row(Tool.PICKAXE, false, true)),
             Map.entry("speaker", new Row(Tool.AXE, false, true)),
