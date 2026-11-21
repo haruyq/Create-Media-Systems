@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "model": "create_media_systems:models/block/stage_custom/hat_clutch.obj",
+  "automatic_culling": false,
+  "shade_quads": true,
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "create_media_systems:block/stage_custom/dus"
+  }
+}

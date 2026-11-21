@@ -1,0 +1,24 @@
+{
+  "multipart": [
+    {"when": {"facing": "south", "lit": "true"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah", "y": 0}},
+    {"when": {"facing": "south", "lit": "false"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah_bypassed", "y": 0}},
+    {"when": {"facing": "south", "depth": "1"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_1", "y": 0}},
+    {"when": {"facing": "south", "depth": "2"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_2", "y": 0}},
+    {"when": {"facing": "south", "depth": "3"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_3", "y": 0}},
+    {"when": {"facing": "west", "lit": "true"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah", "y": 90}},
+    {"when": {"facing": "west", "lit": "false"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah_bypassed", "y": 90}},
+    {"when": {"facing": "west", "depth": "1"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_1", "y": 90}},
+    {"when": {"facing": "west", "depth": "2"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_2", "y": 90}},
+    {"when": {"facing": "west", "depth": "3"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_3", "y": 90}},
+    {"when": {"facing": "north", "lit": "true"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah", "y": 180}},
+    {"when": {"facing": "north", "lit": "false"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah_bypassed", "y": 180}},
+    {"when": {"facing": "north", "depth": "1"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_1", "y": 180}},
+    {"when": {"facing": "north", "depth": "2"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_2", "y": 180}},
+    {"when": {"facing": "north", "depth": "3"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_3", "y": 180}},
+    {"when": {"facing": "east", "lit": "true"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah", "y": 270}},
+    {"when": {"facing": "east", "lit": "false"}, "apply": {"model": "create_media_systems:block/guitar_pedal/wah_bypassed", "y": 270}},
+    {"when": {"facing": "east", "depth": "1"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_1", "y": 270}},
+    {"when": {"facing": "east", "depth": "2"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_2", "y": 270}},
+    {"when": {"facing": "east", "depth": "3"}, "apply": {"model": "create_media_systems:block/guitar_pedal/pointer_3", "y": 270}}
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "plates": {
+    "hi_hat": {
+      "diameter": 14, "x": -1.057, "y": 0.876, "z": 0.425, "tilt": 0,
+      "bellRadius": 0.048, "bellRise": 0.025, "bowRise": 0.012,
+      "baseX": -1.057, "baseZ": 0.425, "mast": 0.876, "spread": 0.188, "legAngle": -90
+    },
+    "crash": {
+      "diameter": 16, "x": -0.759, "y": 1.151, "z": -0.157, "tilt": 13,
+      "bellRadius": 0.054, "bellRise": 0.022, "bowRise": 0.019,
+      "baseX": -1.045, "baseZ": -0.192, "mast": 1.048, "spread": 0.233, "legAngle": -90
+    },
+    "ride": {
+      "diameter": 20, "x": 0.174, "y": 1.064, "z": -0.123, "tilt": 11,
+      "bellRadius": 0.062, "bellRise": 0.029, "bowRise": 0.018,
+      "baseX": 0.298, "baseZ": -0.253, "mast": 0.932, "spread": 0.190, "legAngle": -90
+    }
+  },
+  "kickPedal": {"from": [-0.340, 0.001, 0.219], "to": [-0.244, 0.086, 0.557]},
+  "hatPedal": {"from": [-1.107, 0.001, 0.403], "to": [-1.007, 0.092, 0.664]},
+  "kickHinge": [-0.292, 0.019, 0.532],
+  "hatHinge": [-1.057, 0.018, 0.647],
+  "beaterAxle": [-0.292, 0.130, 0.273],
+  "throne": {"x": -0.288, "y": 0.521, "z": 1.041, "radius": 0.150, "spread": 0.188},
+  "openGap": 0.021
+}

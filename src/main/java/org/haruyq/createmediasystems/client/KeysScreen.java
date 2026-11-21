@@ -41,6 +41,7 @@ public abstract class KeysScreen extends Screen {
     private static final int[] WHITE = {0xFFDAD7CF, 0xFFF8F6F0}, WHITE_DOWN = {0xFF6FA9EC, 0xFFABD2FF},
             BLACK = {0xFF1E1E21, 0xFF08080A}, BLACK_TOP = {0xFF4A4A52, 0xFF2A2A2F},
             BLACK_DOWN = {0xFF1B478C, 0xFF123469}, BLACK_TOP_DOWN = {0xFF4A8DEB, 0xFF2D6FD6}, SHADOW = {0x30000000, 0x48000000};
+    private static final int[] INACTIVE_WHITE = {0xFF85837D, 0xFFA09D97};
     private static final int FELT = 0xFF7A1220;
     protected static final int LEFT = -1, MIDDLE = 0, RIGHT = 1;
 
@@ -52,7 +53,7 @@ public abstract class KeysScreen extends Screen {
 
     /** How high the strip is, and the gap between it and the keys (0 for two lines of lettering), in white keys. */
     private final float stripKeys, deckKeys;
-    private final int firstNote, lastNote, firstKey, whiteKeyCount;
+    private final int firstNote, lastNote, firstWhiteNote, lastWhiteNote, firstKey, whiteKeyCount;
     /** How many of the window's pixels one of the GUI's is. */
     protected double pixel = 1;
     /** The keys: their left edge and top, a white key's width and length. The strip of controls is as wide, above them. */
@@ -86,8 +87,10 @@ public abstract class KeysScreen extends Screen {
         this.deckKeys = deckKeys;
         firstNote = first;
         lastNote = first + keys - 1;
-        firstKey = Layout.across(firstNote);
-        whiteKeyCount = Layout.across(lastNote) - firstKey + 1;
+        firstWhiteNote = Layout.black(firstNote) ? firstNote - 1 : firstNote;
+        lastWhiteNote = Layout.black(lastNote) ? lastNote + 1 : lastNote;
+        firstKey = Layout.across(firstWhiteNote);
+        whiteKeyCount = Layout.across(lastWhiteNote) - firstKey + 1;
     }
 
     protected int whiteKeyCount() {
@@ -323,14 +326,15 @@ public abstract class KeysScreen extends Screen {
         int blackWidth = Math.max(3, Math.round(key * Layout.BLACK_WIDTH)), blackLength = Math.round(keysHeight * Layout.BLACK_LENGTH);
         int side = Math.max(1, blackWidth / 6), slope = Math.max(3, keyWidth / 2), shade = Math.max(1, key / 8);
         for (int pass = 0; pass < 2; pass++) {
-            for (int note = firstNote; note <= lastNote; note++) {
+            for (int note = firstWhiteNote; note <= lastWhiteNote; note++) {
                 if (Layout.black(note) != (pass == 1)) {
                     continue;
                 }
-                boolean pressed = down.test(note);
+                boolean playable = note >= firstNote && note <= lastNote;
+                boolean pressed = playable && down.test(note);
                 int x = keysX + (Layout.across(note) - firstKey - firstWhite) * key;
                 if (pass == 0) {
-                    int[] face = pressed ? whiteDown : white;
+                    int[] face = playable ? (pressed ? whiteDown : white) : INACTIVE_WHITE;
                     part(g, x, keysY, x + key - gap, bottom, corner, face);
                     continue;
                 }

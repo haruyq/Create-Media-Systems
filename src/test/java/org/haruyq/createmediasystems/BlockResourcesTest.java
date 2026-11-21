@@ -39,7 +39,12 @@ class BlockResourcesTest {
     }
 
     private static final Map<String, Row> BLOCKS = new TreeMap<>(Map.ofEntries(
+            Map.entry("auto_chorus_pedal", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("auto_compressor_pedal", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("auto_tremolo_pedal", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("auto_wah_pedal", new Row(Tool.PICKAXE, false, true)),
             Map.entry("blu_ray_player", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("boss_mt_2", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_array", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_base", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_digital_horn", new Row(Tool.PICKAXE, false, true)),
@@ -60,6 +65,8 @@ class BlockResourcesTest {
             Map.entry("lighting_monitor", new Row(Tool.PICKAXE, false, true)),
             Map.entry("line_mixer", new Row(Tool.PICKAXE, false, true)),
             Map.entry("midi_keyboard", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("stage_custom_birch_sbp2f5_dus", new Row(Tool.AXE, false, true)),
+            Map.entry("stage_custom_birch_sbp2f5azm_dus", new Row(Tool.AXE, false, true)),
             Map.entry("steelpan_low_c", new Row(Tool.PICKAXE, false, true)),
             Map.entry("px_s1100", new Row(Tool.PICKAXE, false, true)),
             Map.entry("px_s1100_power_adapter", new Row(Tool.PICKAXE, false, true)),

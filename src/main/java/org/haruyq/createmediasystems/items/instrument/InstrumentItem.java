@@ -6,6 +6,9 @@ import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 import org.haruyq.createmediasystems.items.power.ChargeableItem;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -17,7 +20,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 
 public class InstrumentItem extends Item {
-    private final Kind kind;
+    public final Kind kind;
 
     InstrumentItem(Kind kind) {
         super(new Properties().stacksTo(1));
@@ -27,11 +30,64 @@ public class InstrumentItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         var stack = player.getItemInHand(hand);
-        if (kind == Kind.KEYTAR && hand != InteractionHand.MAIN_HAND || kind == Kind.MELODICA && WearableInstruments.ready(player)) {
+        if (kind == Kind.STRATOCASTER && player.isShiftKeyDown() && !GuitarPatch.get(stack).links().isEmpty()) {
+            if (!level.isClientSide) {
+                stack.remove(InstrumentFeature.PATCH.get());
+                player.displayClientMessage(Component.translatable("guitar_patch.create_media_systems.cleared"), true);
+            }
+            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+        }
+        if (!canPlay(player, hand)) {
             return InteractionResultHolder.pass(stack);
         }
         if (player instanceof ServerPlayer server) WearableInstruments.begin(server, hand, kind);
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    @Override
+    public InteractionResult useOn(UseOnContext context) {
+        Level level = context.getLevel();
+        var pos = context.getClickedPos();
+        var player = context.getPlayer();
+        if (kind != Kind.STRATOCASTER || player == null
+                || !(level.getBlockState(pos).getBlock() instanceof GuitarPedalBlock pedal)) return InteractionResult.PASS;
+        if (!level.isClientSide) {
+            GuitarPatch.toggle(context.getItemInHand(), player,
+                    new GuitarPatch.Link(GlobalPos.of(level.dimension(), pos), pedal.effect()));
+        }
+        return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        if (kind != Kind.STRATOCASTER) return;
+        var links = GuitarPatch.get(stack).links();
+        if (links.isEmpty()) {
+            tooltip.add(Component.translatable("guitar_patch.create_media_systems.hint").withStyle(ChatFormatting.GRAY));
+        } else {
+            for (int i = 0; i < links.size(); i++) {
+                var link = links.get(i);
+                tooltip.add(Component.translatable("guitar_patch.create_media_systems.link", i + 1, link.effect().displayName(),
+                        link.location().pos().toShortString()).withStyle(ChatFormatting.GRAY));
+            }
+            tooltip.add(Component.translatable("guitar_patch.create_media_systems.clear_hint").withStyle(ChatFormatting.DARK_GRAY));
+        }
+    }
+
+    public boolean canPlay(Player player, InteractionHand hand) {
+        if (kind == Kind.KEYTAR) return hand == InteractionHand.MAIN_HAND;
+        if (kind == Kind.MELODICA) return !WearableInstruments.ready(player);
+        InteractionHand other = hand == InteractionHand.MAIN_HAND ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+        return player.getItemInHand(other).isEmpty();
+    }
+
+    public static final class TwoHanded extends InstrumentItem {
+        public final String modelTexture;
+
+        TwoHanded(Kind kind, String modelTexture) {
+            super(kind);
+            this.modelTexture = modelTexture;
+        }
     }
 
     @Override

@@ -31,31 +31,62 @@ import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 final class WearableAudio {
     @Nullable private Synth synth;
     @Nullable private Emitter emitter;
+    @Nullable private InstrumentVoices voices;
+
+    @Nullable private GuitarSound guitar;
+    GuitarSound guitar() {
+        if (guitar == null) guitar = new GuitarSound();
+        return guitar;
+    }
+
+    private InstrumentVoices voices() {
+        if (voices == null) voices = new InstrumentVoices();
+        return voices;
+    }
 
     void tick(Player player, InstrumentState notes, boolean powered) {
         var mc = Minecraft.getInstance();
+        if (notes.kind == Kind.STRATOCASTER) guitar().pedals(player);
         if (!powered || mc.options.getSoundSourceVolume(SoundSource.MASTER) == 0
                 || mc.options.getSoundSourceVolume(SoundSource.RECORDS) == 0) {
-            stop();
+            stopEmitter();
             return;
         }
-        if (synth != null && emitter != null && !emitter.isStopped()
+        if (emitter != null && !emitter.isStopped()
                 && (mc.getSoundManager().isActive(emitter) || System.nanoTime() - emitter.started < 1_000_000_000L)) return;
-        if (emitter != null) stop();
+        if (emitter != null) stopEmitter();
+        if (notes.kind == Kind.STRATOCASTER) {
+            guitar().update(notes, 0, System.nanoTime());
+            emitter = new Emitter(player, null, null, guitar);
+            mc.getSoundManager().play(emitter);
+            return;
+        }
         var font = KeyboardAudio.bank(mc);
-        if (font == null || player != mc.player && !notes.sounding()) return;
+        if (font == null || player != mc.player && notes.kind.model == null && !notes.sounding()) return;
         synth = new Synth(font);
         send(Synth.PROGRAM, notes.program(), 0);
         if (notes.kind == Kind.MELODICA) {
             send(Synth.CONTROL, Synth.EXPRESSION, notes.breath());
             send(Synth.CONTROL, Synth.REVERB_SEND, 0);
         }
-        for (int message : notes.snapshot()) message(notes, message, notes.breath());
-        emitter = new Emitter(player, synth);
+        if (notes.kind.model != null) {
+            voices().update(notes, 0, System.nanoTime());
+        } else {
+            for (int message : notes.snapshot()) message(notes, message, notes.breath());
+        }
+        emitter = new Emitter(player, synth, notes.kind.model == null ? null : voices, null);
         mc.getSoundManager().play(emitter);
     }
 
     void message(InstrumentState notes, int message, int beforeBreath) {
+        if (notes.kind == Kind.STRATOCASTER) {
+            guitar().update(notes, message, System.nanoTime());
+            return;
+        }
+        if (notes.kind.model != null) {
+            voices().update(notes, message, System.nanoTime());
+            return;
+        }
         if (synth == null) return;
         int number = first(message), value = second(message);
         switch (command(message)) {
@@ -91,23 +122,36 @@ final class WearableAudio {
     }
 
     void stop() {
+        stopEmitter();
+        if (guitar != null) guitar.close();
+        guitar = null;
+    }
+
+    private void stopEmitter() {
         if (emitter != null) {
             emitter.end();
             Minecraft.getInstance().getSoundManager().stop(emitter);
             emitter = null;
         }
         synth = null;
+        voices = null;
     }
 
     private static final class Emitter extends AbstractTickableSoundInstance {
         private final Player player;
-        private final Synth synth;
+        @Nullable private final Synth synth;
         final long started = System.nanoTime();
 
-        Emitter(Player player, Synth synth) {
+        @Nullable final InstrumentVoices voices;
+
+        @Nullable final GuitarSound guitar;
+
+        Emitter(Player player, @Nullable Synth synth, @Nullable InstrumentVoices voices, @Nullable GuitarSound guitar) {
             super(KeyboardFeature.PLAYED.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
             this.player = player;
             this.synth = synth;
+            this.voices = voices;
+            this.guitar = guitar;
             volume = .75f;
             tick();
         }
@@ -133,14 +177,14 @@ final class WearableAudio {
     private static final class LiveStream implements CmsStream {
         private static final AudioFormat MONO = new AudioFormat(Synth.RATE, 16, 1, true, false);
         private static final int CAPACITY = 2048;
-        private final Synth synth;
+        @Nullable private final Synth synth;
         private final Emitter emitter;
         private final float[] left = new float[CAPACITY], right = new float[CAPACITY];
         private final ByteBuffer pcm = ByteBuffer.allocateDirect(CAPACITY * 2).order(ByteOrder.LITTLE_ENDIAN);
         private final Runnable refill = this::restart;
         private int source = -1, frames = 256;
 
-        LiveStream(Synth synth, Emitter emitter) {
+        LiveStream(@Nullable Synth synth, Emitter emitter) {
             this.synth = synth;
             this.emitter = emitter;
             StreamPump.live(refill);
@@ -163,7 +207,20 @@ final class WearableAudio {
         }
 
         @Override public ByteBuffer read(int bytes) {
-            synth.render(left, right, 0, frames / Synth.BLOCK);
+            if (emitter.guitar != null) {
+                emitter.guitar.render(left, frames);
+                pcm.clear();
+                for (int i = 0; i < frames; i++) pcm.putShort((short)Math.round(Math.clamp(left[i],-1,1)*32767));
+                return pcm.flip();
+            }
+            if (emitter.voices == null) {
+                synth.render(left, right, 0, frames / Synth.BLOCK);
+            } else {
+                for (int start = 0; start < frames; start += Synth.BLOCK) {
+                    emitter.voices.nextBlock(synth);
+                    synth.render(left, right, start, 1);
+                }
+            }
             pcm.clear();
             for (int frame = 0; frame < frames; frame++) {
                 pcm.putShort((short) Math.round(Math.clamp((left[frame] + right[frame]) * .7f, -1, 1) * 32767));

@@ -140,5 +140,15 @@
         "stream": true
       }
     ]
+  },
+  "stage_custom": {
+    "subtitle": "subtitles.create_media_systems.stage_custom",
+    "sounds": [
+      {
+        "name": "minecraft:music_disc.13",
+        "type": "event",
+        "stream": true
+      }
+    ]
   }
 }

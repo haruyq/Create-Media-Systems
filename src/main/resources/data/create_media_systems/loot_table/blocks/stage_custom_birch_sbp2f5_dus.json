@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "create_media_systems:stage_custom_birch_sbp2f5_dus"
+        }
+      ],
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        },
+        {
+          "condition": "minecraft:block_state_property",
+          "block": "create_media_systems:stage_custom_birch_sbp2f5_dus",
+          "properties": {
+            "part": "root"
+          }
+        }
+      ]
+    }
+  ]
+}

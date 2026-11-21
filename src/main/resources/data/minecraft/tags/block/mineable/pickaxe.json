@@ -1,5 +1,10 @@
 {
   "values": [
+    "create_media_systems:auto_wah_pedal",
+    "create_media_systems:auto_tremolo_pedal",
+    "create_media_systems:auto_chorus_pedal",
+    "create_media_systems:auto_compressor_pedal",
+    "create_media_systems:boss_mt_2",
     "create_media_systems:broadcast_base",
     "create_media_systems:broadcast_mast",
     "create_media_systems:broadcast_horn",

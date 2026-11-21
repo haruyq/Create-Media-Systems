@@ -19,8 +19,8 @@ public final class MelodicaWear {
     private static final Matrix4f CARRIED = Worn.stand(new Vector3f(-.214f, -.500f, 0), new Vector3f(0, -1, 0),
             new Vector3f(-1, 0, 0), Worn.METRE);
     /** At the lips, in the head's upright frame: pointing down and away, keys turned up to the right hand. */
-    private static final Matrix4f PLAYED = lips(new Vector3f(0, .100f, -.262f), new Vector3f(.46f, -.46f, -.76f),
-            new Vector3f(.50f, .80f, -.10f));
+    private static final Matrix4f PLAYED = lips(new Vector3f(0, .100f, -.262f), new Vector3f(.40f, -.18f, -.90f),
+            new Vector3f(-.12f, .94f, .32f));
 
     private MelodicaWear() {}
 
@@ -32,8 +32,19 @@ public final class MelodicaWear {
 
     /** Where to draw {@link MelodicaMesh} in a layer of {@code model}. Ask after the arms are posed. */
     public static Matrix4f placement(HumanoidModel<?> model, float play) {
+        return placement(model, play, null);
+    }
+
+    public static Matrix4f placement(HumanoidModel<?> model, float play, Vector3f eye) {
         Matrix4f carried = Worn.frame(model.leftArm).mul(CARRIED);
-        return play <= 0 ? carried : Worn.blend(carried, Worn.frame(model.head).mul(PLAYED), Worn.ease(play));
+        if (play <= 0) return carried;
+        Matrix4f played = Worn.frame(model.head).mul(PLAYED);
+        if (eye != null) {
+            var lips = Worn.frame(model.head).transformDirection(new Vector3f(0, -.093f, -.090f)).add(eye);
+            var tip = played.transformPosition(new Vector3f(MelodicaMesh.MOUTH_X, MelodicaMesh.MOUTH_Y, MelodicaMesh.MOUTH_Z));
+            played.translateLocal(lips.sub(tip));
+        }
+        return Worn.blend(carried, played, Worn.ease(play));
     }
 
     /**

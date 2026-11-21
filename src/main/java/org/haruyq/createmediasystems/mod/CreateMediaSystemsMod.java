@@ -19,6 +19,7 @@ import org.haruyq.createmediasystems.disc.DiscFeature;
 import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import org.haruyq.createmediasystems.blocks.component.m700.HifiFeature;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardFeature;
+import org.haruyq.createmediasystems.items.instrument.InstrumentFeature;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments;
 import org.haruyq.createmediasystems.items.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
@@ -27,6 +28,7 @@ import org.haruyq.createmediasystems.p2p.P2pFeature;
 import org.haruyq.createmediasystems.screen.ScreenFeature;
 import org.haruyq.createmediasystems.items.partybox.stage320.PartyBoxFeature;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomFeature;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanFeature;
 import org.haruyq.createmediasystems.items.power.PowerFeature;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
@@ -48,7 +50,8 @@ public final class CreateMediaSystemsMod {
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new PxS1100Feature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
-            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new SteelpanFeature(), new ScreenFeature(),
+            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new InstrumentFeature(), new SteelpanFeature(),
+            new StageCustomFeature(), new ScreenFeature(),
             new RadioFeature(), new LoudmanFeature(), new BoomboxFeature());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
@@ -80,11 +83,13 @@ public final class CreateMediaSystemsMod {
         audio.addAll(HifiFeature.hifiUnits());
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
                 KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM,
-                SteelpanFeature.ITEM));
+                SteelpanFeature.ITEM, StageCustomFeature.ITEM, StageCustomFeature.COMPLETE_ITEM));
+        audio.addAll(InstrumentFeature.PEDALS);
         List<Supplier<? extends Item>> portable = new ArrayList<>(List.of(
                 WearableInstruments.KEYTAR, WearableInstruments.MELODICA, PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY,
                 MegaphoneFeature.MEGAPHONE_WHITE, MegaphoneFeature.MEGAPHONE_BLACK,
                 LauncherFeature.DISC_LAUNCHER, LauncherFeature.LAUNCHER_AIM_MODULE_ITEM, LauncherFeature.DISC_CELL_CHARGER_ITEM));
+        portable.addAll(InstrumentFeature.ITEMS);
         portable.addAll(LoudmanFeature.all());
         portable.addAll(LauncherFeature.DISC_CELLS);
 

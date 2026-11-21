@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.UUIDUtil;
@@ -20,6 +21,7 @@ public final class WearablePackets {
     public interface Client {
         void open(Open packet);
         void update(Update packet);
+        void guitar(GuitarOutput packet);
     }
 
     private static Client client;
@@ -28,10 +30,10 @@ public final class WearablePackets {
 
     public static void client(Client receiver) { client = receiver; }
 
-    public record Open(int session, boolean mainHand, boolean keytar) implements CustomPacketPayload {
+    public record Open(int session, boolean mainHand, Kind kind) implements CustomPacketPayload {
         static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("wearable_open"));
         static final StreamCodec<ByteBuf, Open> CODEC = StreamCodec.composite(ByteBufCodecs.VAR_INT, Open::session,
-                ByteBufCodecs.BOOL, Open::mainHand, ByteBufCodecs.BOOL, Open::keytar, Open::new);
+                ByteBufCodecs.BOOL, Open::mainHand, ByteBufCodecs.VAR_INT.map(Kind::byId, kind -> kind.wireId), Open::kind, Open::new);
         @Override public Type<Open> type() { return TYPE; }
     }
 
@@ -48,10 +50,29 @@ public final class WearablePackets {
         static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(UUIDUtil.STREAM_CODEC, Update::player,
                 ByteBufCodecs.VAR_INT, Update::session, ByteBufCodecs.BYTE.map(Byte::intValue, Integer::byteValue), Update::flags,
                 KeytarFinish.STREAM_CODEC, Update::finish, ByteBufCodecs.BOOL, Update::snapshot, EVENTS, Update::events, Update::new);
+        public Kind kind() { return Kind.fromFlags(flags); }
         @Override public Type<Update> type() { return TYPE; }
     }
 
+    public record GuitarInput(int session, byte[] frame) implements CustomPacketPayload {
+        static final Type<GuitarInput> TYPE = new Type<>(CreateMediaSystems.id("guitar_input"));
+        static final StreamCodec<ByteBuf, GuitarInput> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, GuitarInput::session, GuitarFrame.CODEC, GuitarInput::frame, GuitarInput::new);
+        @Override public Type<GuitarInput> type() { return TYPE; }
+    }
+
+    public record GuitarOutput(UUID player, int session, byte[] frame) implements CustomPacketPayload {
+        static final Type<GuitarOutput> TYPE = new Type<>(CreateMediaSystems.id("guitar_output"));
+        static final StreamCodec<ByteBuf, GuitarOutput> CODEC = StreamCodec.composite(UUIDUtil.STREAM_CODEC, GuitarOutput::player,
+                ByteBufCodecs.VAR_INT, GuitarOutput::session, GuitarFrame.CODEC, GuitarOutput::frame, GuitarOutput::new);
+        @Override public Type<GuitarOutput> type() { return TYPE; }
+    }
+
     static void register(PayloadRegistrar registrar) {
+        registrar.playToServer(GuitarInput.TYPE, GuitarInput.CODEC, (packet, context) -> {
+            if (context.player() instanceof ServerPlayer player) WearableInstruments.guitar(player, packet.session, packet.frame);
+        });
+        registrar.playToClient(GuitarOutput.TYPE, GuitarOutput.CODEC, (packet, context) -> { if (client != null) client.guitar(packet); });
         registrar.playToClient(Open.TYPE, Open.CODEC, (packet, context) -> { if (client != null) client.open(packet); });
         registrar.playToClient(Update.TYPE, Update.CODEC, (packet, context) -> { if (client != null) client.update(packet); });
         registrar.playToServer(Input.TYPE, Input.CODEC, (packet, context) -> {

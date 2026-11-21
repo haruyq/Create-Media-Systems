@@ -1,0 +1,9 @@
+{
+  "ambientocclusion": false,
+  "textures": {
+    "ivory": "minecraft:block/quartz_block_bottom"
+  },
+  "elements": [
+    {"from": [7.87, 3.86, 3.14], "to": [8.13, 3.91, 3.82], "rotation": {"origin": [8, 3.86, 4], "axis": "y", "angle": 0}, "faces": {"down": {"texture": "#ivory"}, "up": {"texture": "#ivory"}, "north": {"texture": "#ivory"}, "south": {"texture": "#ivory"}, "west": {"texture": "#ivory"}, "east": {"texture": "#ivory"}}}
+  ]
+}

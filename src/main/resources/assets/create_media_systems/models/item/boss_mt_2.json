@@ -1,0 +1,59 @@
+{
+  "loader": "neoforge:obj",
+  "model": "create_media_systems:models/block/metal_zone/inventory.obj",
+  "automatic_culling": false,
+  "shade_quads": true,
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "create_media_systems:block/metal_zone/cast"
+  },
+  "parent": "minecraft:block/block",
+  "display": {
+    "gui": {
+      "rotation": [
+        39,
+        202,
+        0
+      ],
+      "translation": [
+        0,
+        2.2,
+        0
+      ],
+      "scale": [
+        1.14,
+        1.14,
+        1.14
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.65,
+        0.65,
+        0.65
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        -2.5
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  }
+}
