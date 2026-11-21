@@ -15,7 +15,7 @@ class InstrumentVoicesTest {
         try (var in = getClass().getResourceAsStream("/assets/create_media_systems/keyboard/a88mkii/generaluser_gs.sf3")) {
             bank = SoundFont.read(ByteBuffer.wrap(in.readAllBytes()));
         }
-        for (var kind : new Kind[]{Kind.STRATOCASTER, Kind.FLUTE, Kind.TRUMPET}) {
+        for (var kind : new Kind[]{Kind.FLUTE, Kind.TRUMPET}) {
             var state = new InstrumentState(kind);
             var voices = new InstrumentVoices();
             var left = new float[Synth.BLOCK];

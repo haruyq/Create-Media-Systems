@@ -8,7 +8,6 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
-import org.haruyq.createmediasystems.items.instrument.InstrumentKind;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
@@ -19,16 +18,11 @@ final class InstrumentPlayerArms {
     private InstrumentPlayerArms() {}
 
     static void render(PoseStack pose, MultiBufferSource buffers, int light, ResourceLocation skin,
-                       InstrumentKind kind, InstrumentPlayerPose.Mount mount, boolean slim, boolean leftSleeve,
-                       boolean rightSleeve, ModelPart left, ModelPart right, boolean firstPerson) {
+                       Vector3f leftGrip, Vector3f rightGrip, boolean picking, boolean slim, boolean leftSleeve,
+                       boolean rightSleeve, ModelPart left, ModelPart right) {
         var out = buffers.getBuffer(RenderType.entityCutoutNoCull(skin));
-        if (firstPerson) {
-            drawForearm(pose,out,light,mount.leftGrip(),slim,leftSleeve,true);
-            drawForearm(pose,out,light,mount.rightGrip(),slim,rightSleeve,false);
-        } else {
-            drawArm(pose,out,light,kind,mount.leftGrip(),shoulder(left,true,slim),slim,leftSleeve,true);
-            drawArm(pose,out,light,kind,mount.rightGrip(),shoulder(right,false,slim),slim,rightSleeve,false);
-        }
+        drawArm(pose,out,light,picking,leftGrip,shoulder(left,true,slim),slim,leftSleeve,true);
+        drawArm(pose,out,light,picking,rightGrip,shoulder(right,false,slim),slim,rightSleeve,false);
     }
 
     private static Vector3f shoulder(ModelPart part, boolean left, boolean slim) {
@@ -37,10 +31,10 @@ final class InstrumentPlayerArms {
         return new Vector3f(part.x/16 + sign*(slim ? .03125f : .0625f), (part.y-1.1f)/16, part.z/16);
     }
 
-    private static void drawArm(PoseStack pose, VertexConsumer out, int light, InstrumentKind kind, Vector3fc grip,
+    private static void drawArm(PoseStack pose, VertexConsumer out, int light, boolean picking, Vector3fc grip,
                                 Vector3f shoulder, boolean slim, boolean sleeve, boolean left) {
         // Elbows drop and open outward. The guitar's picking arm goes over the body.
-        float forward = kind == InstrumentKind.STRATOCASTER && !left ? -.70f : .28f;
+        float forward = picking && !left ? -.70f : .28f;
         var limb = solve(shoulder, grip, new Vector3f(left ? .24f : -.36f, 1.15f, forward));
         int width = slim ? 3 : 4;
         int u = left ? 32 : 40, v = left ? 48 : 16;
@@ -81,26 +75,6 @@ final class InstrumentPlayerArms {
         sides(pose,out,light,elbow,bottom,pixels,u,v+10,v+16);
         quad(pose,out,light,top[3],top[0],top[1],top[2],u+4,v,u+4+pixels,v+4);
         capHand(pose,out,light,bottom,pixels,u,v);
-    }
-
-    /** In view space the forearm joins the grip to a point below the camera. */
-    private static void drawForearm(PoseStack pose, VertexConsumer out, int light, Vector3f grip,
-                                    boolean slim, boolean sleeve, boolean left) {
-        var start = new Vector3f(left ? .51f : -.51f, .90f, .17f);
-        var axis = new Vector3f(grip).sub(start).normalize();
-        var across = new Vector3f(1,0,0);
-        int w = slim ? 3 : 4, u = left ? 32 : 40, v = left ? 48 : 16;
-        var base = ring(start,axis,across,w*.028f,.104f);
-        var palm = ring(grip,axis,across,w*.016f,.055f);
-        sides(pose,out,light,base,palm,w,u,v+9,v+16);
-        capHand(pose,out,light,palm,w,u,v);
-        if (sleeve) {
-            int su = left ? 48 : 40, sv = left ? 48 : 32;
-            var outer = ring(start,axis,across,w*.028f+.012f,.116f);
-            var cuff = ring(new Vector3f(grip).fma(.005f,axis),axis,across,w*.016f+.012f,.067f);
-            sides(pose,out,light,outer,cuff,w,su,sv+9,sv+16);
-            capHand(pose,out,light,cuff,w,su,sv);
-        }
     }
 
     private static void sides(PoseStack pose, VertexConsumer out, int light, Vector3f[] top,

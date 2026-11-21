@@ -2,7 +2,7 @@ package org.haruyq.createmediasystems.items.instrument.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.util.Mth;
+import org.joml.Quaternionf;
 import org.haruyq.createmediasystems.items.instrument.InstrumentKind;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -20,15 +20,11 @@ final class InstrumentPlayerPose {
 
     static Mount create(InstrumentKind kind, InstrumentModel.Rig rig, InstrumentAnimation.Frame frame,
                         ModelPart bodyPart, ModelPart headPart) {
-        return create(kind, rig, frame, bodyPart, headPart, false);
+        return create(kind, rig, frame, bodyPart, headPart, null);
     }
 
-    static Mount firstPerson(InstrumentKind kind, InstrumentModel.Rig rig, InstrumentAnimation.Frame frame) {
-        return create(kind, rig, frame, null, null, true);
-    }
-
-    private static Mount create(InstrumentKind kind, InstrumentModel.Rig rig, InstrumentAnimation.Frame frame,
-                                ModelPart bodyPart, ModelPart headPart, boolean firstPerson) {
+    static Mount create(InstrumentKind kind, InstrumentModel.Rig rig, InstrumentAnimation.Frame frame,
+                        ModelPart bodyPart, ModelPart headPart, Vector3f eye) {
         Matrix4f body = partMatrix(bodyPart);
         Matrix4f transform;
         Vector3f left, right;
@@ -44,28 +40,18 @@ final class InstrumentPlayerPose {
             }
             case FLUTE -> {
                 Vector3f rest = body.transformPosition(new Vector3f(.115f, .438f, -.270f));
-                Vector3f mouth = partMatrix(headPart).transformPosition(new Vector3f(0, -.095f, -.253f));
-                var position = rest.lerp(mouth, playing);
-                transform = new Matrix4f().translation(position)
-                        .rotateY(headTurn(headPart) * playing)
-                        .rotateX(headTilt(headPart) * playing)
-                        .rotateZ((157 + 23 * playing) * DEG)
-                        .rotateX(firstPerson ? .62f : -.30f)
+                transform = wind(rest, headPart, eye, playing)
+                        .rotateY((-12 - 42 * playing) * DEG)
+                        .rotateZ((157 + 18 * playing) * DEG).rotateX(-.30f)
                         .translate(-rig.embouchure()[0], -rig.embouchure()[1], -rig.embouchure()[2]);
-                left = InstrumentModel.point(rig.left_grip());
+                // The wrist sits on the lip side of the key group; the palm covers the contact.
+                left = InstrumentModel.point(rig.left_grip()).add(-.025f, 0, 0);
                 right = InstrumentModel.point(rig.right_grip()).add(0, -.006f * frame.control(InstrumentAnimation.Control.RIGHT_MIDDLE), 0);
-                if (firstPerson) {
-                    left.add(0,.042f,-.014f);
-                    right.add(0,.042f,-.014f);
-                }
             }
             case TRUMPET -> {
                 Vector3f rest = body.transformPosition(new Vector3f(0, .408f, -.254f));
-                Vector3f mouth = partMatrix(headPart).transformPosition(new Vector3f(0, -.095f, -.254f));
-                var position = rest.lerp(mouth, playing);
-                transform = new Matrix4f().translation(position)
-                        .rotateY(headTurn(headPart) * playing + (firstPerson ? .63f : 0))
-                        .rotateX(headTilt(headPart) * playing + PI + .51f*(1-playing) + (firstPerson ? .39f : 0))
+                transform = wind(rest, headPart, eye, playing)
+                        .rotateX(PI + (30 - 21 * playing) * DEG)
                         .translate(-rig.mouth()[0], -rig.mouth()[1], -rig.mouth()[2]);
                 left = InstrumentModel.point(rig.left_grip()).add(0, 0, .012f * frame.control(InstrumentAnimation.Control.THIRD_SLIDE));
                 float valves = frame.control(InstrumentAnimation.Control.VALVE_1)
@@ -84,11 +70,13 @@ final class InstrumentPlayerPose {
         return pose.last().pose();
     }
 
-    private static float headTurn(ModelPart head) {
-        return head == null ? 0 : Mth.clamp(head.yRot, -.66f, .66f);
-    }
-
-    private static float headTilt(ModelPart head) {
-        return head == null ? 0 : Mth.clamp(head.xRot, -.61f, .61f);
+    private static Matrix4f wind(Vector3f rest, ModelPart head, Vector3f eye, float raised) {
+        var rotation = new Quaternionf();
+        partMatrix(head).getNormalizedRotation(rotation);
+        // The first-person eye is the camera pivot, including when the player looks straight up or crouches.
+        var lips = eye == null ? partMatrix(head).transformPosition(new Vector3f(0, -.095f, -.253f))
+                : rotation.transform(new Vector3f(0, .093f, -.090f)).add(eye);
+        return new Matrix4f().translation(rest.lerp(lips, raised))
+                .rotate(new Quaternionf().slerp(rotation, raised));
     }
 }

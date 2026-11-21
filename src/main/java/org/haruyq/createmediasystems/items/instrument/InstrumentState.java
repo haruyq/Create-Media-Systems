@@ -9,7 +9,7 @@ import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 public final class InstrumentState {
     public static final int NOTE = 0x90, CONTROL = 0xB0, PROGRAM = 0xC0, BEND = 0xE0;
     public static final int BREATH = 2, SUSTAIN = 64, RELEASE_KEYS = 123;
-    public static final int VOLUME = 7, PICKUP = 70, TONE_NECK = 71, TONE_BRIDGE = 74;
+    public static final int VOLUME = 7, PICKUP = 70, TONE_NECK = 71, TONE_BRIDGE = 74, AMP = 75;
     public static final int CENTER_BEND = 8192;
     private static final int[] PROGRAMS = {81, 89, 4, 16, 38, 62, 11, 50};
 
@@ -20,6 +20,8 @@ public final class InstrumentState {
     private final int[] strings;
     private final List<Integer> windKeys = new ArrayList<>();
     private int lastNote, tone, bend = CENTER_BEND, breath, sustain;
+    private int amp = 1;
+    public int amp() { return amp; }
     private int volume = 127, pickup, neckTone = 127, bridgeTone = 127;
 
     public int volume() { return volume; }
@@ -73,6 +75,7 @@ public final class InstrumentState {
 
     public int windPitch() { return windKeys.isEmpty() ? -1 : windKeys.getLast(); }
     public int stringPitch(int string) { return strings[string]; }
+    public static int openString(int string) { return OPEN_STRINGS[string]; }
     public static int fret(int string, int pitch) { return pitch < 0 ? 0 : pitch - OPEN_STRINGS[string]; }
 
     /** The pitch uses concert MIDI numbering even on the B-flat trumpet. */
@@ -154,6 +157,7 @@ public final class InstrumentState {
                         case PICKUP -> pickup = Math.round(4 * b / 127f);
                         case TONE_NECK -> neckTone = b;
                         case TONE_BRIDGE -> bridgeTone = b;
+                        case AMP -> amp = Math.round(b * 2 / 127f);
                         default -> { return false; }
                     }
                 } else return false;
@@ -179,6 +183,7 @@ public final class InstrumentState {
             messages.add(control(PICKUP, Math.round(pickup * 127 / 4f)));
             messages.add(control(TONE_NECK, neckTone));
             messages.add(control(TONE_BRIDGE, bridgeTone));
+            messages.add(control(AMP, Math.round(amp * 127 / 2f)));
         } else if (breath > 0) messages.add(control(BREATH, breath));
         for (int n = kind.first; n <= kind.last(); n++) {
             if (velocity(n) != 0) messages.add(note(n, velocity(n)));

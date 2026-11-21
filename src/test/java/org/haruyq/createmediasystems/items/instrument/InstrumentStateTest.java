@@ -57,6 +57,7 @@ class InstrumentStateTest {
         guitar.apply(control(PICKUP, 127));
         guitar.apply(control(TONE_NECK, 40));
         guitar.apply(control(TONE_BRIDGE, 102));
+        guitar.apply(control(AMP, 127));
         var listener = new InstrumentState(Kind.STRATOCASTER);
         guitar.snapshot().forEach(listener::apply);
         assertEquals(22, InstrumentState.fret(5, listener.stringPitch(5)));
@@ -65,7 +66,7 @@ class InstrumentStateTest {
         assertEquals(96, listener.volume());
         assertEquals(40, listener.neckTone());
         assertEquals(102, listener.bridgeTone());
-        assertEquals(guitar.brightness(), listener.brightness());
+        assertEquals(2, listener.amp());
         for (int s = 0; s < chord.length; s++) assertEquals(guitar.stringPitch(s), listener.stringPitch(s));
         guitar.apply(note(86, 0));
         for (int note : chord) assertEquals(92, guitar.voicedVelocity(note));

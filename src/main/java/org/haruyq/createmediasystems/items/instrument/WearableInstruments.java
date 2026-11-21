@@ -96,6 +96,17 @@ public final class WearableInstruments implements Feature {
         int paidUntil;
         long window;
         int messages;
+        double audioCredit = 8;
+        long audioAt = System.nanoTime();
+
+        boolean allowsAudio() {
+            long now = System.nanoTime();
+            audioCredit = Math.min(12, audioCredit + (now-audioAt) / 20_000_000.0);
+            audioAt = now;
+            if (audioCredit < 1) return false;
+            audioCredit--;
+            return true;
+        }
 
         Session(ServerPlayer player, InteractionHand hand, Kind kind) {
             this.hand = hand;
@@ -207,6 +218,17 @@ public final class WearableInstruments implements Feature {
         var visible = appearance(player, session);
         if (!visible.equals(outfit.previous)) broadcast(player, outfit, visible, false);
         PacketDistributor.sendToPlayersTrackingEntity(player, update(player, session, visible, false, List.of(message)));
+    }
+
+    static void guitar(ServerPlayer player, int token, byte[] frame) {
+        Session session = player.getData(OUTFIT).session;
+        if (session == null || session.token != token || session.notes.kind != Kind.STRATOCASTER
+                || !session.valid(player) || !session.allowsAudio() || !GuitarFrame.valid(frame)) return;
+        var packet = new WearablePackets.GuitarOutput(player.getUUID(), token, frame);
+        for (var listener : player.serverLevel().getChunkSource().chunkMap.getPlayers(player.chunkPosition(), false)) {
+            if (listener != player && listener.distanceToSqr(player) <= 48 * 48)
+                PacketDistributor.sendToPlayer(listener, packet);
+        }
     }
 
     private static void tick(ServerPlayer player) {

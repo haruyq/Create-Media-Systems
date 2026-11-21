@@ -5,7 +5,6 @@ import java.util.Arrays;
 
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
-import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 
 import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 
@@ -17,7 +16,7 @@ final class InstrumentVoices {
     private final long[] earliestRelease = new long[128];
     private final boolean[] releasing = new boolean[128];
     private long cursor, frame;
-    private int expression = -1, volume = -1, brightness = -1, bend = -1;
+    private int expression = -1;
 
     synchronized void update(InstrumentState state, int message, long now) {
         if (changes.size() > 512 || !changes.isEmpty() && now - changes.getFirst().at > 1_000_000_000L) {
@@ -25,26 +24,12 @@ final class InstrumentVoices {
             changes.clear();
             changes.add(new Change(now, Synth.message(Synth.CONTROL, 0, Synth.ALL_SOUND_OFF, 0)));
             Arrays.fill(playing, false);
-            expression = volume = brightness = bend = -1;
+            expression = -1;
             cursor = 0;
         }
         if (state.kind.wind() && expression != state.breath()) {
             expression = state.breath();
             enqueue(now, Synth.CONTROL, Synth.EXPRESSION, expression);
-        }
-        if (state.kind == Kind.STRATOCASTER) {
-            if (bend != state.bend()) {
-                bend = state.bend();
-                enqueue(now, Synth.BEND, bend & 127, bend >> 7);
-            }
-            if (volume != state.volume()) {
-                volume = state.volume();
-                enqueue(now, Synth.CONTROL, Synth.VOLUME, volume);
-            }
-            if (brightness != state.brightness()) {
-                brightness = state.brightness();
-                enqueue(now, Synth.CONTROL, Synth.BRIGHTNESS, brightness);
-            }
         }
         for (int note = state.kind.first; note <= state.kind.last(); note++) {
             int velocity = state.voicedVelocity(note);

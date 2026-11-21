@@ -1,0 +1,8 @@
+{
+  "parent": "create_media_systems:block/guitar_pedal/enclosure",
+  "textures": {
+    "particle": "create_media_systems:block/guitar_pedal/chorus_case",
+    "case": "create_media_systems:block/guitar_pedal/chorus_case",
+    "label": "create_media_systems:block/guitar_pedal/chorus_face"
+  }
+}

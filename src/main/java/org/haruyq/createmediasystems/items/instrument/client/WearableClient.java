@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.client.WorldEvents;
+import org.haruyq.createmediasystems.items.instrument.GuitarFrame;
 import org.haruyq.createmediasystems.items.instrument.InstrumentKind;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
 import org.haruyq.createmediasystems.items.instrument.KeytarFinish;
@@ -55,9 +56,11 @@ public final class WearableClient implements WearablePackets.Client {
         KeyMotion motion = new KeyMotion(Kind.KEYTAR.first, Kind.KEYTAR.keys);
         float ready, play, handX = KeytarMesh.keyX(60);
         float seconds;
+        long lastInput;
         long lastFrame = System.nanoTime();
 
         void reset(Kind kind) {
+            lastInput = 0;
             if (instrument != null && notes.kind.model == instrument.kind()) {
                 int release = InstrumentState.control(InstrumentState.RELEASE_KEYS, 0);
                 notes.apply(release);
@@ -191,6 +194,22 @@ public final class WearableClient implements WearablePackets.Client {
         for (int message : packet.events()) view.play(message);
     }
 
+    @Override public void guitar(WearablePackets.GuitarOutput packet) {
+        var view = VIEWS.get(packet.player());
+        if (view == null || view.session != packet.session() || view.notes.kind != Kind.STRATOCASTER
+                || !GuitarFrame.valid(packet.frame())) return;
+        byte[] frame = packet.frame();
+        view.audio.guitar().offer(frame.length == 0 ? new short[0] : new GuitarPcm().decode(frame), false);
+        showInput(view,frame);
+    }
+
+    static void showInput(View view, byte[] frame) {
+        if (view.instrument == null || view.notes.kind != Kind.STRATOCASTER) return;
+        long now = System.nanoTime();
+        view.lastInput = frame.length == 0 ? 0 : now;
+        view.instrument.inputFrame(frame, view.notes, now);
+    }
+
     static void input(View view, int session, int message) {
         if (view.session != session) return;
         if (message != WearablePackets.CLOSE) view.play(message);
@@ -204,6 +223,7 @@ public final class WearableClient implements WearablePackets.Client {
         for (var entry : VIEWS.entrySet()) {
             Player player = mc.level.getPlayerByUUID(entry.getKey());
             var view = entry.getValue();
+            if (view.lastInput != 0 && System.nanoTime()-view.lastInput > 300_000_000L) showInput(view,new byte[0]);
             if (player != null && player.isAlive()) {
                 view.missingTicks = 0;
                 if (view.session != 0) view.audio.tick(player, view.notes, view.notes.kind != Kind.KEYTAR || view.powered(player));

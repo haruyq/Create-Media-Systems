@@ -1,0 +1,6 @@
+{
+  "parent": "create_media_systems:block/guitar_pedal/wah",
+  "textures": {
+    "lamp": "minecraft:block/gray_concrete"
+  }
+}

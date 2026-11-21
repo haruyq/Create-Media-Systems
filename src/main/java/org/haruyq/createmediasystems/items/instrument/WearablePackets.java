@@ -21,6 +21,7 @@ public final class WearablePackets {
     public interface Client {
         void open(Open packet);
         void update(Update packet);
+        void guitar(GuitarOutput packet);
     }
 
     private static Client client;
@@ -53,7 +54,25 @@ public final class WearablePackets {
         @Override public Type<Update> type() { return TYPE; }
     }
 
+    public record GuitarInput(int session, byte[] frame) implements CustomPacketPayload {
+        static final Type<GuitarInput> TYPE = new Type<>(CreateMediaSystems.id("guitar_input"));
+        static final StreamCodec<ByteBuf, GuitarInput> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, GuitarInput::session, GuitarFrame.CODEC, GuitarInput::frame, GuitarInput::new);
+        @Override public Type<GuitarInput> type() { return TYPE; }
+    }
+
+    public record GuitarOutput(UUID player, int session, byte[] frame) implements CustomPacketPayload {
+        static final Type<GuitarOutput> TYPE = new Type<>(CreateMediaSystems.id("guitar_output"));
+        static final StreamCodec<ByteBuf, GuitarOutput> CODEC = StreamCodec.composite(UUIDUtil.STREAM_CODEC, GuitarOutput::player,
+                ByteBufCodecs.VAR_INT, GuitarOutput::session, GuitarFrame.CODEC, GuitarOutput::frame, GuitarOutput::new);
+        @Override public Type<GuitarOutput> type() { return TYPE; }
+    }
+
     static void register(PayloadRegistrar registrar) {
+        registrar.playToServer(GuitarInput.TYPE, GuitarInput.CODEC, (packet, context) -> {
+            if (context.player() instanceof ServerPlayer player) WearableInstruments.guitar(player, packet.session, packet.frame);
+        });
+        registrar.playToClient(GuitarOutput.TYPE, GuitarOutput.CODEC, (packet, context) -> { if (client != null) client.guitar(packet); });
         registrar.playToClient(Open.TYPE, Open.CODEC, (packet, context) -> { if (client != null) client.open(packet); });
         registrar.playToClient(Update.TYPE, Update.CODEC, (packet, context) -> { if (client != null) client.update(packet); });
         registrar.playToServer(Input.TYPE, Input.CODEC, (packet, context) -> {

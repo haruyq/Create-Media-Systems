@@ -14,11 +14,11 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.PlayerModelPart;
 
-/** The performer's own body below the camera, including the clothes under the shoulder strap. */
-final class GuitarBody extends PlayerModel<AbstractClientPlayer> implements RenderLayerParent<AbstractClientPlayer, GuitarBody> {
-    private final HumanoidArmorLayer<AbstractClientPlayer, GuitarBody, HumanoidArmorModel<AbstractClientPlayer>> armor;
+/** The performer's own body below the camera, with the same skin and armor as the third-person model. */
+final class InstrumentBody extends PlayerModel<AbstractClientPlayer> implements RenderLayerParent<AbstractClientPlayer, InstrumentBody> {
+    private final HumanoidArmorLayer<AbstractClientPlayer, InstrumentBody, HumanoidArmorModel<AbstractClientPlayer>> armor;
 
-    GuitarBody(EntityRendererProvider.Context context, boolean slim) {
+    InstrumentBody(EntityRendererProvider.Context context, boolean slim) {
         super(context.bakeLayer(slim ? ModelLayers.PLAYER_SLIM : ModelLayers.PLAYER), slim);
         head.visible = hat.visible = false;
         armor = new HumanoidArmorLayer<>(this,
@@ -33,7 +33,7 @@ final class GuitarBody extends PlayerModel<AbstractClientPlayer> implements Rend
         return model;
     }
 
-    @Override public GuitarBody getModel() { return this; }
+    @Override public InstrumentBody getModel() { return this; }
     @Override public ResourceLocation getTextureLocation(AbstractClientPlayer player) { return player.getSkin().texture(); }
 
     void draw(PoseStack pose, MultiBufferSource buffers, int light, AbstractClientPlayer player, boolean bentArms,

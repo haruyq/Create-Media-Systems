@@ -104,38 +104,30 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
         if (player == null || player.isSpectator() || !player.isAlive()) return;
         boolean keyboard = WearableInstruments.ready(player);
         boolean melodica = WearableInstruments.carriesMelodica(player);
-        if (!keyboard && !melodica) {
-            if (event.getItemStack().is(WearableInstruments.KEYTAR.get())) event.setCanceled(true);
+        if (melodica) {
+            if (event.getItemStack().isEmpty() || event.getItemStack().is(WearableInstruments.MELODICA.get())
+                    || event.getItemStack().is(WearableInstruments.KEYTAR.get())) event.setCanceled(true);
             return;
         }
-        var hand = keyboard || player.getMainHandItem().is(WearableInstruments.MELODICA.get())
-                ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
-        if (event.getHand() != hand) {
-            if (keyboard || event.getItemStack().isEmpty() || event.getItemStack().is(WearableInstruments.KEYTAR.get())
+        if (!keyboard) {
+            if (event.getItemStack().is(WearableInstruments.KEYTAR.get())
                     || event.getItemStack().is(WearableInstruments.MELODICA.get())) event.setCanceled(true);
             return;
         }
         event.setCanceled(true);
+        if (event.getHand() != InteractionHand.MAIN_HAND) return;
         var pose = event.getPoseStack();
         var view = WearableClient.view(player);
         long now = System.nanoTime();
         view.animate(player, now);
         pose.pushPose();
-        if (keyboard) {
-            float ready = Worn.ease(view.ready);
-            pose.translate(Mth.lerp(ready, .56f, .07f), Mth.lerp(ready, -.82f, -.415f), -.91f);
-            pose.mulPose(Axis.ZP.rotationDegrees(Mth.lerp(ready, 49, -7)));
-            pose.mulPose(Axis.XP.rotationDegrees(Mth.lerp(ready, 57, 106)));
-            pose.mulPose(Axis.YP.rotationDegrees(180));
-            pose.scale(.59f, .59f, .59f);
-        } else {
-            float play = Worn.ease(view.play);
-            pose.translate(Mth.lerp(play, -.34f, -.06f), Mth.lerp(play, -.40f, -.36f), Mth.lerp(play, -.64f, -.71f));
-            pose.mulPose(Axis.ZP.rotationDegrees(Mth.lerp(play, -47, -9)));
-            pose.mulPose(Axis.XP.rotationDegrees(Mth.lerp(play, 64, 106)));
-            pose.scale(.76f, .76f, .76f);
-        }
-        draw(pose, event.getMultiBufferSource(), event.getPackedLight(), player, view, keyboard ? Kind.KEYTAR : Kind.MELODICA, now);
+        float ready = Worn.ease(view.ready);
+        pose.translate(Mth.lerp(ready, .56f, .07f), Mth.lerp(ready, -.82f, -.415f), -.91f);
+        pose.mulPose(Axis.ZP.rotationDegrees(Mth.lerp(ready, 49, -7)));
+        pose.mulPose(Axis.XP.rotationDegrees(Mth.lerp(ready, 57, 106)));
+        pose.mulPose(Axis.YP.rotationDegrees(180));
+        pose.scale(.59f, .59f, .59f);
+        draw(pose, event.getMultiBufferSource(), event.getPackedLight(), player, view, Kind.KEYTAR, now);
         pose.popPose();
     }
 

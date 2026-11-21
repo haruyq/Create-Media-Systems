@@ -67,6 +67,7 @@ public final class InstrumentAnimation {
     private final Channel[] presses = new Channel[STRINGS];
     private final Channel[] bends = new Channel[STRINGS];
     private final int[] frets = new int[STRINGS], playedStrings = new int[STRINGS];
+    private final int[] inputPitch = new int[STRINGS];
     private final long[] plucked = new long[STRINGS];
     private final float[] strengths = new float[STRINGS];
     private final Channel engaged = new Channel(0, .18);
@@ -84,6 +85,7 @@ public final class InstrumentAnimation {
         }
         Arrays.fill(plucked, NO_STRIKE);
         Arrays.fill(playedStrings, -1);
+        Arrays.fill(inputPitch, -1);
     }
 
     void follow(InstrumentState state, int message, long now) {
@@ -110,6 +112,7 @@ public final class InstrumentAnimation {
         int attack = InstrumentState.command(message) == InstrumentState.NOTE && InstrumentState.second(message) > 0
                 ? InstrumentState.first(message) : -1;
         for (int string = 0; string < STRINGS; string++) {
+            if (inputPitch[string] >= 0) continue;
             int pitch = state.stringPitch(string);
             if (playedStrings[string] != pitch || pitch >= 0 && InstrumentState.command(message) == InstrumentState.BEND) {
                 fret(string, InstrumentState.fret(string, pitch), Math.max(0, bend), now);
@@ -123,6 +126,39 @@ public final class InstrumentAnimation {
             }
             playedStrings[string] = pitch;
         }
+    }
+
+    void inputFrame(byte[] frame, InstrumentState notes, long now) {
+        int heldFrets = 0, position = 0;
+        for (int s = 0; s < STRINGS; s++) {
+            int i = s*3, strength = frame.length == 0 ? 0 : frame[i+1];
+            if (strength == 0) {
+                if (inputPitch[s] >= 0) {
+                    inputPitch[s] = -1;
+                    int pitch = notes.stringPitch(s);
+                    fret(s, InstrumentState.fret(s,pitch), Math.max(0,(notes.bend()-8192)/8192f), now);
+                    playedStrings[s] = pitch;
+                }
+                continue;
+            }
+            int fret = frame[i] & 127;
+            int pitch = fret + InstrumentState.openString(s);
+            boolean attack = frame[i] < 0 || inputPitch[s] != pitch;
+            inputPitch[s] = pitch;
+            fret(s,fret,Math.abs(frame[i+2])/100f,now);
+            if (fret > 0) { heldFrets++; position += fret; }
+            if (attack) {
+                pluck(s,strength/127f,now);
+                if (strokeStarted != now) down = !down;
+                strokeStarted = now;
+            }
+        }
+        if (heldFrets > 0) fretHand.to(position / (float) heldFrets, now);
+    }
+
+    boolean inputNote(int pitch) {
+        for (int note : inputPitch) if (pitch == note) return true;
+        return false;
     }
 
     public InstrumentKind kind() { return kind; }
