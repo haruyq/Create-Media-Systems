@@ -56,6 +56,10 @@ public final class KeyboardSynth implements AutoCloseable {
     private KeyboardSettings settings = new KeyboardSettings();
     private int framesToReleaseClick, clickNote;
 
+    public static void prepareBundled() {
+        KeyboardSoundbank.bank(KeyboardSettings.DEFAULT_FONT);
+    }
+
     public static CompletableFuture<KeyboardSynth> bundled(int polyphony) {
         return KeyboardSoundbank.synth(KeyboardSettings.DEFAULT_FONT, polyphony);
     }

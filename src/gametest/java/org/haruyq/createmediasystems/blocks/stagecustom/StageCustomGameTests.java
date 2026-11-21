@@ -1,10 +1,12 @@
 package org.haruyq.createmediasystems.blocks.stagecustom;
 
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -22,6 +24,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.VideoPlayerGameTests;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock.Part;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Cymbal;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout.Drum;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
@@ -112,7 +116,8 @@ public final class StageCustomGameTests {
         prepare(level, root, facing, state);
         helper.assertTrue(StageCustomBlock.parts(state).size() == 3 && StageCustomBlock.install(level, root, state, null),
                 "Previously placed three-part kits must remain usable");
-        var player = VideoPlayerGameTests.listener(level, root.south(), new java.util.ArrayList<>());
+        var heard = new ArrayList<CustomPacketPayload>();
+        var player = VideoPlayerGameTests.listener(level, root.south(), heard);
         try {
             for (Drum drum : Drum.values()) {
                 int note = StageCustomMidi.note(drum);
@@ -124,12 +129,79 @@ public final class StageCustomGameTests {
                     && !StageCustomMidi.strike(player, new StageCustomMidi.Hit(root, 38, 128))
                     && !StageCustomMidi.strike(player, new StageCustomMidi.Hit(root, 42, 100)),
                     "The kit accepted an unmapped note or an invalid velocity");
+            var velocities = heard.stream().filter(StageCustomMidi.Played.class::isInstance)
+                    .map(StageCustomMidi.Played.class::cast).map(event -> event.hit().velocity()).toList();
+            helper.assertTrue(velocities.equals(List.of(1, 127, 1, 127, 1, 127, 1, 127, 1, 127)),
+                    "The sound packets lost MIDI velocities or played an invalid hit");
             player.setPos(Vec3.atCenterOf(root.east(10)));
             helper.assertTrue(!StageCustomMidi.strike(player, new StageCustomMidi.Hit(root, 38, 100)),
                     "An out-of-range player played the drums");
         } finally {
             level.removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void completeKitSavesItsHiHatAndUsesTheUpperCymbalCells(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var root = helper.absolutePos(new BlockPos(2, 2, 2));
+        var facing = Direction.NORTH;
+        var state = StageCustomFeature.COMPLETE_BLOCK.get().defaultBlockState().setValue(StageCustomBlock.FACING, facing)
+                .setValue(StageCustomBlock.LARGE, true);
+        prepare(level, root, facing, state);
+        var upper = Part.TOP_LEFT.at(root, facing);
+        level.setBlockAndUpdate(upper, Blocks.COBBLESTONE.defaultBlockState());
+        helper.assertTrue(!StageCustomBlock.install(level, root, state, null) && level.isEmptyBlock(root),
+                "The complete kit ignored a ceiling obstruction");
+        level.removeBlock(upper, false);
+        helper.assertTrue(StageCustomBlock.install(level, root, state, null), "The complete kit did not fit");
+        for (var part : StageCustomBlock.parts(state)) {
+            var pos = part.at(root, facing);
+            var installed = level.getBlockState(pos);
+            helper.assertTrue(installed.is(StageCustomFeature.COMPLETE_BLOCK.get())
+                            && StageCustomBlock.root(pos, installed).equals(root) && !installed.getShape(level, pos).isEmpty(),
+                    "An enlarged part was missing or untargetable " + part);
+        }
+
+        var kit = (StageCustomBlock.Entity) level.getBlockEntity(root);
+        var mock = helper.makeMockPlayer(GameType.SURVIVAL);
+        var hat = StageCustomCymbals.plate(Cymbal.HI_HAT);
+        Vec3 hatAt = StageCustomLayout.toWorld(root, facing, hat.point(0, 0, hat.profile(0)).scale(StageCustomBlock.scale(state)));
+        mock.setPos(hatAt.add(0, .38 - mock.getEyeHeight(), 0));
+        mock.setShiftKeyDown(true);
+        var at = BlockPos.containing(hatAt);
+        var click = new BlockHitResult(hatAt, Direction.UP, at, false);
+        helper.assertTrue(level.getBlockState(at).useWithoutItem(level, mock, click).consumesAction() && kit.hatOpen(),
+                "The hi-hat did not open via interaction");
+        var reloaded = new StageCustomBlock.Entity(root, state);
+        reloaded.loadWithComponents(kit.saveWithoutMetadata(level.registryAccess()), level.registryAccess());
+        helper.assertTrue(reloaded.hatOpen(), "The open hi-hat was lost on save and load");
+
+        var packets = new ArrayList<CustomPacketPayload>();
+        var player = VideoPlayerGameTests.listener(level, root.north(2), packets);
+        try {
+            for (var voice : Voice.values()) {
+                int note = StageCustomMidi.note(voice);
+                helper.assertTrue(StageCustomMidi.strike(player, new StageCustomMidi.Hit(root, note, 93)),
+                        "MIDI could not reach a cymbal: " + voice);
+            }
+            helper.assertTrue(!kit.hatOpen() && !kit.getUpdateTag(level.registryAccess()).getBoolean("HatOpen"),
+                    "The MIDI foot pedal did not close and sync the hi-hat");
+            var notes = packets.stream().filter(StageCustomMidi.Played.class::isInstance)
+                    .map(StageCustomMidi.Played.class::cast).map(event -> event.hit().note()).toList();
+            helper.assertTrue(notes.equals(List.of(42, 46, 44, 49, 51, 53)), "Wrong samples for the cymbal pads");
+        } finally {
+            level.removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
+        }
+
+        level.destroyBlock(upper, true);
+        for (var part : StageCustomBlock.parts(state)) {
+            helper.assertTrue(level.isEmptyBlock(part.at(root, facing)), "Breaking an upper tile detached an orphan part");
+        }
+        var drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(root).inflate(3),
+                item -> item.getItem().is(StageCustomFeature.COMPLETE_ITEM.get()));
+        helper.assertTrue(drops.size() == 1 && drops.getFirst().getItem().getCount() == 1, "The wrong kit was dropped");
         helper.succeed();
     }
 

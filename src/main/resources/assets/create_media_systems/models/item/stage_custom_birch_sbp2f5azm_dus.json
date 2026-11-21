@@ -1,0 +1,104 @@
+{
+  "loader": "neoforge:composite",
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "create_media_systems:block/stage_custom/dus"
+  },
+  "children": {
+    "drums": {
+      "parent": "create_media_systems:item/stage_custom_birch_sbp2f5_dus"
+    },
+    "hardware": {
+      "loader": "neoforge:obj",
+      "model": "create_media_systems:models/block/stage_custom/complete_inventory.obj",
+      "automatic_culling": false,
+      "shade_quads": true,
+      "ambientocclusion": false,
+      "textures": {
+        "particle": "create_media_systems:block/stage_custom/dus"
+      }
+    }
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        23,
+        146,
+        0
+      ],
+      "translation": [
+        0,
+        1.2,
+        0
+      ],
+      "scale": [
+        0.83,
+        0.83,
+        0.83
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        5,
+        180,
+        0
+      ],
+      "translation": [
+        0,
+        1,
+        0
+      ],
+      "scale": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        135,
+        0
+      ],
+      "translation": [
+        3,
+        0,
+        0
+      ],
+      "scale": [
+        0.45,
+        0.45,
+        0.45
+      ]
+    },
+    "thirdperson_righthand": {
+      "rotation": [
+        64,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        1.8,
+        -1
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ]
+    }
+  }
+}

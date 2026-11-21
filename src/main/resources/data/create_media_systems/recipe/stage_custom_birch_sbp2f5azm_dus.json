@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BCB",
+    "ISI",
+    "WLW"
+  ],
+  "key": {
+    "B": {
+      "item": "minecraft:copper_ingot"
+    },
+    "C": {
+      "item": "minecraft:chain"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "W": {
+      "item": "minecraft:black_wool"
+    },
+    "L": {
+      "item": "minecraft:leather"
+    },
+    "S": {
+      "item": "create_media_systems:stage_custom_birch_sbp2f5_dus"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:stage_custom_birch_sbp2f5azm_dus",
+    "count": 1
+  }
+}

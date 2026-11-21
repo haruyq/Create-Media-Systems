@@ -141,44 +141,14 @@
       }
     ]
   },
-  "stage_custom.bass": {
-    "subtitle": "subtitles.create_media_systems.stage_custom.bass",
+  "stage_custom": {
+    "subtitle": "subtitles.create_media_systems.stage_custom",
     "sounds": [
-      "create_media_systems:stage_custom/bass_1",
-      "create_media_systems:stage_custom/bass_2",
-      "create_media_systems:stage_custom/bass_3"
-    ]
-  },
-  "stage_custom.tom_10": {
-    "subtitle": "subtitles.create_media_systems.stage_custom.tom_10",
-    "sounds": [
-      "create_media_systems:stage_custom/tom_10_1",
-      "create_media_systems:stage_custom/tom_10_2",
-      "create_media_systems:stage_custom/tom_10_3"
-    ]
-  },
-  "stage_custom.tom_12": {
-    "subtitle": "subtitles.create_media_systems.stage_custom.tom_12",
-    "sounds": [
-      "create_media_systems:stage_custom/tom_12_1",
-      "create_media_systems:stage_custom/tom_12_2",
-      "create_media_systems:stage_custom/tom_12_3"
-    ]
-  },
-  "stage_custom.floor": {
-    "subtitle": "subtitles.create_media_systems.stage_custom.floor",
-    "sounds": [
-      "create_media_systems:stage_custom/floor_1",
-      "create_media_systems:stage_custom/floor_2",
-      "create_media_systems:stage_custom/floor_3"
-    ]
-  },
-  "stage_custom.snare": {
-    "subtitle": "subtitles.create_media_systems.stage_custom.snare",
-    "sounds": [
-      "create_media_systems:stage_custom/snare_1",
-      "create_media_systems:stage_custom/snare_2",
-      "create_media_systems:stage_custom/snare_3"
+      {
+        "name": "minecraft:music_disc.13",
+        "type": "event",
+        "stream": true
+      }
     ]
   }
 }

@@ -1,0 +1,31 @@
+newmtl chrome
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/chrome
+
+newmtl cymbal_bronze
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/cymbal_bronze
+
+newmtl felt
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/felt
+
+newmtl footboard
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/footboard
+
+newmtl hardware
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/hardware
+
+newmtl rubber
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/rubber
+
+newmtl seat_seam
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/seat_seam
+
+newmtl throne
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/throne

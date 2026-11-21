@@ -83,7 +83,7 @@ public final class CreateMediaSystemsMod {
         audio.addAll(HifiFeature.hifiUnits());
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
                 KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM,
-                SteelpanFeature.ITEM, StageCustomFeature.ITEM));
+                SteelpanFeature.ITEM, StageCustomFeature.ITEM, StageCustomFeature.COMPLETE_ITEM));
         audio.addAll(InstrumentFeature.PEDALS);
         List<Supplier<? extends Item>> portable = new ArrayList<>(List.of(
                 WearableInstruments.KEYTAR, WearableInstruments.MELODICA, PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY,

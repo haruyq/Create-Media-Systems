@@ -3,6 +3,10 @@
     {
       "type": "minecraft:single",
       "resource": "create_media_systems:block/stage_custom/heads"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "create_media_systems:block/stage_custom/cymbal_bronze"
     }
   ]
 }

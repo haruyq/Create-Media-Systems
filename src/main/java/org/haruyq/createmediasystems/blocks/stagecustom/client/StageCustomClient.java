@@ -1,14 +1,14 @@
 package org.haruyq.createmediasystems.blocks.stagecustom.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.math.Axis;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.Sheets;
@@ -22,19 +22,22 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.CreateMediaSystems;
-import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock.Entity.CymbalStrike;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock.Entity.Strike;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomFeature;
-import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout.Drum;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomMidi;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.joml.Quaternionf;
@@ -50,6 +53,7 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
     private static final int SEGMENTS = 48;
     private static final float[] SINE = trig(true), COSINE = trig(false);
     private static final Map<StageCustomBlock.Entity, Motion> MOTIONS = new WeakHashMap<>();
+
     private static final KeyMapping MIDI = new KeyMapping("key.create_media_systems.stage_custom_midi",
             KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, "key.categories.create_media_systems");
 
@@ -69,6 +73,8 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(StageCustomFeature.ENTITY.get(), context -> new StageCustomClient()));
         bus.addListener((ModelEvent.RegisterAdditional event) -> List.of(BODY, WIRES, STICK).forEach(event::register));
+        StageCustomCompleteClient.register(bus);
+        StageCustomAudio.register();
         bus.addListener((RegisterKeyMappingsEvent event) -> event.register(MIDI));
         NeoForge.EVENT_BUS.addListener(StageCustomClient::midiKey);
         WorldEvents.onLevelChanged(MOTIONS::clear);
@@ -81,25 +87,27 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
                 || !(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
         var pos = hit.getBlockPos();
         var state = mc.level.getBlockState(pos);
-        if (!state.is(StageCustomFeature.BLOCK.get())) return;
+        if (!(state.getBlock() instanceof StageCustomBlock)) return;
         var kit = StageCustomMidi.reachable(mc.player, StageCustomBlock.root(pos, state));
         if (kit != null) mc.setScreen(new StageCustomMidiScreen(kit));
     }
 
-    private static ModelResourceLocation part(String name) {
+    static ModelResourceLocation part(String name) {
         return ModelResourceLocation.standalone(CreateMediaSystems.id("block/stage_custom/" + name));
     }
 
     @Override
     public AABB getRenderBoundingBox(StageCustomBlock.Entity kit) {
-        return new AABB(kit.getBlockPos()).inflate(1);
+        return new AABB(kit.getBlockPos()).inflate(StageCustomBlock.isComplete(kit.getBlockState()) ? 2 : 1);
     }
 
     @Override
     public void render(StageCustomBlock.Entity kit, float partial, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         if (kit.getLevel() == null) return;
-        var motion = MOTIONS.computeIfAbsent(kit, block -> new Motion());
+        StageCustomAudio.prepare();
+        var motion = MOTIONS.computeIfAbsent(kit, Motion::new);
         kit.drainStrikes().forEach(motion::strike);
+        kit.drainCymbalStrikes().forEach(motion::strike);
         long now = System.nanoTime();
         int above = LevelRenderer.getLightColor(kit.getLevel(), kit.getBlockPos().above());
         pose.pushPose();
@@ -109,6 +117,9 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
         pose.scale(scale, scale, scale);
         pose.translate(-.5, 0, -.5);
         baked(BODY, pose, buffers, above, overlay);
+        if (motion.complete != null) {
+            StageCustomCompleteClient.render(kit, motion.complete, motion.drums[Drum.BASS.ordinal()], now, pose, buffers, above, overlay);
+        }
         renderWires(motion, now, pose, buffers, above, overlay);
         for (var strike : motion.sticks) renderStick(strike, now, pose, buffers, above, overlay);
         var skins = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(SKINS);
@@ -116,7 +127,7 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
         pose.popPose();
     }
 
-    private static void baked(ModelResourceLocation model, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
+    static void baked(ModelResourceLocation model, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         var mc = Minecraft.getInstance();
         mc.getBlockRenderer().getModelRenderer().renderModel(pose.last(), buffers.getBuffer(Sheets.solidBlockSheet()),
                 null, mc.getModelManager().getModel(model), 1, 1, 1, light, overlay, ModelData.EMPTY, null);
@@ -133,14 +144,13 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
         pose.popPose();
     }
 
-    private static void renderStick(Strike strike, long now, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        double age = seconds(strike, now);
+    private static void renderStick(Stick strike, long now, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
+        double age = strike == null ? Double.POSITIVE_INFINITY : Math.max(0, (now - strike.time()) / 1e9);
         if (age >= .225) return;
-        var shell = StageCustomLayout.shell(strike.drum());
         double rebound = (1 - Math.exp(-age * 33)) * (.095 + .06 * strike.strength());
-        Vec3 tip = shell.point(strike.u() * shell.headRadius(), strike.v() * shell.headRadius(), rebound + .004);
+        Vec3 tip = strike.contact().add(strike.normal().scale(rebound + .004));
         double side = strike.hand() == 0 ? -.165 : .165;
-        Vec3 grip = new Vec3(tip.x + side, shell.y() + .24, Math.max(tip.z + .25, shell.z() + .30));
+        Vec3 grip = new Vec3(tip.x + side, strike.contact().y + .24, strike.contact().z + .29);
         Vec3 shaft = grip.subtract(tip).normalize();
         pose.pushPose();
         pose.translate(.5 + tip.x, tip.y, .5 + tip.z);
@@ -226,13 +236,34 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
         return values;
     }
 
+    private record Stick(Vec3 contact, Vec3 normal, float strength, int hand, long time) {}
+
     private static final class Motion {
         private final Strike[] drums = new Strike[DRUMS.length];
-        private final Strike[] sticks = new Strike[2];
+        private final Stick[] sticks = new Stick[2];
+        private final StageCustomCompleteClient.Motion complete;
+
+        Motion(StageCustomBlock.Entity kit) {
+            complete = StageCustomBlock.isComplete(kit.getBlockState()) ? new StageCustomCompleteClient.Motion(kit.hatOpen()) : null;
+        }
 
         void strike(Strike impact) {
             drums[impact.drum().ordinal()] = impact;
-            if (impact.drum() != Drum.BASS) sticks[impact.hand()] = impact;
+            if (impact.drum() != Drum.BASS) {
+                var shell = StageCustomLayout.shell(impact.drum());
+                Vec3 point = shell.point(impact.u() * shell.headRadius(), impact.v() * shell.headRadius(), 0);
+                sticks[impact.hand()] = new Stick(point, shell.normal(), impact.strength(), impact.hand(), impact.time());
+            }
+        }
+
+        void strike(CymbalStrike impact) {
+            if (complete == null) return;
+            complete.latest[impact.cymbal().ordinal()] = impact;
+            var cymbal = StageCustomCymbals.plate(impact.cymbal());
+            double u = impact.u() * cymbal.radius(), v = impact.v() * cymbal.radius();
+            double lift = impact.voice() == Voice.HAT_OPEN ? StageCustomCymbals.openGap() : 0;
+            Vec3 point = cymbal.point(u, v, cymbal.profile(Math.hypot(u, v)) + lift);
+            sticks[impact.hand()] = new Stick(point, cymbal.normal(), impact.strength(), impact.hand(), impact.time());
         }
     }
 }

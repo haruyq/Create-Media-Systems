@@ -13,28 +13,31 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock;
-import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomFeature;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout.Drum;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomMidi;
 import org.haruyq.createmediasystems.client.MidiPort;
 
 final class StageCustomMidiScreen extends Screen {
     private static final Drum[] DRUMS = Drum.values();
-    private static final String SHORTCUTS = "ZXCVB";
+    private static final Voice[] CYMBALS = Voice.values();
+    private static final String SHORTCUTS = "ZXCVB123456";
     private static String preferredInput;
     private final StageCustomBlock.Entity kit;
+    private final boolean complete;
     private final Set<Integer> heldKeys = new HashSet<>();
     private final ArrayBlockingQueue<StageCustomMidi.Hit> pending = new ArrayBlockingQueue<>(64);
     private final AtomicBoolean scheduled = new AtomicBoolean();
-    private final long[] impacts = new long[DRUMS.length];
+    private final long[] impacts = new long[DRUMS.length + CYMBALS.length];
     private final MidiPort midi;
     private MidiPort.Status displayed;
     private Button input;
     private int left, top, panelWidth, ticks;
 
     StageCustomMidiScreen(StageCustomBlock.Entity kit) {
-        super(Component.translatable("block.create_media_systems." + StageCustomFeature.ID));
+        super(kit.getBlockState().getBlock().getName());
         this.kit = kit;
+        complete = StageCustomBlock.isComplete(kit.getBlockState());
         midi = new MidiPort(preferredInput, this::receiveMidi, pending::clear);
         midi.scan();
     }
@@ -43,38 +46,56 @@ final class StageCustomMidiScreen extends Screen {
     protected void init() {
         panelWidth = Math.min(354, width - 16);
         left = (width - panelWidth) / 2;
-        top = height - 105;
-        int padWidth = (panelWidth - 16) / DRUMS.length;
+        top = height - panelHeight() - 15;
         for (Drum drum : DRUMS) {
-            int index = drum.ordinal();
-            Component name = Component.translatable("stage_custom.pad." + drum.id());
-            int note = StageCustomMidi.note(drum);
-            var pad = Button.builder(name, button -> play(new StageCustomMidi.Hit(kit.getBlockPos(), note, 110)))
-                    .bounds(left + 8 + index * padWidth, top + 25, padWidth - 3, 20).build();
-            pad.setTooltip(Tooltip.create(Component.translatable("stage_custom.pad_hint", SHORTCUTS.substring(index, index + 1), note)));
-            addRenderableWidget(pad);
+            addPad(drum.ordinal(), drum.id(), StageCustomMidi.note(drum));
         }
+        if (complete) {
+            for (Voice voice : CYMBALS) addPad(DRUMS.length + voice.ordinal(), voice.id(), StageCustomMidi.note(voice));
+        }
+        int inputTop = top + panelHeight() - 28;
         Component refresh = Component.translatable("keyboard.refresh");
         int refreshWidth = Math.max(54, font.width(refresh) + 12);
         input = addRenderableWidget(Button.builder(Component.empty(), button -> nextInput())
-                .bounds(left + 8, top + 62, panelWidth - refreshWidth - 20, 20).build());
+                .bounds(left + 8, inputTop, panelWidth - refreshWidth - 20, 20).build());
         addRenderableWidget(Button.builder(refresh, button -> midi.scan())
-                .bounds(left + panelWidth - refreshWidth - 8, top + 62, refreshWidth, 20).build());
+                .bounds(left + panelWidth - refreshWidth - 8, inputTop, refreshWidth, 20).build());
         showStatus(midi.status());
+    }
+
+    private void addPad(int index, String id, int note) {
+        int x = padX(index), y = padY(index);
+        Component label = Component.translatable("stage_custom.pad." + id);
+        var pad = Button.builder(label, button -> play(new StageCustomMidi.Hit(kit.getBlockPos(), note, 110)))
+                .bounds(x, y, padWidth(index) - 3, 20).build();
+        pad.setTooltip(Tooltip.create(Component.translatable("stage_custom.pad_hint", shortcut(index), note)));
+        addRenderableWidget(pad);
+    }
+
+    private int panelHeight() { return complete ? 127 : 90; }
+    private int padWidth(int i) { return (panelWidth - 16) / (i < DRUMS.length ? DRUMS.length : CYMBALS.length); }
+    private int padX(int i) { return left + 8 + (i < DRUMS.length ? i : i - DRUMS.length) * padWidth(i); }
+    private int padY(int i) { return top + (i < DRUMS.length ? 25 : 62); }
+    private static String shortcut(int i) { return SHORTCUTS.substring(i, i + 1); }
+
+    private int padIndex(int note) {
+        Drum drum = StageCustomMidi.drum(note);
+        if (drum != null) return drum.ordinal();
+        Voice voice = StageCustomMidi.voice(note);
+        return complete && voice != null ? DRUMS.length + voice.ordinal() : -1;
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partial) {
-        graphics.fill(left, top, left + panelWidth, top + 90, 0xEA111820);
+        graphics.fill(left, top, left + panelWidth, top + panelHeight(), 0xEA111820);
         graphics.fill(left, top, left + panelWidth, top + 2, 0xFF6BA7E8);
         graphics.drawString(font, title, left + 8, top + 9, 0xFFF1F6FC, false);
         super.render(graphics, mouseX, mouseY, partial);
         long now = System.nanoTime();
-        int step = (panelWidth - 16) / DRUMS.length;
-        for (int i = 0; i < DRUMS.length; i++) {
-            int x = left + 8 + i * step;
-            if (now - impacts[i] < 160_000_000L) graphics.fill(x, top + 45, x + step - 3, top + 47, 0xFFA0D2FF);
-            graphics.drawCenteredString(font, SHORTCUTS.substring(i, i + 1), x + step / 2 - 1, top + 49, 0xFFB6CEE5);
+        for (int i = 0; i < (complete ? impacts.length : DRUMS.length); i++) {
+            int x = padX(i), y = padY(i), step = padWidth(i);
+            if (now - impacts[i] < 160_000_000L) graphics.fill(x, y + 20, x + step - 3, y + 22, 0xFFA0D2FF);
+            graphics.drawCenteredString(font, shortcut(i), x + step / 2 - 1, y + 24, 0xFFB6CEE5);
         }
     }
 
@@ -122,9 +143,13 @@ final class StageCustomMidiScreen extends Screen {
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
         int index = SHORTCUTS.indexOf(key);
-        if (index < 0 || hasControlDown() || hasAltDown()) return super.keyPressed(key, scan, modifiers);
+        if (index < 0 || (!complete && index >= DRUMS.length) || hasControlDown() || hasAltDown()) {
+            return super.keyPressed(key, scan, modifiers);
+        }
         if (heldKeys.add(key)) {
-            play(new StageCustomMidi.Hit(kit.getBlockPos(), StageCustomMidi.note(DRUMS[index]), hasShiftDown() ? 59 : 110));
+            int note = index < DRUMS.length ? StageCustomMidi.note(DRUMS[index])
+                    : StageCustomMidi.note(CYMBALS[index - DRUMS.length]);
+            play(new StageCustomMidi.Hit(kit.getBlockPos(), note, hasShiftDown() ? 59 : 110));
         }
         return true;
     }
@@ -144,7 +169,7 @@ final class StageCustomMidiScreen extends Screen {
 
     private void receiveMidi(ShortMessage message) {
         if (message.getCommand() != ShortMessage.NOTE_ON || message.getData2() == 0
-                || StageCustomMidi.drum(message.getData1()) == null) return;
+                || padIndex(message.getData1()) < 0) return;
         if (pending.offer(new StageCustomMidi.Hit(kit.getBlockPos(), message.getData1(), message.getData2()))) dispatch();
     }
 
@@ -163,10 +188,10 @@ final class StageCustomMidiScreen extends Screen {
     }
 
     private void play(StageCustomMidi.Hit hit) {
-        Drum drum = StageCustomMidi.drum(hit.note());
-        if (drum == null || minecraft.player == null
+        int index = padIndex(hit.note());
+        if (index < 0 || minecraft.player == null
                 || StageCustomMidi.reachable(minecraft.player, kit.getBlockPos()) != kit) return;
-        impacts[drum.ordinal()] = System.nanoTime();
+        impacts[index] = System.nanoTime();
         PacketDistributor.sendToServer(hit);
     }
 }
