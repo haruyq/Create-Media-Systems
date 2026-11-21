@@ -44,6 +44,7 @@ class BlockResourcesTest {
             Map.entry("auto_tremolo_pedal", new Row(Tool.PICKAXE, false, true)),
             Map.entry("auto_wah_pedal", new Row(Tool.PICKAXE, false, true)),
             Map.entry("blu_ray_player", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("boss_mt_2", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_array", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_base", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_digital_horn", new Row(Tool.PICKAXE, false, true)),

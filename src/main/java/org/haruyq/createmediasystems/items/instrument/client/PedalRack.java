@@ -22,7 +22,7 @@ final class PedalRack {
     void configure(List<GuitarPatch.Setting> next) {
         if (settings.equals(next)) return;
         if (sameOrder(next)) {
-            for (int i = 0; i < stages.length; i++) stages[i].setAmount(next.get(i).amount());
+            for (int i = 0; i < stages.length; i++) stages[i].configure(next.get(i));
         } else {
             previous = stages;
             stages = createStages(next);
@@ -77,15 +77,18 @@ final class PedalRack {
                 case TREMOLO -> new Tremolo();
                 case CHORUS -> new Chorus();
                 case COMPRESSOR -> new Compressor();
+                case METAL_ZONE -> new MetalZoneDrive(setting.metalZone());
             };
-            setAmount(setting.amount());
+            configure(setting);
             wet = wetTarget;
             depth = depthTarget;
         }
 
-        void setAmount(int amount) {
+        void configure(GuitarPatch.Setting setting) {
+            int amount = setting.amount();
             wetTarget = amount > 0 ? 1 : 0;
             if (amount > 0) depthTarget = amount / 3.0;
+            effect.configure(setting);
         }
 
         double next(double input) {
@@ -96,8 +99,10 @@ final class PedalRack {
         }
     }
 
-    private interface Effect {
+    interface Effect {
         double next(double input, double depth);
+
+        default void configure(GuitarPatch.Setting setting) {}
     }
 
     private static final class Wah implements Effect {

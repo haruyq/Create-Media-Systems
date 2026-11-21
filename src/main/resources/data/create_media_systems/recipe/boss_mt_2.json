@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "CCC",
+    "LRL",
+    " S "
+  ],
+  "key": {
+    "C": {"item": "minecraft:comparator"},
+    "L": {"item": "minecraft:lever"},
+    "R": {"item": "minecraft:redstone"},
+    "S": {"item": "create:copper_casing"}
+  },
+  "result": {"id": "create_media_systems:boss_mt_2", "count": 1}
+}

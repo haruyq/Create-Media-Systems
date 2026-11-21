@@ -80,6 +80,7 @@ public final class InstrumentClient {
     public static void endPerformance(Player player) { PLAYBACK.remove(player); }
 
     public static void register(IEventBus bus) {
+        MetalZoneClient.register(bus);
         bus.addListener((RegisterClientReloadListenersEvent event) ->
                 event.registerReloadListener((ResourceManagerReloadListener) InstrumentModel::reload));
         bus.addListener((EntityRenderersEvent.AddLayers event) -> {

@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=south": {
+      "model": "create_media_systems:block/metal_zone/body",
+      "y": 0
+    },
+    "facing=west": {
+      "model": "create_media_systems:block/metal_zone/body",
+      "y": 90
+    },
+    "facing=north": {
+      "model": "create_media_systems:block/metal_zone/body",
+      "y": 180
+    },
+    "facing=east": {
+      "model": "create_media_systems:block/metal_zone/body",
+      "y": 270
+    }
+  }
+}

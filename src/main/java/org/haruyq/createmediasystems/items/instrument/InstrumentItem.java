@@ -50,7 +50,7 @@ public class InstrumentItem extends Item {
         var pos = context.getClickedPos();
         var player = context.getPlayer();
         if (kind != Kind.STRATOCASTER || player == null
-                || !(level.getBlockState(pos).getBlock() instanceof AutoPedalBlock pedal)) return InteractionResult.PASS;
+                || !(level.getBlockState(pos).getBlock() instanceof GuitarPedalBlock pedal)) return InteractionResult.PASS;
         if (!level.isClientSide) {
             GuitarPatch.toggle(context.getItemInHand(), player,
                     new GuitarPatch.Link(GlobalPos.of(level.dimension(), pos), pedal.effect()));

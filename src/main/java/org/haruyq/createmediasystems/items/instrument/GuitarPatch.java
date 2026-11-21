@@ -31,7 +31,11 @@ public record GuitarPatch(List<Link> links) {
     }
 
     /** Resolved from the world on the game thread, then read by the sound thread. */
-    public record Setting(Link link, int amount) {}
+    public record Setting(Link link, int amount, MetalZoneSettings metalZone) {
+        public Setting(Link link, int amount) {
+            this(link, amount, MetalZoneSettings.DEFAULT);
+        }
+    }
 
     public GuitarPatch {
         links = List.copyOf(links);
@@ -65,8 +69,8 @@ public record GuitarPatch(List<Link> links) {
             if (!link.location().dimension().equals(level.dimension()) || !pos.closerToCenterThan(player.position(), RANGE)
                     || !level.isLoaded(pos)) return new Setting(link, 0);
             var state = level.getBlockState(pos);
-            if (state.getBlock() instanceof AutoPedalBlock pedal && pedal.effect() == link.effect()) {
-                return new Setting(link, pedal.amount(state));
+            if (state.getBlock() instanceof GuitarPedalBlock pedal && pedal.effect() == link.effect()) {
+                return pedal.setting(link, level, state);
             }
             return new Setting(link, 0);
         }).toList();

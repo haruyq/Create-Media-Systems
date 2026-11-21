@@ -943,6 +943,7 @@
   "block.create_media_systems.auto_tremolo_pedal": "CMS Auto Tremolo Pedal",
   "block.create_media_systems.auto_chorus_pedal": "CMS Auto Chorus Pedal",
   "block.create_media_systems.auto_compressor_pedal": "CMS Auto Compressor Pedal",
+  "block.create_media_systems.boss_mt_2": "BOSS MT-2 Metal Zone",
   "guitar_patch.create_media_systems.hint": "Right-click a pedal with the guitar to connect it",
   "guitar_patch.create_media_systems.clear_hint": "Sneak and use the guitar in the air to clear the pedal chain",
   "guitar_patch.create_media_systems.link": "%1$s. %2$s (%3$s)",

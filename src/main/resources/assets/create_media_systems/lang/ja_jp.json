@@ -943,6 +943,7 @@
   "block.create_media_systems.auto_tremolo_pedal": "オートトレモロペダル",
   "block.create_media_systems.auto_chorus_pedal": "オートコーラスペダル",
   "block.create_media_systems.auto_compressor_pedal": "オートコンプレッサーペダル",
+  "block.create_media_systems.boss_mt_2": "BOSS MT-2 Metal Zone",
   "guitar_patch.create_media_systems.hint": "ギターを持ってペダルを右クリックで接続",
   "guitar_patch.create_media_systems.clear_hint": "スニークしながら空中を右クリックで全接続を解除",
   "guitar_patch.create_media_systems.link": "%1$s. %2$s（%3$s）",

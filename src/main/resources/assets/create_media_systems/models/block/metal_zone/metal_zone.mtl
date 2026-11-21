@@ -1,0 +1,63 @@
+newmtl black
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/black
+
+newmtl cap
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/cap
+
+newmtl cap_edge
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/cap_edge
+
+newmtl cast
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/cast
+
+newmtl controls
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/controls
+
+newmtl lens_dark
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/lens_dark
+
+newmtl lens_dark_edge
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/lens_dark_edge
+
+newmtl lens_on
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/lens_on
+
+newmtl lens_on_edge
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/lens_on_edge
+
+newmtl ring_pointer
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/ring_pointer
+
+newmtl rubber
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/rubber
+
+newmtl seam
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/seam
+
+newmtl steel
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/steel
+
+newmtl tread
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/tread
+
+newmtl washer
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/washer
+
+newmtl white_pointer
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/metal_zone/white_pointer

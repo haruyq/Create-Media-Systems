@@ -8,6 +8,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import com.simibubi.create.AllBlocks;
 import com.simibubi.create.AllItems;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -137,6 +138,57 @@ public final class InstrumentGameTests {
         } finally {
             level.removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void metalZoneKnobsSaveAndControlThePatchedGuitar(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var grid = List.of(Items.COMPARATOR, Items.COMPARATOR, Items.COMPARATOR, Items.LEVER, Items.REDSTONE,
+                Items.LEVER, Items.AIR, AllBlocks.COPPER_CASING.asItem(), Items.AIR);
+        var input = CraftingInput.of(3, 3, grid.stream().map(Item::getDefaultInstance).toList());
+        var recipe = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, level).orElseThrow();
+        helper.assertTrue(recipe.value().assemble(input, level.registryAccess()).is(InstrumentFeature.METAL_ZONE.asItem()),
+                "The Metal Zone recipe should craft a placeable pedal");
+        var pos = helper.absolutePos(new BlockPos(0, 2, 0));
+        var switchHit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
+        var player = helper.makeMockPlayer(GameType.CREATIVE);
+        var near = Vec3.atCenterOf(pos).add(0, 0, 1);
+        player.setPos(near);
+        level.setBlockAndUpdate(pos, InstrumentFeature.METAL_ZONE.get().defaultBlockState());
+        var pedal = (MetalZoneBlock.Entity) level.getBlockEntity(pos);
+        var expected = MetalZoneSettings.DEFAULT;
+        for (var knob : MetalZoneBlock.Knob.values()) {
+            int value = 12 + knob.ordinal() * 13;
+            new MetalZoneBlock.SetKnob(pos, knob.ordinal(), value).apply(player);
+            expected = expected.with(knob, value);
+        }
+        helper.assertTrue(pedal.settings().equals(expected), "The six controls did not change independently");
+        new MetalZoneBlock.SetKnob(pos, 77, 40).apply(player);
+        new MetalZoneBlock.SetKnob(pos, MetalZoneBlock.Knob.LEVEL.ordinal(), -1).apply(player);
+        player.setPos(near.add(16, 0, 0));
+        new MetalZoneBlock.SetKnob(pos, MetalZoneBlock.Knob.LEVEL.ordinal(), 80).apply(player);
+        helper.assertTrue(pedal.settings().equals(expected), "An invalid or out-of-range knob turn was accepted");
+        player.setPos(near);
+
+        var restored = new MetalZoneBlock.Entity(pos, level.getBlockState(pos));
+        restored.loadWithComponents(pedal.saveWithoutMetadata(level.registryAccess()), level.registryAccess());
+        helper.assertTrue(restored.settings().equals(expected), "The knob positions were not saved");
+
+        var guitar = new ItemStack(InstrumentFeature.POLAR_WHITE.get());
+        player.setItemInHand(InteractionHand.MAIN_HAND, guitar);
+        helper.assertTrue(guitar.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, switchHit)).consumesAction(),
+                "Connecting the Metal Zone failed");
+        var patch = GuitarPatch.get(guitar);
+        var setting = patch.settings(player).getFirst();
+        helper.assertTrue(setting.link().effect() == AutoEffect.METAL_ZONE && setting.amount() == 1
+                && setting.metalZone().equals(expected), "The guitar did not receive the pedal's active EQ");
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        level.getBlockState(pos).useWithoutItem(level, player, switchHit);
+        setting = patch.settings(player).getFirst();
+        helper.assertTrue(setting.amount() == 0 && setting.metalZone().equals(expected),
+                "The footswitch bypassed the wrong device or reset its settings");
         helper.succeed();
     }
 

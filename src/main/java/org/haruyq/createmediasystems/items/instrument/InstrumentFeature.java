@@ -6,7 +6,9 @@ import java.util.function.Supplier;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -30,12 +32,26 @@ public final class InstrumentFeature implements Feature {
     public static final DeferredBlock<AutoPedalBlock> TREMOLO = pedal(AutoEffect.TREMOLO);
     public static final DeferredBlock<AutoPedalBlock> CHORUS = pedal(AutoEffect.CHORUS);
     public static final DeferredBlock<AutoPedalBlock> COMPRESSOR = pedal(AutoEffect.COMPRESSOR);
-    public static final List<DeferredItem<BlockItem>> PEDALS = List.of(WAH, TREMOLO, CHORUS, COMPRESSOR).stream()
+    public static final DeferredBlock<MetalZoneBlock> METAL_ZONE = CreateMediaSystems.BLOCKS.register(
+            AutoEffect.METAL_ZONE.getSerializedName(), () -> new MetalZoneBlock(pedalProperties()));
+    public static final Supplier<BlockEntityType<MetalZoneBlock.Entity>> METAL_ZONE_ENTITY = CreateMediaSystems.BLOCK_ENTITIES.register(
+            AutoEffect.METAL_ZONE.getSerializedName(), () -> BlockEntityType.Builder.of(MetalZoneBlock.Entity::new, METAL_ZONE.get()).build(null));
+    public static final List<DeferredItem<BlockItem>> PEDALS = List.of(WAH, TREMOLO, CHORUS, COMPRESSOR, METAL_ZONE).stream()
             .map(CreateMediaSystems.ITEMS::registerSimpleBlockItem).toList();
 
     private static DeferredBlock<AutoPedalBlock> pedal(AutoEffect effect) {
         return CreateMediaSystems.BLOCKS.register(effect.getSerializedName(), () ->
-                new AutoPedalBlock(effect, BlockBehaviour.Properties.of().strength(1.5f).sound(SoundType.METAL).noOcclusion()));
+                new AutoPedalBlock(effect, pedalProperties()));
+    }
+
+    private static BlockBehaviour.Properties pedalProperties() {
+        return BlockBehaviour.Properties.of().strength(1.5f).sound(SoundType.METAL).noOcclusion();
+    }
+
+    @Override
+    public void registerPayloads(PayloadRegistrar registrar) {
+        registrar.playToServer(MetalZoneBlock.SetKnob.TYPE, MetalZoneBlock.SetKnob.CODEC,
+                (payload, context) -> payload.apply(context.player()));
     }
 
     private static DeferredItem<InstrumentItem> stratocaster(String finish) {
