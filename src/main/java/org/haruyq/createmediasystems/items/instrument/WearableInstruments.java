@@ -111,7 +111,8 @@ public final class WearableInstruments implements Feature {
         Session(ServerPlayer player, InteractionHand hand, Kind kind) {
             this.hand = hand;
             stack = player.getItemInHand(hand);
-            notes = new InstrumentState(kind);
+            notes = new InstrumentState(kind, kind == Kind.STRATOCASTER
+                    ? stack.getOrDefault(InstrumentFeature.GUITAR_AMP.get(), GuitarAmp.DEFAULT) : GuitarAmp.DEFAULT);
             paidUntil = player.tickCount;
         }
 
@@ -213,7 +214,9 @@ public final class WearableInstruments implements Feature {
             finish(player, outfit);
             return;
         }
+        var previousAmp = session.notes.amp();
         if (!session.allows() || !session.notes.apply(message)) return;
+        if (!previousAmp.equals(session.notes.amp())) session.stack.set(InstrumentFeature.GUITAR_AMP.get(), session.notes.amp());
         session.pay(player);
         var visible = appearance(player, session);
         if (!visible.equals(outfit.previous)) broadcast(player, outfit, visible, false);

@@ -964,9 +964,9 @@
   "wearable.input.monitor_on": "Monitor on",
   "wearable.input.monitor_off": "Monitor off",
   "wearable.input.level": "IN %s dBFS",
-  "wearable.amp.0": "Amp · Clean",
-  "wearable.amp.1": "Amp · Crunch",
-  "wearable.amp.2": "Amp · Lead",
+  "wearable.amp.overdrive": "Overdrive",
+  "wearable.amp.distortion": "Distortion",
+  "wearable.amp.drive": "Drive %s",
   "wearable.melodica.air": "Breath %s%%",
   "wearable.melodica.blow": "Space to blow"
 }

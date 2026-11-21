@@ -173,15 +173,18 @@ final class WearableScreen extends KeysScreen {
             button(width*.71f, 4.16f, width, 5.31f,
                     () -> tr("input."+guitarInput.status().name().toLowerCase(java.util.Locale.ROOT)), this::toggleGuitar)
                     .lit(() -> guitarInput.status() == GuitarInput.Status.LIVE);
-            slider(0, 5.44f, width*.31f, 6.57f, v -> tr("input.gain",v), -18, 24, () -> gainDb, v -> {
+            slider(0, 5.44f, width * .22f, 6.57f, v -> tr("input.gain", v), -18, 24, () -> gainDb, v -> {
                 gainDb = v; guitarInput.gainDb(v);
             });
-            button(width*.32f, 5.44f, width*.64f, 6.57f, () -> tr(monitor ? "input.monitor_on" : "input.monitor_off"), () -> {
+            button(width * .23f, 5.44f, width * .42f, 6.57f, () -> tr(monitor ? "input.monitor_on" : "input.monitor_off"), () -> {
                 monitor = !monitor;
                 if (!monitor) view.audio.guitar().offer(new short[0], true);
             }).lit(() -> monitor);
-            button(width*.65f, 5.44f, width, 6.57f, () -> tr("amp."+view.notes.amp()), () ->
-                    send(control(AMP, Math.round((view.notes.amp()+1)%3 * 127 / 2f))));
+            button(width * .43f, 5.44f, width * .71f, 6.57f,
+                    () -> tr(view.notes.amp().distortion() ? "amp.distortion" : "amp.overdrive"),
+                    () -> send(control(AMP, view.notes.amp().distortion() ? 0 : 127)));
+            slider(width * .72f, 5.44f, width, 6.57f, v -> tr("amp.drive", Math.round(v * 100 / 127f) + "%"),
+                    0, 127, () -> view.notes.amp().drive(), v -> send(control(DRIVE, v)));
             button(0, 1.55f, width * .32f, 2.72f, () -> tr("pickup." + view.notes.pickup()),
                     () -> send(control(PICKUP, Math.round(((view.notes.pickup() + 1) % 5) * 127 / 4f))));
             slider(width * .33f, 1.55f, width * .53f, 2.72f, v -> tr("volume", v), 0, 127,
@@ -320,7 +323,8 @@ final class WearableScreen extends KeysScreen {
                 if ((kind.wind() || kind == Kind.MELODICA) && (number == BREATH || number == 11)
                         || kind == Kind.MELODICA && number == SUSTAIN) midiAir = value;
                 else if (keytar() && number == SUSTAIN) midiSustain = value;
-                else if (kind == Kind.STRATOCASTER && (number == VOLUME || number == PICKUP || number == TONE_NECK || number == TONE_BRIDGE)) {
+                else if (kind == Kind.STRATOCASTER && (number == VOLUME || number == PICKUP || number == TONE_NECK
+                        || number == TONE_BRIDGE || number == AMP || number == DRIVE)) {
                     send(control(number, value));
                 } else if (number == RELEASE_KEYS || number == 120 || number == 121) clearMidi();
                 pedals();

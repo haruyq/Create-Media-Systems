@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.items.instrument;
 
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -10,7 +11,10 @@ import net.minecraft.world.phys.Vec3;
 import com.simibubi.create.AllItems;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -20,6 +24,7 @@ import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.VideoPlayerGameTests;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -106,5 +111,40 @@ public final class InstrumentGameTests {
 
     private static List<Integer> amounts(GuitarPatch patch, net.minecraft.world.entity.player.Player player) {
         return patch.settings(player).stream().map(GuitarPatch.Setting::amount).toList();
+    }
+
+    @GameTest(template = "empty")
+    public static void driveAndDistortionFollowTheSavedGuitarToItsNextSession(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var packets = new ArrayList<CustomPacketPayload>();
+        var player = VideoPlayerGameTests.listener(level, helper.absolutePos(new BlockPos(1, 2, 1)), packets);
+        try {
+            var guitar = new ItemStack(InstrumentFeature.BLACK.get());
+            int session = playGuitar(player, guitar, packets);
+            WearableInstruments.input(player, session, InstrumentState.control(InstrumentState.AMP, 127));
+            WearableInstruments.input(player, session, InstrumentState.control(InstrumentState.DRIVE, 101));
+            WearableInstruments.input(player, session, WearablePackets.CLOSE);
+            var saved = ItemStack.parse(level.registryAccess(), guitar.save(level.registryAccess())).orElseThrow();
+            helper.assertTrue(new GuitarAmp(true, 101).equals(saved.get(InstrumentFeature.GUITAR_AMP.get())), "Lost saved amp");
+
+            session = playGuitar(player, saved, packets);
+            WearableInstruments.input(player, session, InstrumentState.control(InstrumentState.DRIVE, 33));
+            helper.assertTrue(new GuitarAmp(true, 33).equals(saved.get(InstrumentFeature.GUITAR_AMP.get())), "Lost distortion on reopening");
+            var other = new ItemStack(InstrumentFeature.BLACK.get());
+            session = playGuitar(player, other, packets);
+            WearableInstruments.input(player, session, InstrumentState.control(InstrumentState.DRIVE, 33));
+            helper.assertTrue(new GuitarAmp(false, 33).equals(other.get(InstrumentFeature.GUITAR_AMP.get())), "Mode leaked to a second guitar");
+        } finally {
+            level.removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
+        }
+        helper.succeed();
+    }
+
+    private static int playGuitar(ServerPlayer player, ItemStack guitar, List<CustomPacketPayload> packets) {
+        packets.clear();
+        player.setItemInHand(InteractionHand.MAIN_HAND, guitar);
+        guitar.use(player.level(), player, InteractionHand.MAIN_HAND);
+        return packets.stream().filter(WearablePackets.Open.class::isInstance).map(WearablePackets.Open.class::cast)
+                .findFirst().orElseThrow().session();
     }
 }

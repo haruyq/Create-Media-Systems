@@ -101,25 +101,65 @@ class GuitarInputTest {
         assertFalse(GuitarFrame.valid(new byte[GuitarFrame.BYTES-1]));
     }
 
-    @Test void aDirectInputGetsTheSelectedAmpWithoutSynthesizingADuplicateNote() {
-        var outputs = new float[3][GuitarFrame.SAMPLES];
-        for (int mode = 0; mode < 3; mode++) {
-            var state = new InstrumentState(Kind.STRATOCASTER);
-            int change = InstrumentState.control(InstrumentState.AMP, Math.round(mode * 127 / 2f));
-            state.apply(change);
-            var guitar = new GuitarSound();
-            guitar.update(state, change, System.nanoTime());
-            for (int i = 0; i < 5; i++) {
-                guitar.offer(pluck(i, 43, 52, 60), true);
-                guitar.render(outputs[mode], outputs[mode].length);
+    @Test void driveAddsHarmonicsToTheActualLineInputAndEachAmpClipsDifferently() {
+        for (boolean distortion : new boolean[]{false, true}) {
+            double previous = -1;
+            for (int drive : new int[]{0, 64, 127}) {
+                float[] out = guitarOutput(distortion, drive, true);
+                double fundamental = harmonic(out, 1);
+                assertTrue(fundamental > .1);
+                double third = harmonic(out, 3) / fundamental;
+                assertTrue(third > previous + .01, "third harmonic at drive " + drive + ": " + third);
+                previous = third;
+                if (drive == 127) {
+                    double second = harmonic(out, 2) / fundamental;
+                    if (distortion) assertTrue(second < .002 && third > .25);
+                    else assertTrue(second > .02 && third < .25);
+                }
             }
-            assertFalse(state.sounding());
         }
-        for (int mode = 1; mode < 3; mode++) {
-            double difference = 0;
-            for (int i = 0; i < GuitarFrame.SAMPLES; i++) difference += Math.abs(outputs[mode][i]-outputs[mode-1][i]);
-            assertTrue(difference > 35, "amp modes are indistinguishable");
+    }
+
+    @Test void bothAmpChannelsAndDriveAlsoShapeThePickedMidiString() {
+        float[] light = guitarOutput(false, 0, false);
+        float[] driven = guitarOutput(false, 127, false);
+        float[] distorted = guitarOutput(true, 127, false);
+        double driveDifference = 0, modeDifference = 0;
+        for (int i = 0; i < light.length; i++) {
+            driveDifference += Math.abs(light[i] - driven[i]);
+            modeDifference += Math.abs(driven[i] - distorted[i]);
         }
+        assertTrue(driveDifference / light.length > .05);
+        assertTrue(modeDifference / light.length > .025);
+    }
+
+    private static float[] guitarOutput(boolean distortion, int drive, boolean lineIn) {
+        var state = new InstrumentState(Kind.STRATOCASTER);
+        state.apply(InstrumentState.control(InstrumentState.AMP, distortion ? 127 : 0));
+        state.apply(InstrumentState.control(InstrumentState.DRIVE, drive));
+        int message = lineIn ? 0 : InstrumentState.note(57, 108);
+        if (!lineIn) state.apply(message);
+        var guitar = new GuitarSound();
+        guitar.update(state, message, 1_000_000);
+        var input = new short[GuitarFrame.SAMPLES];
+        for (int i = 0; i < input.length; i++) input[i] = (short) (11000 * Math.sin(5 * Math.TAU * i / input.length));
+        var out = new float[input.length];
+        for (int i = 0; i < 8; i++) {
+            if (lineIn) guitar.offer(input, true);
+            guitar.render(out, out.length);
+        }
+        assertEquals(!lineIn, state.sounding());
+        return out;
+    }
+
+    private static double harmonic(float[] signal, int multiple) {
+        double real = 0, imaginary = 0;
+        for (int i = 0; i < signal.length; i++) {
+            double phase = 5 * multiple * Math.TAU * i / signal.length;
+            real += signal[i] * Math.cos(phase);
+            imaginary += signal[i] * Math.sin(phase);
+        }
+        return 2 * Math.hypot(real, imaginary) / signal.length;
     }
 
     @Test void everySynthesizedElectricGuitarPitchSurvivesANoteOffInTheSameTick() {

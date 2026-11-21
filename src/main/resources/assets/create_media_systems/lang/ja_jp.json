@@ -964,9 +964,9 @@
   "wearable.input.monitor_on": "モニター ON",
   "wearable.input.monitor_off": "モニター OFF",
   "wearable.input.level": "入力 %s dBFS",
-  "wearable.amp.0": "アンプ · クリーン",
-  "wearable.amp.1": "アンプ · クランチ",
-  "wearable.amp.2": "アンプ · リード",
+  "wearable.amp.overdrive": "オーバードライブ",
+  "wearable.amp.distortion": "ディストーション",
+  "wearable.amp.drive": "歪み %s",
   "wearable.melodica.air": "ブレス %s%%",
   "wearable.melodica.blow": "Space で息を吹く"
 }

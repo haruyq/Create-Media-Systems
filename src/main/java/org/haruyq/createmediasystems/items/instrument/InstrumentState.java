@@ -9,7 +9,7 @@ import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 public final class InstrumentState {
     public static final int NOTE = 0x90, CONTROL = 0xB0, PROGRAM = 0xC0, BEND = 0xE0;
     public static final int BREATH = 2, SUSTAIN = 64, RELEASE_KEYS = 123;
-    public static final int VOLUME = 7, PICKUP = 70, TONE_NECK = 71, TONE_BRIDGE = 74, AMP = 75;
+    public static final int VOLUME = 7, PICKUP = 70, TONE_NECK = 71, TONE_BRIDGE = 74, AMP = 75, DRIVE = 76;
     public static final int CENTER_BEND = 8192;
     private static final int[] PROGRAMS = {81, 89, 4, 16, 38, 62, 11, 50};
 
@@ -20,8 +20,8 @@ public final class InstrumentState {
     private final int[] strings;
     private final List<Integer> windKeys = new ArrayList<>();
     private int lastNote, tone, bend = CENTER_BEND, breath, sustain;
-    private int amp = 1;
-    public int amp() { return amp; }
+    private GuitarAmp amp;
+    public GuitarAmp amp() { return amp; }
     private int volume = 127, pickup, neckTone = 127, bridgeTone = 127;
 
     public int volume() { return volume; }
@@ -40,7 +40,12 @@ public final class InstrumentState {
     }
 
     public InstrumentState(Kind kind) {
+        this(kind, GuitarAmp.DEFAULT);
+    }
+
+    InstrumentState(Kind kind, GuitarAmp amp) {
         this.kind = kind;
+        this.amp = amp;
         velocity = new int[kind.keys];
         sustained = new int[kind.keys];
         strings = kind == Kind.STRATOCASTER ? new int[OPEN_STRINGS.length] : new int[0];
@@ -67,7 +72,7 @@ public final class InstrumentState {
         return switch (kind) {
             case KEYTAR -> PROGRAMS[tone];
             case MELODICA -> 22;
-            case STRATOCASTER -> 27; // General MIDI clean electric guitar
+            case STRATOCASTER -> amp.distortion() ? 30 : 29; // GM distortion / overdriven guitar
             case FLUTE -> 73;
             case TRUMPET -> 56;
         };
@@ -157,7 +162,8 @@ public final class InstrumentState {
                         case PICKUP -> pickup = Math.round(4 * b / 127f);
                         case TONE_NECK -> neckTone = b;
                         case TONE_BRIDGE -> bridgeTone = b;
-                        case AMP -> amp = Math.round(b * 2 / 127f);
+                        case AMP -> amp = new GuitarAmp(b >= 64, amp.drive());
+                        case DRIVE -> amp = new GuitarAmp(amp.distortion(), b);
                         default -> { return false; }
                     }
                 } else return false;
@@ -183,7 +189,8 @@ public final class InstrumentState {
             messages.add(control(PICKUP, Math.round(pickup * 127 / 4f)));
             messages.add(control(TONE_NECK, neckTone));
             messages.add(control(TONE_BRIDGE, bridgeTone));
-            messages.add(control(AMP, Math.round(amp * 127 / 2f)));
+            messages.add(control(AMP, amp.distortion() ? 127 : 0));
+            messages.add(control(DRIVE, amp.drive()));
         } else if (breath > 0) messages.add(control(BREATH, breath));
         for (int n = kind.first; n <= kind.last(); n++) {
             if (velocity(n) != 0) messages.add(note(n, velocity(n)));

@@ -16,6 +16,8 @@ import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 public final class InstrumentFeature implements Feature {
     public static final Supplier<DataComponentType<GuitarPatch>> PATCH = CreateMediaSystems.COMPONENTS.registerComponentType(
             "guitar_patch", builder -> builder.persistent(GuitarPatch.CODEC).networkSynchronized(GuitarPatch.STREAM_CODEC));
+    static final Supplier<DataComponentType<GuitarAmp>> GUITAR_AMP = CreateMediaSystems.COMPONENTS.registerComponentType(
+            "guitar_amp", builder -> builder.persistent(GuitarAmp.CODEC));
     public static final DeferredItem<InstrumentItem> CORAL_RED = stratocaster("coral_red");
     public static final DeferredItem<InstrumentItem> POLAR_WHITE = stratocaster("polar_white");
     public static final DeferredItem<InstrumentItem> SUNBURST = stratocaster("sunburst");

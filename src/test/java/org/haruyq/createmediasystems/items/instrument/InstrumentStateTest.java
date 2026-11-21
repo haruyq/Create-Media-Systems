@@ -58,6 +58,7 @@ class InstrumentStateTest {
         guitar.apply(control(TONE_NECK, 40));
         guitar.apply(control(TONE_BRIDGE, 102));
         guitar.apply(control(AMP, 127));
+        guitar.apply(control(DRIVE, 106));
         var listener = new InstrumentState(Kind.STRATOCASTER);
         guitar.snapshot().forEach(listener::apply);
         assertEquals(22, InstrumentState.fret(5, listener.stringPitch(5)));
@@ -66,10 +67,28 @@ class InstrumentStateTest {
         assertEquals(96, listener.volume());
         assertEquals(40, listener.neckTone());
         assertEquals(102, listener.bridgeTone());
-        assertEquals(2, listener.amp());
+        assertEquals(new GuitarAmp(true, 106), listener.amp());
         for (int s = 0; s < chord.length; s++) assertEquals(guitar.stringPitch(s), listener.stringPitch(s));
         guitar.apply(note(86, 0));
         for (int note : chord) assertEquals(92, guitar.voicedVelocity(note));
+    }
+
+    @Test void onlyTheGuitarAcceptsTheTwoAmpChannelsAndDriveController() {
+        var guitar = new InstrumentState(Kind.STRATOCASTER);
+        assertEquals(GuitarAmp.DEFAULT, guitar.amp());
+        for (int value = 0; value <= 127; value++) {
+            assertTrue(guitar.apply(control(DRIVE, value)));
+            assertTrue(guitar.apply(control(AMP, value)));
+            assertEquals(value, guitar.amp().drive());
+            assertEquals(value >= 64, guitar.amp().distortion());
+            assertEquals(value >= 64 ? 30 : 29, guitar.program());
+        }
+        for (var kind : Kind.values()) {
+            if (kind == Kind.STRATOCASTER) continue;
+            var instrument = new InstrumentState(kind);
+            assertFalse(instrument.apply(control(AMP, 127)));
+            assertFalse(instrument.apply(control(DRIVE, 127)));
+        }
     }
 
     @Test void windsPlayConcertPitchWithLastNotePriorityAndRestoreBreathAndNoteOrder() {
