@@ -35,10 +35,12 @@ final class InstrumentPlayerPose {
         float playing = frame.playing();
         switch (kind) {
             case STRATOCASTER -> {
-                transform = new Matrix4f(body).translate(-.164f, .605f - .025f * playing, -.214f)
-                        .rotateX(firstPerson ? -.59f : PI).rotateZ((10 + 9 * playing) * DEG);
-                left = new Vector3f(GuitarStrings.fretX(rig, frame.fretHand()) - .009f, -.065f, -.014f);
-                right = InstrumentModel.point(rig.pick_point()).add(-.012f, .056f * frame.stroke(), .014f);
+                // The neck projects past the left shoulder. Tip the upper bout toward the chest
+                // so the player can sight along the strings from above.
+                transform = new Matrix4f(body).translate(-.164f, .59f - .015f * playing, -.214f)
+                        .rotateY(18 * DEG).rotateX((149 - 7 * playing) * DEG).rotateZ((10 + 9 * playing) * DEG);
+                left = new Vector3f(GuitarStrings.fretX(rig, frame.fretHand()) - .009f, -.043f, -.009f);
+                right = InstrumentModel.point(rig.pick_point()).add(-.012f, .037f * frame.stroke(), .014f);
             }
             case FLUTE -> {
                 Vector3f rest = body.transformPosition(new Vector3f(.115f, .438f, -.270f));

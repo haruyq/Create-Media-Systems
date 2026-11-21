@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
@@ -17,6 +18,7 @@ import net.minecraft.client.renderer.entity.player.PlayerRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
@@ -30,11 +32,13 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RenderPlayerEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.client.ArmPoses;
+import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.items.instrument.InstrumentFeature;
@@ -45,6 +49,7 @@ import org.joml.Vector3f;
 public final class InstrumentClient {
     private static final Map<Player, Playback> PLAYBACK = new WeakHashMap<>();
     private static final Deque<PlayerDraw> DRAWS = new ArrayDeque<>();
+    private static final Map<PlayerSkin.Model, GuitarBody> GUITAR_BODIES = new EnumMap<>(PlayerSkin.Model.class);
 
     private record Held(InteractionHand hand, ItemStack stack, TwoHanded item) {}
     private record PartState(ModelPart part, boolean skipDraw) {
@@ -77,6 +82,7 @@ public final class InstrumentClient {
             for (var skin : event.getSkins()) {
                 PlayerRenderer renderer = event.getSkin(skin);
                 if (renderer != null) renderer.addLayer(new HeldInstrumentLayer(renderer));
+                GUITAR_BODIES.put(skin, new GuitarBody(event.getContext(), skin == PlayerSkin.Model.SLIM));
             }
         });
         bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
@@ -90,6 +96,7 @@ public final class InstrumentClient {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, InstrumentClient::beforePlayer);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, InstrumentClient::afterPlayer);
         NeoForge.EVENT_BUS.addListener(InstrumentClient::firstPerson);
+        NeoForge.EVENT_BUS.addListener(InstrumentClient::wornGuitar);
         WorldEvents.onLevelChanged(() -> {
             PLAYBACK.clear();
             restorePlayerDraws();
@@ -190,20 +197,71 @@ public final class InstrumentClient {
                                      float walk, float amount, float partial, float age, float yaw, float pitch) {
             var held = held(player);
             if (held == null || !visible(player)) return;
-            var rig = InstrumentModel.rig(held.item.kind.model);
-            if (rig == null) return;
-            var model = getParentModel();
-            var frame = frame(player, held);
-            var mount = InstrumentPlayerPose.create(held.item.kind.model, rig, frame, model.body, model.head);
-            drawMounted(pose, buffers, light, held.item.kind.model, held.item.modelTexture, rig, frame, mount, true);
-            if (splitArms(player)) drawArms(pose,buffers,light,held.item.kind.model,mount,player,model,false);
+            drawWorn(pose, buffers, light, player, held, getParentModel(), splitArms(player));
         }
+    }
+
+    private static void drawWorn(PoseStack pose, MultiBufferSource buffers, int light, AbstractClientPlayer player,
+                                 Held held, PlayerModel<AbstractClientPlayer> model, boolean arms) {
+        var kind = held.item.kind.model;
+        var rig = InstrumentModel.rig(kind);
+        if (rig == null) return;
+        var frame = frame(player, held);
+        var mount = InstrumentPlayerPose.create(kind, rig, frame, model.body, model.head);
+        drawMounted(pose, buffers, light, kind, held.item.modelTexture, rig, frame, mount, true);
+        if (arms) drawArms(pose, buffers, light, kind, mount, player, model, false);
+    }
+
+    private static void wornGuitar(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
+        var mc = Minecraft.getInstance();
+        var player = mc.player;
+        var camera = event.getCamera();
+        if (player == null || camera.getEntity() != player || camera.isDetached() || mc.options.hideGui
+                || !player.isAlive() || !visible(player)) return;
+        var held = held(player);
+        if (held == null || held.item.kind.model != InstrumentKind.STRATOCASTER || IrisCompat.shadowPass()) return;
+        var model = GUITAR_BODIES.get(player.getSkin().model());
+        if (model == null) return;
+
+        float partial = camera.getPartialTickTime();
+        float bodyYaw = Mth.rotLerp(partial, player.yBodyRotO, player.yBodyRot);
+
+        // The world camera supplies pitch, FOV and depth. Position the model from the player's feet,
+        // with the same render offset, scale and model origin vanilla uses for the other players.
+        var dispatcher = mc.getEntityRenderDispatcher();
+        var offset = dispatcher.getRenderer(player).getRenderOffset(player, partial);
+        var origin = player.getPosition(partial).subtract(camera.getPosition()).add(offset);
+        var pose = event.getPoseStack();
+        pose.pushPose();
+        pose.translate(origin.x, origin.y, origin.z);
+        pose.mulPose(Axis.YP.rotationDegrees(180 - bodyYaw));
+        float scale = player.getScale() * .9375f;
+        pose.scale(-scale, -scale, scale);
+        // The vanilla camera sits on the neck axis. Put the shoulders three skin pixels behind
+        // the eyes so looking down sights past the collar and along the fretboard.
+        pose.translate(0, -1.501f, 3f / 16);
+        int light = dispatcher.getPackedLightCoords(player, partial);
+        var buffers = mc.renderBuffers().bufferSource();
+        boolean bentArms = splitArms(player);
+        model.draw(pose, buffers, light, player, bentArms, player.walkAnimation.position(partial),
+                player.walkAnimation.speed(partial), partial, player.tickCount + partial,
+                Mth.wrapDegrees(player.getViewYRot(partial) - bodyYaw), player.getViewXRot(partial));
+        drawWorn(pose, buffers, light, player, held, model, bentArms);
+        pose.popPose();
     }
 
     private static void firstPerson(RenderHandEvent event) {
         var player = Minecraft.getInstance().player;
         if (player == null || !visible(player)) return;
         var held = held(player);
+        // A shoulder-slung guitar is already in the world pass, including during a hotbar change.
+        boolean puttingAwayGuitar = event.getItemStack().getItem() instanceof TwoHanded previous
+                && previous.kind.model == InstrumentKind.STRATOCASTER && !player.getItemInHand(event.getHand()).is(previous);
+        if (puttingAwayGuitar || held != null && held.item.kind.model == InstrumentKind.STRATOCASTER) {
+            event.setCanceled(true);
+            return;
+        }
         if (held == null || InstrumentModel.rig(held.item.kind.model) == null) return;
         if (event.getHand() != held.hand) {
             if (event.getItemStack().isEmpty()) event.setCanceled(true);
@@ -211,15 +269,14 @@ public final class InstrumentClient {
         }
         if (!event.getItemStack().is(held.item)) return;
         event.setCanceled(true);
+        var kind = held.item.kind.model;
         var pose = event.getPoseStack();
         var buffers = event.getMultiBufferSource();
-        var kind = held.item.kind.model;
         var rig = InstrumentModel.rig(kind);
         var frame = frame(player, held);
         var mount = InstrumentPlayerPose.firstPerson(kind, rig, frame);
         pose.pushPose();
-        boolean guitar = kind == InstrumentKind.STRATOCASTER;
-        pose.translate(guitar ? .125 : -.070, (guitar ? .39 : -.090) - .19 * event.getEquipProgress(), guitar ? -.81 : -.68);
+        pose.translate(-.070, -.090 - .19 * event.getEquipProgress(), -.68);
         pose.mulPose(Axis.ZP.rotationDegrees(180));
         drawMounted(pose,buffers,event.getPackedLight(),kind,held.item.modelTexture,rig,frame,mount,false);
         drawArms(pose,buffers,event.getPackedLight(),kind,mount,player,null,true);

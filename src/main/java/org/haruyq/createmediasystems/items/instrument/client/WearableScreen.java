@@ -295,6 +295,12 @@ final class WearableScreen extends KeysScreen {
     }
 
     @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
+        if (hidden && kind == Kind.STRATOCASTER && button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            double sensitivity = minecraft.options.sensitivity().get() * .6 + .2;
+            double scale = pixel * 8 * sensitivity * sensitivity * sensitivity;
+            player.turn(dx * scale, dy * scale * (minecraft.options.invertYMouse().get() ? -1 : 1));
+            return true;
+        }
         if (mouseNote < 0) return super.mouseDragged(x, y, button, dx, dy);
         int next = keyAt(x * pixel, y * pixel);
         if (next >= 0 && next != mouseNote) {

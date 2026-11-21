@@ -134,6 +134,30 @@ final class InstrumentModelTest {
         }
     }
 
+    @Test void guitarHangsAcrossTheTorsoWithBothPlayingHandsInReach() throws Exception {
+        var rig = geometry(InstrumentKind.STRATOCASTER).rig();
+        for (int fret : new int[]{1, 12, 22}) {
+            var guitar = new InstrumentAnimation(InstrumentKind.STRATOCASTER);
+            guitar.engage(true, START);
+            guitar.fret(0, fret, 0, START);
+            guitar.strum(true, 1, SETTLED);
+            for (long time : new long[]{START, SETTLED, SETTLED + 100_000_000}) {
+                var mount = InstrumentPlayerPose.create(InstrumentKind.STRATOCASTER, rig, guitar.sample(time), null, null);
+                var bridge = mount.at(rig.strings().getFirst().saddle());
+                var neck = mount.at(rig.strings().getFirst().nut()).sub(bridge);
+                assertTrue(neck.x > 0 && neck.y < 0 && neck.z < 0, "Neck extends up and forward to the player's left");
+                var face = mount.transform().transformDirection(new Vector3f(0, 0, 1));
+                assertTrue(face.z < face.y && face.y < -.25f, "Strings face predominantly outwards, tipped up towards the player");
+                for (int side : new int[]{-1, 1}) {
+                    var target = side > 0 ? mount.leftGrip() : mount.rightGrip();
+                    var shoulder = new Vector3f(side * .375f, .9f / 16, 0);
+                    var arm = InstrumentPlayerArms.solve(shoulder, target, new Vector3f(side, 1, 0));
+                    assertEquals(0, arm.hand().distance(target), EPSILON, "Hand reaches the guitar at fret " + fret);
+                }
+            }
+        }
+    }
+
     @Test void aQuickReleaseStartsFromTheCurrentPose() {
         var state = new InstrumentAnimation(InstrumentKind.FLUTE);
         state.engage(true,START);
