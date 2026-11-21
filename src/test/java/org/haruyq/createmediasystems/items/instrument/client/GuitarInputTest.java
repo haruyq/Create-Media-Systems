@@ -1,8 +1,13 @@
 package org.haruyq.createmediasystems.items.instrument.client;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
+import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
+import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
+import org.haruyq.createmediasystems.blocks.piano.pxs1100we.client.KeyboardSynth;
 import org.haruyq.createmediasystems.items.instrument.GuitarFrame;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
@@ -124,13 +129,52 @@ class GuitarInputTest {
         float[] light = guitarOutput(false, 0, false);
         float[] driven = guitarOutput(false, 127, false);
         float[] distorted = guitarOutput(true, 127, false);
-        double driveDifference = 0, modeDifference = 0;
+        double driveDifference = 0, modeDifference = 0, level = 0;
         for (int i = 0; i < light.length; i++) {
             driveDifference += Math.abs(light[i] - driven[i]);
             modeDifference += Math.abs(driven[i] - distorted[i]);
+            level += Math.abs(driven[i]);
         }
-        assertTrue(driveDifference / light.length > .05);
-        assertTrue(modeDifference / light.length > .025);
+        assertTrue(level > .5);
+        assertTrue(driveDifference / level > .25);
+        assertTrue(modeDifference / level > .25);
+    }
+
+    @Test void centreDrivePlaysTheElectronicPianosActualOverdriveAndDistortionSamples() throws Exception {
+        for (boolean distortion : new boolean[]{false, true}) {
+            var state = new InstrumentState(Kind.STRATOCASTER);
+            state.apply(InstrumentState.control(InstrumentState.AMP, distortion ? 127 : 0));
+            state.apply(InstrumentState.control(InstrumentState.DRIVE, distortion ? 63 : 64));
+            var settings = new KeyboardSettings();
+            settings.main = new KeyboardSettings.Tone(0, distortion ? 30 : 29);
+            try (var piano = KeyboardSynth.bundled(settings.polyphony).join();
+                 var guitar = new GuitarSound(CompletableFuture.completedFuture(KeyboardSynth.bundled(32).join()))) {
+                var chord = List.of(KeyboardMidi.note(40, 78), KeyboardMidi.note(47, 105), KeyboardMidi.note(52, 98));
+                piano.apply(settings, true, chord);
+                for (var event : chord) {
+                    int message = InstrumentState.note(event.key(), event.value());
+                    state.apply(message);
+                    guitar.update(state, message, 1_000_000);
+                }
+                float[] played = new float[KeyboardSynth.FRAMES_PER_BUFFER];
+                byte[] reference = new byte[played.length * 4];
+                double error = 0, energy = 0;
+                for (int block = 0; block < 30; block++) {
+                    guitar.render(played, played.length);
+                    piano.read(reference, played.length);
+                    for (int i = 0; i < played.length; i++) {
+                        int p = i * 4;
+                        short left = (short) ((reference[p] & 255) | reference[p + 1] << 8);
+                        short right = (short) ((reference[p + 2] & 255) | reference[p + 3] << 8);
+                        double expected = (left + right) / 65536.0;
+                        energy += expected * expected;
+                        error += (played[i] - expected) * (played[i] - expected);
+                    }
+                }
+                assertTrue(energy > .1);
+                assertTrue(Math.sqrt(error / energy) < .015, "Preset " + state.program() + " relative error " + Math.sqrt(error / energy));
+            }
+        }
     }
 
     private static float[] guitarOutput(boolean distortion, int drive, boolean lineIn) {
@@ -139,14 +183,16 @@ class GuitarInputTest {
         state.apply(InstrumentState.control(InstrumentState.DRIVE, drive));
         int message = lineIn ? 0 : InstrumentState.note(57, 108);
         if (!lineIn) state.apply(message);
-        var guitar = new GuitarSound();
-        guitar.update(state, message, 1_000_000);
         var input = new short[GuitarFrame.SAMPLES];
         for (int i = 0; i < input.length; i++) input[i] = (short) (11000 * Math.sin(5 * Math.TAU * i / input.length));
         var out = new float[input.length];
-        for (int i = 0; i < 8; i++) {
-            if (lineIn) guitar.offer(input, true);
-            guitar.render(out, out.length);
+        try (var guitar = new GuitarSound(lineIn ? new CompletableFuture<>()
+                : CompletableFuture.completedFuture(KeyboardSynth.bundled(32).join()))) {
+            guitar.update(state, message, 1_000_000);
+            for (int i = 0; i < 8; i++) {
+                if (lineIn) guitar.offer(input, true);
+                guitar.render(out, out.length);
+            }
         }
         assertEquals(!lineIn, state.sounding());
         return out;
@@ -162,20 +208,25 @@ class GuitarInputTest {
         return 2 * Math.hypot(real, imaginary) / signal.length;
     }
 
-    @Test void everySynthesizedElectricGuitarPitchSurvivesANoteOffInTheSameTick() {
+    @Test void everySampledGuitarPitchSurvivesASameTickReleaseEvenWhileTheBankIsLoading() {
         for (int note = 40; note <= 86; note++) {
-            var strings = new ElectricStrings();
-            var state = new InstrumentState(Kind.STRATOCASTER);
-            for (int v : new int[]{96,0}) {
-                int message=InstrumentState.note(note,v);
-                state.apply(message);
-                strings.update(state,message,1_000_000);
+            var loading = new CompletableFuture<KeyboardSynth>();
+            try (var guitar = new GuitarSound(loading)) {
+                var state = new InstrumentState(Kind.STRATOCASTER);
+                for (int v : new int[]{96, 0}) {
+                    int message = InstrumentState.note(note, v);
+                    state.apply(message);
+                    guitar.update(state, message, 1_000_000);
+                }
+                float[] out = new float[2400];
+                guitar.render(out, out.length);
+                for (float f : out) assertEquals(0, f);
+                loading.complete(KeyboardSynth.bundled(32).join());
+                guitar.render(out, out.length);
+                double energy = 0;
+                for (float f : out) energy += f * f;
+                assertTrue(energy > .001, "Sampled guitar note " + note);
             }
-            var out = new float[960];
-            strings.render(out,out.length);
-            double energy=0;
-            for (float f:out) energy+=f*f;
-            assertTrue(energy>.01,"Electric guitar note "+note);
         }
     }
 }

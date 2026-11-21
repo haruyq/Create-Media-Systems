@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import javax.sound.midi.Instrument;
 import javax.sound.midi.MidiChannel;
@@ -24,9 +25,9 @@ import org.haruyq.gervill.ModelPatch;
 import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.*;
 
 /** One stereo SoundFont synth for one instrument, advanced by its two OpenAL sources. */
-final class KeyboardSynth implements AutoCloseable {
+public final class KeyboardSynth implements AutoCloseable {
     static final int RATE = 48_000;
-    static final int FRAMES_PER_BUFFER = RATE / 200;
+    public static final int FRAMES_PER_BUFFER = RATE / 200;
     private static final int VOICES_PER_INPUT = 3, CHANNELS = 16 * VOICES_PER_INPUT + 1;
     private static final int MAIN = 0, LAYER = 1, LOWER = 2, CLICK_CHANNEL = 9;
     private static final int PERCUSSION_BANK = 120 << 7;
@@ -55,6 +56,10 @@ final class KeyboardSynth implements AutoCloseable {
     private KeyboardSettings settings = new KeyboardSettings();
     private int framesToReleaseClick, clickNote;
 
+    public static CompletableFuture<KeyboardSynth> bundled(int polyphony) {
+        return KeyboardSoundbank.synth(KeyboardSettings.DEFAULT_FONT, polyphony);
+    }
+
     KeyboardSynth(KeyboardSoundbank.Bank bank, int polyphony) {
         this.bank = bank;
         try {
@@ -71,7 +76,7 @@ final class KeyboardSynth implements AutoCloseable {
         }
     }
 
-    void apply(KeyboardSettings next, boolean snapshot, List<KeyboardMidi> events) {
+    public void apply(KeyboardSettings next, boolean snapshot, List<KeyboardMidi> events) {
         if (snapshot) {
             batches.clear();
             this.events = Collections.emptyIterator();
@@ -289,7 +294,7 @@ final class KeyboardSynth implements AutoCloseable {
         read(stereo, stereo.length / 4);
     }
 
-    void read(byte[] stereo, int frames) throws IOException {
+    public void read(byte[] stereo, int frames) throws IOException {
         if (attackFrames == 0) processEvents();
         int bytes = frames * 4;
         int size = pcm.readNBytes(stereo, 0, bytes);

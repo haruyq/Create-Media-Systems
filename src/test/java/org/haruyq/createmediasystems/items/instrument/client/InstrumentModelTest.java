@@ -134,6 +134,30 @@ final class InstrumentModelTest {
         }
     }
 
+    @Test void theTrumpetGrowsAboutItsMouthpieceAndTheBellReadsFromThePlayersEye() throws Exception {
+        var model = geometry(InstrumentKind.TRUMPET);
+        var rig = model.rig();
+        var anim = new InstrumentAnimation(InstrumentKind.TRUMPET);
+        anim.engage(true, START);
+        var eye = new Vector3f(0, -.19f, 0);
+        var firstPerson = InstrumentPlayerPose.create(InstrumentKind.TRUMPET, rig, anim.sample(SETTLED), null, null, eye);
+        var lips = new Vector3f(eye).add(0, .093f, -.027f);
+        assertEquals(0, lips.distance(firstPerson.at(rig.mouth())), EPSILON);
+        var thirdPerson = InstrumentPlayerPose.create(InstrumentKind.TRUMPET, rig, anim.sample(SETTLED), null, null);
+        assertEquals(.5481f * 1.4f, thirdPerson.at(rig.mouth()).distance(thirdPerson.at(new float[]{rig.mouth()[0], 0, .5481f})), EPSILON);
+        var rim = model.parts().stream().filter(part -> part.name().equals("rolled_bell_bead")).findFirst().orElseThrow();
+        double left = Double.POSITIVE_INFINITY, right = Double.NEGATIVE_INFINITY;
+        for (float[] quad : rim.quads()) {
+            for (int i = 3; i < 23; i += 5) {
+                var point = firstPerson.at(new float[]{quad[i], quad[i + 1], quad[i + 2]}).sub(eye);
+                double x = point.x / -point.z;
+                left = Math.min(left, x);
+                right = Math.max(right, x);
+            }
+        }
+        assertTrue(right - left > .22, "The rim takes up too little of the player's field of view");
+    }
+
     @Test void guitarHangsAcrossTheTorsoWithBothPlayingHandsInReach() throws Exception {
         var rig = geometry(InstrumentKind.STRATOCASTER).rig();
         for (int fret : new int[]{1, 12, 22}) {

@@ -40,7 +40,7 @@ final class InstrumentPlayerPose {
             }
             case FLUTE -> {
                 Vector3f rest = body.transformPosition(new Vector3f(.115f, .438f, -.270f));
-                transform = wind(rest, headPart, eye, playing)
+                transform = wind(rest, headPart, eye, playing, .090f)
                         .rotateY((-12 - 42 * playing) * DEG)
                         .rotateZ((157 + 18 * playing) * DEG).rotateX(-.30f)
                         .translate(-rig.embouchure()[0], -rig.embouchure()[1], -rig.embouchure()[2]);
@@ -50,8 +50,10 @@ final class InstrumentPlayerPose {
             }
             case TRUMPET -> {
                 Vector3f rest = body.transformPosition(new Vector3f(0, .408f, -.254f));
-                transform = wind(rest, headPart, eye, playing)
-                        .rotateX(PI + (30 - 21 * playing) * DEG)
+                transform = wind(rest, headPart, eye, playing, .027f)
+                        .rotateY(5 * playing * DEG)
+                        .rotateX(PI + (30 - 23 * playing) * DEG)
+                        .scale(InstrumentModel.TRUMPET_DISPLAY_SCALE)
                         .translate(-rig.mouth()[0], -rig.mouth()[1], -rig.mouth()[2]);
                 left = InstrumentModel.point(rig.left_grip()).add(0, 0, .012f * frame.control(InstrumentAnimation.Control.THIRD_SLIDE));
                 float valves = frame.control(InstrumentAnimation.Control.VALVE_1)
@@ -70,12 +72,12 @@ final class InstrumentPlayerPose {
         return pose.last().pose();
     }
 
-    private static Matrix4f wind(Vector3f rest, ModelPart head, Vector3f eye, float raised) {
+    private static Matrix4f wind(Vector3f rest, ModelPart head, Vector3f eye, float raised, float lipDepth) {
         var rotation = new Quaternionf();
         partMatrix(head).getNormalizedRotation(rotation);
         // The first-person eye is the camera pivot, including when the player looks straight up or crouches.
         var lips = eye == null ? partMatrix(head).transformPosition(new Vector3f(0, -.095f, -.253f))
-                : rotation.transform(new Vector3f(0, .093f, -.090f)).add(eye);
+                : rotation.transform(new Vector3f(0, .093f, -lipDepth)).add(eye);
         return new Matrix4f().translation(rest.lerp(lips, raised))
                 .rotate(new Quaternionf().slerp(rotation, raised));
     }
