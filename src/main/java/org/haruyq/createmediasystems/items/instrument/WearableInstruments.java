@@ -42,12 +42,39 @@ public final class WearableInstruments implements Feature {
     private static int nextSession;
 
     public enum Kind {
-        KEYTAR(36, 49), MELODICA(53, 32);
+        KEYTAR(1, 36, 49, null), MELODICA(0, 53, 32, null),
+        STRATOCASTER(2, 40, 47, InstrumentKind.STRATOCASTER),
+        FLUTE(3, 60, 37, InstrumentKind.FLUTE), TRUMPET(4, 52, 31, InstrumentKind.TRUMPET);
 
         public final int first, keys;
-        Kind(int first, int keys) {
+        final int wireId;
+        @Nullable public final InstrumentKind model;
+
+        Kind(int wireId, int first, int keys, @Nullable InstrumentKind model) {
+            this.wireId = wireId;
             this.first = first;
             this.keys = keys;
+            this.model = model;
+        }
+
+        public boolean wind() { return this == FLUTE || this == TRUMPET; }
+        public boolean bendsPitch() { return this == KEYTAR || this == STRATOCASTER; }
+
+        static Kind fromFlags(int flags) {
+            int modelId = flags >>> 4;
+            return modelId == 0 ? ((flags & CARRIED) != 0 ? MELODICA : KEYTAR) : byId(modelId);
+        }
+
+        // The first two wire IDs match the original melodica/keytar boolean.
+        static Kind byId(int id) {
+            return switch (id) {
+                case 0 -> MELODICA;
+                case 1 -> KEYTAR;
+                case 2 -> STRATOCASTER;
+                case 3 -> FLUTE;
+                case 4 -> TRUMPET;
+                default -> throw new IllegalArgumentException("Unknown wearable instrument " + id);
+            };
         }
 
         public int last() { return first + keys - 1; }
@@ -79,11 +106,11 @@ public final class WearableInstruments implements Feature {
 
         boolean valid(ServerPlayer player) {
             return player.isAlive() && !player.isSpectator() && player.getItemInHand(hand) == stack
-                    && (notes.kind == Kind.KEYTAR || !ready(player));
+                    && stack.getItem() instanceof InstrumentItem item && item.canPlay(player, hand);
         }
 
         boolean powered(ServerPlayer player) {
-            return notes.kind == Kind.MELODICA || paidUntil > player.tickCount || ChargeableItem.energy(stack) > 0;
+            return notes.kind != Kind.KEYTAR || paidUntil > player.tickCount || ChargeableItem.energy(stack) > 0;
         }
 
         void pay(ServerPlayer player) {
@@ -158,14 +185,13 @@ public final class WearableInstruments implements Feature {
     }
 
     static void begin(ServerPlayer player, InteractionHand hand, Kind kind) {
-        if (!player.isAlive() || player.isSpectator() || kind == Kind.KEYTAR && hand != InteractionHand.MAIN_HAND
-                || kind == Kind.MELODICA && ready(player)) return;
+        if (!player.isAlive() || player.isSpectator() || !(player.getItemInHand(hand).getItem() instanceof InstrumentItem item)
+                || item.kind != kind || !item.canPlay(player, hand)) return;
         Outfit outfit = player.getData(OUTFIT);
         Session session = new Session(player, hand, kind);
         outfit.session = session;
         broadcast(player, outfit, appearance(player, session), true);
-        PacketDistributor.sendToPlayer(player, new WearablePackets.Open(session.token, hand == InteractionHand.MAIN_HAND,
-                kind == Kind.KEYTAR));
+        PacketDistributor.sendToPlayer(player, new WearablePackets.Open(session.token, hand == InteractionHand.MAIN_HAND, kind));
     }
 
     static void input(ServerPlayer player, int token, int message) {
@@ -211,6 +237,7 @@ public final class WearableInstruments implements Feature {
             if (powered) flags |= POWERED;
         }
         if (carriesMelodica(player)) flags |= CARRIED;
+        if (session != null && session.notes.kind.model != null) flags |= session.notes.kind.wireId << 4;
         return new Appearance(flags, KeytarFinish.of(keytar));
     }
 

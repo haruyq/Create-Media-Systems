@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.haruyq.createmediasystems.blocks.piano.client.KeyMotion;
 import org.haruyq.createmediasystems.client.WorldEvents;
+import org.haruyq.createmediasystems.items.instrument.InstrumentKind;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
 import org.haruyq.createmediasystems.items.instrument.KeytarFinish;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments;
@@ -48,7 +49,8 @@ public final class WearableClient implements WearablePackets.Client {
         final WearableAudio audio = new WearableAudio();
         int flags, session;
         KeytarFinish finish = KeytarFinish.DEFAULT;
-        boolean listed;
+        int missingTicks;
+        @Nullable InstrumentAnimation instrument;
         InstrumentState notes = new InstrumentState(Kind.KEYTAR);
         KeyMotion motion = new KeyMotion(Kind.KEYTAR.first, Kind.KEYTAR.keys);
         float ready, play, handX = KeytarMesh.keyX(60);
@@ -56,8 +58,19 @@ public final class WearableClient implements WearablePackets.Client {
         long lastFrame = System.nanoTime();
 
         void reset(Kind kind) {
+            if (instrument != null && notes.kind.model == instrument.kind()) {
+                int release = InstrumentState.control(InstrumentState.RELEASE_KEYS, 0);
+                notes.apply(release);
+                instrument.follow(notes, release, System.nanoTime());
+            }
             notes = new InstrumentState(kind);
             motion = new KeyMotion(kind.first, kind.keys);
+            if (kind.model != null && session != 0) {
+                instrument = new InstrumentAnimation(kind.model);
+                instrument.engage(true, System.nanoTime());
+            } else if (instrument != null) {
+                instrument.engage(false, System.nanoTime());
+            }
             handX = keyX(kind, notes.lastNote());
         }
 
@@ -110,12 +123,19 @@ public final class WearableClient implements WearablePackets.Client {
             } else if (command == InstrumentState.CONTROL && number == InstrumentState.RELEASE_KEYS) {
                 for (int note = notes.kind.first; note <= notes.kind.last(); note++) motion.release(note, now);
             }
+            if (instrument != null && notes.kind.model == instrument.kind()) instrument.follow(notes, message, now);
             audio.message(notes, message, before);
         }
 
         float travel(Kind kind, int note, long now) {
             return notes.kind == kind ? motion.travel(note, now) : 0;
         }
+    }
+
+    static InstrumentAnimation.Frame frame(Player player, InstrumentKind model, long now) {
+        var view = VIEWS.get(player.getUUID());
+        return view != null && view.instrument != null && view.instrument.kind() == model
+                ? view.instrument.sample(now) : InstrumentAnimation.rest();
     }
 
     static View view(Player player) {
@@ -128,14 +148,18 @@ public final class WearableClient implements WearablePackets.Client {
     }
 
     private static float keyX(Kind kind, int note) {
-        return kind == Kind.KEYTAR ? KeytarMesh.keyX(note) : MelodicaMesh.keyX(note);
+        return switch (kind) {
+            case KEYTAR -> KeytarMesh.keyX(note);
+            case MELODICA -> MelodicaMesh.keyX(note);
+            default -> 0;
+        };
     }
 
     @Override
     public void open(WearablePackets.Open packet) {
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
-        Kind kind = packet.keytar() ? Kind.KEYTAR : Kind.MELODICA;
+        Kind kind = packet.kind();
         InteractionHand hand = packet.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         mc.setScreen(new WearableScreen(mc.player, view(mc.player), packet.session(), kind, hand));
     }
@@ -147,11 +171,20 @@ public final class WearableClient implements WearablePackets.Client {
         var view = VIEWS.computeIfAbsent(packet.player(), ignored -> new View());
         boolean wasPowered = view.has(WearableInstruments.POWERED);
         view.flags = packet.flags();
+        view.missingTicks = 0;
         view.finish = packet.finish();
         if (packet.snapshot() || view.session != packet.session()) {
             view.audio.stop();
             view.session = packet.session();
-            view.reset(view.has(WearableInstruments.CARRIED) ? Kind.MELODICA : Kind.KEYTAR);
+            view.reset(packet.kind());
+            if (view.session != 0 && view.notes.kind.model != null && packet.snapshot()) {
+                // A wind snapshot can contain several held notes. Sound only the one currently fingered.
+                for (int message : packet.events()) view.notes.apply(message);
+                view.instrument.follow(view.notes, 0, System.nanoTime());
+                Player player = mc.level.getPlayerByUUID(packet.player());
+                if (player != null) view.audio.tick(player, view.notes, true);
+                return;
+            }
         } else if (view.notes.kind == Kind.KEYTAR && wasPowered && !view.has(WearableInstruments.POWERED)) {
             view.audio.stop();
         }
@@ -171,14 +204,16 @@ public final class WearableClient implements WearablePackets.Client {
         for (var entry : VIEWS.entrySet()) {
             Player player = mc.level.getPlayerByUUID(entry.getKey());
             var view = entry.getValue();
-            view.listed = player != null && player.isAlive();
-            if (view.listed) {
-                if (view.session != 0) view.audio.tick(player, view.notes, view.notes.kind == Kind.MELODICA || view.powered(player));
+            if (player != null && player.isAlive()) {
+                view.missingTicks = 0;
+                if (view.session != 0) view.audio.tick(player, view.notes, view.notes.kind != Kind.KEYTAR || view.powered(player));
                 else view.audio.stop();
             } else {
                 view.audio.stop();
+                view.missingTicks++;
             }
         }
-        VIEWS.values().removeIf(view -> !view.listed);
+        // Tracking can deliver the session snapshot before the vanilla player spawn.
+        VIEWS.values().removeIf(view -> view.missingTicks > 20);
     }
 }

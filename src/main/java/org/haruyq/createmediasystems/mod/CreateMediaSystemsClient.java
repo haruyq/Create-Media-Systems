@@ -19,6 +19,7 @@ import org.haruyq.createmediasystems.disc.DiscClient;
 import org.haruyq.createmediasystems.blocks.display.DisplayClient;
 import org.haruyq.createmediasystems.blocks.component.m700.HifiClient;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.client.KeyboardClient;
+import org.haruyq.createmediasystems.items.instrument.client.InstrumentClient;
 import org.haruyq.createmediasystems.items.instrument.client.WearableClient;
 import org.haruyq.createmediasystems.items.launcher.client.LauncherClient;
 import org.haruyq.createmediasystems.lighting.LightingClient;
@@ -68,6 +69,7 @@ public final class CreateMediaSystemsClient {
             ClientFeature.withPonder(BroadcastClient::register, BroadcastPonder::register), new KeyboardClient(),
             ClientFeature.withPonder(PianoClient::register, PianoPonder::register),
             ClientFeature.withPonder(WearableClient::register, WearablePonder::register),
+            InstrumentClient::register,
             ClientFeature.withPonder(SteelpanClient::register, SteelpanPonder::register),
             ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register),
             ClientFeature.withPonder(RadioClient::register, RadioPonder::register), LoudmanClient::register,

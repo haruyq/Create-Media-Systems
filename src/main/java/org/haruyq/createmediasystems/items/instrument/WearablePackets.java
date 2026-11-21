@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.UUIDUtil;
@@ -28,10 +29,10 @@ public final class WearablePackets {
 
     public static void client(Client receiver) { client = receiver; }
 
-    public record Open(int session, boolean mainHand, boolean keytar) implements CustomPacketPayload {
+    public record Open(int session, boolean mainHand, Kind kind) implements CustomPacketPayload {
         static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("wearable_open"));
         static final StreamCodec<ByteBuf, Open> CODEC = StreamCodec.composite(ByteBufCodecs.VAR_INT, Open::session,
-                ByteBufCodecs.BOOL, Open::mainHand, ByteBufCodecs.BOOL, Open::keytar, Open::new);
+                ByteBufCodecs.BOOL, Open::mainHand, ByteBufCodecs.VAR_INT.map(Kind::byId, kind -> kind.wireId), Open::kind, Open::new);
         @Override public Type<Open> type() { return TYPE; }
     }
 
@@ -48,6 +49,7 @@ public final class WearablePackets {
         static final StreamCodec<ByteBuf, Update> CODEC = StreamCodec.composite(UUIDUtil.STREAM_CODEC, Update::player,
                 ByteBufCodecs.VAR_INT, Update::session, ByteBufCodecs.BYTE.map(Byte::intValue, Integer::byteValue), Update::flags,
                 KeytarFinish.STREAM_CODEC, Update::finish, ByteBufCodecs.BOOL, Update::snapshot, EVENTS, Update::events, Update::new);
+        public Kind kind() { return Kind.fromFlags(flags); }
         @Override public Type<Update> type() { return TYPE; }
     }
 

@@ -17,7 +17,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 
 public class InstrumentItem extends Item {
-    private final Kind kind;
+    public final Kind kind;
 
     InstrumentItem(Kind kind) {
         super(new Properties().stacksTo(1));
@@ -27,11 +27,27 @@ public class InstrumentItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         var stack = player.getItemInHand(hand);
-        if (kind == Kind.KEYTAR && hand != InteractionHand.MAIN_HAND || kind == Kind.MELODICA && WearableInstruments.ready(player)) {
+        if (!canPlay(player, hand)) {
             return InteractionResultHolder.pass(stack);
         }
         if (player instanceof ServerPlayer server) WearableInstruments.begin(server, hand, kind);
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    public boolean canPlay(Player player, InteractionHand hand) {
+        if (kind == Kind.KEYTAR) return hand == InteractionHand.MAIN_HAND;
+        if (kind == Kind.MELODICA) return !WearableInstruments.ready(player);
+        InteractionHand other = hand == InteractionHand.MAIN_HAND ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+        return player.getItemInHand(other).isEmpty();
+    }
+
+    public static final class TwoHanded extends InstrumentItem {
+        public final String modelTexture;
+
+        TwoHanded(Kind kind, String modelTexture) {
+            super(kind);
+            this.modelTexture = modelTexture;
+        }
     }
 
     @Override

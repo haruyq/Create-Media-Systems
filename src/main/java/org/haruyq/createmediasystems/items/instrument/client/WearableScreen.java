@@ -16,8 +16,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import org.haruyq.createmediasystems.client.KeysScreen;
 import org.haruyq.createmediasystems.client.MidiPort;
+import org.haruyq.createmediasystems.items.instrument.InstrumentItem;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
-import org.haruyq.createmediasystems.items.instrument.WearableInstruments;
 import org.haruyq.createmediasystems.items.instrument.WearableInstruments.Kind;
 import org.haruyq.createmediasystems.items.instrument.WearablePackets;
 import org.haruyq.createmediasystems.items.power.ChargeableItem;
@@ -55,7 +55,12 @@ final class WearableScreen extends KeysScreen {
         this.session = session;
         this.kind = kind;
         this.hand = hand;
-        if (kind == Kind.KEYTAR) {
+        if (kind.wind()) sentAir = midiAir = 127;
+        if (kind == Kind.STRATOCASTER || kind == Kind.TRUMPET) {
+            lamp = 0xFFFFCE78;
+            lit = new int[] {0xFFFFE2AA, 0xFFE3AA58};
+            body = new int[] {0xFA383336, 0xFA241E20};
+        } else if (kind == Kind.KEYTAR) {
             lamp = 0xFF79E6D5;
             lit = new int[] {0xFFADEEE3, 0xFF6AD4C2};
             body = new int[] {0xFA303539, 0xFA181C20};
@@ -86,10 +91,29 @@ final class WearableScreen extends KeysScreen {
                 button(index * each, 1.55f, (index + 1) * each - .12f, 2.72f,
                         () -> tr("tone." + tone), () -> send(tone(tone))).lit(() -> view.notes.tone() == tone);
             }
+        }
+        if (kind == Kind.STRATOCASTER) {
+            float width = whiteKeyCount();
+            button(0, 1.55f, width * .32f, 2.72f, () -> tr("pickup." + view.notes.pickup()),
+                    () -> send(control(PICKUP, Math.round(((view.notes.pickup() + 1) % 5) * 127 / 4f))));
+            slider(width * .33f, 1.55f, width * .53f, 2.72f, v -> tr("volume", v), 0, 127,
+                    () -> view.notes.volume(), v -> send(control(VOLUME, v)));
+            slider(width * .54f, 1.55f, width * .76f, 2.72f, v -> tr("tone_neck", v), 0, 127,
+                    () -> view.notes.neckTone(), v -> send(control(TONE_NECK, v)));
+            slider(width * .77f, 1.55f, width, 2.72f, v -> tr("tone_bridge", v), 0, 127,
+                    () -> view.notes.bridgeTone(), v -> send(control(TONE_BRIDGE, v)));
+        }
+        if (kind.bendsPitch()) {
             slider(0, 2.86f, whiteKeyCount() * .43f, 4, value -> tr("bend", value - CENTER_BEND),
                     0, 16383, () -> bendValue, value -> {
                         bendDragged = true;
                         bendTo(value);
+                    });
+        } else if (kind.wind()) {
+            slider(0, 2.86f, whiteKeyCount() * .50f, 4, value -> tr("air", value),
+                    0, 127, () -> sentAir, value -> {
+                        midiAir = value;
+                        pedals();
                     });
         } else {
             button(0, 1.55f, whiteKeyCount() * .56f, 2.85f,
@@ -102,16 +126,23 @@ final class WearableScreen extends KeysScreen {
     @Override protected void draw(GuiGraphics g, double x, double y) {
         var stack = player.getItemInHand(hand);
         String status = keytar() ? tr("charge", Math.round(ChargeableItem.charge(stack) * 100) + "%").getString() : "";
-        String hints = tr("keys", tr(keytar() ? "keys.damper" : "keys.breath")).getString();
-        drawHeader(g, title.getString(), status, view.powered(player) ? lamp : faint, hints, faint);
+        String hints = kind.model == null ? tr("keys", tr(keytar() ? "keys.damper" : "keys.breath")).getString() : "";
+        String name = title.getString();
+        if (kind.model != null) {
+            int hide = Math.round((font.width(Component.translatable("create_media_systems.keys.hide")) + 12) * textScale);
+            name = fit(name, stripWidth - hide - keyWidth);
+            write(g, fit(tr("keys.notes").getString(), stripWidth - keyWidth), keysX + stripWidth * .5f,
+                    keysY - (deck + felt) * .5f, textScale, faint, MIDDLE);
+        }
+        drawHeader(g, name, status, view.powered(player) ? lamp : faint, hints, faint);
         drawKeys(g, note -> view.notes.kind == kind && view.notes.velocity(note) != 0);
     }
 
     @Override public void tick() {
         super.tick();
-        if (!player.isAlive() || player.isSpectator() || view.session != session || (keytar()
-                ? !player.getItemInHand(hand).is(WearableInstruments.KEYTAR.get())
-                : WearableInstruments.ready(player) || !player.getItemInHand(hand).is(WearableInstruments.MELODICA.get()))) {
+        if (!player.isAlive() || player.isSpectator() || view.session != session
+                || !(player.getItemInHand(hand).getItem() instanceof InstrumentItem item)
+                || item.kind != kind || !item.canPlay(player, hand)) {
             onClose();
             return;
         }
@@ -137,9 +168,10 @@ final class WearableScreen extends KeysScreen {
         var keys = Set.copyOf(midiNotes.values());
         midiNotes.clear();
         for (int note : keys) release(note);
-        midiAir = midiSustain = 0;
+        midiAir = kind.wind() ? 127 : 0;
+        midiSustain = 0;
         pedals();
-        if (keytar() && bendValue != CENTER_BEND) bendTo(CENTER_BEND);
+        if (kind.bendsPitch() && bendValue != CENTER_BEND) bendTo(CENTER_BEND);
     }
 
     private Component midiName() {
@@ -169,17 +201,22 @@ final class WearableScreen extends KeysScreen {
                 if (message.getCommand() == ShortMessage.NOTE_OFF || value == 0) {
                     Integer note = midiNotes.remove(key);
                     if (note != null) release(note);
-                } else if (number >= kind.first && number <= kind.last() && midiNotes.putIfAbsent(key, number) == null) {
-                    press(number, value);
+                } else if (number >= kind.first && number <= kind.last()) {
+                    Integer previous = midiNotes.put(key, number);
+                    if (kind.model != null) send(note(number, value));
+                    else if (previous == null) press(number, value);
                 }
             }
             case ShortMessage.CONTROL_CHANGE -> {
-                if (!keytar() && (number == BREATH || number == 11 || number == SUSTAIN)) midiAir = value;
+                if ((kind.wind() || kind == Kind.MELODICA) && (number == BREATH || number == 11)
+                        || kind == Kind.MELODICA && number == SUSTAIN) midiAir = value;
                 else if (keytar() && number == SUSTAIN) midiSustain = value;
-                else if (number == RELEASE_KEYS || number == 120 || number == 121) clearMidi();
+                else if (kind == Kind.STRATOCASTER && (number == VOLUME || number == PICKUP || number == TONE_NECK || number == TONE_BRIDGE)) {
+                    send(control(number, value));
+                } else if (number == RELEASE_KEYS || number == 120 || number == 121) clearMidi();
                 pedals();
             }
-            case ShortMessage.PITCH_BEND -> { if (keytar()) bendTo(number | value << 7); }
+            case ShortMessage.PITCH_BEND -> { if (kind.bendsPitch()) bendTo(number | value << 7); }
             case ShortMessage.PROGRAM_CHANGE -> { if (keytar()) send(tone(number % 8)); }
         }
     }
@@ -204,8 +241,8 @@ final class WearableScreen extends KeysScreen {
                 sentSustain = value;
                 send(control(SUSTAIN, value));
             }
-        } else {
-            int value = space || mouseNote >= 0 ? 112 : midiAir;
+        } else if (kind == Kind.MELODICA || kind.wind()) {
+            int value = kind == Kind.MELODICA && (space || mouseNote >= 0) ? 112 : midiAir;
             if (value != sentAir) {
                 sentAir = value;
                 send(control(BREATH, value));
@@ -214,18 +251,21 @@ final class WearableScreen extends KeysScreen {
     }
 
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
-        if (key == GLFW.GLFW_KEY_SPACE) {
+        if (key == GLFW.GLFW_KEY_SPACE && kind.model == null) {
             space = true;
             pedals();
             return true;
         }
+        int base = kind == Kind.STRATOCASTER ? 40 : keytar() ? 48 : 60;
         if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT) {
-            octaves = Mth.clamp(octaves + (key == GLFW.GLFW_KEY_LEFT ? -1 : 1), keytar() ? -2 : -1, keytar() ? 2 : 1);
+            int min = kind.model == null ? (keytar() ? -2 : -1) : Math.floorDiv(kind.first - base, 12);
+            int max = kind.model == null ? (keytar() ? 2 : 1) : Math.max(0, Math.ceilDiv(kind.last() - base - COMPUTER.length + 1, 12));
+            octaves = Mth.clamp(octaves + (key == GLFW.GLFW_KEY_LEFT ? -1 : 1), min, max);
             return true;
         }
         for (int i = 0; i < COMPUTER.length; i++) {
             if (key != COMPUTER[i]) continue;
-            int note = (keytar() ? 48 : 60) + 12 * octaves + i;
+            int note = base + 12 * octaves + i;
             if (note >= kind.first && note <= kind.last() && typed.putIfAbsent(key, note) == null) press(note, 96);
             return true;
         }
@@ -233,7 +273,7 @@ final class WearableScreen extends KeysScreen {
     }
 
     @Override public boolean keyReleased(int key, int scan, int modifiers) {
-        if (key == GLFW.GLFW_KEY_SPACE) {
+        if (key == GLFW.GLFW_KEY_SPACE && kind.model == null) {
             space = false;
             pedals();
             return true;

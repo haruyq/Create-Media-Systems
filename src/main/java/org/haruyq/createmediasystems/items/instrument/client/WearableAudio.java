@@ -31,6 +31,12 @@ import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 final class WearableAudio {
     @Nullable private Synth synth;
     @Nullable private Emitter emitter;
+    @Nullable private InstrumentVoices voices;
+
+    private InstrumentVoices voices() {
+        if (voices == null) voices = new InstrumentVoices();
+        return voices;
+    }
 
     void tick(Player player, InstrumentState notes, boolean powered) {
         var mc = Minecraft.getInstance();
@@ -43,19 +49,27 @@ final class WearableAudio {
                 && (mc.getSoundManager().isActive(emitter) || System.nanoTime() - emitter.started < 1_000_000_000L)) return;
         if (emitter != null) stop();
         var font = KeyboardAudio.bank(mc);
-        if (font == null || player != mc.player && !notes.sounding()) return;
+        if (font == null || player != mc.player && notes.kind.model == null && !notes.sounding()) return;
         synth = new Synth(font);
         send(Synth.PROGRAM, notes.program(), 0);
         if (notes.kind == Kind.MELODICA) {
             send(Synth.CONTROL, Synth.EXPRESSION, notes.breath());
             send(Synth.CONTROL, Synth.REVERB_SEND, 0);
         }
-        for (int message : notes.snapshot()) message(notes, message, notes.breath());
-        emitter = new Emitter(player, synth);
+        if (notes.kind.model != null) {
+            voices().update(notes, 0, System.nanoTime());
+        } else {
+            for (int message : notes.snapshot()) message(notes, message, notes.breath());
+        }
+        emitter = new Emitter(player, synth, notes.kind.model == null ? null : voices);
         mc.getSoundManager().play(emitter);
     }
 
     void message(InstrumentState notes, int message, int beforeBreath) {
+        if (notes.kind.model != null) {
+            voices().update(notes, message, System.nanoTime());
+            return;
+        }
         if (synth == null) return;
         int number = first(message), value = second(message);
         switch (command(message)) {
@@ -97,6 +111,7 @@ final class WearableAudio {
             emitter = null;
         }
         synth = null;
+        voices = null;
     }
 
     private static final class Emitter extends AbstractTickableSoundInstance {
@@ -104,10 +119,13 @@ final class WearableAudio {
         private final Synth synth;
         final long started = System.nanoTime();
 
-        Emitter(Player player, Synth synth) {
+        @Nullable final InstrumentVoices voices;
+
+        Emitter(Player player, Synth synth, @Nullable InstrumentVoices voices) {
             super(KeyboardFeature.PLAYED.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
             this.player = player;
             this.synth = synth;
+            this.voices = voices;
             volume = .75f;
             tick();
         }
@@ -163,7 +181,14 @@ final class WearableAudio {
         }
 
         @Override public ByteBuffer read(int bytes) {
-            synth.render(left, right, 0, frames / Synth.BLOCK);
+            if (emitter.voices == null) {
+                synth.render(left, right, 0, frames / Synth.BLOCK);
+            } else {
+                for (int start = 0; start < frames; start += Synth.BLOCK) {
+                    emitter.voices.nextBlock(synth);
+                    synth.render(left, right, start, 1);
+                }
+            }
             pcm.clear();
             for (int frame = 0; frame < frames; frame++) {
                 pcm.putShort((short) Math.round(Math.clamp((left[frame] + right[frame]) * .7f, -1, 1) * 32767));

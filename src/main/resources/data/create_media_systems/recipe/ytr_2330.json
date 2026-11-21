@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "  B",
+    "NVS",
+    "BB "
+  ],
+  "key": {
+    "B": {
+      "item": "create:brass_sheet"
+    },
+    "N": {
+      "item": "create:brass_nugget"
+    },
+    "V": {
+      "item": "create:brass_ingot"
+    },
+    "S": {
+      "item": "minecraft:note_block"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:ytr_2330",
+    "count": 1
+  }
+}
