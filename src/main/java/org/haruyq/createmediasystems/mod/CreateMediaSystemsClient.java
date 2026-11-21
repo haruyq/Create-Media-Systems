@@ -34,6 +34,7 @@ import org.haruyq.createmediasystems.items.instrument.client.WearablePonder;
 import org.haruyq.createmediasystems.items.launcher.client.LauncherPonder;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.client.MegaphonePonder;
 import org.haruyq.createmediasystems.items.partybox.stage320.client.PartyBoxPonder;
+import org.haruyq.createmediasystems.blocks.stagecustom.client.StageCustomClient;
 import org.haruyq.createmediasystems.blocks.steelpan.client.SteelpanPonder;
 import org.haruyq.createmediasystems.blocks.steelpan.client.SteelpanClient;
 import org.haruyq.createmediasystems.p2p.P2pClient;
@@ -71,6 +72,7 @@ public final class CreateMediaSystemsClient {
             ClientFeature.withPonder(WearableClient::register, WearablePonder::register),
             InstrumentClient::register,
             ClientFeature.withPonder(SteelpanClient::register, SteelpanPonder::register),
+            StageCustomClient::register,
             ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register),
             ClientFeature.withPonder(RadioClient::register, RadioPonder::register), LoudmanClient::register,
             new BoomboxClient());

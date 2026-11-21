@@ -4,6 +4,7 @@
     "create_media_systems:speaker",
     "create_media_systems:train_speaker",
     "create_media_systems:disc_reader",
-    "create_media_systems:grand_piano"
+    "create_media_systems:grand_piano",
+    "create_media_systems:stage_custom_birch_sbp2f5_dus"
   ]
 }

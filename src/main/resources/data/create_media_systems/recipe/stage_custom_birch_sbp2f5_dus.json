@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "ILI",
+    "WUW",
+    "ILI"
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "L": {
+      "item": "minecraft:leather"
+    },
+    "W": {
+      "item": "minecraft:birch_planks"
+    },
+    "U": {
+      "item": "minecraft:blue_dye"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:stage_custom_birch_sbp2f5_dus",
+    "count": 1
+  }
+}

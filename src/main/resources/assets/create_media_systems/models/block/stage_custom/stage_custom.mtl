@@ -1,0 +1,71 @@
+newmtl badge_sbb2217
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/badge_sbb2217
+
+newmtl badge_sbf1615
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/badge_sbf1615
+
+newmtl badge_sbs1455
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/badge_sbs1455
+
+newmtl badge_sbt1007
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/badge_sbt1007
+
+newmtl badge_sbt1208
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/badge_sbt1208
+
+newmtl birch
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/birch
+
+newmtl black_hoop
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/black_hoop
+
+newmtl chrome
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/chrome
+
+newmtl dus
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/dus
+
+newmtl hardware
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/hardware
+
+newmtl item_black
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/item_black
+
+newmtl item_clear
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/item_clear
+
+newmtl item_coated
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/item_coated
+
+newmtl item_kick_clear
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/item_kick_clear
+
+newmtl maple_stick
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/maple_stick
+
+newmtl plies
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/plies
+
+newmtl rubber
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/rubber
+
+newmtl wire
+Kd 1.0 1.0 1.0
+map_Kd create_media_systems:block/stage_custom/wire

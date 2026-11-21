@@ -28,6 +28,7 @@ import org.haruyq.createmediasystems.p2p.P2pFeature;
 import org.haruyq.createmediasystems.screen.ScreenFeature;
 import org.haruyq.createmediasystems.items.partybox.stage320.PartyBoxFeature;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomFeature;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanFeature;
 import org.haruyq.createmediasystems.items.power.PowerFeature;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.PxS1100Feature;
@@ -49,7 +50,8 @@ public final class CreateMediaSystemsMod {
     private static final List<Feature> FEATURES = List.of(new StreamFeature(), new PowerFeature(), new PxS1100Feature(), new MegaphoneFeature(),
             new PartyBoxFeature(), new LauncherFeature(), new AudioFeature(), new TrainFeature(), new DiscFeature(), new VideoFeature(),
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
-            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new InstrumentFeature(), new SteelpanFeature(), new ScreenFeature(),
+            new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new InstrumentFeature(), new SteelpanFeature(),
+            new StageCustomFeature(), new ScreenFeature(),
             new RadioFeature(), new LoudmanFeature(), new BoomboxFeature());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
@@ -81,7 +83,7 @@ public final class CreateMediaSystemsMod {
         audio.addAll(HifiFeature.hifiUnits());
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
                 KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM,
-                SteelpanFeature.ITEM));
+                SteelpanFeature.ITEM, StageCustomFeature.ITEM));
         audio.addAll(InstrumentFeature.PEDALS);
         List<Supplier<? extends Item>> portable = new ArrayList<>(List.of(
                 WearableInstruments.KEYTAR, WearableInstruments.MELODICA, PartyBoxFeature.PARTYBOX, PowerFeature.BATTERY,

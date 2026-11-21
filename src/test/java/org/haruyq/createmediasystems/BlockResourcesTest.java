@@ -65,6 +65,7 @@ class BlockResourcesTest {
             Map.entry("lighting_monitor", new Row(Tool.PICKAXE, false, true)),
             Map.entry("line_mixer", new Row(Tool.PICKAXE, false, true)),
             Map.entry("midi_keyboard", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("stage_custom_birch_sbp2f5_dus", new Row(Tool.AXE, false, true)),
             Map.entry("steelpan_low_c", new Row(Tool.PICKAXE, false, true)),
             Map.entry("px_s1100", new Row(Tool.PICKAXE, false, true)),
             Map.entry("px_s1100_power_adapter", new Row(Tool.PICKAXE, false, true)),
