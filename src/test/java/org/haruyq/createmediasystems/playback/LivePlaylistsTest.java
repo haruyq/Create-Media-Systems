@@ -57,6 +57,39 @@ class LivePlaylistsTest {
     }
 
     @Test
+    void aLinkToAPlaylistStillBeingAddedToOpensAsLive() throws Exception {
+        HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        Map<String, String> files = Map.of(
+                // A master lists its media playlists relative to itself, as AzuraCast's does.
+                "/radio/live.m3u8", "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=211200,CODECS=\"mp4a.40.2\"\naac_hifi.m3u8\n",
+                "/radio/aac_hifi.m3u8", LIVE,
+                "/film/vod.m3u8", "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=211200\nmedia.m3u8\n",
+                "/film/media.m3u8", LIVE + "#EXT-X-ENDLIST\n",
+                "/page/not-a-playlist.m3u8", "<html>Not found</html>");
+        origin.createContext("/", exchange -> {
+            String file = files.get(exchange.getRequestURI().getPath());
+            byte[] body = file == null ? new byte[0] : file.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(file == null ? 404 : 200, file == null ? -1 : body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        origin.start();
+        try {
+            String base = "http://127.0.0.1:" + origin.getAddress().getPort();
+            // VLC reports a live playlist as a seekable video as long as its segments: only this says it is live.
+            assertTrue(MediaSources.web(URI.create(base + "/radio/live.m3u8"), false, 0).live(), "a master");
+            assertTrue(MediaSources.web(URI.create(base + "/radio/aac_hifi.m3u8"), false, 0).live(), "a media playlist");
+            assertFalse(MediaSources.web(URI.create(base + "/film/vod.m3u8"), false, 0).live(), "a finished one");
+            assertFalse(MediaSources.web(URI.create(base + "/film/media.m3u8"), false, 0).live());
+            assertFalse(MediaSources.web(URI.create(base + "/page/not-a-playlist.m3u8"), false, 0).live());
+            assertFalse(MediaSources.web(URI.create(base + "/gone.m3u8"), false, 0).live(), "VLC is left to tell");
+            assertFalse(MediaSources.web(URI.create(base + "/radio/radio.mp3"), false, 0).live(), "no playlist is asked for");
+        } finally {
+            origin.stop(0);
+        }
+    }
+
+    @Test
     void masterPointsVlcAtTheHeldBackPlaylistFetchedWithTheOriginsHeaders() throws Exception {
         HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         origin.createContext("/live/variant.m3u8", exchange -> {

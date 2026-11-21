@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.playback;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -28,6 +29,7 @@ import com.sun.net.httpserver.HttpServer;
  */
 final class LivePlaylists {
     static final int HELD_BACK = 2;
+    private static final int MAX_PLAYLIST_BYTES = 1024 * 1024;
     private static final Pattern URI_ATTRIBUTE = Pattern.compile("URI=\"([^\"]*)\"");
     // ponytail: never evicted, a URL and two headers per live playlist resolved since start; evict by last request if it grows.
     private static final Map<String, Origin> ORIGINS = new ConcurrentHashMap<>();
@@ -54,6 +56,48 @@ final class LivePlaylists {
             lines.add(line);
         }
         return String.join("\n", lines);
+    }
+
+    /**
+     * Whether the HLS playlist at {@code uri} is a live broadcast: its media playlist (the first one a master lists)
+     * has no EXT-X-ENDLIST yet. VLC 3 can't tell: it reports such a playlist as seekable and as long as the segments
+     * listed now, as it does a short video on demand. False if the playlist can't be read, which leaves VLC to tell.
+     */
+    static boolean isLive(URI uri) {
+        try {
+            Fetched playlist = fetch(uri);
+            if (playlist.text().contains("#EXT-X-STREAM-INF")) {
+                String first = playlist.text().lines().map(String::strip)
+                        .filter(line -> !line.isEmpty() && !line.startsWith("#")).findFirst().orElse(null);
+                if (first == null) {
+                    return false;
+                }
+                playlist = fetch(playlist.from().resolve(first));
+            }
+            return playlist.text().startsWith("#EXTM3U") && !playlist.text().contains("#EXT-X-ENDLIST");
+        } catch (IOException | RuntimeException unread) {
+            return false;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /** A playlist's text, and where it came from once redirects were followed. */
+    private record Fetched(String text, URI from) {
+    }
+
+    /** At most {@link #MAX_PLAYLIST_BYTES} of the playlist at {@code uri}: a link a player wrote may be anything. */
+    private static Fetched fetch(URI uri) throws IOException, InterruptedException {
+        HttpResponse<InputStream> response = NativeMediaResolver.HTTP.send(
+                HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).build(), HttpResponse.BodyHandlers.ofInputStream());
+        try (InputStream body = response.body()) {
+            if (response.statusCode() != 200) {
+                throw new IOException("HTTP " + response.statusCode());
+            }
+            String text = new String(body.readNBytes(MAX_PLAYLIST_BYTES), StandardCharsets.UTF_8);
+            return new Fetched(text.replaceFirst("^\uFEFF", "").stripLeading(), response.uri());
+        }
     }
 
     private static String local(URI server, String origin, Map<String, String> headers) {

@@ -113,10 +113,13 @@ public final class MediaSources {
         };
     }
 
-    private static NativeMediaResolver.Prepared web(URI uri, boolean video, int maxHeight) throws IOException {
+    static NativeMediaResolver.Prepared web(URI uri, boolean video, int maxHeight) throws IOException {
         NativeMediaResolver.Prepared asIs = asIs(uri);
         if (asIs != null) {
-            return asIs;
+            // A live HLS link is told to be live here: VLC took it for a video as long as its playlist, and the
+            // server ended it that far in (see LivePlaylists#isLive).
+            return !asIs.live() && uri.getPath().toLowerCase(Locale.ROOT).endsWith(".m3u8") && LivePlaylists.isLive(uri)
+                    ? new NativeMediaResolver.Prepared(uri, true) : asIs;
         }
         if (video) {
             NativeMediaResolver.Prepared kept = VideoCache.get().lookup(uri, maxHeight);
