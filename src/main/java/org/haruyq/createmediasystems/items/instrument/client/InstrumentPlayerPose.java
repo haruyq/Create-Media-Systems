@@ -39,21 +39,23 @@ final class InstrumentPlayerPose {
                 right = InstrumentModel.point(rig.pick_point()).add(-.012f, .037f * frame.stroke(), .014f);
             }
             case FLUTE -> {
-                Vector3f rest = body.transformPosition(new Vector3f(.115f, .438f, -.270f));
-                transform = wind(rest, headPart, eye, playing, .090f)
-                        .rotateY((-12 - 42 * playing) * DEG)
-                        .rotateZ((157 + 18 * playing) * DEG).rotateX(-.30f)
+                Vector3f rest = body.transformPosition(new Vector3f(.130f, .350f, -.240f));
+                transform = wind(rest, headPart, eye, playing, .105f)
+                        .rotateY((-12 - 31 * playing) * DEG)
+                        .rotateZ((157 + 21 * playing) * DEG).rotateX(-.30f)
+                        .scale(InstrumentModel.WIND_DISPLAY_SCALE)
                         .translate(-rig.embouchure()[0], -rig.embouchure()[1], -rig.embouchure()[2]);
-                // The wrist sits on the lip side of the key group; the palm covers the contact.
-                left = InstrumentModel.point(rig.left_grip()).add(-.025f, 0, 0);
-                right = InstrumentModel.point(rig.right_grip()).add(0, -.006f * frame.control(InstrumentAnimation.Control.RIGHT_MIDDLE), 0);
+                // The left thumb supports the tube. Its wrist sits a palm-width toward the lip plate.
+                left = InstrumentModel.point(rig.left_grip()).add(-.095f, .018f, -.064f);
+                right = InstrumentModel.point(rig.right_grip()).add(0,
+                        .043f - .006f * frame.control(InstrumentAnimation.Control.RIGHT_MIDDLE), -.014f);
             }
             case TRUMPET -> {
                 Vector3f rest = body.transformPosition(new Vector3f(0, .408f, -.254f));
                 transform = wind(rest, headPart, eye, playing, .027f)
                         .rotateY(5 * playing * DEG)
                         .rotateX(PI + (30 - 23 * playing) * DEG)
-                        .scale(InstrumentModel.TRUMPET_DISPLAY_SCALE)
+                        .scale(InstrumentModel.WIND_DISPLAY_SCALE)
                         .translate(-rig.mouth()[0], -rig.mouth()[1], -rig.mouth()[2]);
                 left = InstrumentModel.point(rig.left_grip()).add(0, 0, .012f * frame.control(InstrumentAnimation.Control.THIRD_SLIDE));
                 float valves = frame.control(InstrumentAnimation.Control.VALVE_1)

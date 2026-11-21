@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.items.instrument.client;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.haruyq.createmediasystems.items.instrument.client.InstrumentAnimation.Control.*;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import org.haruyq.createmediasystems.items.instrument.InstrumentKind;
@@ -132,6 +133,35 @@ final class InstrumentModelTest {
                 assertEquals(.369f,pose.hand().distance(pose.elbow()),EPSILON);
             }
         }
+    }
+
+    @Test void enlargedFluteFitsBothHandsAndShowsTheTwoKeyGroupsFromThePlayersEye() throws Exception {
+        var rig = geometry(InstrumentKind.FLUTE).rig();
+        var flute = new InstrumentAnimation(InstrumentKind.FLUTE);
+        flute.engage(true, START);
+        for (long time : new long[]{START, START + 90_000_000, SETTLED}) {
+            var mount = InstrumentPlayerPose.create(InstrumentKind.FLUTE, rig, flute.sample(time), null, null);
+            assertTrue(mount.leftGrip().distance(.375f, .0625f, 0) < .723f);
+            assertTrue(mount.rightGrip().distance(-.375f, .0625f, 0) < .723f);
+        }
+        var eye = new Vector3f(0, -.19f, 0);
+        var playing = InstrumentPlayerPose.create(InstrumentKind.FLUTE, rig, flute.sample(SETTLED), null, null, eye);
+        assertEquals(0, playing.at(rig.embouchure()).distance(new Vector3f(eye).add(0, .093f, -.105f)), EPSILON);
+        assertTrue(playing.leftGrip().distance(playing.at(rig.contacts().get("left_thumb"))) < .125f);
+        assertTrue(playing.rightGrip().distance(playing.at(rig.contacts().get("right_middle"))) < .085f);
+        var left = playing.at(rig.contacts().get("left_index")).sub(eye);
+        var right = playing.at(rig.contacts().get("right_middle")).sub(eye);
+        assertTrue(right.x / right.z - left.x / left.z > .08f, "The key groups are foreshortened into one spot");
+
+        var crown = new float[]{-.07823f, 0, 0};
+        var foot = new float[]{crown[0] + rig.length(), 0, 0};
+        var item = new PoseStack();
+        InstrumentModel.centerItem(item, InstrumentKind.FLUTE);
+        var itemCrown = item.last().pose().transformPosition(InstrumentModel.point(crown));
+        var itemFoot = item.last().pose().transformPosition(InstrumentModel.point(foot));
+        assertEquals(.945f, playing.at(crown).distance(playing.at(foot)), EPSILON);
+        assertEquals(.945f, itemCrown.distance(itemFoot), EPSILON);
+        assertEquals(0, (itemCrown.x + itemFoot.x) / 2, .002f);
     }
 
     @Test void theTrumpetGrowsAboutItsMouthpieceAndTheBellReadsFromThePlayersEye() throws Exception {

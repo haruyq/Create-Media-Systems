@@ -21,8 +21,8 @@ import org.joml.Vector3f;
 
 /** Reference meshes use metres and Y up. Instrument rigs keep each moving part separate. */
 public final class InstrumentModel {
-    // A Minecraft player's hand is four model pixels wide. Scale the trumpet as one piece, including its grips.
-    static final float TRUMPET_DISPLAY_SCALE = 1.4f;
+    // Size the wind instruments against the player's four-pixel palm, including their keys and grips.
+    static final float WIND_DISPLAY_SCALE = 1.4f;
     public record Rig(float scale, float nut_width, float radius, int frets, List<StringSpec> strings,
                       float[] bridge_pivot, float[][] strap_pins, float[] pick_point,
                       float length, float[] embouchure, float[] left_grip, float[] right_grip,
@@ -131,9 +131,12 @@ public final class InstrumentModel {
     static void centerItem(PoseStack pose, InstrumentKind kind) {
         switch (kind) {
             case STRATOCASTER -> pose.translate(-.337, 0, -.006);
-            case FLUTE -> pose.translate(-.220, -.003, -.003);
+            case FLUTE -> {
+                pose.scale(WIND_DISPLAY_SCALE, WIND_DISPLAY_SCALE, WIND_DISPLAY_SCALE);
+                pose.translate(-.259, .002, 0);
+            }
             case TRUMPET -> {
-                pose.scale(TRUMPET_DISPLAY_SCALE, TRUMPET_DISPLAY_SCALE, TRUMPET_DISPLAY_SCALE);
+                pose.scale(WIND_DISPLAY_SCALE, WIND_DISPLAY_SCALE, WIND_DISPLAY_SCALE);
                 pose.mulPose(Axis.YP.rotationDegrees(90));
                 pose.translate(0, .012, -.270);
             }
