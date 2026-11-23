@@ -58,7 +58,8 @@ public final class DjRenderer implements BlockEntityRenderer<DdjFlx4Block.Entity
      * The picture of its top (tools/ddj_flx4/gen_top.py draws it from Control's places), at each size it is drawn
      * from: all of the top with no lamp lit in its upper half, and
      * with every lamp lit in its lower. Smoothed between its texels, which entityCutoutNoCull's are not; it has no
-     * mipmaps, so the size nearest to how wide the controller is seen is drawn from.
+     * mipmaps, so the smallest size still at least 1.5 times as wide as the controller is seen is drawn from (a size
+     * too small is blurred; a size too large only shimmers a little).
      */
     private static final int[] PRINT_WIDTHS = {2048, 1024, 512, 256, 128};
     private static final RenderType[] PRINTS = new RenderType[PRINT_WIDTHS.length];
@@ -92,9 +93,9 @@ public final class DjRenderer implements BlockEntityRenderer<DdjFlx4Block.Entity
         BlockPos pos = controller.getBlockPos();
         Minecraft client = Minecraft.getInstance();
         double away = Math.sqrt(client.gameRenderer.getMainCamera().getPosition()
-                .distanceToSqr(SableCompat.toRenderWorld(controller.getLevel(), pos, Vec3.atCenterOf(pos))));
-        // It is a block wide: how wide that is seen from where the camera is. In a Ponder scene or on a contraption the
-        // camera's place says nothing of that: there it is drawn as from a few blocks off.
+                .distanceToSqr(SableCompat.toRenderWorld(controller.getLevel(), pos, Vec3.atBottomCenterOf(pos).add(0, DdjFlx4Block.HEIGHT / 16, 0))));
+        // It is a block wide, lying flat on its block's floor (not at the block's middle): how wide that is seen from
+        // where the camera is. In a Ponder scene or on a contraption the camera's place says nothing of that: there it is drawn as from a few blocks off.
         float wide = controller.getLevel() != client.level ? FINE : (float) (client.getWindow().getHeight()
                 / (2 * Math.max(away, .1) * Math.tan(Math.toRadians(client.options.fov().get() / 2.0))));
         View view = DjClient.view(controller);
@@ -135,7 +136,7 @@ public final class DjRenderer implements BlockEntityRenderer<DdjFlx4Block.Entity
     static void draw(View view, PoseStack pose, MultiBufferSource buffers, int light, float wide, int hovered) {
         DjState state = view.state();
         int level = PRINTS.length - 1;
-        while (level > 0 && PRINT_WIDTHS[level] * 1.3f < wide) {
+        while (level > 0 && PRINT_WIDTHS[level] < wide * 1.5f) {
             level--;
         }
         pose.pushPose();
