@@ -51,6 +51,11 @@ public final class MidiPort implements AutoCloseable {
         this.wanted = wanted;
     }
 
+    /** Runs {@code task} on the one thread that works MIDI devices: javax.sound.midi lists and opens them unsafely from two. */
+    public static void onDevices(Runnable task) {
+        DEVICES.execute(task);
+    }
+
     public Status status() { return status; }
     public String preference() { return requested; }
 

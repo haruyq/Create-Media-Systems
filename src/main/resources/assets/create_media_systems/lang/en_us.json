@@ -988,5 +988,19 @@
   "wearable.amp.distortion": "Distortion",
   "wearable.amp.drive": "Drive %s",
   "wearable.melodica.air": "Breath %s%%",
-  "wearable.melodica.blow": "Space to blow"
+  "wearable.melodica.blow": "Space to blow",
+  "block.create_media_systems.ddj_flx4": "PIONEAR DJ DDJ-FLX4",
+  "create_media_systems.ddj_flx4.host": "Host",
+  "create_media_systems.ddj_flx4.stop": "Stop Hosting",
+  "create_media_systems.ddj_flx4.free": "No host",
+  "create_media_systems.ddj_flx4.controller": "DDJ-FLX4",
+  "create_media_systems.ddj_flx4.rekordbox": "rekordbox",
+  "create_media_systems.ddj_flx4.sound": "Sound",
+  "create_media_systems.ddj_flx4.on": "Connected",
+  "create_media_systems.ddj_flx4.off": "Not connected",
+  "create_media_systems.ponder.ddj_flx4.header": "The PIONEAR DJ DDJ-FLX4",
+  "create_media_systems.ponder.ddj_flx4.text_1": "Right-click it to open its screen. Press Host there and it becomes yours: it then stands as the DDJ-FLX4 plugged into your computer does, and follows the rekordbox 7 running there.",
+  "create_media_systems.ponder.ddj_flx4.text_2": "A Monitor beside it or on top of it shows the two decks as rekordbox does: their waveforms, where each is in its track, and its tempo.",
+  "create_media_systems.ponder.ddj_flx4.text_3": "Link speakers to it as to any player. They play what your rekordbox plays to everyone near, sent directly from your computer.",
+  "create_media_systems.ponder.ddj_flx4.text_4": "Anyone near can work its controls on its screen, all but the jog wheels. That reaches your rekordbox through a virtual MIDI port, once rekordbox's MIDI settings have imported for that port the mapping written into the game's create_media_systems folder. A control your own DDJ-FLX4 has just moved stays as that set it."
 }

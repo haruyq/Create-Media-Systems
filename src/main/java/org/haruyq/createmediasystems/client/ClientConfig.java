@@ -49,6 +49,12 @@ public final class ClientConfig {
     public static final ModConfigSpec.ConfigValue<String> SCREEN_AUDIO_PATH = BUILDER
             .comment("cms-screen-audio.exe, which takes the sound a screen share sends (an app's or the PC's on Windows 11, a microphone's on any Windows). Empty uses the one bundled with the mod; a path overrides it.")
             .define("screenAudioPath", "");
+    public static final ModConfigSpec.ConfigValue<String> DJ_MIDI_OUT = BUILDER
+            .comment("The MIDI output a DDJ-FLX4 you host sends its in-game controls to, as a part of its name: a virtual port (loopMIDI) that your rekordbox has mapped as a controller. Empty sends them nowhere.")
+            .define("djMidiOut", "loopMIDI");
+    public static final ModConfigSpec.ConfigValue<String> DJ_SOUND_DEVICE = BUILDER
+            .comment("Where a DDJ-FLX4 you host takes its sound from. Empty takes what rekordbox itself plays (Windows 11); the id of a capture device, as 'cms-screen-audio.exe list' prints it, takes that device instead, for a rekordbox whose sound the first way does not reach.")
+            .define("djSoundDevice", "");
 
     private ClientConfig() {
     }
