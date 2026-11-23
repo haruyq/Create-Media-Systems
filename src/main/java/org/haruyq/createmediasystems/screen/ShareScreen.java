@@ -380,6 +380,9 @@ public final class ShareScreen extends Screen {
                     done.complete(image);
                 } catch (Exception failed) {
                     done.complete(null);
+                } finally {
+                    // The callback owns the frame: unreleased, each picture of the window or screen stays in memory.
+                    frame.release();
                 }
             });
             capturer.captureFrame();

@@ -972,7 +972,15 @@ public final class Transport implements AutoCloseable {
                     }
                     MediaStreamTrack track = transceiver.getReceiver().getTrack();
                     if (track instanceof VideoTrack video) {
-                        video.addSink(frame -> pictures.forEach(sink -> sink.onVideoFrame(frame)));
+                        // The sink owns each frame WebRTC hands it, a native copy (w*h*1.5 bytes) that GC never
+                        // frees; what watches only reads it during the call (see VideoFrame#put).
+                        video.addSink(frame -> {
+                            try {
+                                pictures.forEach(sink -> sink.onVideoFrame(frame));
+                            } finally {
+                                frame.release();
+                            }
+                        });
                     } else if (track instanceof AudioTrack sound) {
                         sound.addSink((data, bits, rate, channels, frames) ->
                                 sounds.forEach(sink -> sink.onData(data, bits, rate, channels, frames)));
