@@ -50,6 +50,7 @@ class BlockResourcesTest {
             Map.entry("broadcast_digital_horn", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_horn", new Row(Tool.PICKAXE, false, true)),
             Map.entry("broadcast_mast", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("ddj_flx4", new Row(Tool.PICKAXE, false, true)),
             Map.entry("disc_cell_charger", new Row(Tool.PICKAXE, true, true)),
             Map.entry("disc_drive_emulator", new Row(Tool.PICKAXE, false, true)),
             Map.entry("disc_reader", new Row(Tool.AXE, false, true)),

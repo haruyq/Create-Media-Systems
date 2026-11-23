@@ -6,6 +6,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.audio.AudioClient;
 import org.haruyq.createmediasystems.blocks.broadcast.client.BroadcastClient;
 import org.haruyq.createmediasystems.blocks.boombox.zsrs81bt.client.BoomboxClient;
+import org.haruyq.createmediasystems.blocks.dj.ddjflx4.client.DjClient;
 import org.haruyq.createmediasystems.blocks.radio.client.RadioClient;
 import org.haruyq.createmediasystems.blocks.radio.client.RadioPonder;
 import org.haruyq.createmediasystems.items.walkman.nws310.client.LoudmanClient;
@@ -75,7 +76,7 @@ public final class CreateMediaSystemsClient {
             StageCustomClient::register,
             ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register),
             ClientFeature.withPonder(RadioClient::register, RadioPonder::register), LoudmanClient::register,
-            new BoomboxClient());
+            new BoomboxClient(), new DjClient());
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

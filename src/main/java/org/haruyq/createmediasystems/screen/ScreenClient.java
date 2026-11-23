@@ -53,6 +53,10 @@ public final class ScreenClient {
             if (own != null && own.url.equals(url)) {
                 return own;
             }
+            SoundShare sound = SoundShare.current();
+            if (sound != null && sound.url.equals(url)) {
+                return sound;
+            }
             throw new IOException("This screen share has ended");
         }
         Transport session = DiscClient.join(url.owner());

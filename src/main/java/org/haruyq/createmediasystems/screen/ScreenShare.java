@@ -190,6 +190,7 @@ public final class ScreenShare implements ScreenPlayer.Feed {
      */
     static ScreenShare start(UUID owner, Settings settings) throws IOException {
         stopCurrent();
+        SoundShare.stopCurrent();
         ScreenShare share;
         try {
             share = new ScreenShare(owner, settings);

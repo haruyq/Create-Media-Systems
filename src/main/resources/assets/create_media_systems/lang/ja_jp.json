@@ -988,5 +988,19 @@
   "wearable.amp.distortion": "ディストーション",
   "wearable.amp.drive": "歪み %s",
   "wearable.melodica.air": "ブレス %s%%",
-  "wearable.melodica.blow": "Space で息を吹く"
+  "wearable.melodica.blow": "Space で息を吹く",
+  "block.create_media_systems.ddj_flx4": "PIONEAR DJ DDJ-FLX4",
+  "create_media_systems.ddj_flx4.host": "ホストする",
+  "create_media_systems.ddj_flx4.stop": "ホストをやめる",
+  "create_media_systems.ddj_flx4.free": "使用者なし",
+  "create_media_systems.ddj_flx4.controller": "DDJ-FLX4",
+  "create_media_systems.ddj_flx4.rekordbox": "rekordbox",
+  "create_media_systems.ddj_flx4.sound": "音声",
+  "create_media_systems.ddj_flx4.on": "接続中",
+  "create_media_systems.ddj_flx4.off": "未接続",
+  "create_media_systems.ponder.ddj_flx4.header": "PIONEAR DJ DDJ-FLX4",
+  "create_media_systems.ponder.ddj_flx4.text_1": "右クリックすると操作画面が開きます。そこで「ホストする」を押すと、このコントローラーが自分のものになります。以後は自分のコンピューターに繋いだDDJ-FLX4と同じ状態になり、そこで動いているrekordbox 7の再生状況を映します。",
+  "create_media_systems.ponder.ddj_flx4.text_2": "隣か上に置いたモニターには、2つのデッキがrekordboxと同じ配置で映ります。波形、曲の中の再生位置、テンポが分かります。",
+  "create_media_systems.ponder.ddj_flx4.text_3": "スピーカーは、ほかのプレーヤーと同じ方法でリンクします。リンクしたスピーカーは、自分のrekordboxが鳴らしている音を近くの全員に再生します。音は自分のコンピューターから直接送られます。",
+  "create_media_systems.ponder.ddj_flx4.text_4": "近くにいる人は誰でも、操作画面でジョグ以外のつまみやボタンを操作できます。その操作は仮想MIDIポートを通って自分のrekordboxに届きます。届くようにするには、ゲームのcreate_media_systemsフォルダーに作られる割り当てファイルを、rekordboxのMIDI設定でそのポートに取り込みます。自分のDDJ-FLX4で動かしたばかりのつまみやボタンは、実機の入力が優先されます。"
 }
