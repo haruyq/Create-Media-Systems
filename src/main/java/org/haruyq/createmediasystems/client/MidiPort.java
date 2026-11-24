@@ -44,12 +44,12 @@ public final class MidiPort implements AutoCloseable {
     private Transmitter transmitter;
     private String connected = "";
 
-    /** An instrument's: the input midiDevice names, or with none picked the first there is. */
+    /** An instrument's: the input midiDevice names, or the first there is while none is picked or it is unplugged. */
     public MidiPort(Consumer<ShortMessage> receive, Runnable disconnected) {
         this(ClientConfig.MIDI_DEVICE.get().isEmpty() ? null : ClientConfig.MIDI_DEVICE.get(), receive, disconnected, input -> true);
     }
 
-    /** With no {@code preferred} input, takes the first that {@code wanted} accepts, waiting for one if there is none. */
+    /** Takes {@code preferred}, or while there is none or it is unplugged the first that {@code wanted} accepts, waiting for one if there is none. */
     public MidiPort(String preferred, Consumer<ShortMessage> receive, Runnable disconnected, Predicate<Input> wanted) {
         requested = preferred;
         this.receive = receive;
@@ -100,6 +100,13 @@ public final class MidiPort implements AutoCloseable {
         return choices.get((choices.indexOf(picked) + 1) % choices.size());
     }
 
+    /** The input to open for {@code picked}: the one it names, or while that is unplugged the first {@code wanted}; none for off. */
+    static Input choose(List<Input> inputs, String picked, Predicate<Input> wanted) {
+        if (OFF.equals(picked)) return null;
+        return inputs.stream().filter(input -> picks(picked, input)).findFirst()
+                .or(() -> inputs.stream().filter(wanted).findFirst()).orElse(null);
+    }
+
     /** Whether {@code picked} names {@code input}: by its id, or as midiDevice once did, by a part of its name. */
     public static boolean picks(String picked, Input input) {
         return input.id().equals(picked) || !picked.isEmpty() && !picked.equals(OFF) && picked.indexOf('|') < 0
@@ -112,16 +119,15 @@ public final class MidiPort implements AutoCloseable {
             try {
                 if (closed) return;
                 var inputs = inputs();
-                if (requested == null) inputs.stream().filter(wanted).findFirst().ifPresent(input -> requested = input.id());
                 String chosen = requested == null ? "" : requested;
-                var selected = inputs.stream().filter(input -> picks(chosen, input)).findFirst().orElse(null);
+                var selected = choose(inputs, chosen, wanted);
                 if (selected == null) {
                     disconnect();
-                    status = new Status(inputs, chosen, OFF.equals(requested) ? "keyboard.midi_none" : "keyboard.midi_missing");
+                    status = new Status(inputs, chosen, OFF.equals(chosen) ? "keyboard.midi_none" : "keyboard.midi_missing");
                     return;
                 }
+                // The input actually open, which the label names; requested stays, for when the picked one is plugged in.
                 String id = selected.id();
-                if (!id.equals(chosen)) requested = id;
                 if (id.equals(connected) && device != null && device.isOpen()) {
                     status = new Status(inputs, id, "keyboard.midi_connected");
                     return;

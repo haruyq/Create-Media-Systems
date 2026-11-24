@@ -51,7 +51,7 @@ final class MidiInput {
         return status;
     }
 
-    /** Opens the inputs for {@code controller}, closing those open for another; {@code picked} names the one to take, empty for all. */
+    /** Opens the inputs for {@code controller}, closing those open for another; {@code picked} names the one to take, empty (or unplugged) for all. */
     static void open(Controller controller, String picked) {
         status = new MidiPort.Status(status.inputs(), picked, "keyboard.midi_scanning");
         MidiPort.onDevices(() -> {
@@ -65,8 +65,10 @@ final class MidiInput {
                 LogUtils.getLogger().info("MIDI inputs can't be listed: {}", broken.getMessage());
             }
             boolean failed = false;
+            boolean all = picked.isEmpty()
+                    || !MidiPort.OFF.equals(picked) && inputs.stream().noneMatch(input -> MidiPort.picks(picked, input));
             for (MidiPort.Input input : inputs) {
-                if (!picked.isEmpty() && !MidiPort.picks(picked, input)) {
+                if (!all && !MidiPort.picks(picked, input)) {
                     continue;
                 }
                 try {
@@ -79,7 +81,7 @@ final class MidiInput {
                     LogUtils.getLogger().info("MIDI input {} can't be opened: {}", input.name(), busy.getMessage());
                 }
             }
-            status = new MidiPort.Status(inputs, picked, !OPEN.isEmpty() ? "keyboard.midi_connected" : failed ? "keyboard.midi_error"
+            status = new MidiPort.Status(inputs, all ? "" : picked, !OPEN.isEmpty() ? "keyboard.midi_connected" : failed ? "keyboard.midi_error"
                     : MidiPort.OFF.equals(picked) ? "keyboard.midi_none" : "keyboard.midi_missing");
         });
     }

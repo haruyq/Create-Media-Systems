@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -22,6 +23,17 @@ class MidiPortTest {
         assertEquals(A.id(), MidiPort.next(inputs, "", true));
         assertEquals("", MidiPort.next(inputs, MidiPort.OFF, true));
         assertEquals(A.id(), MidiPort.next(inputs, "gone|x|y|0", false));
+    }
+
+    @Test
+    void choosesThePickedInputOrTheFirstWhileItIsUnplugged() {
+        var inputs = List.of(A, B);
+        assertEquals(B, MidiPort.choose(inputs, B.id(), input -> true));
+        assertEquals(A, MidiPort.choose(inputs, "gone|x|y|0", input -> true));
+        assertEquals(A, MidiPort.choose(inputs, "", input -> true));
+        assertEquals(B, MidiPort.choose(inputs, "", input -> input == B));
+        assertNull(MidiPort.choose(inputs, MidiPort.OFF, input -> true));
+        assertNull(MidiPort.choose(List.of(), B.id(), input -> true));
     }
 
     @Test
