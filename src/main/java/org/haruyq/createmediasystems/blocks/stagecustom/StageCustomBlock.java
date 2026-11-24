@@ -54,7 +54,7 @@ import org.jetbrains.annotations.Nullable;
 public final class StageCustomBlock extends Block implements EntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public static final EnumProperty<Part> PART = EnumProperty.create("part", Part.class);
-    static final BooleanProperty LARGE = BooleanProperty.create("large");
+    public static final BooleanProperty LARGE = BooleanProperty.create("large");
     private static final float LARGE_SCALE = 1.5f;
     private static final Set<Part> ORIGINAL_PARTS = Set.of(Part.ROOT, Part.LEFT, Part.LEFT_REAR);
     private static final Set<Part> COMPLETE_ORIGINAL_PARTS = Set.of(Part.ROOT, Part.LEFT, Part.LEFT_REAR,
