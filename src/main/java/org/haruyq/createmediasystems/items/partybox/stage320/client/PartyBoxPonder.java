@@ -181,6 +181,6 @@ public final class PartyBoxPonder {
         scene.world().createEntity(level -> box(level, floor));
         scene.idle(15);
         scene.overlay().showControls(body, Pointing.DOWN, 40).rightClick().withItem(cell(BatteryItem.CAPACITY));
-        say(scene, 140, body, "The battery goes into the SBL PartyBox Stage 320 and the SBL Megaphone 30. Right-clicking the Hayacio PX-S1100WE MIDI Keyboard or a Broadcast Power Base with it moves as much of its charge into them as they have room for.");
+        say(scene, 140, body, "The battery goes into the SBL PartyBox Stage 320 and the SBL Megaphone 30. Right-clicking the Hayacio PX-S1100WE Digital Piano or a Broadcast Power Base with it moves as much of its charge into them as they have room for.");
     }
 }
