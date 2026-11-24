@@ -192,6 +192,7 @@ final class StageCustomMidiScreen extends Screen {
         if (index < 0 || minecraft.player == null
                 || StageCustomMidi.reachable(minecraft.player, kit.getBlockPos()) != kit) return;
         impacts[index] = System.nanoTime();
+        StageCustomMidi.strike(minecraft.player, hit);
         PacketDistributor.sendToServer(hit);
     }
 }

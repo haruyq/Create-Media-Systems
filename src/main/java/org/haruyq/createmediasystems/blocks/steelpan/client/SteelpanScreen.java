@@ -169,6 +169,7 @@ final class SteelpanScreen extends Screen {
     }
 
     private void play(int midi, int velocity) {
+        if (minecraft != null && minecraft.player != null) SteelpanPackets.playLocally(minecraft.player, target, midi, velocity);
         PacketDistributor.sendToServer(new SteelpanPackets.Play(target, midi, velocity));
     }
 

@@ -22,9 +22,11 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import org.haruyq.createmediasystems.OwnNotes;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanBlock;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanFeature;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets;
+import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets.Play;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets.Target;
 import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.WorldEvents;
@@ -32,6 +34,7 @@ import org.jetbrains.annotations.Nullable;
 
 public final class SteelpanClient implements SteelpanPackets.Client {
     private static final Map<SteelpanBlock.Entity, SteelpanState> STATES = new WeakHashMap<>();
+    private static final OwnNotes OWN = new OwnNotes();
 
     private SteelpanClient() {}
 
@@ -67,15 +70,32 @@ public final class SteelpanClient implements SteelpanPackets.Client {
 
     @Override
     public void strike(SteelpanPackets.Strike strike) {
+        if (!OWN.echo(new Play(strike.target(), strike.midi(), strike.velocity()), System.nanoTime())) play(strike, false);
+    }
+
+    @Override
+    public void played(Target target, int midi, int velocity) {
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;
+        var pan = instrument(mc.level, target);
+        boolean left = pan == null || state(pan).freeHand() == 0;
+        if (play(new SteelpanPackets.Strike(target, midi, velocity, left), true)) {
+            OWN.add(new Play(target, midi, velocity), System.nanoTime());
+        }
+    }
+
+    private static boolean play(SteelpanPackets.Strike strike, boolean own) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null) return false;
         var pan = instrument(mc.level, strike.target());
-        if (pan == null && strike.target().origin(mc.level, 1) == null) return;
-        long now = System.nanoTime();
-        long impact = pan == null ? now + SteelpanState.PREPARE
-                : state(pan).schedule(strike.midi(), strike.velocity() / 127f, strike.left() ? 0 : 1, now);
+        if (pan == null && strike.target().origin(mc.level, 1) == null) return false;
+        // Others' strikes land PREPARE late so their mallet visibly reaches the field; the striker's own sounds now.
+        long from = System.nanoTime() - (own ? SteelpanState.PREPARE : 0);
+        long impact = pan == null ? from + SteelpanState.PREPARE
+                : state(pan).schedule(strike.midi(), strike.velocity() / 127f, strike.left() ? 0 : 1, from);
         SteelpanAudio.strike(strike.target(), strike.midi(), strike.velocity(), impact);
         if (mc.screen instanceof SteelpanScreen screen) screen.strike(strike, impact);
+        return true;
     }
 
     @Nullable

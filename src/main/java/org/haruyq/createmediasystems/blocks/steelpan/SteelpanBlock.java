@@ -63,7 +63,10 @@ public final class SteelpanBlock extends Block implements EntityBlock {
         Vec3 direction = hitInPlot.subtract(localEye).normalize();
         int midi = rayNote(localEye.subtract(Vec3.atBottomCenterOf(pos)), direction, state.getValue(FACING));
         if (midi < 0) return InteractionResult.PASS;
-        if (!level.isClientSide && SteelpanPackets.canPlay(player, target)) pan.strike(midi, 100);
+        if (SteelpanPackets.canPlay(player, target)) {
+            if (level.isClientSide) SteelpanPackets.played(target, midi, 100);
+            else pan.strike(midi, 100);
+        }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
