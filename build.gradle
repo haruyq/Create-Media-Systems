@@ -12,7 +12,6 @@ base {
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-sourceSets.main.java.srcDir('third_party/gervill/java')
 
 // The -P switches: each adds optional game tests (see "Game tests" below).
 def flag = { String name -> providers.gradleProperty(name).isPresent() }
