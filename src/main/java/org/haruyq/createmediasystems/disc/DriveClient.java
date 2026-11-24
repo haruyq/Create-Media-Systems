@@ -293,7 +293,7 @@ public final class DriveClient {
         List<DriveEmulatorBlock.Viewer> viewers = transport.links().stream().limit(64)
                 .map(link -> new DriveEmulatorBlock.Viewer(link.peer(), link.open() && link.measured(),
                         (int) Math.max(0, link.rttNanos() / 1_000_000), (int) (link.bps() / 1000))).toList();
-        PacketDistributor.sendToServer(new DriveEmulatorBlock.Viewers(block, viewers));
+        PacketDistributor.sendToServer(new DriveEmulatorBlock.Viewers(DriveEmulatorBlock.Viewers.TYPE, block, viewers));
     }
 
     /**

@@ -44,4 +44,29 @@ public interface DiscDrive {
         }
         return null;
     }
+
+    /** Whether something beside the drive at {@code pos} plays discs of {@code kind}. */
+    static boolean feeds(@Nullable BlockGetter level, BlockPos pos, DiscKind kind) {
+        if (level != null) {
+            for (Direction side : Direction.values()) {
+                if (level.getBlockEntity(pos.relative(side)) instanceof Fed fed && fed.plays(kind)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Tells what is beside the drive at {@code pos} that it changed ({@code by} changed it), or only relinked. */
+    static void changed(BlockGetter level, BlockPos pos, @Nullable Player by, boolean relinked) {
+        for (Direction side : Direction.values()) {
+            if (level.getBlockEntity(pos.relative(side)) instanceof Fed fed) {
+                if (relinked) {
+                    fed.driveRelinked(by);
+                } else {
+                    fed.driveChanged(by);
+                }
+            }
+        }
+    }
 }
