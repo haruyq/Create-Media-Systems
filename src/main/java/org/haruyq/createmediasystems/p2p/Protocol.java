@@ -14,10 +14,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-/**
- * Direct P2P's protocol with the API (see P2p): its addresses, and the ticket it gives each peer. Free of Minecraft
- * classes, as Transport is, so the standalone test app (tools/p2p-test) builds them as they are.
- */
+/** Direct P2P's protocol with the API (see P2p): its addresses, and the ticket it gives each peer. */
 public final class Protocol {
     public static final int VERSION = 1;
     /** Most a connection is taken to carry, in bit/s: 100 Gbps. */
