@@ -22,12 +22,19 @@ import net.minecraft.client.sounds.AudioStream;
  */
 public final class ScreenPlayer implements NativeAudio.Backend {
     /**
-     * How long after it comes in a sample is heard: the sound engine plays what a stream reads that long later (see
-     * VlcAudio#read). The host holds its video back as long, so picture and sound play together.
+     * How long after it comes in a sample is heard. A stream reads 100 ms at a time about 300 ms ahead of what it plays
+     * (see VlcAudio#read), plus the device's latency: at 450 ms the newest sample was only about 10 ms ahead of what a
+     * read wanted, so any hitch left the rest of that read silent, at a different moment on each of a stereo pair's
+     * streams, and the sound flicked between the left and right speakers. The host holds its video back as long, so
+     * picture and sound play together.
      */
-    public static final long SOUND_DELAY_MICROS = 450_000;
-    /** A sound this far off its run (a stall, the host restarting it) starts a new one where it now is due. */
-    private static final long RESYNC_MICROS = 120_000;
+    public static final long SOUND_DELAY_MICROS = 700_000;
+    /**
+     * A sound this far off its run (the host restarting it, a stall longer than the margin above) starts a new one where
+     * it now is due. Samples that come in late by less still play on time; a new run at each hitch of about 150 ms in
+     * WebRTC handing the sound over (one every 30 s or so on a 1080p60 share) left that long a silence.
+     */
+    private static final long RESYNC_MICROS = 200_000;
 
     /** A share as this client gets it: from its host's P2P session, or the capture itself on the host. */
     public interface Feed {
