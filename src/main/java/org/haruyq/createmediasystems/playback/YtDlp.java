@@ -289,7 +289,7 @@ public final class YtDlp {
     }
 
     /**
-     * A track in the API's shape (see API.md's /resolve), which NativeMediaResolver plays; only the origin headers
+     * A track in the API's shape (see CMS-API's /resolve), which NativeMediaResolver plays; only the origin headers
      * VLC can send (User-Agent, Referer) are kept.
      */
     private static JsonObject track(JsonObject format, String kind) {

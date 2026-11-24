@@ -285,7 +285,7 @@ public final class Transport implements AutoCloseable {
                 + "/webrtc-java-" + WEBRTC_VERSION + "-" + platform + ".jar");
         LOGGER.info("Downloading native WebRTC from {}", uri);
         var jar = new java.io.ByteArrayOutputStream();
-        Downloads.verified(P2p.HTTP, uri, jar, NATIVES.get(platform), 128 * 1024 * 1024, Duration.ofMinutes(5), "Native WebRTC", null);
+        Downloads.verified(P2p.HTTP, uri, jar, NATIVES.get(platform), 128 * 1024 * 1024, Duration.ofMinutes(30), "Native WebRTC", null);
         return jar.toByteArray();
     }
 

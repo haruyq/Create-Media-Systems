@@ -18,7 +18,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
 /**
- * The pages the API's extension plays (GET /extension/patterns, see API.md). They play through the API's relay
+ * The pages the API's extension plays (GET /extension/patterns, see the CMS-API README). They play through the API's relay
  * (/video, /stream) instead of on this computer; the mod itself knows no such site.
  */
 final class ExtensionUrls {

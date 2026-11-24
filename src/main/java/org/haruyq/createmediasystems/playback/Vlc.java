@@ -149,7 +149,7 @@ final class Vlc {
         String url = "https://download.videolan.org/pub/videolan/vlc/" + VERSION + "/win64/vlc-" + VERSION + "-win64.zip";
         LogUtils.getLogger().info("Downloading VLC {} into {}", VERSION, dir);
         var bytes = new ByteArrayOutputStream();
-        Downloads.verified(NativeMediaResolver.HTTP, URI.create(url), bytes, SHA256, 256 * 1024 * 1024, Duration.ofMinutes(10), "VLC", null);
+        Downloads.verified(NativeMediaResolver.HTTP, URI.create(url), bytes, SHA256, 256 * 1024 * 1024, Duration.ofMinutes(30), "VLC", null);
         String root = "vlc-" + VERSION + "/";
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
             for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {

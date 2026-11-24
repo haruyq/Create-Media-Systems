@@ -40,7 +40,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Plays a {@link StreamSpec}: on the native player (see NativeAudio), or as the API's {@code /stream} response (raw
- * PCM s16le, 48 kHz, mono, or that as Ogg Vorbis; see API.md), streamed.
+ * PCM s16le, 48 kHz, mono, or that as Ogg Vorbis; see CMS-API), streamed.
  */
 public final class StreamSound extends AbstractTickableSoundInstance {
     // The engine queues 4 one-second buffers on start, from its own thread; have them ready.
@@ -56,7 +56,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private static final int CHANNEL_RETRY_TICKS = 20;
     /**
      * What the server waits for its listeners to load a track (see Streams#MAX_LOAD_TICKS): the API may first wait out
-     * YouTube's pre-roll ad before the audio exists (see API.md).
+     * YouTube's pre-roll ad before the audio exists (see CMS-API).
      */
     private static final Duration REQUEST_TIMEOUT =
             Duration.ofNanos(Streams.MAX_LOAD_TICKS * PlaybackClock.NANOS_PER_TICK);
