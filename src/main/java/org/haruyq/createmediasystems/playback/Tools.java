@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.haruyq.createmediasystems.Downloads;
 import org.haruyq.createmediasystems.client.ClientFiles;
 
 import org.jetbrains.annotations.Nullable;
@@ -196,7 +197,7 @@ final class Tools {
             case PER_ASSET -> sumFor(new String(download(base + asset + ".sha256sum"), StandardCharsets.UTF_8), null);
             case NONE -> null;
         };
-        if (expected != null && !expected.equalsIgnoreCase(AudioCache.sha256(bytes))) {
+        if (expected != null && !expected.equalsIgnoreCase(Downloads.sha256(bytes))) {
             throw new IOException(asset + " does not match its release's SHA-256");
         }
         Path temp = Files.createTempFile(DIR, name, ".part");

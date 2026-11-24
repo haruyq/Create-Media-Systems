@@ -11,12 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import org.haruyq.createmediasystems.Downloads;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFiles;
 import org.haruyq.createmediasystems.stream.ProviderUrls;
@@ -198,14 +196,6 @@ final class AudioCache {
 
     /** The file name for {@code source}: its hash, so no URL lands on disk. */
     static String name(URI source) {
-        return sha256(source.toString().getBytes(StandardCharsets.UTF_8));
-    }
-
-    static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
-        }
+        return Downloads.sha256(source.toString().getBytes(StandardCharsets.UTF_8));
     }
 }

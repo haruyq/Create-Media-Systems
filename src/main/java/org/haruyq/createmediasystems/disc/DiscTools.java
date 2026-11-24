@@ -1,27 +1,21 @@
 package org.haruyq.createmediasystems.disc;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipFile;
+
+import org.haruyq.createmediasystems.Downloads;
 
 import com.sun.jna.Platform;
 
@@ -146,52 +140,9 @@ public final class DiscTools {
 
     private static void download(URI uri, Path target, String checksum) throws IOException {
         try (HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
-                .followRedirects(HttpClient.Redirect.NORMAL).build()) {
-            var response = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(30)).build(), HttpResponse.BodyHandlers.ofInputStream());
-            try (InputStream input = response.body(); var worker = Executors.newVirtualThreadPerTaskExecutor()) {
-                try {
-                    if (response.statusCode() != 200 || response.headers().firstValueAsLong("Content-Length").orElse(0) > MAX_DOWNLOAD) {
-                        throw new IOException("FFmpeg download failed (HTTP " + response.statusCode() + "); retry /cms disc load");
-                    }
-                    var copy = worker.submit(() -> {
-                        MessageDigest hash = digest();
-                        try (var output = Files.newOutputStream(target)) {
-                            byte[] buffer = new byte[64 * 1024];
-                            long total = 0;
-                            for (int read; (read = input.read(buffer)) != -1;) {
-                                checkInterrupted();
-                                if ((total += read) > MAX_DOWNLOAD) {
-                                    throw new IOException("FFmpeg download exceeded its size limit");
-                                }
-                                hash.update(buffer, 0, read);
-                                output.write(buffer, 0, read);
-                            }
-                        }
-                        return HexFormat.of().formatHex(hash.digest());
-                    });
-                    if (!checksum.equals(copy.get(5, TimeUnit.MINUTES))) {
-                        throw new IOException("FFmpeg download failed SHA-256 verification; retry /cms disc load");
-                    }
-                } catch (java.util.concurrent.ExecutionException failed) {
-                    throw new IOException("FFmpeg download failed; check your connection and retry /cms disc load", failed.getCause());
-                } catch (java.util.concurrent.TimeoutException timeout) {
-                    throw new IOException("FFmpeg download timed out; retry /cms disc load");
-                } finally {
-                    input.close();
-                    worker.shutdownNow();
-                }
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("FFmpeg setup was cancelled");
-        }
-    }
-
-    private static MessageDigest digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
+                .followRedirects(HttpClient.Redirect.NORMAL).build();
+             var output = Files.newOutputStream(target)) {
+            Downloads.verified(http, uri, output, checksum, MAX_DOWNLOAD, Duration.ofMinutes(5), "FFmpeg", "retry /cms disc load");
         }
     }
 
