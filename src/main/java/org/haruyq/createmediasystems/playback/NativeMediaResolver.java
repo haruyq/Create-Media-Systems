@@ -112,12 +112,6 @@ final class NativeMediaResolver {
         }
     }
 
-    /** Whether {@code source} is resolved, or being resolved, here already (see {@link #resolve}). */
-    static boolean cached(URI source, boolean audioOnly, int maxHeight) {
-        Cached cached = CACHE.get(new Key(source, audioOnly, maxHeight));
-        return cached != null && System.nanoTime() - cached.expiresAt() < 0;
-    }
-
     /** Forgets what {@code source} resolved to, so the next play resolves it again (VLC could not open it). */
     static void forget(URI source) {
         CACHE.keySet().removeIf(key -> key.source().equals(source));

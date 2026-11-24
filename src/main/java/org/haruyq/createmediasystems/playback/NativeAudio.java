@@ -297,12 +297,6 @@ public final class NativeAudio {
         default void equalize(Tone tone) {
         }
 
-        /** What its video's playback took (see Diagnostics); null for none. */
-        @Nullable
-        default Diagnostics diagnostics() {
-            return null;
-        }
-
         /** Its taps, offered its sound (after its tone) and pictures as they play; null for none. */
         @Nullable
         default MediaTaps taps() {
@@ -348,9 +342,6 @@ public final class NativeAudio {
                 }
                 sleep();
             }
-            if (shared.diagnostics != null) {
-                shared.diagnostics.ready();
-            }
             // A local file is ready at once: give the streams that joined meanwhile the moment it takes to tap it.
             long tapDeadline = System.nanoTime() + TAP_WAIT_NANOS;
             while (!shared.allTapped() && System.nanoTime() < tapDeadline && !cancelled.getAsBoolean()) {
@@ -385,9 +376,6 @@ public final class NativeAudio {
                 owner.seek(target / 1_000_000);
             }
             owner.resume();
-            if (shared.diagnostics != null) {
-                shared.diagnostics.playing(told != null, target / 1e9);
-            }
             // Where the track should be from now on, by this computer's clock: what drift is measured against.
             shared.id = shared.id.at(now - (vod ? target : 0));
             shared.nextCheck = now + START_GRACE_NANOS;
@@ -398,10 +386,6 @@ public final class NativeAudio {
             return stream;
         } catch (IOException | RuntimeException | LinkageError error) {
             shared.playing.completeExceptionally(error);
-            if (shared.diagnostics != null && !cancelled.getAsBoolean()) {
-                shared.diagnostics.failed(error instanceof IOException ? error.getMessage()
-                        : "Native playback failed to initialize");
-            }
             if (!cancelled.getAsBoolean()) {
                 // A cached resolution or kept audio may be what failed (a signed URL that expired): the next try
                 // resolves again.
@@ -434,9 +418,6 @@ public final class NativeAudio {
         final StreamSpec.DiscClock disc;
         /** How closely it is held to where it should be (see correct). */
         final Hold held;
-        /** What its video's playback took (see Diagnostics); null for a record's. */
-        @Nullable
-        final Diagnostics diagnostics;
         /** Done once it plays; failed if it never will. */
         final CompletableFuture<Void> playing = new CompletableFuture<>();
         /**
@@ -459,7 +440,6 @@ public final class NativeAudio {
             this.owner = owner;
             this.disc = disc;
             held = disc == null ? TRACK_HOLD : DISC_HOLD;
-            diagnostics = owner.diagnostics();
         }
 
         /** Where it is shown, or else played from: its Blu-ray player or hi-fi stack if a video, else its source. */
@@ -571,16 +551,10 @@ public final class NativeAudio {
             long at = owner.time();
             long expected = disc == null ? (now - id.origin()) / 1_000_000 : disc.millis();
             double length = owner.seconds();
-            if (diagnostics != null && now - diagnostics.playing >= Diagnostics.REPORT_AFTER_NANOS) {
-                diagnostics.send();
-            }
             if (live || !seekable || at < 0 || length > 0 && expected > length * 1000 - END_MARGIN_MILLIS) {
                 return;
             }
             boolean seek = Math.abs(expected - at) >= held.driftMillis() && now - seekedAt >= held.cooldownNanos();
-            if (diagnostics != null) {
-                diagnostics.drift(expected - at, seek);
-            }
             if (seek) {
                 seekedAt = now;
                 owner.seek(expected);

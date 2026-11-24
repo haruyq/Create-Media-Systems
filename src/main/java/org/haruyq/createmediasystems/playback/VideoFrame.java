@@ -69,8 +69,6 @@ public final class VideoFrame {
     private float brightness;
     private volatile int shownWidth;
     private volatile int shownHeight;
-    /** When VLC finished its first picture (System.nanoTime); 0 before. */
-    volatile long firstPicture;
     volatile long lastPicture;
     /** The player's taps, offered each picture as it is shown. */
     private final MediaTaps taps;
@@ -168,9 +166,6 @@ public final class VideoFrame {
     final Vlc.VideoDisplay display = (opaque, picture) -> {
         long now = System.nanoTime();
         lastPicture = now;
-        if (firstPicture == 0) {
-            firstPicture = now;
-        }
         synchronized (guard) {
             Memory written = buffers[back];
             if (written == null) {

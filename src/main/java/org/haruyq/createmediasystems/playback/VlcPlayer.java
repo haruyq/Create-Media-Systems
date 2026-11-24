@@ -52,15 +52,12 @@ public final class VlcPlayer implements NativeAudio.Backend {
     private final int maxHeight;
     /** How far into its track it is asked to play (s), which a shared disc's stream starts at (see MediaSources). */
     private final double startSeconds;
-    /** What its video's playback took, sent as it is released (see Diagnostics); null without video. */
-    @Nullable
-    final Diagnostics diagnostics;
 
     /**
-     * A player of {@code video}, or of a record's audio alone if null, asked at {@code requestedAt} to play
-     * {@code startSeconds} into its track.
+     * A player of {@code video}, or of a record's audio alone if null, asked to play {@code startSeconds} into its
+     * track.
      */
-    VlcPlayer(@Nullable Streams.Video video, long requestedAt, double startSeconds) {
+    VlcPlayer(@Nullable Streams.Video video, double startSeconds) {
         this.startSeconds = startSeconds;
         frame = video == null ? null : new VideoFrame(taps);
         var callbacks = new CallbackThreadInitializer(true, false, "CMS VLC callback");
@@ -73,7 +70,6 @@ public final class VlcPlayer implements NativeAudio.Backend {
             Native.setCallbackThreadInitializer(frame.display, callbacks);
         }
         maxHeight = video == null ? 0 : MediaSources.height(video);
-        diagnostics = video == null ? null : new Diagnostics(video, frame, audio, maxHeight, requestedAt);
     }
 
     @Override
@@ -98,25 +94,13 @@ public final class VlcPlayer implements NativeAudio.Backend {
     }
 
     @Override
-    @Nullable
-    public Diagnostics diagnostics() {
-        return diagnostics;
-    }
-
-    @Override
     public MediaTaps taps() {
         return taps;
     }
 
     @Override
     public void start(URI source, @Nullable DoubleSupplier opensAt) throws IOException {
-        if (diagnostics != null) {
-            diagnostics.resolving(source);
-        }
         NativeMediaResolver.Prepared media = MediaSources.resolve(source, frame != null, maxHeight, startSeconds);
-        if (diagnostics != null) {
-            diagnostics.resolved(media.live());
-        }
         lock.lock();
         try {
             if (released) {
@@ -262,9 +246,6 @@ public final class VlcPlayer implements NativeAudio.Backend {
             released = true;
         } finally {
             lock.unlock();
-        }
-        if (diagnostics != null) {
-            diagnostics.send();
         }
         forget();
         // Stopping waits for VLC's threads, which may take a moment: never on the game's or the sound engine's.

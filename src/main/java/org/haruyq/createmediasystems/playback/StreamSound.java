@@ -271,7 +271,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
                 }
                 boolean screen = MediaKind.of(spec.track()) == MediaKind.SCREEN;
                 AudioStream opened = NativeAudio.play(() -> screen ? new ScreenPlayer(spec.video())
-                                : new VlcPlayer(spec.video(), requestedAt, spec.startSeconds()),
+                                : new VlcPlayer(spec.video(), spec.startSeconds()),
                         spec, requestedAt, () -> released, go);
                 direct = opened;
                 if (released) {

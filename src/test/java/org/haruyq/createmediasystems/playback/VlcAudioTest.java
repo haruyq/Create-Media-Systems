@@ -26,7 +26,7 @@ class VlcAudioTest {
 
     @Test
     void callbacksKeepStandbyEligibleWithoutAudioTapsOrLightingDemand() {
-        VlcPlayer player = new VlcPlayer(null, 0, 0);
+        VlcPlayer player = new VlcPlayer(null, 0);
         assertFalse(player.recentMedia(System.nanoTime()));
         try (Memory sample = new Memory(4)) {
             player.audio.play.invoke(null, sample, 1, START);

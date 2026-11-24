@@ -34,9 +34,6 @@ public final class ClientConfig {
     public static final ModConfigSpec.BooleanValue YOUTUBE_COOKIES = BUILDER
             .comment("Take YouTube cookies from the VRCVideoCacher Cookies Exporter browser extension (127.0.0.1:9696), so yt-dlp plays displays' YouTube videos signed in. A throwaway account is safer: YouTube may restrict accounts used this way.")
             .define("youtubeCookies", true);
-    public static final ModConfigSpec.BooleanValue SEND_DIAGNOSTICS = BUILDER
-            .comment("Send how long each display's video took to start here to the server's API, to find why it starts slowly for some: the times, this config, the Create: Media Systems and yt-dlp versions, whether YouTube cookies are set (never the cookies) and the end of logs/latest.log without chat.")
-            .define("sendDiagnostics", true);
     public static final ModConfigSpec.ConfigValue<String> DISC_FFMPEG_PATH = BUILDER
             .comment("FFmpeg for disc sharing. The default 'ffmpeg', an empty value or an old managed path uses the current managed build on 64-bit Windows, and the ffmpeg on PATH elsewhere. An external executable path overrides it; needs dvdvideo, H.264 and AC-3 support.")
             .define("discFfmpegPath", "ffmpeg");

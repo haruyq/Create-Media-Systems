@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -167,20 +166,6 @@ final class Tools {
 
     private static Path versionFile(String name) {
         return DIR.resolve(name + VERSION);
-    }
-
-    /** What is installed, by name, at which release (see fetch); empty before anything is. */
-    static Map<String, String> versions() {
-        Map<String, String> versions = new java.util.TreeMap<>();
-        try (java.util.stream.Stream<Path> files = Files.list(DIR)) {
-            for (Path file : files.filter(f -> f.getFileName().toString().endsWith(VERSION)).toList()) {
-                String name = file.getFileName().toString();
-                versions.put(name.substring(0, name.length() - VERSION.length()), Files.readString(file).trim());
-            }
-        } catch (IOException none) {
-            // not set up (yet)
-        }
-        return versions;
     }
 
     /**

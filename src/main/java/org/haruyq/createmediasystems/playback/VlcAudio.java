@@ -51,8 +51,6 @@ final class VlcAudio {
     final Equalizer equalizer = new Equalizer();
     /** The player's taps, offered what it plays as heard, after its tone. */
     private final MediaTaps taps;
-    /** When VLC played its first samples (System.nanoTime); 0 before. */
-    volatile long firstSamples;
     volatile long lastSamples;
     /** Held by the player: VLC calls them as long as it plays, so they must outlive no reference. */
     final Vlc.AudioPlay play = (opaque, samples, count, pts) -> play(samples, count, pts);
@@ -124,9 +122,6 @@ final class VlcAudio {
     void play(byte[] stereo, int count, long pts) {
         long now = System.nanoTime();
         lastSamples = now;
-        if (firstSamples == 0) {
-            firstSamples = now;
-        }
         if (!streams.isEmpty()) {
             equalizer.process(stereo);
             offer(stereo, count, pts);
