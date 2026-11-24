@@ -186,8 +186,7 @@ public final class Transport implements AutoCloseable {
      */
     public static Transport open(String apiBase, Protocol.Ticket ticket, Listener listener) {
         URI uri = Protocol.endpoint(apiBase, "p2p/sessions/" + ticket.sessionId() + "/signal", true);
-        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-        Socket socket = new Socket(http, uri, ticket.token());
+        Socket socket = new Socket(P2p.HTTP, uri, ticket.token());
         Transport transport = new Transport(ticket, listener, socket::send, socket::close);
         socket.signal = transport::signal;
         socket.fail = transport::fail;
@@ -286,7 +285,7 @@ public final class Transport implements AutoCloseable {
         LOGGER.info("Downloading native WebRTC from {}", uri);
         java.net.http.HttpResponse<byte[]> response;
         try {
-            response = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build().send(
+            response = P2p.HTTP.send(
                     java.net.http.HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(5)).build(),
                     java.net.http.HttpResponse.BodyHandlers.ofByteArray());
         } catch (InterruptedException e) {
