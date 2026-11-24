@@ -1,15 +1,14 @@
 package org.haruyq.createmediasystems.screen;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.disc.DriveEmulatorBlock;
-import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Stability;
 import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Viewer;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock.Viewers;
+import org.haruyq.createmediasystems.disc.ViewerList;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaKind;
@@ -28,8 +27,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -137,19 +134,8 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
         }
     }
 
-    /** Client → server: the viewers of this player's share through the server at {@code pos}, once a second. */
-    public record Viewers(BlockPos pos, List<Viewer> viewers) implements CustomPacketPayload {
-        public static final Type<Viewers> TYPE = new Type<>(CreateMediaSystems.id("screen_viewers"));
-        public static final StreamCodec<ByteBuf, Viewers> CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC, Viewers::pos,
-                Viewer.CODEC.apply(ByteBufCodecs.list(64)), Viewers::viewers,
-                Viewers::new);
-
-        @Override
-        public Type<Viewers> type() {
-            return TYPE;
-        }
-    }
+    /** Client → server: the viewers of this player's share through the server at the payload's pos, once a second. */
+    public static final CustomPacketPayload.Type<Viewers> VIEWERS = new CustomPacketPayload.Type<>(CreateMediaSystems.id("screen_viewers"));
 
     static void registerPayloads(PayloadRegistrar registrar) {
         registrar.playToServer(Update.TYPE, Update.CODEC, (payload, context) -> {
@@ -157,7 +143,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
                 server.update((ServerPlayer) context.player(), payload.link(), payload.what());
             }
         });
-        registrar.playToServer(Viewers.TYPE, Viewers.CODEC, (payload, context) -> {
+        registrar.playToServer(VIEWERS, Viewers.codec(VIEWERS), (payload, context) -> {
             if (server(context.player(), payload.pos()) instanceof Entity server) {
                 server.viewers((ServerPlayer) context.player(), payload.viewers());
             }
@@ -190,9 +176,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
         /** The share's link (see DiscUrl#screen), empty while nothing is shared, and what it shows. */
         private String link = "";
         private String what = "";
-        /** The share's viewers by name, as its host's client last told. Not saved. */
-        private List<Viewer> viewers = List.of();
-        private List<String> viewerNames = List.of();
+        private final ViewerList viewers = new ViewerList();
 
         public Entity(BlockPos pos, BlockState state) {
             super(ScreenFeature.SERVER_ENTITY.get(), pos, state);
@@ -232,13 +216,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
         }
 
         public boolean feeds() {
-            for (Direction side : Direction.values()) {
-                if (level != null && level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed
-                        && fed.plays(DiscKind.BLU_RAY)) {
-                    return true;
-                }
-            }
-            return false;
+            return DiscDrive.feeds(level, worldPosition, DiscKind.BLU_RAY);
         }
 
         /**
@@ -272,21 +250,9 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
         }
 
         void viewers(ServerPlayer player, List<Viewer> told) {
-            if (!player.getUUID().equals(host) || !live() || told.equals(viewers)) {
-                return;
+            if (player.getUUID().equals(host) && live() && viewers.tell(player, told)) {
+                sendData();
             }
-            List<Viewer> known = new ArrayList<>();
-            List<String> names = new ArrayList<>();
-            for (Viewer viewer : told) {
-                ServerPlayer watching = player.server.getPlayerList().getPlayer(viewer.id());
-                if (watching != null) {
-                    known.add(viewer);
-                    names.add(watching.getGameProfile().getName());
-                }
-            }
-            viewers = known;
-            viewerNames = names;
-            sendData();
         }
 
         void release() {
@@ -300,8 +266,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
 
         private void changed(@Nullable Player by, boolean relinked) {
             if (!live()) {
-                viewers = List.of();
-                viewerNames = List.of();
+                viewers.clear();
             }
             setChanged();
             if (level == null || level.isClientSide) {
@@ -311,15 +276,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
             if (getBlockState().getValue(LIT) != live() && level.getBlockState(worldPosition).is(getBlockState().getBlock())) {
                 level.setBlockAndUpdate(worldPosition, getBlockState().setValue(LIT, live()));
             }
-            for (Direction side : Direction.values()) {
-                if (level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed) {
-                    if (relinked) {
-                        fed.driveRelinked(by);
-                    } else {
-                        fed.driveChanged(by);
-                    }
-                }
-            }
+            DiscDrive.changed(level, worldPosition, by, relinked);
         }
 
         @Override
@@ -361,17 +318,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
             }
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.drive.host", hostName))
                     .withStyle(ChatFormatting.GRAY));
-            tooltip.add(Component.literal("     ").append(Component.translatable(viewers.isEmpty()
-                    ? "create_media_systems.drive.no_viewers" : "create_media_systems.drive.viewers")).withStyle(ChatFormatting.GRAY));
-            for (int i = 0; i < viewers.size(); i++) {
-                Viewer viewer = viewers.get(i);
-                Stability stability = viewer.stability(DriveEmulatorBlock.Disc.BLU_RAY);
-                tooltip.add(Component.literal("     " + viewerNames.get(i) + "  ").withStyle(ChatFormatting.WHITE)
-                        .append(Component.translatable("create_media_systems.drive.stability."
-                                + stability.name().toLowerCase(Locale.ROOT)).withStyle(stability.color()))
-                        .append(Component.literal(!viewer.measured() ? "" : String.format(Locale.ROOT, "  %d ms  %.1f Mbps",
-                                viewer.rttMillis(), viewer.kbps() / 1000.0)).withStyle(ChatFormatting.GRAY)));
-            }
+            viewers.describe(tooltip, DriveEmulatorBlock.Disc.BLU_RAY);
             return true;
         }
 
@@ -385,17 +332,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
             tag.putString("Link", link);
             tag.putString("What", what);
             if (clientPacket) {
-                ListTag list = new ListTag();
-                for (int i = 0; i < viewers.size(); i++) {
-                    CompoundTag viewer = new CompoundTag();
-                    viewer.putUUID("Id", viewers.get(i).id());
-                    viewer.putString("Name", viewerNames.get(i));
-                    viewer.putBoolean("Measured", viewers.get(i).measured());
-                    viewer.putInt("Rtt", viewers.get(i).rttMillis());
-                    viewer.putInt("Kbps", viewers.get(i).kbps());
-                    list.add(viewer);
-                }
-                tag.put("Viewers", list);
+                viewers.write(tag);
             }
         }
 
@@ -407,15 +344,7 @@ public class ScreenServerBlock extends HorizontalDirectionalBlock implements Ent
             link = tag.getString("Link");
             what = tag.getString("What");
             if (clientPacket) {
-                List<Viewer> known = new ArrayList<>();
-                List<String> names = new ArrayList<>();
-                for (Tag each : tag.getList("Viewers", Tag.TAG_COMPOUND)) {
-                    CompoundTag viewer = (CompoundTag) each;
-                    known.add(new Viewer(viewer.getUUID("Id"), viewer.getBoolean("Measured"), viewer.getInt("Rtt"), viewer.getInt("Kbps")));
-                    names.add(viewer.getString("Name"));
-                }
-                viewers = known;
-                viewerNames = names;
+                viewers.read(tag);
             }
         }
     }

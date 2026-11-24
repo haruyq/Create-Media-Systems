@@ -161,7 +161,7 @@ public final class ScreenClient {
         List<DriveEmulatorBlock.Viewer> viewers = transport.links().stream().limit(64)
                 .map(link -> new DriveEmulatorBlock.Viewer(link.peer(), link.open() && link.measured(),
                         (int) Math.max(0, link.rttNanos() / 1_000_000), (int) (link.bps() / 1000))).toList();
-        PacketDistributor.sendToServer(new ScreenServerBlock.Viewers(server, viewers));
+        PacketDistributor.sendToServer(new DriveEmulatorBlock.Viewers(ScreenServerBlock.VIEWERS, server, viewers));
     }
 
     /** Every tick of every server here: one that says it shares this player's screen, which it no longer does, is told. */
