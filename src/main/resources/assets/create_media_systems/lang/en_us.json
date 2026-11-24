@@ -667,7 +667,7 @@
   "block.create_media_systems.midi_keyboard": "Koland A-88MKII MIDI Keyboard",
   "create_media_systems.keys.hide": "Hide",
   "create_media_systems.keys.show": "Show",
-  "create_media_systems.keys.hide_help": "Hides or shows this screen. The instrument keeps playing while it is hidden.",
+  "create_media_systems.keys.hide_help": "Hides or shows this screen. The instrument keeps playing while it is hidden, and dragging with the right button looks around.",
   "create_media_systems.keyboard.control.bank_down": "BANK ◄: the previous of the 16 pad banks.",
   "create_media_systems.keyboard.control.bank_up": "BANK ►: the next of the 16 pad banks.",
   "create_media_systems.keyboard.control.snapshot": "SNAP SHOT: recall one of 8 stored panel settings. Press it, a pad, then NEXT. With SHIFT lit, stores the current settings on that pad instead.",

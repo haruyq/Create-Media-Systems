@@ -5,11 +5,13 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * What every instrument's screen has: the world in sight behind it, undimmed, and the game going on; a top line with
  * the instrument's name; and the button at its right end that puts the screen out of sight but for itself, while the
- * instrument still plays from the computer's keys and a MIDI keyboard. It opens shown.
+ * instrument still plays from the computer's keys and a MIDI keyboard, and dragging with the right button turns the
+ * player to look around. It opens shown.
  */
 public abstract class InstrumentScreen extends Screen {
     protected static final int NAME = 0xFF85858D;
@@ -28,6 +30,18 @@ public abstract class InstrumentScreen extends Screen {
     /** The world stays in sight behind it. */
     @Override
     public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    }
+
+    /** While hidden, a drag with the right button turns the player as the mouse does in game; nothing else takes it. */
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (hidden && button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && minecraft.player != null) {
+            double sensitivity = minecraft.options.sensitivity().get() * .6 + .2;
+            double scale = minecraft.getWindow().getGuiScale() * 8 * sensitivity * sensitivity * sensitivity;
+            minecraft.player.turn(dragX * scale, dragY * scale * (minecraft.options.invertYMouse().get() ? -1 : 1));
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     protected Component toggleName() {
