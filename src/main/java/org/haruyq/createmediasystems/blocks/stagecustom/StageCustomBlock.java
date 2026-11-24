@@ -14,6 +14,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -201,6 +202,10 @@ public final class StageCustomBlock extends Block implements EntityBlock {
         if (!(level.getBlockEntity(root) instanceof Entity entity) || !samePart(entity.getBlockState(), state, Part.ROOT)) {
             return InteractionResult.PASS;
         }
+        if (player.isShiftKeyDown()) {
+            if (player instanceof ServerPlayer server) StageCustomMidi.open(server, root);
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        }
         Vec3 eye = SableCompat.eye(player, 1);
         Vec3 localEye = SableCompat.toBlockSpace(level, root, eye);
         Vec3 localHit = SableCompat.hitInBlockSpace(level, pos, click.getLocation());
@@ -209,7 +214,7 @@ public final class StageCustomBlock extends Block implements EntityBlock {
         Vec3 modelDirection = StageCustomLayout.toModel(facing, localHit.subtract(localEye)).normalize();
         double reach = (player.blockInteractionRange() + .08) / scale;
         var hit = StageCustomLayout.aim(modelEye, modelDirection, reach);
-        int velocity = player.isShiftKeyDown() ? 59 : 110;
+        int velocity = 110;
         if (isComplete(state)) {
             var cymbal = StageCustomCymbals.aim(modelEye, modelDirection, reach, entity.hatOpen());
             var pedal = StageCustomCymbals.aimPedal(modelEye, modelDirection, reach);
@@ -222,8 +227,7 @@ public final class StageCustomBlock extends Block implements EntityBlock {
                 return InteractionResult.sidedSuccess(level.isClientSide);
             }
             if (cymbal != null && cymbalDistance < drumDistance) {
-                if (cymbal.cymbal() != Cymbal.HI_HAT || !player.isShiftKeyDown()) entity.strikeCymbal(cymbal, velocity);
-                else if (!level.isClientSide) entity.toggleHat(player);
+                entity.strikeCymbal(cymbal, velocity);
                 return InteractionResult.sidedSuccess(level.isClientSide);
             }
         }

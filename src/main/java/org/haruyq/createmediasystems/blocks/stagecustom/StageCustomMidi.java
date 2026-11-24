@@ -28,6 +28,7 @@ public final class StageCustomMidi {
     private static final InputRate LOCAL = new InputRate();
     private static final OwnNotes OWN = new OwnNotes();
     private static Consumer<Hit> playback = hit -> {};
+    private static Consumer<BlockPos> opener = root -> {};
 
     private StageCustomMidi() {}
 
@@ -85,6 +86,10 @@ public final class StageCustomMidi {
         playback = handler;
     }
 
+    public static void opener(Consumer<BlockPos> handler) {
+        opener = handler;
+    }
+
     @Nullable
     public static StageCustomBlock.Entity reachable(Player player, BlockPos root) {
         if (!player.isAlive() || player.isSpectator()) return null;
@@ -110,6 +115,14 @@ public final class StageCustomMidi {
         public Type<Played> type() { return TYPE; }
     }
 
+    record Open(BlockPos root) implements CustomPacketPayload {
+        private static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("stage_custom_open"));
+        private static final StreamCodec<ByteBuf, Open> CODEC = BlockPos.STREAM_CODEC.map(Open::new, Open::root);
+
+        @Override
+        public Type<Open> type() { return TYPE; }
+    }
+
     static void register(PayloadRegistrar registrar) {
         registrar.playToServer(Hit.TYPE, Hit.CODEC, (packet, context) -> {
             if (context.player() instanceof ServerPlayer player) strike(player, packet);
@@ -117,6 +130,11 @@ public final class StageCustomMidi {
         registrar.playToClient(Played.TYPE, Played.CODEC, (packet, context) -> {
             if (valid(packet.hit()) && !OWN.echo(packet.hit(), System.nanoTime())) playback.accept(packet.hit());
         });
+        registrar.playToClient(Open.TYPE, Open.CODEC, (packet, context) -> opener.accept(packet.root()));
+    }
+
+    static void open(ServerPlayer player, BlockPos root) {
+        if (reachable(player, root) != null) PacketDistributor.sendToPlayer(player, new Open(root));
     }
 
     static void broadcast(StageCustomBlock.Entity kit, int note, int velocity) {

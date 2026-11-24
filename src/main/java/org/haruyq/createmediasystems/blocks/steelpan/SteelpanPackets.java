@@ -16,12 +16,12 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.jetbrains.annotations.Nullable;
 
 public final class SteelpanPackets {
     public static final double HEARING_RANGE = 32;
-    private static final double PLAY_RANGE = 8;
     private static final Map<ServerPlayer, PlayerInput> INPUTS = new WeakHashMap<>();
     private static final PlayerInput LOCAL = new PlayerInput();
     private static Client client;
@@ -142,7 +142,7 @@ public final class SteelpanPackets {
     public static boolean canPlay(Player player, Target target) {
         Vec3 origin = target.origin(player.level(), 1);
         return player.isAlive() && !player.isSpectator() && origin != null
-                && SableCompat.eye(player, 1).distanceToSqr(origin) <= PLAY_RANGE * PLAY_RANGE
+                && SableCompat.eye(player, 1).distanceToSqr(origin) <= Reach.HAND * Reach.HAND
                 && player.level().mayInteract(player, BlockPos.containing(origin));
     }
 

@@ -38,7 +38,6 @@
   "block.create_media_systems.grand_piano": "Concert Grand Piano",
   "block.create_media_systems.steelpan_low_c": "Low C Lead Steelpan",
   "block.create_media_systems.stage_custom_birch_sbp2f5_dus": "Yamaha Stage Custom Birch SBP2F5-DUS",
-  "key.create_media_systems.stage_custom_midi": "Open drum MIDI controls",
   "stage_custom.midi_input": "MIDI input · %s",
   "stage_custom.pad.bass": "Kick",
   "stage_custom.pad.tom_10": "10″ Tom",

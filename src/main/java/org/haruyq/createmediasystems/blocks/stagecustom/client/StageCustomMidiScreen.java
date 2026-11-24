@@ -134,6 +134,8 @@ final class StageCustomMidiScreen extends Screen {
             onClose();
             return;
         }
+        // A key let go of in another window never comes back here.
+        if (!minecraft.isWindowActive()) heldKeys.clear();
         if (++ticks % 40 == 0) midi.scan();
         var status = midi.status();
         if (!status.equals(displayed)) showStatus(status);

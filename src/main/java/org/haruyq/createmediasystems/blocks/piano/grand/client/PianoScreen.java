@@ -125,9 +125,6 @@ final class PianoScreen extends KeysScreen {
     @Override public void tick() {
         super.tick();
         if (ticks % 40 == 0) midi.scan();
-        if (!Minecraft.getInstance().isWindowActive() && (!pcNotes.isEmpty() || mouse >= 0 || Arrays.stream(pcPedal).anyMatch(p -> p != 0))) {
-            releaseComputer();
-        }
     }
 
     private void queueMidi(List<PianoEvent> events) {
@@ -209,7 +206,7 @@ final class PianoScreen extends KeysScreen {
         if (isNote(note) && !midiHeld[note - FIRST_NOTE] && !computerHolds(note)) play(release(note, 58));
     }
 
-    private void releaseComputer() {
+    @Override protected void releaseComputer() {
         var held = new ArrayList<>(pcNotes.values());
         if (mouse >= 0) held.add(mouse);
         mouse = -1;

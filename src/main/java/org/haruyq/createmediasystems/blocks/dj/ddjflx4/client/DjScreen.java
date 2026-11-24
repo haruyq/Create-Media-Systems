@@ -82,9 +82,14 @@ final class DjScreen extends Screen {
 
     @Override
     public void tick() {
-        if (controller() == null) {
+        // Only the screen goes: its player keeps hosting from wherever they are.
+        if (minecraft.player == null || DdjFlx4Block.near(minecraft.player, pos) == null) {
             onClose();
             return;
+        }
+        // A button let go of in another window never comes back here.
+        if (held >= 0 && !minecraft.isWindowActive()) {
+            mouseReleased(0, 0, 0);
         }
         if (unsent && moved >= 0) {
             unsent = false;

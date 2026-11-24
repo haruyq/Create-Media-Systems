@@ -127,6 +127,8 @@ final class SteelpanScreen extends Screen {
             onClose();
             return;
         }
+        // A key let go of in another window never comes back here.
+        if (!minecraft.isWindowActive()) held.clear();
         if (++ticks % 40 == 0) midi.scan();
         var status = midi.status();
         if (status != midiStatus) updateMidi(status);

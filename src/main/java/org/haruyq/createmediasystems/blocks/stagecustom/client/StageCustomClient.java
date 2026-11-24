@@ -1,34 +1,27 @@
 package org.haruyq.createmediasystems.blocks.stagecustom.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.model.data.ModelData;
-import net.neoforged.neoforge.client.settings.KeyConflictContext;
-import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock.Entity.CymbalStrike;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock.Entity.Strike;
@@ -42,7 +35,6 @@ import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomMidi;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-import org.lwjgl.glfw.GLFW;
 
 public final class StageCustomClient implements BlockEntityRenderer<StageCustomBlock.Entity> {
     private static final ModelResourceLocation BODY = part("kit");
@@ -53,9 +45,6 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
     private static final int SEGMENTS = 48;
     private static final float[] SINE = trig(true), COSINE = trig(false);
     private static final Map<StageCustomBlock.Entity, Motion> MOTIONS = new WeakHashMap<>();
-
-    private static final KeyMapping MIDI = new KeyMapping("key.create_media_systems.stage_custom_midi",
-            KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, "key.categories.create_media_systems");
 
     private enum Skin {
         CLEAR(true), BLACK(false), COATED(false), KICK_CLEAR(true);
@@ -75,20 +64,14 @@ public final class StageCustomClient implements BlockEntityRenderer<StageCustomB
         bus.addListener((ModelEvent.RegisterAdditional event) -> List.of(BODY, WIRES, STICK).forEach(event::register));
         StageCustomCompleteClient.register(bus);
         StageCustomAudio.register();
-        bus.addListener((RegisterKeyMappingsEvent event) -> event.register(MIDI));
-        NeoForge.EVENT_BUS.addListener(StageCustomClient::midiKey);
+        StageCustomMidi.opener(StageCustomClient::open);
         WorldEvents.onLevelChanged(MOTIONS::clear);
     }
 
-    private static void midiKey(ClientTickEvent.Post event) {
-        if (!MIDI.consumeClick()) return;
+    private static void open(BlockPos root) {
         var mc = Minecraft.getInstance();
-        if (mc.screen != null || mc.player == null || mc.level == null
-                || !(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
-        var pos = hit.getBlockPos();
-        var state = mc.level.getBlockState(pos);
-        if (!(state.getBlock() instanceof StageCustomBlock)) return;
-        var kit = StageCustomMidi.reachable(mc.player, StageCustomBlock.root(pos, state));
+        if (mc.player == null || (mc.screen != null && !(mc.screen instanceof StageCustomMidiScreen))) return;
+        var kit = StageCustomMidi.reachable(mc.player, root);
         if (kit != null) mc.setScreen(new StageCustomMidiScreen(kit));
     }
 

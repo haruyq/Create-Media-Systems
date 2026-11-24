@@ -25,6 +25,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.VideoPlayerGameTests;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock.Part;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Cymbal;
+import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Pedal;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout.Drum;
 
@@ -172,8 +173,14 @@ public final class StageCustomGameTests {
         mock.setShiftKeyDown(true);
         var at = BlockPos.containing(hatAt);
         var click = new BlockHitResult(hatAt, Direction.UP, at, false);
-        helper.assertTrue(level.getBlockState(at).useWithoutItem(level, mock, click).consumesAction() && kit.hatOpen(),
-                "The hi-hat did not open via interaction");
+        helper.assertTrue(level.getBlockState(at).useWithoutItem(level, mock, click).consumesAction() && !kit.hatOpen(),
+                "Sneak-using the kit worked the hi-hat instead of opening its screen");
+        mock.setShiftKeyDown(false);
+        Vec3 pedalAt = StageCustomLayout.toWorld(root, facing, StageCustomCymbals.hinge(Pedal.HI_HAT).scale(StageCustomBlock.scale(state)));
+        mock.setPos(pedalAt.add(0, .3 - mock.getEyeHeight(), 0));
+        var pedal = BlockPos.containing(pedalAt);
+        helper.assertTrue(level.getBlockState(pedal).useWithoutItem(level, mock, new BlockHitResult(pedalAt, Direction.UP, pedal, false))
+                .consumesAction() && kit.hatOpen(), "The hi-hat pedal did not open the hi-hat");
         var reloaded = new StageCustomBlock.Entity(root, state);
         reloaded.loadWithComponents(kit.saveWithoutMetadata(level.registryAccess()), level.registryAccess());
         helper.assertTrue(reloaded.hatOpen(), "The open hi-hat was lost on save and load");
@@ -181,6 +188,10 @@ public final class StageCustomGameTests {
         var packets = new ArrayList<CustomPacketPayload>();
         var player = VideoPlayerGameTests.listener(level, root.north(2), packets);
         try {
+            player.setShiftKeyDown(true);
+            helper.assertTrue(level.getBlockState(at).useWithoutItem(level, player, click).consumesAction()
+                    && packets.stream().anyMatch(StageCustomMidi.Open.class::isInstance), "Sneak-using the kit did not open its screen");
+            player.setShiftKeyDown(false);
             for (var voice : Voice.values()) {
                 int note = StageCustomMidi.note(voice);
                 helper.assertTrue(StageCustomMidi.strike(player, new StageCustomMidi.Hit(root, note, 93)),
@@ -191,6 +202,10 @@ public final class StageCustomGameTests {
             var notes = packets.stream().filter(StageCustomMidi.Played.class::isInstance)
                     .map(StageCustomMidi.Played.class::cast).map(event -> event.hit().note()).toList();
             helper.assertTrue(notes.equals(List.of(42, 46, 44, 49, 51, 53)), "Wrong samples for the cymbal pads");
+            packets.clear();
+            player.setPos(Vec3.atCenterOf(root.east(10)));
+            StageCustomMidi.open(player, root);
+            helper.assertTrue(packets.stream().noneMatch(StageCustomMidi.Open.class::isInstance), "The kit's screen opened out of reach");
         } finally {
             level.removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
         }

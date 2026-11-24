@@ -11,7 +11,6 @@ import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
@@ -320,7 +319,6 @@ final class KeyboardScreen extends KeysScreen {
     @Override public void tick() {
         super.tick();
         if (ticks % 40 == 0) midi.scan();
-        if (!Minecraft.getInstance().isWindowActive()) releaseComputer();
     }
 
     private synchronized void requestMidiReset() {
@@ -429,7 +427,7 @@ final class KeyboardScreen extends KeysScreen {
     private void release(int note) {
         if (note >= 0 && !pcHolds(note) && !hardwareHeld[note]) note(KeyboardMidi.note(note, 0));
     }
-    private synchronized void releaseComputer() {
+    @Override protected synchronized void releaseComputer() {
         var held = new ArrayList<>(computer.values());
         if (mouseNote >= 0) held.add(mouseNote);
         mouseDown = false;

@@ -55,7 +55,7 @@ public abstract class KeysScreen extends Screen {
     private static final int[] UPPER_ROW = {GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_E,
             GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_5, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_U,
             GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_0, GLFW.GLFW_KEY_P};
-    /** How hard a computer key plays a note; and with Shift on an instrument that is struck, softer, as sneaking plays. */
+    /** How hard a computer key plays a note; and with Shift on an instrument that is struck, softer. */
     public static final int KEY_VELOCITY = 96, SOFT_VELOCITY = 56;
 
     /** This instrument's colours, the Koland keyboard's until it sets its own: the lettering, the line around the body, what shows between the keys, the felt. */
@@ -191,6 +191,12 @@ public abstract class KeysScreen extends Screen {
     @Override
     public void tick() {
         ticks++;
+        // A key or button let go of in another window never comes back here.
+        if (!minecraft.isWindowActive()) releaseComputer();
+    }
+
+    /** Lets go of what the computer's keys and the mouse hold; called every tick the window is out of focus. */
+    protected void releaseComputer() {
     }
 
     @Override

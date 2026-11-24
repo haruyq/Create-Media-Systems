@@ -430,6 +430,12 @@ final class KeyboardScreen extends KeysScreen {
     }
 
     @Override
+    protected void releaseComputer() {
+        for (int key : List.copyOf(typed.keySet())) keyReleased(key, 0, 0);
+        if (mouseNote >= 0 || held != null) mouseReleased(0, 0, 0);
+    }
+
+    @Override
     public boolean keyReleased(int key, int scanCode, int modifiers) {
         Integer note = typed.remove(key);
         if (note != null && key == GLFW.GLFW_KEY_SPACE) {

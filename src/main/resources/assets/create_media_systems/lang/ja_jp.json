@@ -38,7 +38,6 @@
   "block.create_media_systems.grand_piano": "コンサートグランドピアノ",
   "block.create_media_systems.steelpan_low_c": "ローCリード・スティールパン",
   "block.create_media_systems.stage_custom_birch_sbp2f5_dus": "ヤマハ Stage Custom Birch SBP2F5-DUS",
-  "key.create_media_systems.stage_custom_midi": "ドラムのMIDI演奏画面を開く",
   "stage_custom.midi_input": "MIDI入力 · %s",
   "stage_custom.pad.bass": "バス",
   "stage_custom.pad.tom_10": "10″タム",

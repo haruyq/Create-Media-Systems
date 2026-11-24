@@ -383,6 +383,12 @@ final class WearableScreen extends KeysScreen {
         return true;
     }
 
+    @Override protected void releaseComputer() {
+        for (int key : List.copyOf(typed.keySet())) keyReleased(key, 0, 0);
+        if (space) keyReleased(GLFW.GLFW_KEY_SPACE, 0, 0);
+        if (mouseNote >= 0 || bendDragged) mouseReleased(0, 0, 0);
+    }
+
     @Override public boolean mouseClicked(double x, double y, int button) {
         if (super.mouseClicked(x, y, button)) return true;
         if (button != 0) return false;
