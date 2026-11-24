@@ -53,7 +53,7 @@
   "stage_custom.create_media_systems.hat_open": "ハイハットを開きました",
   "stage_custom.create_media_systems.hat_closed": "ハイハットを閉じました",
   "subtitles.create_media_systems.stage_custom": "ドラムセットが鳴る",
-  "steelpan.range": "ローCリード  •  C4–E6",
+  "steelpan.range": "C4–E6",
   "steelpan.controls": "打面をクリック、または表示されたキーで演奏　Shift で弱く",
   "create_media_systems.keys.note_trails": "ノーツ発光",
   "create_media_systems.keys.note_speed": "ノーツ速度 %s",

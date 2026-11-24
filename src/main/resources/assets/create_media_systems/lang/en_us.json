@@ -53,7 +53,7 @@
   "stage_custom.create_media_systems.hat_open": "Hi-hat opened",
   "stage_custom.create_media_systems.hat_closed": "Hi-hat closed",
   "subtitles.create_media_systems.stage_custom": "Drum kit plays",
-  "steelpan.range": "LOW C LEAD  •  C4–E6",
+  "steelpan.range": "C4–E6",
   "steelpan.controls": "Click a field or press its labeled key · Shift softer",
   "create_media_systems.keys.note_trails": "Note lights",
   "create_media_systems.keys.note_speed": "Note speed %s",
