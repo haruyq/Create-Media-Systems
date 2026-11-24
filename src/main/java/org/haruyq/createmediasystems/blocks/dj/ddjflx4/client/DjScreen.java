@@ -68,14 +68,14 @@ final class DjScreen extends InstrumentScreen {
         displayY = 22;
         unit = wide / across;
         top = displayY + wide * DjDisplay.HEIGHT / DjDisplay.WIDTH + wide * .02f;
-        if (addToggle((int) (left + wide), 3)) return;
+        if (addToggle(width - 8, 3)) return;
         host = addRenderableWidget(Button.builder(Component.empty(), button -> {
             if (DjClient.hosting(pos)) {
                 DjClient.stop();
             } else {
                 DjClient.host(pos);
             }
-        }).bounds((int) left + font.width(title) + 8, 3, 70, 16)
+        }).bounds(16 + font.width(title), 3, 70, 16)
                 .tooltip(Tooltip.create(Component.translatable("create_media_systems.ddj_flx4.host_help"))).build());
     }
 
@@ -120,7 +120,7 @@ final class DjScreen extends InstrumentScreen {
         boolean mine = DjClient.hosting(pos);
         host.setMessage(Component.translatable(mine ? "create_media_systems.ddj_flx4.stop" : "create_media_systems.ddj_flx4.host"));
         host.active = mine || controller.host() == null;
-        drawHeader(g, (int) left, 7, Component.empty(), 0);
+        drawHeader(g, 8, 7, Component.empty(), 0);
         g.drawString(font, status(controller), host.getRight() + 6, 7, 0xFFFFFFFF);
         DjClient.Status status = DjClient.status(pos);
         if (status != null && !status.problem().getString().isEmpty()) {

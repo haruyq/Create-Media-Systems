@@ -667,7 +667,7 @@
   "block.create_media_systems.midi_keyboard": "Koland A-88MKII MIDIキーボード",
   "create_media_systems.keys.hide": "非表示",
   "create_media_systems.keys.show": "表示",
-  "create_media_systems.keys.hide_help": "この画面を隠す、または表示します。隠している間も、パソコンのキーとMIDIキーボードで演奏できます。",
+  "create_media_systems.keys.hide_help": "この画面を隠す、または表示します。隠している間も演奏を続けられます。",
   "create_media_systems.keyboard.control.bank_down": "BANK ◄: パッドのバンク(全16)を1つ戻します。",
   "create_media_systems.keyboard.control.bank_up": "BANK ►: パッドのバンク(全16)を1つ進めます。",
   "create_media_systems.keyboard.control.snapshot": "SNAP SHOT: 保存した8つのパネル設定を呼び出します。押してからパッドを選び、NEXTで確定。SHIFT点灯中は、現在の設定をそのパッドに保存します。",
