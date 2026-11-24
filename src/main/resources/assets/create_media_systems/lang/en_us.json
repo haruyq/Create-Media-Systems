@@ -704,6 +704,8 @@
   "create_media_systems.keyboard.control.octave_down": "OCTAVE -: an octave down (to -4). With TRANSPOSE lit a semitone down, with SHIFT lit a lighter velocity curve.",
   "create_media_systems.keyboard.control.octave_up": "OCTAVE +: an octave up (to +5). With TRANSPOSE lit a semitone up, with SHIFT lit a heavier velocity curve.",
   "create_media_systems.keyboard.control.lever": "Pitch bend / modulation lever: drag left and right to bend, push it away to add vibrato.",
+  "create_media_systems.keyboard.snapshot_store": "STORE: pick a pad, then NEXT",
+  "create_media_systems.keyboard.snapshot_recall": "RECALL: pick a pad, then NEXT",
   "create_media_systems.ponder.midi_keyboard.header": "The MIDI Keyboard",
   "create_media_systems.ponder.midi_keyboard.text_1": "The keyboard is three blocks wide in one block: set it on a desk with room to either side. Right-click it to play, or join someone already playing.",
   "create_media_systems.ponder.midi_keyboard.text_2": "Its keys, pads, knobs and buttons are worked with the mouse. The computer's keyboard plays it too: the rows from Z and from Q are its keys, Space its damper pedal. A real MIDI keyboard plugged into the computer plays it as well.",

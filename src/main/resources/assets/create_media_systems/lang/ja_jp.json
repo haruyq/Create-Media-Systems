@@ -704,6 +704,8 @@
   "create_media_systems.keyboard.control.octave_down": "OCTAVE -: 1オクターブ下げます(-4まで)。TRANSPOSE点灯中は半音下、SHIFT点灯中は軽いベロシティカーブへ。",
   "create_media_systems.keyboard.control.octave_up": "OCTAVE +: 1オクターブ上げます(+5まで)。TRANSPOSE点灯中は半音上、SHIFT点灯中は重いベロシティカーブへ。",
   "create_media_systems.keyboard.control.lever": "ピッチベンド/モジュレーションレバー: 左右にドラッグでベンド、奥へ押すとビブラート。",
+  "create_media_systems.keyboard.snapshot_store": "保存: パッドを選んでNEXT",
+  "create_media_systems.keyboard.snapshot_recall": "呼び出し: パッドを選んでNEXT",
   "create_media_systems.ponder.midi_keyboard.header": "MIDIキーボードを演奏する",
   "create_media_systems.ponder.midi_keyboard.text_1": "キーボードは1ブロックで横3ブロック分の幅があります。左右に余裕のある机の上に置きましょう。右クリックで演奏でき、誰かが弾いている途中でも参加できます。",
   "create_media_systems.ponder.midi_keyboard.text_2": "鍵盤、パッド、つまみ、ボタンはマウスで操作します。パソコンのキーボードでも弾けます。Zの段とQの段が鍵盤、Spaceがダンパーペダルです。パソコンにつないだ本物のMIDIキーボードでも演奏できます。",

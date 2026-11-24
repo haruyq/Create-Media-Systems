@@ -151,7 +151,7 @@ final class KeyboardScreen extends KeysScreen {
     private String status(Panel panel) {
         List<String> set = new ArrayList<>();
         if (controller.snapshotMode() != 0) {
-            set.add((controller.snapshotMode() == Controller.WRITE ? "STORE" : "RECALL") + ": PAD, NEXT");
+            set.add(Component.translatable(KEY + (controller.snapshotMode() == Controller.WRITE ? "snapshot_store" : "snapshot_recall")).getString());
         }
         if (panel.octave != 0) {
             set.add("OCT " + signed(panel.octave));
