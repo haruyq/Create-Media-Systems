@@ -1,10 +1,9 @@
 package org.haruyq.createmediasystems.playback;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +14,7 @@ import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.haruyq.createmediasystems.Downloads;
 import org.haruyq.createmediasystems.client.ClientFiles;
 
 import org.jetbrains.annotations.Nullable;
@@ -148,23 +148,10 @@ final class Vlc {
         }
         String url = "https://download.videolan.org/pub/videolan/vlc/" + VERSION + "/win64/vlc-" + VERSION + "-win64.zip";
         LogUtils.getLogger().info("Downloading VLC {} into {}", VERSION, dir);
-        byte[] bytes;
-        try {
-            HttpResponse<byte[]> response = NativeMediaResolver.HTTP.send(HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofMinutes(10)).build(), HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() != 200) {
-                throw new IOException("HTTP " + response.statusCode() + " for " + url);
-            }
-            bytes = response.body();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted", e);
-        }
-        if (!SHA256.equalsIgnoreCase(AudioCache.sha256(bytes))) {
-            throw new IOException("The VLC download does not match VideoLAN's SHA-256");
-        }
+        var bytes = new ByteArrayOutputStream();
+        Downloads.verified(NativeMediaResolver.HTTP, URI.create(url), bytes, SHA256, 256 * 1024 * 1024, Duration.ofMinutes(30), "VLC", null);
         String root = "vlc-" + VERSION + "/";
-        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
             for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
                 String name = entry.getName().replace('\\', '/');
                 if (entry.isDirectory() || !name.startsWith(root) || !Parts.kept(name.substring(root.length()))) {

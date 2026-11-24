@@ -1,11 +1,7 @@
 .gradle/
 build/
 run/
-run-launcher-*/
 hs_err_pid*.log
-run-lighting-demo/
-run-sable-lighting-demo/
-run-lighting-benchmark/
 out/
 *.iml
 .idea/

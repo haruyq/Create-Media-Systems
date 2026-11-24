@@ -1,6 +1,5 @@
 package org.haruyq.createmediasystems.disc;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -28,8 +27,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -241,17 +238,18 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         }
     }
 
-    /** Client → server: the viewers of the disc this player shares through the emulator at {@code pos}, once a second. */
-    public record Viewers(BlockPos pos, List<Viewer> viewers) implements CustomPacketPayload {
+    /**
+     * Client → server: the viewers of what this player shares through the block at {@code pos}, once a second: an
+     * emulator's disc ({@link #TYPE}) or a screen server's share, each under its own type.
+     */
+    public record Viewers(Type<Viewers> type, BlockPos pos, List<Viewer> viewers) implements CustomPacketPayload {
         public static final Type<Viewers> TYPE = new Type<>(CreateMediaSystems.id("drive_viewers"));
-        public static final StreamCodec<ByteBuf, Viewers> CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC, Viewers::pos,
-                Viewer.CODEC.apply(ByteBufCodecs.list(64)), Viewers::viewers,
-                Viewers::new);
 
-        @Override
-        public Type<Viewers> type() {
-            return TYPE;
+        public static StreamCodec<ByteBuf, Viewers> codec(Type<Viewers> type) {
+            return StreamCodec.composite(
+                    BlockPos.STREAM_CODEC, Viewers::pos,
+                    Viewer.CODEC.apply(ByteBufCodecs.list(64)), Viewers::viewers,
+                    (pos, viewers) -> new Viewers(type, pos, viewers));
         }
     }
 
@@ -262,7 +260,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                         payload.disc() < 0 ? null : Disc.byId(payload.disc()));
             }
         });
-        registrar.playToServer(Viewers.TYPE, Viewers.CODEC, (payload, context) -> {
+        registrar.playToServer(Viewers.TYPE, Viewers.codec(Viewers.TYPE), (payload, context) -> {
             if (emulator(context.player(), payload.pos()) instanceof Entity emulator) {
                 emulator.viewers((ServerPlayer) context.player(), payload.viewers());
             }
@@ -289,9 +287,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         private boolean spinning;
         /** Whether what it is beside has its disc but still loads it: shared, yet nothing of it is seen or heard so far. */
         private boolean starting;
-        /** The disc's viewers by name, as its host's client last told. Not saved. */
-        private List<Viewer> viewers = List.of();
-        private List<String> viewerNames = List.of();
+        private final ViewerList viewers = new ViewerList();
 
         public Entity(BlockPos pos, BlockState state) {
             super(DiscFeature.DRIVE_EMULATOR_ENTITY.get(), pos, state);
@@ -348,13 +344,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         }
 
         public boolean feeds(Disc kind) {
-            for (Direction side : Direction.values()) {
-                if (level != null && level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed
-                        && fed.plays(kind.kind)) {
-                    return true;
-                }
-            }
-            return false;
+            return DiscDrive.feeds(level, worldPosition, kind.kind);
         }
 
         public boolean feedsAny() {
@@ -408,21 +398,9 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
         }
 
         void viewers(ServerPlayer player, List<Viewer> told) {
-            if (!player.getUUID().equals(host) || drive != Drive.READY || told.equals(viewers)) {
-                return;
+            if (player.getUUID().equals(host) && drive == Drive.READY && viewers.tell(player, told)) {
+                sendData();
             }
-            List<Viewer> known = new ArrayList<>();
-            List<String> names = new ArrayList<>();
-            for (Viewer viewer : told) {
-                ServerPlayer watching = player.server.getPlayerList().getPlayer(viewer.id());
-                if (watching != null) {
-                    known.add(viewer);
-                    names.add(watching.getGameProfile().getName());
-                }
-            }
-            viewers = known;
-            viewerNames = names;
-            sendData();
         }
 
         void release() {
@@ -441,8 +419,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
 
         private void changed(@Nullable Player by, boolean relinked) {
             if (drive != Drive.READY) {
-                viewers = List.of();
-                viewerNames = List.of();
+                viewers.clear();
             }
             setChanged();
             if (level == null || level.isClientSide) {
@@ -452,15 +429,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             if (getBlockState().getValue(LIT) != (drive != Drive.OPEN) && level.getBlockState(worldPosition).is(getBlockState().getBlock())) {
                 level.setBlockAndUpdate(worldPosition, getBlockState().setValue(LIT, drive != Drive.OPEN));
             }
-            for (Direction side : Direction.values()) {
-                if (level.getBlockEntity(worldPosition.relative(side)) instanceof DiscDrive.Fed fed) {
-                    if (relinked) {
-                        fed.driveRelinked(by);
-                    } else {
-                        fed.driveChanged(by);
-                    }
-                }
-            }
+            DiscDrive.changed(level, worldPosition, by, relinked);
             turn();
         }
 
@@ -531,17 +500,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
                 tooltip.add(Component.literal("     ").append(status()));
                 return true;
             }
-            tooltip.add(Component.literal("     ").append(Component.translatable(viewers.isEmpty()
-                    ? "create_media_systems.drive.no_viewers" : "create_media_systems.drive.viewers")).withStyle(ChatFormatting.GRAY));
-            for (int i = 0; i < viewers.size(); i++) {
-                Viewer viewer = viewers.get(i);
-                Stability stability = viewer.stability(disc);
-                tooltip.add(Component.literal("     " + viewerNames.get(i) + "  ").withStyle(ChatFormatting.WHITE)
-                        .append(Component.translatable("create_media_systems.drive.stability."
-                                + stability.name().toLowerCase(Locale.ROOT)).withStyle(stability.color))
-                        .append(Component.literal(!viewer.measured() ? "" : String.format(Locale.ROOT, "  %d ms  %.1f Mbps",
-                                viewer.rttMillis(), viewer.kbps() / 1000.0)).withStyle(ChatFormatting.GRAY)));
-            }
+            viewers.describe(tooltip, disc);
             return true;
         }
 
@@ -560,17 +519,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             if (clientPacket) {
                 tag.putBoolean("Spinning", spinning);
                 tag.putBoolean("Starting", starting);
-                ListTag list = new ListTag();
-                for (int i = 0; i < viewers.size(); i++) {
-                    CompoundTag viewer = new CompoundTag();
-                    viewer.putUUID("Id", viewers.get(i).id());
-                    viewer.putString("Name", viewerNames.get(i));
-                    viewer.putBoolean("Measured", viewers.get(i).measured());
-                    viewer.putInt("Rtt", viewers.get(i).rttMillis());
-                    viewer.putInt("Kbps", viewers.get(i).kbps());
-                    list.add(viewer);
-                }
-                tag.put("Viewers", list);
+                viewers.write(tag);
             }
         }
 
@@ -587,15 +536,7 @@ public class DriveEmulatorBlock extends HorizontalDirectionalBlock implements En
             if (clientPacket) {
                 spinning = tag.getBoolean("Spinning");
                 starting = tag.getBoolean("Starting");
-                List<Viewer> known = new ArrayList<>();
-                List<String> names = new ArrayList<>();
-                for (Tag each : tag.getList("Viewers", Tag.TAG_COMPOUND)) {
-                    CompoundTag viewer = (CompoundTag) each;
-                    known.add(new Viewer(viewer.getUUID("Id"), viewer.getBoolean("Measured"), viewer.getInt("Rtt"), viewer.getInt("Kbps")));
-                    names.add(viewer.getString("Name"));
-                }
-                viewers = known;
-                viewerNames = names;
+                viewers.read(tag);
             }
         }
     }

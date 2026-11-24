@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.items.power.client;
 
 import org.haruyq.createmediasystems.client.ClientFeature;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.items.power.PowerFeature;
 
@@ -12,7 +13,6 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 public final class BatteryRenderer extends BlockEntityWithoutLevelRenderer {
@@ -23,13 +23,8 @@ public final class BatteryRenderer extends BlockEntityWithoutLevelRenderer {
     }
 
     public static final ClientFeature CLIENT = (IEventBus modBus) -> modBus.addListener(
-            (RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-                private BatteryRenderer renderer;
-                @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                    if (renderer == null) renderer = new BatteryRenderer();
-                    return renderer;
-                }
-            }, PowerFeature.BATTERY.get()));
+            (RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, BatteryRenderer::new,
+                    PowerFeature.BATTERY.get()));
 
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack p, MultiBufferSource buffers, int light, int overlay) {

@@ -42,7 +42,7 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 public final class ServerConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
     public static final ModConfigSpec.ConfigValue<String> API_URL = BUILDER
-            .comment("Base URL of the audio API (endpoints in API.md). Clients stream from it; the server asks it for track lengths.")
+            .comment("Base URL of the audio API (CMS-API). Clients stream from it; the server asks it for track lengths.")
             .define("apiUrl", "http://127.0.0.1:8000", o -> o instanceof String base && ApiHttp.isBase(base));
     public static final ModConfigSpec.ConfigValue<List<? extends String>> ALLOWED_HOSTS = BUILDER
             .comment("Hosts (and their subdomains) a disc, announcement or image viewer may link to.")

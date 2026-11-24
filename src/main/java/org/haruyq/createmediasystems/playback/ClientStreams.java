@@ -29,7 +29,6 @@ import com.mojang.logging.LogUtils;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
-import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
@@ -118,11 +117,6 @@ public final class ClientStreams {
         /** Where in its track what is heard now is, of an API stream (s); -1 if nothing is, or it plays natively. */
         public double audibleSeconds() {
             return sound == null ? -1 : sound.audibleSeconds();
-        }
-
-        /** Where in its track the API was last asked to stream from (s); -1 before it was. */
-        public double requestedSeconds() {
-            return sound == null ? -1 : sound.requestedSeconds();
         }
 
         public void sync(double seconds) {
@@ -333,28 +327,6 @@ public final class ClientStreams {
     }
 
     private ClientStreams() {
-    }
-
-    /**
-     * One source's side playing here, for dev probes: its emitters, how they are heard together as of this tick, and
-     * its stream (null while none plays), and whether that waits for a channel.
-     */
-    public record SideView(BlockPos source, Streams.Channel channel, int emitters, boolean present, boolean nearby,
-                           double gain, @Nullable SoundInstance sound, boolean waitingForChannel) {
-    }
-
-    public static List<SideView> sides() {
-        return GROUPS.entrySet().stream().map(entry -> {
-            Group group = entry.getValue();
-            StreamSound sound = group.slot.sound;
-            return new SideView(entry.getKey().source(), entry.getKey().channel(), group.emitters.size(),
-                    group.present, group.nearby, group.gain, sound, sound != null && sound.waitingForChannel());
-        }).toList();
-    }
-
-    /** How many streams play for a side no emitter here plays any more (none, unless one leaked). */
-    public static long orphans() {
-        return PLAYING.stream().filter(slot -> slot.side != null && !GROUPS.containsKey(slot.side)).count();
     }
 
     public static void register(IEventBus modBus) {

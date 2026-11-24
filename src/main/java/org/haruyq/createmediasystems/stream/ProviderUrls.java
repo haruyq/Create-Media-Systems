@@ -5,7 +5,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** The pages the API resolves to their media (see API.md); does not grant access outside the server allow-list. */
+/** The pages the API resolves to their media (see CMS-API); does not grant access outside the server allow-list. */
 public final class ProviderUrls {
     private static final Pattern CCTV = Pattern.compile("(?:[a-z0-9-]+\\.)*(?:cctv\\.com|cntv\\.cn|cntv\\.com)");
     private static final Set<String> BILIBILI = Set.of("bilibili.com", "www.bilibili.com", "m.bilibili.com");

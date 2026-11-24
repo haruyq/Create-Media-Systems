@@ -37,6 +37,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.haruyq.createmediasystems.ApiHttp;
+import org.haruyq.createmediasystems.Downloads;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -186,8 +187,7 @@ public final class Transport implements AutoCloseable {
      */
     public static Transport open(String apiBase, Protocol.Ticket ticket, Listener listener) {
         URI uri = Protocol.endpoint(apiBase, "p2p/sessions/" + ticket.sessionId() + "/signal", true);
-        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-        Socket socket = new Socket(http, uri, ticket.token());
+        Socket socket = new Socket(P2p.HTTP, uri, ticket.token());
         Transport transport = new Transport(ticket, listener, socket::send, socket::close);
         socket.signal = transport::signal;
         socket.fail = transport::fail;
@@ -284,28 +284,9 @@ public final class Transport implements AutoCloseable {
         URI uri = URI.create("https://repo1.maven.org/maven2/dev/onvoid/webrtc/webrtc-java/" + WEBRTC_VERSION
                 + "/webrtc-java-" + WEBRTC_VERSION + "-" + platform + ".jar");
         LOGGER.info("Downloading native WebRTC from {}", uri);
-        java.net.http.HttpResponse<byte[]> response;
-        try {
-            response = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build().send(
-                    java.net.http.HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(5)).build(),
-                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted", e);
-        }
-        if (response.statusCode() != 200) {
-            throw new IOException("Native WebRTC could not be downloaded (HTTP " + response.statusCode() + ")");
-        }
-        try {
-            String sha256 = java.util.HexFormat.of().formatHex(
-                    java.security.MessageDigest.getInstance("SHA-256").digest(response.body()));
-            if (!sha256.equals(NATIVES.get(platform))) {
-                throw new IOException("The native WebRTC download does not match its SHA-256");
-            }
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-        return response.body();
+        var jar = new java.io.ByteArrayOutputStream();
+        Downloads.verified(P2p.HTTP, uri, jar, NATIVES.get(platform), 128 * 1024 * 1024, Duration.ofMinutes(30), "Native WebRTC", null);
+        return jar.toByteArray();
     }
 
     /** The library and its licenses (META-INF/LICENSE, NOTICE, licenses/) out of {@code jar}, into {@code target}. */

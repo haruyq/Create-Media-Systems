@@ -20,6 +20,7 @@ import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Synthesizer;
 
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Controller;
+import org.haruyq.createmediasystems.client.MidiPort;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -33,7 +34,7 @@ import com.mojang.logging.LogUtils;
  */
 final class MidiInput {
     private static final long CONTINUOUS_MILLIS = 5;
-    /** Opens and closes the devices: looking them up alone can take seconds. */
+    /** Passes on the wheels, pedals and pressure; MidiPort's thread opens and closes the devices. */
     private static final ScheduledExecutorService WORKER = Executors.newSingleThreadScheduledExecutor(task -> {
         Thread thread = new Thread(task, "CMS MIDI input");
         thread.setDaemon(true);
@@ -59,7 +60,7 @@ final class MidiInput {
     /** Opens the inputs for {@code controller}, closing those open for another; {@code only} names the ones to take, empty for all. */
     static void open(Controller controller, String only) {
         names = null;
-        WORKER.execute(() -> {
+        MidiPort.onDevices(() -> {
             closeAll();
             List<String> opened = new ArrayList<>();
             In in = receiving = new In(controller);
@@ -84,7 +85,7 @@ final class MidiInput {
     }
 
     static void close() {
-        WORKER.execute(MidiInput::closeAll);
+        MidiPort.onDevices(MidiInput::closeAll);
     }
 
     private static void closeAll() {

@@ -44,13 +44,8 @@ public final class EmitterAudioManager {
     private static final Map<UUID, Playing> PLAYING = new HashMap<>();
     private static int ticks;
 
-    /** How one emitter is heard here now, for diagnostics; seconds are -1 where unknown. */
-    public record Heard(UUID id, int revision, double startSeconds, double serverSeconds, double audibleSeconds,
-                        boolean stream, double requestedSeconds, double pitch, double gain) {
-    }
-
     /** One emitter playing here: as it was when it started ({@code revision}, at {@code startedAt}), on one of the two. */
-    private record Playing(MusicEmitter emitter, int revision, int startedAt, double startSeconds,
+    private record Playing(MusicEmitter emitter, int revision, int startedAt,
                            @Nullable ClientStreams.Slot stream, @Nullable EmitterRecordSound record) {
         /** Still playing, loading, or waiting for a channel. */
         boolean active() {
@@ -90,18 +85,6 @@ public final class EmitterAudioManager {
     public static MusicEmitter playing(UUID id) {
         Playing playing = PLAYING.get(id);
         return playing == null ? null : playing.emitter;
-    }
-
-    /** How the emitter {@code id} is heard here now; null if it isn't played here. */
-    @Nullable
-    public static Heard heard(UUID id) {
-        Playing p = PLAYING.get(id);
-        return p == null ? null : new Heard(id, p.revision, p.startSeconds, p.emitter.seconds(), p.audibleSeconds(),
-                p.stream != null, p.stream != null ? p.stream.requestedSeconds() : -1, pitch(p.emitter), gain(p.emitter));
-    }
-
-    public static List<Heard> heard() {
-        return PLAYING.keySet().stream().map(EmitterAudioManager::heard).toList();
     }
 
     /** Whether {@code sound} is a music emitter's record (its link plays as a StreamSound). */
@@ -171,12 +154,12 @@ public final class EmitterAudioManager {
             }
             ClientStreams.Slot slot = new ClientStreams.Slot("emitter " + emitter.id());
             slot.play(new StreamSound(emitter.viaApi() ? spec.viaApi() : spec));
-            return new Playing(emitter, revision, ticks, at, slot, null);
+            return new Playing(emitter, revision, ticks, slot, null);
         }
         return MediaItem.song(media, mc.level.registryAccess()).map(song -> {
             var record = new EmitterRecordSound(emitter, revision, song.value().soundEvent().value());
             mc.getSoundManager().play(record);
-            return new Playing(emitter, revision, ticks, at, null, record);
+            return new Playing(emitter, revision, ticks, null, record);
         }).orElse(null);
     }
 

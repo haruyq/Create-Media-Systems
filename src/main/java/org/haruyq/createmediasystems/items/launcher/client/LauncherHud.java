@@ -27,7 +27,6 @@ public final class LauncherHud {
     private static final int WIDTH=318,HEIGHT=88;
     private static int spareCells,cachedTick=Integer.MIN_VALUE;
     private static Object cachedPlayer;
-    static boolean reticleDrawn;
     private LauncherHud() {}
     public static void register(IEventBus bus) {
         bus.addListener((RegisterGuiLayersEvent event)->event.registerAbove(VanillaGuiLayers.CROSSHAIR,LAYER,LauncherHud::render));
@@ -41,7 +40,7 @@ public final class LauncherHud {
         var mc=Minecraft.getInstance();if(e.getName().equals(VanillaGuiLayers.CROSSHAIR) && visible(mc) && mc.options.getCameraType().isFirstPerson())e.setCanceled(true);
     }
     private static void render(GuiGraphics g,DeltaTracker delta) {
-        reticleDrawn=false;var mc=Minecraft.getInstance();if(!visible(mc))return;
+        var mc=Minecraft.getInstance();if(!visible(mc))return;
         var gun=mc.player.getMainHandItem();var r=LauncherReadout.of(gun);var tier=r.tier();
         boolean reload=LauncherMagazine.reloading(gun),eject=LauncherMagazine.ejecting(gun),low=r.shots()<=Math.max(3,r.capacity()/5);
         int accent=r.hasCell()?0xFF000000|tier.color:MUTED;
@@ -137,7 +136,6 @@ public final class LauncherHud {
 
     private static void reticle(GuiGraphics g,Minecraft mc,float unit,float aim,boolean reload,boolean locked) {
         if(reload)return;
-        reticleDrawn=true;
         g.pose().pushPose();g.pose().translate(g.guiWidth()*.5f,g.guiHeight()*.5f,0);g.pose().scale(unit,unit,1);
         float movement=(float)Math.min(1,mc.player.getDeltaMovement().horizontalDistance()*4);
         float gap=5+movement*3+LauncherClient.kick(1)*3;

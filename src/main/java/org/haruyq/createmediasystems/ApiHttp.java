@@ -7,10 +7,7 @@ import java.util.Locale;
 
 import com.google.gson.JsonParser;
 
-/**
- * The CMS-API's addresses (see API.md) and how its errors read. Free of Minecraft classes, so it is unit tested and
- * the standalone P2P app (tools/p2p-test) builds it as it is.
- */
+/** The CMS-API's addresses (see the CMS-API README) and how its errors read. */
 public final class ApiHttp {
     private ApiHttp() {
     }
@@ -29,14 +26,14 @@ public final class ApiHttp {
         return apiBase.replaceAll("/+$", "") + "/" + path;
     }
 
-    /** {@code GET {apiBase}/{name}?url=<source>} (video, info, resolve; see API.md). */
+    /** {@code GET {apiBase}/{name}?url=<source>} (video, info, resolve; see the CMS-API README). */
     public static String endpoint(String apiBase, String name, String url) {
         return api(apiBase, name) + "?url=" + URLEncoder.encode(url.trim(), StandardCharsets.UTF_8);
     }
 
     /**
-     * {@code GET {apiBase}/stream?url=<source>[&start=<seconds>][&channel=left|right]&format=ogg}, see API.md. Ogg
-     * Vorbis is a tenth of the raw PCM's bandwidth; an API without it answers PCM, which plays as before.
+     * {@code GET {apiBase}/stream?url=<source>[&start=<seconds>][&channel=left|right]&format=ogg}, see the CMS-API README.
+     * Ogg Vorbis is a tenth of the raw PCM's bandwidth; an API without it answers PCM, which plays as before.
      */
     public static String streamUrl(String apiBase, String url, double startSeconds, String channel) {
         String query = startSeconds > 0 ? "&start=" + String.format(Locale.ROOT, "%.2f", startSeconds) : "";

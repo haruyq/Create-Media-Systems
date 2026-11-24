@@ -102,6 +102,15 @@ public final class Mesh {
         quad(p, v, x0, y0, z1, x0, y0, z0, x0, y1, z0, x0, y1, z1, -1, 0, 0, tile, light, overlay);
     }
 
+    /** A flat rectangle lying {@code y} high, as bright as it is whatever the light: a lamp. */
+    public static void glow(PoseStack pose, VertexConsumer lit, float x0, float z0, float x1, float z1, float y, int color) {
+        int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
+        lit.addVertex(pose.last(), x0, y, z0).setColor(r, g, b, 255);
+        lit.addVertex(pose.last(), x0, y, z1).setColor(r, g, b, 255);
+        lit.addVertex(pose.last(), x1, y, z1).setColor(r, g, b, 255);
+        lit.addVertex(pose.last(), x1, y, z0).setColor(r, g, b, 255);
+    }
+
     /**
      * A flat ring (a disk when {@code inner} is 0) around (x, y) in the plane at z, facing +z or -z by the sign of
      * {@code facing}, in {@code segments} sectors each coloured by the angle it starts at.

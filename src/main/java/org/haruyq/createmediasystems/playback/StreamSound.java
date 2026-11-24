@@ -40,7 +40,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Plays a {@link StreamSpec}: on the native player (see NativeAudio), or as the API's {@code /stream} response (raw
- * PCM s16le, 48 kHz, mono, or that as Ogg Vorbis; see API.md), streamed.
+ * PCM s16le, 48 kHz, mono, or that as Ogg Vorbis; see CMS-API), streamed.
  */
 public final class StreamSound extends AbstractTickableSoundInstance {
     // The engine queues 4 one-second buffers on start, from its own thread; have them ready.
@@ -56,7 +56,7 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private static final int CHANNEL_RETRY_TICKS = 20;
     /**
      * What the server waits for its listeners to load a track (see Streams#MAX_LOAD_TICKS): the API may first wait out
-     * YouTube's pre-roll ad before the audio exists (see API.md).
+     * YouTube's pre-roll ad before the audio exists (see CMS-API).
      */
     private static final Duration REQUEST_TIMEOUT =
             Duration.ofNanos(Streams.MAX_LOAD_TICKS * PlaybackClock.NANOS_PER_TICK);
@@ -71,7 +71,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private final StreamSpec spec;
     /** When the server said to play: a stream joining mid-way catches up on its own start-up delay from here. */
     private final long requestedAt = System.nanoTime();
-    private volatile double requestedSeconds = -1;
     /**
      * The server's word to play, which a source's stream waits for once loaded (see NativeAudio#open); null for one
      * that plays at once (an announcement, a portable emitter).
@@ -204,11 +203,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     public double audibleSeconds() {
         PcmStream current = stream;
         return current == null ? -1 : current.heardSeconds(System.nanoTime());
-    }
-
-    /** Where in its track the API was last asked to stream from (s); -1 before it was. */
-    public double requestedSeconds() {
-        return requestedSeconds;
     }
 
     @Nullable
@@ -350,7 +344,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private InputStream request(double offset) throws IOException {
         try {
             URI uri = URI.create(spec.request(ServerConfig.API_URL.get(), offset));
-            requestedSeconds = Math.max(0, spec.startSeconds() + offset);
             HttpResponse<InputStream> response = HTTP.send(HttpRequest.newBuilder(uri).timeout(REQUEST_TIMEOUT).build(),
                     HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() != 200) {
