@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -75,6 +76,8 @@ class SynthTest {
         // A variation or kit the bank lacks plays the plain one.
         assertEquals(font.preset(0, 5), font.preset(99, 5));
         assertEquals(font.preset(SoundFont.DRUMS, 0), font.preset(SoundFont.DRUMS, 99));
+        assertEquals(font.name(0, 0), font.names().get(0));
+        assertEquals(font.name(SoundFont.DRUMS, 0), font.names().get(SoundFont.DRUMS << 8));
     }
 
     @Test
@@ -165,5 +168,49 @@ class SynthTest {
         float[] open = render(synth, 0.4), closed = render(cut, 0.4);
         assertTrue(loudness(open, 0.15, 0.4) > 0.005, "open: " + loudness(open, 0.15, 0.4));
         assertTrue(loudness(closed, 0.15, 0.4) < loudness(open, 0.15, 0.4) / 3);
+    }
+
+    @Test
+    void anyChannelOnBank120PlaysDrumsAndOtherwiseOnlyTheTenth() {
+        Synth drums = new Synth(font), piano = new Synth(font), many = new Synth(font, 96, 49), few = new Synth(font);
+        drums.send(note(true, Synth.DRUM_CHANNEL, 38, 100));
+        piano.send(note(true, 0, 38, 100));
+        many.send(Synth.message(Synth.CONTROL, 41, Synth.BANK, 120));
+        many.send(Synth.message(Synth.PROGRAM, 41, 0, 0));
+        many.send(note(true, 41, 38, 100));
+        Synth melodic = new Synth(font, 96, 49);
+        // The tenth of its sixteen, but not the tenth channel.
+        melodic.send(note(true, 25, 38, 100));
+        few.send(note(true, 41, 38, 100));
+        assertArrayEquals(render(drums, 0.3), render(many, 0.3));
+        assertArrayEquals(render(piano, 0.3), render(melodic, 0.3));
+        render(few, 0.1);
+        assertTrue(few.silent(), "a channel it lacks plays nothing");
+    }
+
+    @Test
+    void aStrikeIsAsLoudAsItSaysWhateverItsVelocity() {
+        double hard = loudness(strike(127, 0), 0, 0.5);
+        assertEquals(hard, loudness(strike(20, 0), 0, 0.5), hard * 0.02);
+        assertEquals(0.5, loudness(strike(127, -6), 0, 0.5) / hard, 0.03);
+    }
+
+    private static float[] strike(int velocity, float decibels) {
+        Synth synth = new Synth(font);
+        synth.send(Synth.message(Synth.CONTROL, 0, 91, 0));
+        synth.strike(note(true, 0, 60, velocity), 75, decibels, 0);
+        return render(synth, 0.5);
+    }
+
+    @Test
+    void itSoundsNoMoreVoicesThanItHas() {
+        Synth one = new Synth(font, 1, 16);
+        one.send(Synth.message(Synth.CONTROL, 0, 91, 0));
+        one.send(Synth.message(Synth.PROGRAM, 0, 19, 0));
+        one.send(note(true, 0, 60, 100));
+        render(one, 0.1);
+        one.send(note(true, 0, 67, 100));
+        float[] audio = render(one, 0.5);
+        assertTrue(share(audio, 261.63) < share(audio, 392.0) / 20);
     }
 }

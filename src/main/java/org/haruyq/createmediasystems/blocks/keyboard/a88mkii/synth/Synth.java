@@ -8,9 +8,9 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont.Mod
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont.Region;
 
 /**
- * A General MIDI sound module playing a {@link SoundFont}: 16 channels (the tenth drums), fed MIDI channel messages
- * from any thread ({@link #send}) and rendered in stereo by one ({@link #render}). A message sounds from the next
- * render on, so how soon is up to how little is rendered at a time.
+ * A General MIDI sound module playing a {@link SoundFont}: 16 channels or more (the tenth drums, and any other on
+ * bank 120), fed MIDI channel messages from any thread ({@link #send}) and rendered in stereo by one ({@link #render}).
+ * A message sounds from the next render on, so how soon is up to how little is rendered at a time.
  */
 public final class Synth {
     public static final int RATE = 48_000;
@@ -25,16 +25,16 @@ public final class Synth {
             ATTACK_TIME = 73, BRIGHTNESS = 74, REVERB_SEND = 91, CHORUS_SEND = 93, ALL_SOUND_OFF = 120,
             RESET_CONTROLLERS = 121, ALL_NOTES_OFF = 123;
 
-    private static final int VOICES = 96;
     private static final float MASTER = 1.4f, SECONDS = BLOCK / (float) RATE;
     /** How quiet (dB) a voice is when it is done. */
     private static final float SILENT = 96;
     private static final int WAITING = 0, RISING = 1, HELD = 2, FALLING = 3, SUSTAINED = 4, LET_GO = 5, DONE = 6;
 
     private final SoundFont font;
-    private final ConcurrentLinkedQueue<Integer> incoming = new ConcurrentLinkedQueue<>();
-    private final Channel[] channels = new Channel[16];
-    private final Voice[] voices = new Voice[VOICES];
+    /** Messages, and {@link Strike}s, in the order they were sent. */
+    private final ConcurrentLinkedQueue<Object> incoming = new ConcurrentLinkedQueue<>();
+    private final Channel[] channels;
+    private final Voice[] voices;
     private final float[] busLeft = new float[BLOCK], busRight = new float[BLOCK], reverbSend = new float[BLOCK],
             chorusSend = new float[BLOCK];
     private final Reverb reverb = new Reverb();
@@ -44,24 +44,46 @@ public final class Synth {
     private int idleBlocks = Integer.MAX_VALUE / 2;
     private volatile boolean silent = true;
 
+    private record Strike(int message, int select, float decibels, float cents) {
+    }
+
     public Synth(SoundFont font) {
+        this(font, 96, 16);
+    }
+
+    /** One that sounds at most {@code voices} at once, on {@code channels} channels (see {@link #message}). */
+    public Synth(SoundFont font, int voices, int channels) {
         this.font = font;
-        for (int i = 0; i < channels.length; i++) {
-            channels[i] = new Channel(i == DRUM_CHANNEL);
+        this.channels = new Channel[channels];
+        this.voices = new Voice[voices];
+        for (int i = 0; i < channels; i++) {
+            this.channels[i] = new Channel(i == DRUM_CHANNEL);
         }
-        for (int i = 0; i < voices.length; i++) {
-            voices[i] = new Voice();
+        for (int i = 0; i < this.voices.length; i++) {
+            this.voices[i] = new Voice();
         }
     }
 
-    /** A channel message as it is sent: its status byte (kind and channel) and two data bytes. */
+    /**
+     * A channel message as it is sent: its status byte (kind and channel) and two data bytes, then what of the channel
+     * is past 15 for a synth of more channels. A message for a channel it lacks is let be.
+     */
     public static int message(int status, int channel, int data1, int data2) {
-        return status | channel & 15 | (data1 & 127) << 8 | (data2 & 127) << 16;
+        return status | channel & 15 | (data1 & 127) << 8 | (data2 & 127) << 16 | (channel >> 4 & 127) << 24;
     }
 
     /** Plays {@code message} (see {@link #message}) from the next render on. Any thread. */
     public void send(int message) {
         incoming.add(message);
+    }
+
+    /**
+     * Plays the note-on {@code message} as {@link #send} does, but picks its regions as if struck at velocity
+     * {@code select}, and gives it {@code decibels} (0 the loudest) and {@code cents} on its cutoff in place of what its
+     * velocity would make of its loudness and brightness. Any thread, in turn with what is sent.
+     */
+    public void strike(int message, int select, float decibels, float cents) {
+        incoming.add(new Strike(message, select, decibels, cents));
     }
 
     /** Whether nothing sounds and nothing waits to: rendering it now gives silence. */
@@ -71,8 +93,12 @@ public final class Synth {
 
     /** Renders the next {@code count} blocks into {@code left} and {@code right} from {@code offset}. One thread. */
     public void render(float[] left, float[] right, int offset, int count) {
-        for (Integer message; (message = incoming.poll()) != null;) {
-            handle(message);
+        for (Object message; (message = incoming.poll()) != null;) {
+            if (message instanceof Strike strike) {
+                handle(strike.message, strike);
+            } else {
+                handle((Integer) message, null);
+            }
         }
         for (int block = 0; block < count; block++, offset += BLOCK) {
             boolean sounding = false;
@@ -104,15 +130,19 @@ public final class Synth {
         return x - x * x * x / 6.75f;
     }
 
-    private void handle(int message) {
-        Channel channel = channels[message & 15];
+    private void handle(int message, Strike strike) {
+        int index = message & 15 | (message >>> 24 & 127) << 4;
+        if (index >= channels.length) {
+            return;
+        }
+        Channel channel = channels[index];
         int data1 = message >> 8 & 127, data2 = message >> 16 & 127;
         switch (message & 0xF0) {
             case NOTE_ON -> {
                 if (data2 == 0) {
                     noteOff(channel, data1);
                 } else {
-                    noteOn(channel, data1, data2);
+                    noteOn(channel, data1, data2, strike);
                 }
             }
             case NOTE_OFF -> noteOff(channel, data1);
@@ -126,7 +156,7 @@ public final class Synth {
         channel.version++;
     }
 
-    private void noteOn(Channel channel, int key, int velocity) {
+    private void noteOn(Channel channel, int key, int velocity, Strike strike) {
         for (Voice voice : voices) {
             if (voice.stage < LET_GO && voice.channel == channel && voice.key == key) {
                 voice.keyDown = false;
@@ -135,7 +165,7 @@ public final class Synth {
         }
         int struck = channel.controllers[SOFT_PEDAL] >= 64 ? Math.max(1, velocity * 2 / 3) : velocity;
         for (Region region : channel.preset) {
-            if (!region.plays(key, velocity)) {
+            if (!region.plays(key, strike == null ? velocity : strike.select)) {
                 continue;
             }
             if (region.exclusiveClass != 0) {
@@ -145,7 +175,7 @@ public final class Synth {
                     }
                 }
             }
-            free().start(channel, region, key, struck);
+            free().start(channel, region, key, struck, strike);
         }
     }
 
@@ -265,7 +295,7 @@ public final class Synth {
 
         void program(int number) {
             program = number;
-            preset = font.preset(drums ? DRUMS : controllers[BANK], number);
+            preset = font.preset(drums || controllers[BANK] == 120 ? DRUMS : controllers[BANK], number);
             font.prepare(preset);
         }
     }
@@ -293,7 +323,7 @@ public final class Synth {
         float left, right;
         float b0, b1, b2, a1, a2, z1, z2;
 
-        void start(Channel channel, Region region, int key, int velocity) {
+        void start(Channel channel, Region region, int key, int velocity, Strike strike) {
             this.channel = channel;
             this.region = region;
             this.key = key;
@@ -309,6 +339,11 @@ public final class Synth {
             System.arraycopy(region.generators, 0, struck, 0, GENERATORS);
             movingCount = 0;
             for (Modulator modulator : region.modulators) {
+                if (strike != null && (modulator.source() & 0xFF) == 2 && modulator.amountSource() == 0
+                        && (modulator.destination() == ATTENUATION || modulator.destination() == CUTOFF)) {
+                    // A strike's own loudness and brightness stand in for its velocity's.
+                    continue;
+                }
                 if (moves(modulator.source()) || moves(modulator.amountSource())) {
                     if (movingCount < moving.length) {
                         moving[movingCount++] = modulator;
@@ -316,6 +351,10 @@ public final class Synth {
                 } else {
                     struck[modulator.destination()] += value(modulator);
                 }
+            }
+            if (strike != null) {
+                struck[ATTENUATION] -= strike.decibels * 10;
+                struck[CUTOFF] += strike.cents;
             }
             seen = channel.version - 1;
             modulate();

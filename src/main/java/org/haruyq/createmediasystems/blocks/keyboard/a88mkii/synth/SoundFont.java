@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -324,6 +325,11 @@ public final class SoundFont {
     /** The name of {@code program} of {@code bank}; null if the bank has none there. */
     public String name(int bank, int program) {
         return names.get(bank << 8 | program);
+    }
+
+    /** The name of every preset, by {@code bank << 8 | program}. */
+    public Map<Integer, String> names() {
+        return Collections.unmodifiableMap(names);
     }
 
     /**
