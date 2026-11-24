@@ -264,8 +264,14 @@ public final class ScreenShare implements ScreenPlayer.Feed {
                     ClientConfig.DISC_FFPROBE_PATH.get(), () -> status = "downloading");
             int width = settings.width(), height = settings.height();
             Source what = settings.source();
+            // gfxcapture's own max_framerate drops any picture sooner than 1/fps after the last, so a picture due right at
+            // the limit was dropped half the time: on a 120 Hz monitor 120 gave 88-105 a second, 60 gave 56-61 and 50
+            // gave 40. Instead every picture comes and select keeps the first at most a quarter step early of each 1/fps
+            // step: 120-121, 60-61 and 50-51 there.
+            String step = "1/" + settings.fps(), early = "1/" + 4 * settings.fps();
             String grab = (what.window() ? "gfxcapture=hwnd=" + Long.toUnsignedString(what.id()) : "gfxcapture=monitor_idx=" + what.id())
-                    + ":max_framerate=" + settings.fps() + ",hwdownload,format=bgra"
+                    + ":max_framerate=1000,select='if(gte(t,ld(0)-" + early + "),1+0*st(0,max(ld(0),t-" + early + ")+" + step
+                    + "),0)',hwdownload,format=bgra"
                     + ",scale=" + width + ":" + height + ":force_original_aspect_ratio=decrease:force_divisible_by=2"
                     + ",pad=" + width + ":" + height + ":(ow-iw)/2:(oh-ih)/2,format=yuv420p";
             // Over loopback TCP: Java reads FFmpeg's stdout at about 130 MB/s here, 43 fps of 1080p, and TCP at 60.
