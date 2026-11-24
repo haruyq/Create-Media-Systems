@@ -4,11 +4,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import javax.sound.sampled.AudioFormat;
 import net.minecraft.client.Minecraft;
@@ -21,16 +18,14 @@ import net.minecraft.sounds.SoundSource;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.SableCompat;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.client.KeyboardSynth;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.client.KeyboardAudio;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock;
-import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomFeature;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomMidi;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.playback.CmsStream;
-import org.haruyq.createmediasystems.playback.Pcm;
 import org.haruyq.createmediasystems.playback.StreamPump;
 import org.lwjgl.openal.AL10;
 
@@ -38,8 +33,9 @@ import org.lwjgl.openal.AL10;
 final class StageCustomAudio {
     private static final Map<StageCustomBlock.Entity, Emitter> PLAYING = new IdentityHashMap<>();
     private static final long TAIL = 6_000_000_000L;
-    private static final int OPEN_HAT_CHANNEL = 1;
-    private static boolean warmed;
+    /** Both sides mixed, and brought down to the level the kit had on the electronic piano's synth. */
+    private static final float LEVEL = .5f * .62f;
+    private static SoundFont preparedBank;
 
     private StageCustomAudio() {}
 
@@ -57,26 +53,35 @@ final class StageCustomAudio {
     }
 
     static void prepare() {
-        if (warmed) return;
-        warmed = true;
-        KeyboardSynth.prepareBundled();
+        bank(Minecraft.getInstance());
     }
 
-    static KeyboardSettings settings() {
-        var settings = new KeyboardSettings();
-        settings.main = new KeyboardSettings.Tone(KeyboardSettings.DRUM_BANK, 0);
-        settings.reverb = 0;
-        return settings;
-    }
-
-    static void appendNote(List<KeyboardMidi> events, int note, int velocity) {
-        Voice cymbal = StageCustomMidi.voice(note);
-        if (cymbal == Voice.HAT_CLOSED || cymbal == Voice.HAT_PEDAL) {
-            // Closing the pedal damps the open cymbal while the other pads continue ringing.
-            events.add(new KeyboardMidi(KeyboardMidi.CONTROL | OPEN_HAT_CHANNEL, KeyboardMidi.SILENCE, 0));
+    private static SoundFont bank(Minecraft mc) {
+        var bank = KeyboardAudio.bank(mc);
+        if (bank != null && bank != preparedBank) {
+            preparedBank = bank;
+            bank.prepare(bank.preset(SoundFont.DRUMS, 0));
         }
-        int channel = cymbal == Voice.HAT_OPEN ? OPEN_HAT_CHANNEL : 0;
-        events.add(new KeyboardMidi(KeyboardMidi.ON | channel, note, velocity));
+        return bank;
+    }
+
+    /** A kit's synth: the standard kit, dry. A closed or pedalled hi-hat cuts the open one off by its exclusive class. */
+    static Synth synth(SoundFont bank) {
+        var synth = new Synth(bank, 40, 16);
+        synth.send(Synth.message(Synth.CONTROL, Synth.DRUM_CHANNEL, Synth.REVERB_SEND, 0));
+        return synth;
+    }
+
+    static void hit(Synth synth, int note, int velocity) {
+        synth.send(Synth.message(Synth.NOTE_ON, Synth.DRUM_CHANNEL, note, velocity));
+    }
+
+    /** Renders {@code frames} (whole blocks) of {@code synth} into {@code mono}, a 16-bit sample each. */
+    static void render(Synth synth, float[] left, float[] right, int frames, ByteBuffer mono) {
+        synth.render(left, right, 0, frames / Synth.BLOCK);
+        for (int i = 0; i < frames; i++) {
+            mono.putShort((short) Math.round(Math.clamp((left[i] + right[i]) * LEVEL, -1, 1) * 32767));
+        }
     }
 
     private static void strike(StageCustomMidi.Hit hit) {
@@ -84,6 +89,8 @@ final class StageCustomAudio {
         if (mc.level == null || !(mc.level.getBlockEntity(hit.root()) instanceof StageCustomBlock.Entity kit)
                 || mc.options.getSoundSourceVolume(SoundSource.RECORDS) == 0
                 || mc.options.getSoundSourceVolume(SoundSource.MASTER) == 0) return;
+        var bank = bank(mc);
+        if (bank == null) return;
         var sounds = mc.getSoundManager();
         var source = PLAYING.get(kit);
         long now = System.nanoTime();
@@ -96,7 +103,7 @@ final class StageCustomAudio {
             source.end();
             sounds.stop(source);
         }
-        source = new Emitter(kit, now);
+        source = new Emitter(kit, bank, now);
         source.add(hit, now);
         PLAYING.put(kit, source);
         sounds.play(source);
@@ -104,14 +111,15 @@ final class StageCustomAudio {
 
     private static final class Emitter extends AbstractTickableSoundInstance {
         private final StageCustomBlock.Entity kit;
+        private final SoundFont bank;
         private final ArrayDeque<StageCustomMidi.Hit> hits = new ArrayDeque<>();
         private final long started;
         private long expires;
-        private volatile boolean ended;
 
-        Emitter(StageCustomBlock.Entity kit, long now) {
+        Emitter(StageCustomBlock.Entity kit, SoundFont bank, long now) {
             super(StageCustomFeature.PLAYED.get(), SoundSource.RECORDS, SoundInstance.createUnseededRandom());
             this.kit = kit;
+            this.bank = bank;
             started = now;
             expires = now + TAIL;
             volume = .95f;
@@ -124,12 +132,9 @@ final class StageCustomAudio {
             expires = now + TAIL;
         }
 
-        synchronized List<KeyboardMidi> drain() {
-            if (hits.isEmpty()) return List.of();
-            var events = new ArrayList<KeyboardMidi>(hits.size());
-            for (var hit : hits) appendNote(events, hit.note(), hit.velocity());
+        synchronized void drain(Synth synth) {
+            for (var hit : hits) hit(synth, hit.note(), hit.velocity());
             hits.clear();
-            return events;
         }
 
         @Override
@@ -146,37 +151,28 @@ final class StageCustomAudio {
         }
 
         void end() {
-            ended = true;
             stop();
         }
 
         @Override
         public CompletableFuture<AudioStream> getStream(SoundBufferLibrary library, Sound sound, boolean looping) {
-            return KeyboardSynth.bundled(40).thenApply(synth -> {
-                if (ended) {
-                    synth.close();
-                    throw new CancellationException();
-                }
-                return new LiveStream(this, synth);
-            });
+            return CompletableFuture.completedFuture(new LiveStream(this, synth(bank)));
         }
     }
 
     private static final class LiveStream implements CmsStream {
-        private static final AudioFormat MONO = new AudioFormat(Pcm.RATE, 16, 1, true, false);
-        private static final int FRAMES = KeyboardSynth.FRAMES_PER_BUFFER * 2;
+        private static final AudioFormat MONO = new AudioFormat(Synth.RATE, 16, 1, true, false);
+        private static final int FRAMES = 15 * Synth.BLOCK;
         private final Emitter emitter;
-        private final KeyboardSynth synth;
-        private final KeyboardSettings settings = StageCustomAudio.settings();
-        private final byte[] stereo = new byte[FRAMES * 4];
+        private final Synth synth;
+        private final float[] left = new float[FRAMES], right = new float[FRAMES];
         private final ByteBuffer mono = ByteBuffer.allocateDirect(FRAMES * 2).order(ByteOrder.LITTLE_ENDIAN);
         private final Runnable refill = this::restart;
         private int source = -1;
 
-        LiveStream(Emitter emitter, KeyboardSynth synth) {
+        LiveStream(Emitter emitter, Synth synth) {
             this.emitter = emitter;
             this.synth = synth;
-            synth.apply(settings, true, List.of());
             StreamPump.live(refill);
         }
 
@@ -192,21 +188,9 @@ final class StageCustomAudio {
 
         @Override
         public ByteBuffer read(int bytes) throws IOException {
-            var events = emitter.drain();
-            if (!events.isEmpty()) synth.apply(settings, false, events);
+            emitter.drain(synth);
             mono.clear();
-            int frames = Math.min(bytes / 2, FRAMES);
-            for (int offset = 0; offset < frames;) {
-                int count = Math.min(KeyboardSynth.FRAMES_PER_BUFFER, frames - offset);
-                synth.read(stereo, count);
-                for (int i = 0; i < count; i++) {
-                    int at = i * 4;
-                    int left = stereo[at + 1] << 8 | stereo[at] & 255;
-                    int right = stereo[at + 3] << 8 | stereo[at + 2] & 255;
-                    mono.putShort((short) ((left + right) / 2));
-                }
-                offset += count;
-            }
+            render(synth, left, right, Math.min(bytes / 2, FRAMES) / Synth.BLOCK * Synth.BLOCK, mono);
             return mono.flip();
         }
 
@@ -219,7 +203,6 @@ final class StageCustomAudio {
         @Override
         public void close() {
             StreamPump.ended(refill);
-            synth.close();
         }
     }
 }
