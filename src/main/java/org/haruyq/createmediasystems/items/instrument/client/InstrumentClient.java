@@ -33,11 +33,11 @@ import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RenderPlayerEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.client.ArmPoses;
 import org.haruyq.createmediasystems.client.IrisCompat;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.items.instrument.InstrumentFeature;
@@ -73,13 +73,8 @@ public final class InstrumentClient {
                 BODIES.put(skin, new InstrumentBody(event.getContext(), skin == PlayerSkin.Model.SLIM));
             }
         });
-        bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) renderer = new StandaloneRenderer();
-                return renderer;
-            }
-        }, InstrumentFeature.ITEMS.stream().map(e -> (Item) e.get()).toArray(Item[]::new)));
+        bus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, StandaloneRenderer::new,
+                InstrumentFeature.ITEMS.stream().map(e -> (Item) e.get()).toArray(Item[]::new)));
 
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, InstrumentClient::beforePlayer);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, InstrumentClient::afterPlayer);

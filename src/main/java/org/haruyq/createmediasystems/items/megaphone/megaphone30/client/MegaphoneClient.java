@@ -2,11 +2,11 @@ package org.haruyq.createmediasystems.items.megaphone.megaphone30.client;
 
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.MegaphoneFeature;
 import java.util.*;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -15,7 +15,6 @@ import net.minecraft.world.item.*;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.*;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.*;
 import org.haruyq.createmediasystems.playback.*;
@@ -61,10 +60,7 @@ public final class MegaphoneClient {
     public static void register(IEventBus bus) {
         org.haruyq.createmediasystems.client.ArmPoses.add(MegaphoneClient::poseArms);
         bus.addListener((RegisterMenuScreensEvent e)->e.register(MegaphoneFeature.MEGAPHONE_MENU.get(),MegaphoneScreen::new));
-        bus.addListener((RegisterClientExtensionsEvent e)->e.registerItem(new IClientItemExtensions(){
-            private MegaphoneItemRenderer renderer;
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer(){if(renderer==null)renderer=new MegaphoneItemRenderer();return renderer;}
-        },MegaphoneFeature.MEGAPHONE_WHITE.get(),MegaphoneFeature.MEGAPHONE_BLACK.get()));
+        bus.addListener((RegisterClientExtensionsEvent e)->ItemRenderers.register(e, MegaphoneItemRenderer::new, MegaphoneFeature.MEGAPHONE_WHITE.get(),MegaphoneFeature.MEGAPHONE_BLACK.get()));
         EmitterAudioManager.add(Horn::near);
     }
 }

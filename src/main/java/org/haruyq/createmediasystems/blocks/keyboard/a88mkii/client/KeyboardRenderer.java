@@ -17,6 +17,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout.Control;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Panel;
 import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -36,7 +37,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 /**
@@ -61,23 +61,15 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
     static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerBlockEntityRenderer(
                 KeyboardFeature.KEYBOARD_ENTITY.get(), context -> new KeyboardRenderer()));
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    Minecraft mc = Minecraft.getInstance();
-                    renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
-                        @Override
-                        public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
-                                                 MultiBufferSource buffers, int light, int overlay) {
-                            draw(pose, buffers, light, Direction.SOUTH, new PanelLook(NEW, 0, null), 0, 0, 8192, 0, false);
-                        }
-                    };
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, () -> {
+            Minecraft mc = Minecraft.getInstance();
+            return new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
+                @Override
+                public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
+                                         MultiBufferSource buffers, int light, int overlay) {
+                    draw(pose, buffers, light, Direction.SOUTH, new PanelLook(NEW, 0, null), 0, 0, 8192, 0, false);
                 }
-                return renderer;
-            }
+            };
         }, KeyboardFeature.KEYBOARD_ITEM.get()));
     }
 

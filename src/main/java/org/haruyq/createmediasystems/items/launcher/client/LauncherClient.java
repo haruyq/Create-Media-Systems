@@ -6,6 +6,7 @@ import org.haruyq.createmediasystems.items.power.ChargeableItem;
 import org.haruyq.createmediasystems.client.mesh.CellLight;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.items.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.items.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.items.launcher.DiscLauncherReloadPacket;
@@ -221,13 +222,8 @@ public final class LauncherClient {
     }
 
     private static void registerExtensions(RegisterClientExtensionsEvent event) {
-        event.registerItem(new IClientItemExtensions() {
-            private DiscCellRenderer renderer;
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) renderer = new DiscCellRenderer();
-                return renderer;
-            }
-        }, LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
+        ItemRenderers.register(event, DiscCellRenderer::new,
+                LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
         event.registerItem(new IClientItemExtensions() {
             private LauncherRenderer renderer;
 

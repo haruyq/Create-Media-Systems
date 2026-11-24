@@ -15,11 +15,11 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.GrandPianoBlock;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoBlockEntity;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 
@@ -32,28 +32,20 @@ final class PianoRenderer implements BlockEntityRenderer<PianoBlockEntity> {
     static void register(IEventBus bus) {
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(PianoFeature.PIANO_ENTITY.get(), context -> new PianoRenderer()));
-        bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    var mc = Minecraft.getInstance();
-                    renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
-                        @Override
-                        public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
-                                MultiBufferSource buffers, int light, int overlay) {
-                            float lid = context == ItemDisplayContext.GUI ? 32 : 0;
-                            pose.pushPose();
-                            pose.translate(.19, .26, .025);
-                            pose.scale(.34f, .34f, .34f);
-                            new PianoMesh(pose, buffers, light).draw(PianoAction.REST, lid, FALLBOARD_OPEN_ANGLE);
-                            pose.popPose();
-                        }
-                    };
+        bus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, () -> {
+            var mc = Minecraft.getInstance();
+            return new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
+                @Override
+                public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
+                        MultiBufferSource buffers, int light, int overlay) {
+                    float lid = context == ItemDisplayContext.GUI ? 32 : 0;
+                    pose.pushPose();
+                    pose.translate(.19, .26, .025);
+                    pose.scale(.34f, .34f, .34f);
+                    new PianoMesh(pose, buffers, light).draw(PianoAction.REST, lid, FALLBOARD_OPEN_ANGLE);
+                    pose.popPose();
                 }
-                return renderer;
-            }
+            };
         }, PianoFeature.PIANO_ITEM.get()));
     }
 

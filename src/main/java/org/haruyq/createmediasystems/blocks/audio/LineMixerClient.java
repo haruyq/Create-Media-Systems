@@ -10,6 +10,7 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.ControlDrag;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.playback.Spectrum;
@@ -39,7 +40,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -69,27 +69,19 @@ public final class LineMixerClient implements BlockEntityRenderer<LineMixerBlock
     static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerBlockEntityRenderer(
                 AudioFeature.LINE_MIXER_ENTITY.get(), context -> new LineMixerClient()));
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    Minecraft mc = Minecraft.getInstance();
-                    renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
-                        @Override
-                        public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
-                                                 MultiBufferSource buffers, int light, int overlay) {
-                            // Its two blocks about the middle of the item's one.
-                            pose.pushPose();
-                            pose.translate(-0.5, 0, 0);
-                            draw(pose, buffers, light, Direction.SOUTH, null, false, 0, STILL, false);
-                            pose.popPose();
-                        }
-                    };
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, () -> {
+            Minecraft mc = Minecraft.getInstance();
+            return new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
+                @Override
+                public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
+                                         MultiBufferSource buffers, int light, int overlay) {
+                    // Its two blocks about the middle of the item's one.
+                    pose.pushPose();
+                    pose.translate(-0.5, 0, 0);
+                    draw(pose, buffers, light, Direction.SOUTH, null, false, 0, STILL, false);
+                    pose.popPose();
                 }
-                return renderer;
-            }
+            };
         }, AudioFeature.LINE_MIXER_ITEM.get()));
         ControlDrag.onUse(LineMixerClient::grab);
     }
