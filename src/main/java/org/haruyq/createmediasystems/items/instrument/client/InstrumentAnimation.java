@@ -31,11 +31,6 @@ public final class InstrumentAnimation {
         REST_CONTROLS[Control.TONE_NECK.ordinal()] = 1;
         REST_CONTROLS[Control.TONE_BRIDGE.ordinal()] = 1;
     }
-    private static final int[][] CHORDS = {
-        {0, 2, 2, 0, 0, 0}, {3, 2, 0, 0, 0, 3}, {0, 0, 2, 2, 1, 0}, {0, 2, 2, 1, 0, 0}
-    };
-    private static final int[] FLUTE_PHRASE = {60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 79, 84, 83, 81, 77, 72, 66, 63, 61, 60};
-    private static final int[] TRUMPET_PHRASE = {60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 79, 84, 79, 76, 72, 68, 65, 62, 61, 60};
     private static final Control[] FLUTE_FINGERS = {
         Control.THUMB, Control.THUMB_BB, Control.LEFT_INDEX, Control.LEFT_MIDDLE, Control.LEFT_RING, Control.LEFT_PINKY,
         Control.RIGHT_INDEX, Control.RIGHT_MIDDLE, Control.RIGHT_RING, Control.RIGHT_PINKY, Control.LOW_CS, Control.LOW_C,
@@ -237,58 +232,6 @@ public final class InstrumentAnimation {
         }
         float stroke = strokeStarted == NO_STRIKE ? REST.stroke() : pick(secondsAfter(now, strokeStarted), down);
         return new Frame(values, frets.clone(), pressure, bent, vibration, stroke, fretHand.at(now), engaged.at(now));
-    }
-
-    /** Reuses vanilla item use time for a deterministic in-game demonstration. */
-    public static Frame demo(InstrumentKind kind, float elapsed) {
-        if (elapsed < 0) return REST;
-        float playing = smooth(elapsed / .19f);
-        float[] controls = REST_CONTROLS.clone();
-        int[] frets = new int[STRINGS];
-        float[] pressure = new float[STRINGS], bends = new float[STRINGS], vibrations = new float[STRINGS];
-        float stroke = REST.stroke(), fretHand = 4;
-        switch (kind) {
-            case STRATOCASTER -> {
-                double t = Math.max(0, elapsed - .16);
-                int beat = (int) (t / .234);
-                double age = t - beat * .234;
-                boolean down = (beat & 1) == 0;
-                int chord = beat / 6 % CHORDS.length;
-                int ii = chord == 1 ? 3 : 2;
-                fretHand = ii + (chord == 3 ? .18f : 0);
-                frets = CHORDS[chord].clone();
-                for (int i = 0; i < STRINGS; i++) {
-                    pressure[i] = frets[i] > 0 ? playing : 0;
-                    vibrations[i] = ring(age - (down ? i : STRINGS - 1 - i) * .008, playing, i);
-                }
-                stroke = pick(age, down);
-                controls[Control.TREMOLO.ordinal()] = beat % 12 >= 9 ? (float) (.66 * Math.pow(Math.sin(age * Math.PI / .234), 2)) : 0;
-            }
-            case FLUTE, TRUMPET -> {
-                var rig = InstrumentModel.rig(kind);
-                if (rig == null) break;
-                var chart = rig.fingerings();
-                var phrase = kind == InstrumentKind.FLUTE ? FLUTE_PHRASE : TRUMPET_PHRASE;
-                double t = Math.max(0, elapsed - .15);
-                int step = (int)(t / .22);
-                int note = phrase[step % phrase.length];
-                int previous = phrase[(step + phrase.length - 1) % phrase.length];
-                float f = smooth((float)((t - step * .22) / .045)) * playing;
-                for (String name : chart.get(note)) controls[Control.named(name).ordinal()] = f;
-                if (step > 0) {
-                    for (String name : chart.get(previous)) {
-                        int index = Control.named(name).ordinal();
-                        controls[index] += 1 - f;
-                    }
-                }
-                if (kind == InstrumentKind.TRUMPET) {
-                    float extension = note == 61 || note == 62 ? .52f : 0;
-                    float old = previous == 61 || previous == 62 ? .52f : 0;
-                    controls[Control.THIRD_SLIDE.ordinal()] = step == 0 ? extension * f : old + (extension - old) * f;
-                }
-            }
-        }
-        return new Frame(controls, frets, pressure, bends, vibrations, stroke, fretHand, playing);
     }
 
     static Frame fade(Frame last, float amount) {

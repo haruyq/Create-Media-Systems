@@ -56,17 +56,6 @@ public final class VideoCache {
         this.maxBytes = maxBytes;
     }
 
-    /**
-     * For dev harnesses: keeps {@code video} as {@code page}'s, at most {@code maxHeight} tall and {@code seconds} long,
-     * as if it had been downloaded, and checks it can be read back.
-     */
-    public static void seed(URI page, int maxHeight, Path video, double seconds) throws IOException {
-        get().keep(page, maxHeight, video, seconds);
-        if (get().lookup(page, maxHeight) == null) {
-            throw new IOException("A seeded video could not be read back");
-        }
-    }
-
     static synchronized VideoCache get() {
         if (shared == null) {
             shared = new VideoCache(ClientFiles.VIDEO_CACHE,
@@ -222,18 +211,6 @@ public final class VideoCache {
         } finally {
             FileUtils.deleteQuietly(part.toFile());
         }
-    }
-
-    /** Keeps a copy of {@code video} (sound included) as {@code page}'s at most {@code maxHeight} tall, {@code seconds} long. */
-    void keep(URI page, int maxHeight, Path video, double seconds) throws IOException {
-        String name = name(ProviderUrls.canonical(page), maxHeight);
-        Files.createDirectories(dir);
-        String kept = name + ".video" + extension(video);
-        Files.copy(video, dir.resolve(kept), StandardCopyOption.REPLACE_EXISTING);
-        JsonObject meta = new JsonObject();
-        meta.addProperty("video", kept);
-        meta.addProperty("duration", seconds);
-        writeMeta(name, meta);
     }
 
     /** The meta file goes last, whole at once: a copy counts as kept only once all of it is there. */

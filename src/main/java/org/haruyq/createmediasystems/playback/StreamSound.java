@@ -71,7 +71,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private final StreamSpec spec;
     /** When the server said to play: a stream joining mid-way catches up on its own start-up delay from here. */
     private final long requestedAt = System.nanoTime();
-    private volatile double requestedSeconds = -1;
     /**
      * The server's word to play, which a source's stream waits for once loaded (see NativeAudio#open); null for one
      * that plays at once (an announcement, a portable emitter).
@@ -204,11 +203,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     public double audibleSeconds() {
         PcmStream current = stream;
         return current == null ? -1 : current.heardSeconds(System.nanoTime());
-    }
-
-    /** Where in its track the API was last asked to stream from (s); -1 before it was. */
-    public double requestedSeconds() {
-        return requestedSeconds;
     }
 
     @Nullable
@@ -350,7 +344,6 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     private InputStream request(double offset) throws IOException {
         try {
             URI uri = URI.create(spec.request(ServerConfig.API_URL.get(), offset));
-            requestedSeconds = Math.max(0, spec.startSeconds() + offset);
             HttpResponse<InputStream> response = HTTP.send(HttpRequest.newBuilder(uri).timeout(REQUEST_TIMEOUT).build(),
                     HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() != 200) {

@@ -6,7 +6,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelPart;
@@ -51,7 +50,6 @@ import org.haruyq.createmediasystems.client.Worn;
 import org.joml.Vector3f;
 
 public final class InstrumentClient {
-    private static final Map<Player, Playback> PLAYBACK = new WeakHashMap<>();
     private static final Deque<PlayerDraw> DRAWS = new ArrayDeque<>();
     private static final Map<PlayerSkin.Model, InstrumentBody> BODIES = new EnumMap<>(PlayerSkin.Model.class);
 
@@ -61,23 +59,8 @@ public final class InstrumentClient {
         void restore() { part.skipDraw = skipDraw; }
     }
     private record PlayerDraw(Player player, ItemStack custom, PartState[] arms) {}
-    private static final class Playback {
-        Item item;
-        InstrumentAnimation external;
-    }
 
     private InstrumentClient() {}
-
-    /** Connect a held instrument to a caller's own performance on the client render thread. */
-    public static InstrumentAnimation performance(Player player, InstrumentKind kind) {
-        var held = held(player);
-        if (held == null || held.item.kind.model != kind) throw new IllegalArgumentException("Player is not holding that instrument");
-        var playback = playback(player, held);
-        if (playback.external == null) playback.external = new InstrumentAnimation(kind);
-        return playback.external;
-    }
-
-    public static void endPerformance(Player player) { PLAYBACK.remove(player); }
 
     public static void register(IEventBus bus) {
         MetalZoneClient.register(bus);
@@ -102,14 +85,8 @@ public final class InstrumentClient {
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, InstrumentClient::afterPlayer);
         NeoForge.EVENT_BUS.addListener(InstrumentClient::firstPerson);
         NeoForge.EVENT_BUS.addListener(InstrumentClient::wornInstrument);
-        WorldEvents.onLevelChanged(() -> {
-            PLAYBACK.clear();
-            restorePlayerDraws();
-        });
-        WorldEvents.onFrameEnded(() -> {
-            PLAYBACK.keySet().removeIf(player -> player.isRemoved() || held(player) == null);
-            restorePlayerDraws();
-        });
+        WorldEvents.onLevelChanged(InstrumentClient::restorePlayerDraws);
+        WorldEvents.onFrameEnded(InstrumentClient::restorePlayerDraws);
         ArmPoses.add((model, player, yaw, pitch) -> {
             var held = held(player);
             if (held == null || splitArms(player) || !visible(player)) return;
@@ -149,20 +126,8 @@ public final class InstrumentClient {
         return null;
     }
 
-    private static Playback playback(Player player, Held held) {
-        var playback = PLAYBACK.computeIfAbsent(player, p -> new Playback());
-        if (playback.item != held.item) {
-            playback.item = held.item;
-            playback.external = null;
-        }
-        return playback;
-    }
-
     private static InstrumentAnimation.Frame frame(Player player, Held held) {
-        long now = System.nanoTime();
-        var playback = PLAYBACK.get(player);
-        if (playback != null && playback.item == held.item && playback.external != null) return playback.external.sample(now);
-        return WearableClient.frame(player, held.item.kind.model, now);
+        return WearableClient.frame(player, held.item.kind.model, System.nanoTime());
     }
 
     private static void beforePlayer(RenderPlayerEvent.Pre event) {
