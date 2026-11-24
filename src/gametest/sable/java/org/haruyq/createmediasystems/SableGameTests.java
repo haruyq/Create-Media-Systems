@@ -76,7 +76,7 @@ public class SableGameTests {
         level.setBlockAndUpdate(origin.east(3), AudioFeature.SPEAKER.get().defaultBlockState());
         ((SpeakerBlock.Entity) level.getBlockEntity(origin.east(3))).configure(level, groundSource, 1, Streams.Channel.MIX);
 
-        ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin,
+        ServerSubLevel ship = Ships.assemble(level, origin,
                 List.of(origin, origin.east(), origin.east(2), origin.east(3)),
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX() + 3, origin.getY(), origin.getZ()));
         BlockPos plot = ship.getPlot().getCenterBlock();
@@ -128,12 +128,35 @@ public class SableGameTests {
         helper.succeed();
     }
 
+    /** What {@link Ships#assemble} is for: the tests of a batch free and take plots within one tick. */
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void shipOnAPlotFreedThisTickKeepsItsBlockEntities(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos gone = helper.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos origin = gone.east(2);
+        level.setBlockAndUpdate(gone, Blocks.IRON_BLOCK.defaultBlockState());
+        level.setBlockAndUpdate(origin, VideoFeature.EQUALIZER.get().defaultBlockState());
+        ((EqualizerBlock.Entity) level.getBlockEntity(origin)).set(2, 6);
+        ServerSubLevel first = Ships.assemble(level, gone, List.of(gone),
+                new BoundingBox3i(gone.getX(), gone.getY(), gone.getZ(), gone.getX(), gone.getY(), gone.getZ()));
+        helper.assertTrue(level.getBlockState(first.getPlot().getCenterBlock()).is(Blocks.IRON_BLOCK), "the first ship carries its block");
+        SubLevelContainer.getContainer(level).removeSubLevel(first, SubLevelRemovalReason.REMOVED);
+
+        ServerSubLevel ship = Ships.assemble(level, origin, List.of(origin),
+                new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
+        helper.assertTrue(ship.getPlot().plotPos.equals(first.getPlot().plotPos), "Sable gives the freed plot to the next ship");
+        helper.assertTrue(level.getBlockEntity(ship.getPlot().getCenterBlock()) instanceof EqualizerBlock.Entity equalizer
+                && equalizer.gain(2) == 6, "a ship on a plot freed this tick carries its equalizer and its setting");
+        SubLevelContainer.getContainer(level).removeSubLevel(ship, SubLevelRemovalReason.REMOVED);
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void equalizerFadersWorkOnATurnedShip(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(2, 2, 2));
         level.setBlockAndUpdate(origin, VideoFeature.EQUALIZER.get().defaultBlockState());
-        ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),
+        ServerSubLevel ship = Ships.assemble(level, origin, List.of(origin),
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
         BlockPos plot = ship.getPlot().getCenterBlock();
         ship.logicalPose().orientation().rotationY(Math.PI / 2).rotateX(0.3);

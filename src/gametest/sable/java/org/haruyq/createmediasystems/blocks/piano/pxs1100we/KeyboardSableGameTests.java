@@ -15,6 +15,7 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.Ships;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -36,7 +37,7 @@ public final class KeyboardSableGameTests {
         test.assertTrue(input != null && input.receiveEnergy(80, false) == 80, "The adapter did not buffer FE");
         var blocks = new ArrayList<>(parts.stream().map(part -> part.at(root, state)).toList());
         blocks.add(adapterPos);
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, root, blocks,
+        var ship = Ships.assemble(level, root, blocks,
                 new BoundingBox3i(root.getX() - 1, root.getY(), root.getZ(), root.getX() + 1, root.getY() + 1, root.getZ() + 1));
         var plot = ship.getPlot().getCenterBlock();
         var keyboard = (KeyboardBlockEntity) level.getBlockEntity(plot);

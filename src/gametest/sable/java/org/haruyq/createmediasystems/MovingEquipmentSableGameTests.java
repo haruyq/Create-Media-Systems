@@ -71,7 +71,7 @@ public final class MovingEquipmentSableGameTests {
         ChargeableItem.setEnergy(cell, 75);
         charger.insert(cell);
         List<BlockPos> blocks = List.of(start, start.above(), start.above(2), start.east(), start.west());
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, start, blocks, new BoundingBox3i(
+        var ship = Ships.assemble(level, start, blocks, new BoundingBox3i(
                 start.getX() - 1, start.getY(), start.getZ(), start.getX() + 1, start.getY() + 2, start.getZ()));
         var plot = ship.getPlot().getCenterBlock();
         var afloat = (BroadcastTowerBlock.Tower) level.getBlockEntity(plot.above(2));
@@ -115,7 +115,7 @@ public final class MovingEquipmentSableGameTests {
         var level = h.getLevel();
         BlockPos start = h.absolutePos(new BlockPos(4, 1, 4));
         level.setBlockAndUpdate(start, Blocks.IRON_BLOCK.defaultBlockState());
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, start, List.of(start),
+        var ship = Ships.assemble(level, start, List.of(start),
                 new BoundingBox3i(start.getX(), start.getY(), start.getZ(), start.getX(), start.getY(), start.getZ()));
         var plot = ship.getPlot().getCenterBlock();
         var bearingPos = plot.above();
@@ -169,7 +169,7 @@ public final class MovingEquipmentSableGameTests {
         level.setBlockAndUpdate(start.above(), BroadcastFeature.HORN.get().defaultBlockState());
         level.setBlockAndUpdate(start.west(), LauncherFeature.DISC_CELL_CHARGER.get().defaultBlockState());
         var blocks = List.of(start.below(), start.west().below(), start, start.above(), start.west());
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, start, blocks, new BoundingBox3i(
+        var ship = Ships.assemble(level, start, blocks, new BoundingBox3i(
                 start.getX() - 1, start.getY() - 1, start.getZ(), start.getX(), start.getY() + 1, start.getZ()));
         var plot = ship.getPlot().getCenterBlock();
         var base = (BroadcastBaseBlock.Base) level.getBlockEntity(plot);
