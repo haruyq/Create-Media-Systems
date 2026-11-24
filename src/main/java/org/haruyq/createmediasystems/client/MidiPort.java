@@ -43,13 +43,15 @@ public final class MidiPort implements AutoCloseable {
     private MidiDevice device;
     private Transmitter transmitter;
     private String connected = "";
+    private boolean fallback;
 
     /** An instrument's: the input midiDevice names, or the first there is while none is picked or it is unplugged. */
     public MidiPort(Consumer<ShortMessage> receive, Runnable disconnected) {
         this(ClientConfig.MIDI_DEVICE.get().isEmpty() ? null : ClientConfig.MIDI_DEVICE.get(), receive, disconnected, input -> true);
+        fallback = true;
     }
 
-    /** Takes {@code preferred}, or while there is none or it is unplugged the first that {@code wanted} accepts, waiting for one if there is none. */
+    /** Takes {@code preferred}, or while there is none the first that {@code wanted} accepts, and keeps to it, waiting while it is unplugged. */
     public MidiPort(String preferred, Consumer<ShortMessage> receive, Runnable disconnected, Predicate<Input> wanted) {
         requested = preferred;
         this.receive = receive;
@@ -119,8 +121,10 @@ public final class MidiPort implements AutoCloseable {
             try {
                 if (closed) return;
                 var inputs = inputs();
+                if (!fallback && requested == null) inputs.stream().filter(wanted).findFirst().ifPresent(input -> requested = input.id());
                 String chosen = requested == null ? "" : requested;
-                var selected = choose(inputs, chosen, wanted);
+                var selected = fallback ? choose(inputs, chosen, wanted)
+                        : inputs.stream().filter(input -> input.id().equals(chosen)).findFirst().orElse(null);
                 if (selected == null) {
                     disconnect();
                     status = new Status(inputs, chosen, OFF.equals(chosen) ? "keyboard.midi_none" : "keyboard.midi_missing");

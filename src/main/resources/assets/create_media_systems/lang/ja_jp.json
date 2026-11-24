@@ -1039,7 +1039,7 @@
   "wearable.amp.overdrive": "オーバードライブ",
   "wearable.amp.distortion": "ディストーション",
   "wearable.amp.drive": "歪み %s",
-  "wearable.melodica.air": "ブレス %s%%",
+  "wearable.melodica.air": "息の強さ %s%%",
   "wearable.tone_help": "ショルダーキーボードの音色を選びます。",
   "wearable.input.device_help": "クリックして、ギターとして鳴らす音声入力を切り替えます。",
   "wearable.input.channel_help": "音声入力のどのチャンネルを使うかを切り替えます。",
