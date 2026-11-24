@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.screen;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -269,10 +270,11 @@ public final class ScreenShare implements ScreenPlayer.Feed {
                     + ",pad=" + width + ":" + height + ":(ow-iw)/2:(oh-ih)/2,format=yuv420p";
             // Over loopback TCP: Java reads FFmpeg's stdout at about 130 MB/s here, 43 fps of 1080p, and TCP at 60.
             pictures = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
-            // passthrough: only pictures that changed, so a still screen is hardly encoded at all.
+            // vfr: only pictures that changed, so a still screen is hardly encoded at all. passthrough also let through two
+            // pictures gfxcapture gave the same timestamp, which the rawvideo muxer refuses with an error line each.
             try {
                 process = new ProcessBuilder(ffmpeg.ffmpeg(), "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", grab,
-                        "-fps_mode", "passthrough", "-f", "rawvideo", "tcp://127.0.0.1:" + pictures.getLocalPort()).start();
+                        "-fps_mode", "vfr", "-f", "rawvideo", "tcp://127.0.0.1:" + pictures.getLocalPort()).start();
             } catch (IOException failed) {
                 pictures.close();
                 throw failed;
@@ -295,6 +297,17 @@ public final class ScreenShare implements ScreenPlayer.Feed {
     }
 
     private void read(Process process, ServerSocket pictures, int width, int height) {
+        // Read as FFmpeg writes it: once its 4 KB pipe was full (about 30 error lines), FFmpeg waited on it and sent no
+        // more pictures, and every viewer's screen stopped on the last one. The start is kept for the log.
+        CompletableFuture<String> errors = CompletableFuture.supplyAsync(() -> {
+            try (InputStream err = process.getErrorStream()) {
+                String first = new String(err.readNBytes(1024), StandardCharsets.UTF_8).trim();
+                err.transferTo(OutputStream.nullOutputStream());
+                return first;
+            } catch (IOException unreadable) {
+                return "";
+            }
+        }, runnable -> Thread.ofPlatform().daemon().name("CMS screen capture errors").start(runnable));
         int size = width * height * 3 / 2;
         byte[] picture = new byte[size];
         Socket from = null;
@@ -327,12 +340,7 @@ public final class ScreenShare implements ScreenPlayer.Feed {
                 // restarted or stopped, or FFmpeg failed: told below
             }
         }
-        String why;
-        try {
-            why = new String(process.getErrorStream().readNBytes(1024), StandardCharsets.UTF_8).trim();
-        } catch (IOException unreadable) {
-            why = "";
-        }
+        String why = errors.completeOnTimeout("", 2, TimeUnit.SECONDS).join();
         synchronized (this) {
             if (capture == process && !stopped) {
                 LogUtils.getLogger().warn("Screen capture stopped: {}", why);
