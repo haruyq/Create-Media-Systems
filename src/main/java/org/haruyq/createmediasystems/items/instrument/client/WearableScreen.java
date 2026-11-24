@@ -289,7 +289,7 @@ final class WearableScreen extends KeysScreen {
     private Component midiName() {
         var status = midi.status();
         return status.inputs().stream().filter(port -> port.id().equals(status.selected())).findFirst()
-                .map(port -> tr("midi", port.name())).orElseGet(() -> Component.translatable(status.message().replace("keyboard.", "piano.")));
+                .map(port -> tr("midi", port.name())).orElseGet(() -> Component.translatable(status.message()));
     }
 
     private void nextMidi() {

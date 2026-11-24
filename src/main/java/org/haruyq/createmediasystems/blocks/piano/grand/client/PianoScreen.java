@@ -16,6 +16,7 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.haruyq.createmediasystems.client.KeysScreen;
+import org.haruyq.createmediasystems.client.MidiPort;
 import org.lwjgl.glfw.GLFW;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
@@ -105,8 +106,8 @@ final class PianoScreen extends KeysScreen {
     private Component device() {
         var status = midi.status();
         String name = status.inputs().stream().filter(input -> input.id().equals(status.selected()))
-                .map(MidiKeyboard.Input::name).findFirst().orElse(null);
-        return name == null || !status.message().equals("piano.midi_connected") ? Component.translatable(status.message())
+                .map(MidiPort.Input::name).findFirst().orElse(null);
+        return name == null || !status.message().equals("keyboard.midi_connected") ? Component.translatable(status.message())
                 : Component.literal(name);
     }
 
