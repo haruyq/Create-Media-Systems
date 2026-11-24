@@ -50,7 +50,8 @@ public final class InstrumentState {
         sustained = new int[kind.keys];
         strings = kind == Kind.STRATOCASTER ? new int[OPEN_STRINGS.length] : new int[0];
         Arrays.fill(strings, -1);
-        breath = kind.wind() ? 127 : 0;
+        // Blown instruments sound from their keys alone until breath is turned down.
+        breath = 127;
         lastNote = 60;
     }
 
@@ -150,7 +151,7 @@ public final class InstrumentState {
                     Arrays.fill(strings, -1);
                     windKeys.clear();
                     sustain = 0;
-                    breath = kind.wind() ? 127 : 0;
+                    breath = 127;
                     bend = CENTER_BEND;
                 } else if (a == BREATH && (kind == Kind.MELODICA || kind.wind())) breath = b;
                 else if (a == SUSTAIN && kind == Kind.KEYTAR) {
@@ -191,7 +192,7 @@ public final class InstrumentState {
             messages.add(control(TONE_BRIDGE, bridgeTone));
             messages.add(control(AMP, amp.distortion() ? 127 : 0));
             messages.add(control(DRIVE, amp.drive()));
-        } else if (breath > 0) messages.add(control(BREATH, breath));
+        } else messages.add(control(BREATH, breath));
         for (int n = kind.first; n <= kind.last(); n++) {
             if (velocity(n) != 0) messages.add(note(n, velocity(n)));
             else if (sustained[n - kind.first] != 0) {

@@ -7,21 +7,23 @@ import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class InstrumentStateTest {
-    @Test void melodicaKeysAndBreathAreIndependent() {
+    @Test void melodicaSoundsFromItsKeysUntilBreathIsTurnedDown() {
         var keys = new InstrumentState(Kind.MELODICA);
         assertFalse(keys.apply(note(52, 80)));
         assertTrue(keys.apply(note(53, 80)));
         assertEquals(80, keys.velocity(53));
-        assertFalse(keys.sounding());
-        assertTrue(keys.apply(control(BREATH, 108)));
         assertTrue(keys.sounding());
         assertEquals(22, keys.program());
-        var tracker = new InstrumentState(Kind.MELODICA);
-        keys.snapshot().forEach(tracker::apply);
-        assertTrue(tracker.sounding());
         assertTrue(keys.apply(control(BREATH, 0)));
         assertFalse(keys.sounding());
         assertEquals(80, keys.velocity(53));
+        var tracker = new InstrumentState(Kind.MELODICA);
+        keys.snapshot().forEach(tracker::apply);
+        assertFalse(tracker.sounding());
+        assertTrue(keys.apply(control(BREATH, 108)));
+        assertTrue(keys.sounding());
+        assertTrue(keys.apply(control(RELEASE_KEYS, 0)));
+        assertEquals(127, keys.breath());
     }
 
     @Test void sustainKeepsReleasedNotesInLateListenerSnapshots() {

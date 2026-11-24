@@ -13,6 +13,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 
@@ -44,6 +45,18 @@ public abstract class KeysScreen extends Screen {
     private static final int[] INACTIVE_WHITE = {0xFF85837D, 0xFFA09D97};
     private static final int FELT = 0xFF7A1220;
     protected static final int LEFT = -1, MIDDLE = 0, RIGHT = 1;
+    /**
+     * The computer's keys that play notes, on every instrument: two rows of a piano's keys from C, the row from Z and
+     * the row from Q an octave up, the lower one running on into the upper's first notes.
+     */
+    private static final int[] LOWER_ROW = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_C,
+            GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_G, GLFW.GLFW_KEY_B, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_M,
+            GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_L, GLFW.GLFW_KEY_PERIOD, GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_SLASH};
+    private static final int[] UPPER_ROW = {GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_E,
+            GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_5, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_U,
+            GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_0, GLFW.GLFW_KEY_P};
+    /** How hard a computer key plays a note; and with Shift on an instrument that is struck, softer, as sneaking plays. */
+    public static final int KEY_VELOCITY = 96, SOFT_VELOCITY = 56;
 
     /** This instrument's colours, the Koland keyboard's until it sets its own: the lettering, the line around the body, what shows between the keys, the felt. */
     protected int text = TEXT, faint = FAINT, ink = INK, lamp = LAMP, edge = EDGE, bed = EDGE, feltColor = FELT;
@@ -67,6 +80,8 @@ public abstract class KeysScreen extends Screen {
     /** How many times their width the keys are drawn, and the first white key in sight when not all of them fit. */
     protected int zoom = 1, firstWhite;
     protected int ticks;
+    /** The note the Z key plays; ← and → move it an octave. */
+    protected int base = 48;
     private final List<Face> faces = new ArrayList<>();
     @Nullable
     private Face grabbed;
@@ -95,6 +110,34 @@ public abstract class KeysScreen extends Screen {
 
     protected int whiteKeyCount() {
         return whiteKeyCount;
+    }
+
+    /** How many notes above the Z key the computer's key {@code key} plays, 0 to 28; -1 for a key that plays none. */
+    public static int typedStep(int key) {
+        for (int i = 0; i < LOWER_ROW.length; i++) {
+            if (LOWER_ROW[i] == key) {
+                return i;
+            }
+            if (UPPER_ROW[i] == key) {
+                return 12 + i;
+            }
+        }
+        return -1;
+    }
+
+    /** The note the computer's key {@code key} plays from {@link #base}; -1 for a key that plays none. */
+    protected int typedNote(int key) {
+        int step = typedStep(key);
+        return step < 0 ? -1 : base + step;
+    }
+
+    /** True for ← and →, which move {@link #base} an octave down or up, between {@code lowest} and {@code highest}. */
+    protected boolean octaveKey(int key, int lowest, int highest) {
+        if (key != GLFW.GLFW_KEY_LEFT && key != GLFW.GLFW_KEY_RIGHT) {
+            return false;
+        }
+        base = Mth.clamp(base + (key == GLFW.GLFW_KEY_LEFT ? -12 : 12), lowest, highest);
+        return true;
     }
 
     /** Lays it out. An instrument adds its faces and widgets after this, unless it is {@link #hidden}. */

@@ -26,12 +26,6 @@ import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
  * lacquer, brass and gold, ivory and ebony keys under red felt, and behind them its fallboard with the maker's name.
  */
 final class PianoScreen extends KeysScreen {
-    private static final int[] PC_KEYS = {
-        GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_E,
-        GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_G,
-        GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_U, GLFW.GLFW_KEY_J,
-        GLFW.GLFW_KEY_K, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_L, GLFW.GLFW_KEY_P, GLFW.GLFW_KEY_SEMICOLON
-    };
     private static final int[] PEDALS = {SOFT, SOSTENUTO, DAMPER};
     private static final String[] PEDAL_NAMES = {"piano.soft", "piano.sostenuto", "piano.damper"};
     private static String preferred;
@@ -50,7 +44,7 @@ final class PianoScreen extends KeysScreen {
     private static final ResourceLocation FALLBOARD = CreateMediaSystems.id("textures/block/piano/grand/grand_piano_fallboard.png");
     private static final int[] NAME = {428, 167, 169, 40};
     private static final int LACQUER = 0xFF1F2024;
-    private int pcRoot = 60, mouse = -1;
+    private int mouse = -1;
 
     PianoScreen(PianoClient client, PianoClient.Instrument instrument) {
         super(Component.translatable("block.create_media_systems.grand_piano"), 4.6f, 2.4f);
@@ -236,19 +230,15 @@ final class PianoScreen extends KeysScreen {
             pedal(pedal, 127);
             return true;
         }
-        if (key == GLFW.GLFW_KEY_Z || key == GLFW.GLFW_KEY_X) {
-            pcRoot = Math.clamp(pcRoot + (key == GLFW.GLFW_KEY_Z ? -12 : 12), 24, 84);
-            return true;
-        }
-        for (int i = 0; i < PC_KEYS.length; i++) {
-            if (PC_KEYS[i] == key) {
-                if (!pcNotes.containsKey(key)) {
-                    int note = pcRoot + i;
-                    pcNotes.put(key, note);
-                    play(press(note, 86));
-                }
-                return true;
+        // From C0 to C6: A0 and C8 each have a key in one of them.
+        if (octaveKey(key, 12, 84)) return true;
+        int note = typedNote(key);
+        if (note >= 0) {
+            if (isNote(note) && !pcNotes.containsKey(key)) {
+                pcNotes.put(key, note);
+                play(press(note, KEY_VELOCITY));
             }
+            return true;
         }
         return super.keyPressed(key, scan, modifiers);
     }
@@ -304,7 +294,7 @@ final class PianoScreen extends KeysScreen {
 
     @Override protected void draw(GuiGraphics g, double x, double y) {
         drawHeader(g, title.getString(), Component.translatable(PianoAudio.INSTANCE.status()).getString(), lamp,
-                Component.translatable("piano.pc_controls", pcRoot / 12 - 1).getString(), faint);
+                Component.translatable("keyboard.keys_help", base / 12 - 1).getString(), faint);
         // The fallboard behind the keys, the maker's name at its middle.
         int top = keysY - deck, bottom = keysY - felt, high = Math.round(keyWidth * 1.2f), wide = high * NAME[2] / NAME[3];
         int left = keysX + (stripWidth - wide) / 2, above = (top + bottom - high) / 2;

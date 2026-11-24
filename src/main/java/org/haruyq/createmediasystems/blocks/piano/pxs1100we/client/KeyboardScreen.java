@@ -51,12 +51,6 @@ final class KeyboardScreen extends KeysScreen {
     /** The touch buttons with a light, as the block's renderer has them; the power light is beside them, not on a button. */
     private static final String[] LIGHTS = {"function", "sound_mode", "metronome", "play", "rec", "grand_piano", "elec_piano"};
     private static final KeyboardLayout.Hit POWER_LIGHT = new KeyboardLayout.Hit(18.912 / 16, 19.168 / 16, 9.136 / 16, 9.392 / 16, 0);
-    private static final int[] LOWER = {GLFW_KEY_Z, GLFW_KEY_S, GLFW_KEY_X, GLFW_KEY_D, GLFW_KEY_C, GLFW_KEY_V,
-            GLFW_KEY_G, GLFW_KEY_B, GLFW_KEY_H, GLFW_KEY_N, GLFW_KEY_J, GLFW_KEY_M, GLFW_KEY_COMMA,
-            GLFW_KEY_L, GLFW_KEY_PERIOD, GLFW_KEY_SEMICOLON, GLFW_KEY_SLASH};
-    private static final int[] UPPER = {GLFW_KEY_Q, GLFW_KEY_2, GLFW_KEY_W, GLFW_KEY_3, GLFW_KEY_E, GLFW_KEY_R,
-            GLFW_KEY_5, GLFW_KEY_T, GLFW_KEY_6, GLFW_KEY_Y, GLFW_KEY_7, GLFW_KEY_U, GLFW_KEY_I,
-            GLFW_KEY_9, GLFW_KEY_O, GLFW_KEY_0, GLFW_KEY_P};
     private static final int[] PEDALS = {SUSTAIN, SOSTENUTO, SOFT};
     private static final String[] FAMILIES = {"pianos", "chromatic", "organs", "guitars", "basses", "strings",
             "ensemble", "brass", "reeds", "pipes", "leads", "pads", "effects", "world", "percussive", "sfx", "kits"};
@@ -74,7 +68,7 @@ final class KeyboardScreen extends KeysScreen {
     private Tab tab;
     private EditBox search;
     private String query = "";
-    private int category = -1, role, toneScroll, base = 48, mouseNote = -1;
+    private int category = -1, role, toneScroll, mouseNote = -1;
     private boolean mouseDown, pedalLatched, closed;
     /** While the mouse turns the volume knob: the volume and the mouse's height it took hold at, and the volume last asked for. */
     private boolean turning;
@@ -344,7 +338,7 @@ final class KeyboardScreen extends KeysScreen {
             batch.add(new KeyboardMidi(CONTROL | channel, RESET, 0));
         }
         for (int n = 0; n < PEDALS.length; n++) batch.add(cc(PEDALS[n], effectivePedal(n)));
-        computer.values().stream().distinct().forEach(n -> batch.add(KeyboardMidi.note(n, 88)));
+        computer.values().stream().distinct().forEach(n -> batch.add(KeyboardMidi.note(n, KEY_VELOCITY)));
         if (mouseNote >= 0 && !computer.containsValue(mouseNote)) batch.add(KeyboardMidi.note(mouseNote, 88));
     }
 
@@ -404,16 +398,13 @@ final class KeyboardScreen extends KeysScreen {
             }
             return true;
         }
-        if (key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
-            base = Math.clamp(base + (key == GLFW_KEY_LEFT ? -12 : 12), 24, 72);
-            return true;
-        }
-        int played = computerNote(key);
+        if (octaveKey(key, 24, 72)) return true;
+        int played = typedNote(key);
         if (played >= 0) {
             if (!computer.containsKey(key)) {
                 boolean held = pcHolds(played) || hardwareHeld[played];
                 computer.put(key, played);
-                if (!held) note(KeyboardMidi.note(played, 88));
+                if (!held) note(KeyboardMidi.note(played, KEY_VELOCITY));
             }
             return true;
         }
@@ -433,11 +424,6 @@ final class KeyboardScreen extends KeysScreen {
             return true;
         }
         return super.keyReleased(key, scan, mods);
-    }
-    private int computerNote(int key) {
-        for (int i = 0; i < LOWER.length; i++) if (LOWER[i] == key) return base + i;
-        for (int i = 0; i < UPPER.length; i++) if (UPPER[i] == key) return base + 12 + i;
-        return -1;
     }
     private boolean pcHolds(int note) { return mouseNote == note || computer.containsValue(note); }
     private void release(int note) {

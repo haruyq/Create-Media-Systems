@@ -16,6 +16,7 @@ import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout.Drum;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomMidi;
+import org.haruyq.createmediasystems.client.KeysScreen;
 import org.haruyq.createmediasystems.client.MidiPort;
 
 final class StageCustomMidiScreen extends Screen {
@@ -149,7 +150,7 @@ final class StageCustomMidiScreen extends Screen {
         if (heldKeys.add(key)) {
             int note = index < DRUMS.length ? StageCustomMidi.note(DRUMS[index])
                     : StageCustomMidi.note(CYMBALS[index - DRUMS.length]);
-            play(new StageCustomMidi.Hit(kit.getBlockPos(), note, hasShiftDown() ? 59 : 110));
+            play(new StageCustomMidi.Hit(kit.getBlockPos(), note, hasShiftDown() ? KeysScreen.SOFT_VELOCITY : KeysScreen.KEY_VELOCITY));
         }
         return true;
     }

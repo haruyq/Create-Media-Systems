@@ -26,11 +26,13 @@ import org.haruyq.createmediasystems.blocks.steelpan.SteelpanLayout;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanLayout.Note;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets.Target;
+import org.haruyq.createmediasystems.client.KeysScreen;
 import org.haruyq.createmediasystems.client.MidiPort;
 import org.joml.Matrix4f;
 import org.joml.Vector2f;
 
 final class SteelpanScreen extends Screen {
+    /** The key shown on each note, as {@link KeysScreen#typedStep} plays them: the upper row's where both rows have one. */
     private static final String KEYS = "ZSXDCVGBHNJMQ2W3ER5T6Y7UI9O0P";
     private static final int STEPS = 36;
     private static final Vector2f[] CIRCLE = new Vector2f[STEPS];
@@ -187,9 +189,9 @@ final class SteelpanScreen extends Screen {
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
-        int index = KEYS.indexOf(key);
+        int index = KeysScreen.typedStep(key);
         if (index >= 0 && !hasControlDown() && !hasAltDown()) {
-            if (held.add(key)) play(SteelpanLayout.LOWEST + index, hasShiftDown() ? 120 : 91);
+            if (held.add(key)) play(SteelpanLayout.LOWEST + index, hasShiftDown() ? KeysScreen.SOFT_VELOCITY : KeysScreen.KEY_VELOCITY);
             return true;
         }
         return super.keyPressed(key, scan, modifiers);
