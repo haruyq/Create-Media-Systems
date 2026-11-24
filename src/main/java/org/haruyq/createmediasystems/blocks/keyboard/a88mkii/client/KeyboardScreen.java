@@ -338,7 +338,8 @@ final class KeyboardScreen extends KeysScreen {
             }
         } else if (y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2) {
             // The MIDI input, at the right of the top line: the next (all of them first), looked for again.
-            MidiPort.cycle(MidiInput.status().inputs(), MidiInput.status().selected(), true);
+            MidiPort.Status midi = MidiInput.status();
+            if (!midi.inputs().isEmpty()) MidiPort.cycle(midi.inputs(), midi.selected(), true);
             KeyboardClient.listen(playing);
         }
         return true;
