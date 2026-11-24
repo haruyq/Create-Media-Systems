@@ -70,7 +70,7 @@ public final class WearablePonder {
         scene.overlay().showControls(stage, Pointing.DOWN, 60).rightClick();
         say(scene, 110, stage, "The Melodica plays from either hand, and is raised to the lips while it is played. It does not open while a Hayacio Keytar is in the main hand.");
         say(scene, 120, stage, "Both are played with the mouse, the computer keys Z to M and Q to P, or a MIDI keyboard. The left and right arrow keys shift the octave.");
-        say(scene, 130, stage, "The Melodica sounds only while air flows: hold Space, play it with the mouse, or send MIDI CC2. The Hayacio Keytar has eight tones, a pitch-bend slider, and Space as its sustain pedal instead.");
+        say(scene, 130, stage, "The Melodica plays at full breath. The Breath slider on its screen, or MIDI CC2 from a breath controller, sets how hard the player blows. The Hayacio Keytar has eight tones, a pitch-bend slider, and Space as its sustain pedal instead.");
         notes(scene, stage, 80);
         hold(scene, player, keytar);
         say(scene, 100, stage, PonderPalette.GREEN, "The sound comes from the player playing it, and players nearby hear it too. No speakers are needed.");
