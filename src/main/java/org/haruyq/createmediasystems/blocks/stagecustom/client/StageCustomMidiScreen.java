@@ -23,7 +23,6 @@ final class StageCustomMidiScreen extends Screen {
     private static final Drum[] DRUMS = Drum.values();
     private static final Voice[] CYMBALS = Voice.values();
     private static final String SHORTCUTS = "ZXCVB123456";
-    private static String preferredInput;
     private final StageCustomBlock.Entity kit;
     private final boolean complete;
     private final Set<Integer> heldKeys = new HashSet<>();
@@ -39,7 +38,7 @@ final class StageCustomMidiScreen extends Screen {
         super(kit.getBlockState().getBlock().getName());
         this.kit = kit;
         complete = StageCustomBlock.isComplete(kit.getBlockState());
-        midi = new MidiPort(preferredInput, this::receiveMidi, pending::clear);
+        midi = new MidiPort(this::receiveMidi, pending::clear);
         midi.scan();
     }
 
@@ -57,7 +56,7 @@ final class StageCustomMidiScreen extends Screen {
         int inputTop = top + panelHeight() - 28;
         Component refresh = Component.translatable("keyboard.refresh");
         int refreshWidth = Math.max(54, font.width(refresh) + 12);
-        input = addRenderableWidget(Button.builder(Component.empty(), button -> nextInput())
+        input = addRenderableWidget(Button.builder(Component.empty(), button -> midi.next())
                 .bounds(left + 8, inputTop, panelWidth - refreshWidth - 20, 20).build());
         addRenderableWidget(Button.builder(refresh, button -> midi.scan())
                 .bounds(left + panelWidth - refreshWidth - 8, inputTop, refreshWidth, 20).build());
@@ -103,28 +102,11 @@ final class StageCustomMidiScreen extends Screen {
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partial) {}
 
-    private void nextInput() {
-        var status = midi.status();
-        int next = 0;
-        for (int i = 0; i < status.inputs().size(); i++) {
-            if (status.inputs().get(i).id().equals(status.selected())) {
-                next = i + 1;
-                break;
-            }
-        }
-        preferredInput = next < status.inputs().size() ? status.inputs().get(next).id() : "";
-        midi.select(preferredInput);
-    }
-
     private void showStatus(MidiPort.Status status) {
         displayed = status;
-        var selected = status.inputs().stream().filter(device -> device.id().equals(status.selected())).findFirst();
-        Component label = "keyboard.midi_connected".equals(status.message()) && selected.isPresent()
-                ? Component.translatable("stage_custom.midi_input", selected.get().name())
-                : Component.translatable(status.message());
+        Component label = MidiPort.label(status);
         input.setMessage(Component.literal(font.plainSubstrByWidth(label.getString(), input.getWidth() - 12)));
         input.setTooltip(Tooltip.create(label));
-        input.active = !status.inputs().isEmpty();
     }
 
     @Override

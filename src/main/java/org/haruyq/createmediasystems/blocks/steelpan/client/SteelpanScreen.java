@@ -39,7 +39,6 @@ final class SteelpanScreen extends Screen {
     private static final Vector2f[][] OUTLINES = new Vector2f[KEYS.length()][STEPS];
     private static final long GLOW = 310_000_000L;
     private static final int TEXT = 0xFFF1F5F9, MUTED = 0xFFA3B9C7, TEMPERATURE = 0xFFE6A464;
-    private static String midiPreference;
 
     static {
         for (int i = 0; i < STEPS; i++) {
@@ -70,7 +69,7 @@ final class SteelpanScreen extends Screen {
     SteelpanScreen(Target target) {
         super(Component.translatable("block.create_media_systems.steelpan_low_c"));
         this.target = target;
-        midi = new MidiPort(midiPreference, this::receiveMidi, inputs::clear);
+        midi = new MidiPort(this::receiveMidi, inputs::clear);
         midi.scan();
     }
 
@@ -89,36 +88,18 @@ final class SteelpanScreen extends Screen {
 
         Component refresh = Component.translatable("keyboard.refresh");
         int refreshWidth = Math.max(58, font.width(refresh) + 14);
-        input = addRenderableWidget(Button.builder(Component.empty(), button -> nextMidi())
+        input = addRenderableWidget(Button.builder(Component.empty(), button -> midi.next())
                 .bounds(left + 12, bottom - 28, w - refreshWidth - 30, 19).build());
         addRenderableWidget(Button.builder(refresh, button -> midi.scan())
                 .bounds(right - 12 - refreshWidth, bottom - 28, refreshWidth, 19).build());
         updateMidi(midi.status());
     }
 
-    private void nextMidi() {
-        var status = midi.status();
-        int chosen = -1;
-        for (int i = 0; i < status.inputs().size(); i++) {
-            if (status.inputs().get(i).id().equals(status.selected())) {
-                chosen = i;
-                break;
-            }
-        }
-        int next = chosen + 1;
-        midi.select(next < status.inputs().size() ? status.inputs().get(next).id() : "");
-        midiPreference = midi.preference();
-    }
-
     private void updateMidi(MidiPort.Status status) {
         midiStatus = status;
-        var device = status.inputs().stream().filter(candidate -> candidate.id().equals(status.selected())).findFirst();
-        Component label = status.message().equals("keyboard.midi_connected") && device.isPresent()
-                ? Component.translatable("steelpan.midi_input", device.get().name())
-                : Component.translatable(status.message());
+        Component label = MidiPort.label(status);
         input.setMessage(Component.literal(font.plainSubstrByWidth(label.getString(), Math.max(1, input.getWidth() - 12))));
         input.setTooltip(Tooltip.create(label));
-        input.active = !status.inputs().isEmpty();
     }
 
     @Override

@@ -53,7 +53,6 @@ final class KeyboardScreen extends KeysScreen {
     private static final int[] PEDALS = {SUSTAIN, SOSTENUTO, SOFT};
     private static final String[] FAMILIES = {"pianos", "chromatic", "organs", "guitars", "basses", "strings",
             "ensemble", "brass", "reeds", "pipes", "leads", "pads", "effects", "world", "percussive", "sfx", "kits"};
-    private static String preferred;
     private static volatile int preferredChannel = -1;
 
     private final PxS1100Client client;
@@ -98,7 +97,7 @@ final class KeyboardScreen extends KeysScreen {
         this.client = client;
         this.instrument = instrument;
         tab = browser ? Tab.TONES : Tab.PLAY;
-        midi = new MidiPort(preferred, this::receiveMidi, this::requestMidiReset);
+        midi = new MidiPort(this::receiveMidi, this::requestMidiReset);
         midi.scan();
     }
 
@@ -209,7 +208,7 @@ final class KeyboardScreen extends KeysScreen {
     }
 
     private void settingsWidgets() {
-        cell(0, 0, 2, this::device, this::nextInput).hint(t("device_help"));
+        cell(0, 0, 2, midi::label, midi::next).hint(t("device_help"));
         cell(2, 0, 1, () -> t("refresh"), midi::scan);
         cell(3, 0, 1, () -> preferredChannel < 0 ? t("all_channels") : t("channel", preferredChannel + 1), () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
@@ -236,29 +235,12 @@ final class KeyboardScreen extends KeysScreen {
         slide(5, 2, 1, "beats", 1, 12, () -> settings().beats, n -> action(Action.BEATS, n));
     }
 
-    /** The MIDI input it listens to, or why it listens to none. */
-    private Component device() {
-        var status = midi.status();
-        var name = status.inputs().stream().filter(input -> input.id().equals(status.selected())).map(MidiPort.Input::name).findFirst();
-        return name.isPresent() && status.message().equals("keyboard.midi_connected") ? Component.literal(name.get())
-                : Component.translatable(status.message());
-    }
-
     private static Component t(String key, Object... args) { return Component.translatable("keyboard." + key, args); }
     private boolean flag(String name) { return instrument.view.getBoolean(name); }
     private KeyboardSettings settings() { return instrument.settings; }
     private void action(Action action) { action(action, 0); }
     private void action(Action action, int first) { client.command(instrument, action, first, 0, ""); }
     private void note(KeyboardMidi event) { client.send(instrument, List.of(event)); }
-
-    private void nextInput() {
-        var status = midi.status();
-        var inputs = status.inputs();
-        int next = 0;
-        for (int i = 0; i < inputs.size(); i++) if (inputs.get(i).id().equals(status.selected())) next = i + 1;
-        if (inputs.isEmpty()) midi.scan();
-        else midi.select(next == inputs.size() ? "" : inputs.get(next).id());
-    }
 
     private void nextFont() {
         var available = KeyboardSoundbank.choices();
@@ -667,7 +649,6 @@ final class KeyboardScreen extends KeysScreen {
 
     @Override public synchronized void removed() {
         closed = true;
-        preferred = midi.preference();
         midi.close();
         action(Action.CLOSE);
         super.removed();

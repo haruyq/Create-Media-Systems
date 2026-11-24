@@ -11,20 +11,17 @@ import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 final class MidiKeyboard implements AutoCloseable {
     private final MidiDecoder decoder = new MidiDecoder();
     private final Consumer<List<PianoEvent>> receive;
-    private final MidiPort port;
+    final MidiPort port;
     private volatile int channel = -1;
 
-    MidiKeyboard(String preferred, Consumer<List<PianoEvent>> receive) {
+    MidiKeyboard(Consumer<List<PianoEvent>> receive) {
         this.receive = receive;
-        port = new MidiPort(preferred, message -> {
+        port = new MidiPort(message -> {
             var events = decoder.decode(message);
             if (!events.isEmpty()) receive.accept(events);
         }, this::panic);
     }
 
-    MidiPort.Status status() { return port.status(); }
-    String preference() { return port.preference(); }
-    void select(String id) { port.select(id); }
     void scan() { port.scan(); }
 
     void channel(int channel) {

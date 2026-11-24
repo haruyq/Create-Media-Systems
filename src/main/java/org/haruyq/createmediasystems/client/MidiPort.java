@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.client;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -17,9 +18,13 @@ import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Synthesizer;
 import javax.sound.midi.Transmitter;
 
+import net.minecraft.network.chat.Component;
+
 public final class MidiPort implements AutoCloseable {
     public record Input(String id, String name, MidiDevice.Info info) {}
     public record Status(List<Input> inputs, String selected, String message) {}
+    /** The midiDevice setting that turns MIDI input off; any other is an {@link Input#id}, or empty for none picked. */
+    public static final String OFF = "off";
 
     private static final java.util.concurrent.ExecutorService DEVICES = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "CMS MIDI Devices");
@@ -39,8 +44,9 @@ public final class MidiPort implements AutoCloseable {
     private Transmitter transmitter;
     private String connected = "";
 
-    public MidiPort(String preferred, Consumer<ShortMessage> receive, Runnable disconnected) {
-        this(preferred, receive, disconnected, input -> true);
+    /** An instrument's: the input midiDevice names, or with none picked the first there is. */
+    public MidiPort(Consumer<ShortMessage> receive, Runnable disconnected) {
+        this(ClientConfig.MIDI_DEVICE.get().isEmpty() ? null : ClientConfig.MIDI_DEVICE.get(), receive, disconnected, input -> true);
     }
 
     /** With no {@code preferred} input, takes the first that {@code wanted} accepts, waiting for one if there is none. */
@@ -57,11 +63,47 @@ public final class MidiPort implements AutoCloseable {
     }
 
     public Status status() { return status; }
-    public String preference() { return requested; }
 
-    public void select(String id) {
-        requested = id;
-        scan();
+    /** What an instrument's MIDI button says: the input played from, or why none is. */
+    public Component label() { return label(status); }
+
+    public static Component label(Status status) {
+        if (!status.message().equals("keyboard.midi_connected")) return Component.translatable(status.message());
+        return Component.translatable("keyboard.midi_input", status.selected().isEmpty() ? Component.translatable("keyboard.midi_all")
+                : status.inputs().stream().filter(input -> input.id().equals(status.selected())).findFirst()
+                        .map(input -> Component.literal(input.name())).orElse(Component.literal(status.selected())));
+    }
+
+    /** An instrument's MIDI button pressed: the next input, then off, then the first again; looks for inputs if there are none. */
+    public void next() {
+        var now = status;
+        if (now.inputs().isEmpty()) scan();
+        else {
+            requested = cycle(now.inputs(), now.selected(), false);
+            scan();
+        }
+    }
+
+    /** The choice after {@code picked}, saved as midiDevice for every instrument: all ({@code all}, as empty), each input, off. */
+    public static String cycle(List<Input> inputs, String picked, boolean all) {
+        String next = next(inputs, picked, all);
+        ClientConfig.MIDI_DEVICE.set(next);
+        ClientConfig.MIDI_DEVICE.save();
+        return next;
+    }
+
+    static String next(List<Input> inputs, String picked, boolean all) {
+        var choices = new ArrayList<String>();
+        if (all) choices.add("");
+        inputs.forEach(input -> choices.add(input.id()));
+        choices.add(OFF);
+        return choices.get((choices.indexOf(picked) + 1) % choices.size());
+    }
+
+    /** Whether {@code picked} names {@code input}: by its id, or as midiDevice once did, by a part of its name. */
+    public static boolean picks(String picked, Input input) {
+        return input.id().equals(picked) || !picked.isEmpty() && !picked.equals(OFF) && picked.indexOf('|') < 0
+                && input.name().toLowerCase(Locale.ROOT).contains(picked.toLowerCase(Locale.ROOT));
     }
 
     public void scan() {
@@ -72,23 +114,25 @@ public final class MidiPort implements AutoCloseable {
                 var inputs = inputs();
                 if (requested == null) inputs.stream().filter(wanted).findFirst().ifPresent(input -> requested = input.id());
                 String chosen = requested == null ? "" : requested;
-                var selected = inputs.stream().filter(input -> input.id().equals(chosen)).findFirst().orElse(null);
+                var selected = inputs.stream().filter(input -> picks(chosen, input)).findFirst().orElse(null);
                 if (selected == null) {
                     disconnect();
-                    status = new Status(inputs, chosen, "".equals(requested) ? "keyboard.midi_none" : "keyboard.midi_missing");
+                    status = new Status(inputs, chosen, OFF.equals(requested) ? "keyboard.midi_none" : "keyboard.midi_missing");
                     return;
                 }
-                if (chosen.equals(connected) && device != null && device.isOpen()) {
-                    status = new Status(inputs, chosen, "keyboard.midi_connected");
+                String id = selected.id();
+                if (!id.equals(chosen)) requested = id;
+                if (id.equals(connected) && device != null && device.isOpen()) {
+                    status = new Status(inputs, id, "keyboard.midi_connected");
                     return;
                 }
                 disconnect();
                 try {
                     connect(selected);
-                    status = new Status(inputs, chosen, "keyboard.midi_connected");
+                    status = new Status(inputs, id, "keyboard.midi_connected");
                 } catch (MidiUnavailableException | IllegalArgumentException | SecurityException error) {
                     disconnect();
-                    status = new Status(inputs, chosen, "keyboard.midi_error");
+                    status = new Status(inputs, id, "keyboard.midi_error");
                 }
             } catch (RuntimeException | LinkageError error) {
                 disconnect();
@@ -99,7 +143,7 @@ public final class MidiPort implements AutoCloseable {
         });
     }
 
-    static List<Input> inputs() {
+    public static List<Input> inputs() {
         var inputs = new ArrayList<Input>();
         for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
             try {

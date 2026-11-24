@@ -42,7 +42,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.NeoForge;
 
 /**
@@ -54,9 +53,6 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class KeyboardClient implements ClientFeature {
     /** Where the keyboard stands in its Ponder scenes. */
     static final BlockPos KEYBOARD = new BlockPos(2, 2, 2);
-    private static final ModConfigSpec.ConfigValue<String> MIDI_DEVICE = ClientConfig.BUILDER
-            .comment("The MIDI input a keyboard block is played from while you sit at it: part of the device's name, like 'A-88'. Empty takes every MIDI input of this computer.")
-            .define("midiDevice", "");
 
     /** The keyboard this client's player plays; null for none. */
     @Nullable
@@ -161,7 +157,7 @@ public final class KeyboardClient implements ClientFeature {
 
     /** Opens this computer's MIDI inputs for {@code own}, looking for them anew: one may have been plugged in since. */
     static void listen(Playing own) {
-        MidiInput.open(own.controller, MIDI_DEVICE.get());
+        MidiInput.open(own.controller, ClientConfig.MIDI_DEVICE.get());
     }
 
     /** To the server, from any thread; nothing once the connection is gone. */

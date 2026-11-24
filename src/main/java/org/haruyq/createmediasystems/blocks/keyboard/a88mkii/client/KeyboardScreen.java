@@ -12,6 +12,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout.Control;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Panel;
 import org.haruyq.createmediasystems.client.KeysScreen;
+import org.haruyq.createmediasystems.client.MidiPort;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -137,12 +138,9 @@ final class KeyboardScreen extends KeysScreen {
 
     /** The top line: what is set off its usual on the left (nothing, on a keyboard as it comes), the MIDI inputs on the right. */
     private void drawHeader(GuiGraphics g, Panel panel) {
-        List<String> inputs = MidiInput.names();
-        Component midi = inputs == null ? Component.translatable(KEY + "midi.looking")
-                : inputs.isEmpty() ? Component.translatable(KEY + "midi.none")
-                : Component.translatable(KEY + "midi", String.join(", ", inputs));
-        drawHeader(g, "Koland A-88MKII", status(panel), LAMP, midi.getString(), inputs == null || inputs.isEmpty() ? FAINT
-                : 0xFF000000 | PanelLook.GREEN);
+        MidiPort.Status midi = MidiInput.status();
+        drawHeader(g, "Koland A-88MKII", status(panel), LAMP, MidiPort.label(midi).getString(),
+                midi.message().equals("keyboard.midi_connected") ? 0xFF000000 | PanelLook.GREEN : FAINT);
     }
 
     private String status(Panel panel) {
@@ -339,7 +337,8 @@ final class KeyboardScreen extends KeysScreen {
                 case LEVER -> lever(x, y);
             }
         } else if (y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2) {
-            // The MIDI inputs, at the right of the top line: looked for again.
+            // The MIDI input, at the right of the top line: the next (all of them first), looked for again.
+            MidiPort.cycle(MidiInput.status().inputs(), MidiInput.status().selected(), true);
             KeyboardClient.listen(playing);
         }
         return true;

@@ -28,7 +28,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 
 final class WearableScreen extends KeysScreen {
-    private static String preferred, preferredLine = "";
+    private static String preferredLine = "";
     private static int preferredChannel, gainDb;
     private static volatile boolean monitor = true;
     private final GuitarInput guitarInput;
@@ -76,7 +76,7 @@ final class WearableScreen extends KeysScreen {
             lit = new int[] {0xFFC4E6FF, 0xFF86C2F1};
             body = new int[] {0xFA284764, 0xFA192F49};
         }
-        midi = new MidiPort(preferred, message -> {
+        midi = new MidiPort(message -> {
             if (!input.offer(message)) resetMidi = true;
             scheduleMidi();
         }, () -> {
@@ -208,7 +208,7 @@ final class WearableScreen extends KeysScreen {
                     0, 127, () -> sentAir, value -> { midiAir = value; pedals(); });
         }
         float left = whiteKeyCount() * .60f;
-        button(left, 2.86f, whiteKeyCount() - .1f, 4, this::midiName, this::nextMidi);
+        button(left, 2.86f, whiteKeyCount() - .1f, 4, midi::label, midi::next);
     }
 
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -281,25 +281,6 @@ final class WearableScreen extends KeysScreen {
         midiSustain = 0;
         pedals();
         if (kind.bendsPitch() && bendValue != CENTER_BEND) bendTo(CENTER_BEND);
-    }
-
-    private Component midiName() {
-        var status = midi.status();
-        return status.inputs().stream().filter(port -> port.id().equals(status.selected())).findFirst()
-                .map(port -> tr("midi", port.name())).orElseGet(() -> Component.translatable(status.message()));
-    }
-
-    private void nextMidi() {
-        var status = midi.status();
-        var ports = status.inputs();
-        int next = 0;
-        for (int i = 0; i < ports.size(); i++) {
-            if (ports.get(i).id().equals(status.selected())) {
-                next = i + 1;
-                break;
-            }
-        }
-        midi.select(next == ports.size() ? "" : ports.get(next).id());
     }
 
     private void midiMessage(ShortMessage message) {
@@ -442,7 +423,6 @@ final class WearableScreen extends KeysScreen {
 
     @Override public void removed() {
         if (guitarInput != null) stopGuitar();
-        preferred = midi.preference();
         midi.close();
         send(control(RELEASE_KEYS, 0));
         send(WearablePackets.CLOSE);

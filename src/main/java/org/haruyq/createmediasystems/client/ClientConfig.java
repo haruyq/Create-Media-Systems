@@ -46,6 +46,9 @@ public final class ClientConfig {
     public static final ModConfigSpec.ConfigValue<String> SCREEN_AUDIO_PATH = BUILDER
             .comment("cms-screen-audio.exe, which takes the sound a screen share sends (an app's or the PC's on Windows 11, a microphone's on any Windows). Empty uses the one bundled with the mod; a path overrides it.")
             .define("screenAudioPath", "");
+    public static final ModConfigSpec.ConfigValue<String> MIDI_DEVICE = BUILDER
+            .comment("The MIDI input every instrument is played from, as its screen's MIDI button last picked it: the input's id, or 'off'. Empty takes the first input, and every input on a keyboard block. A part of a device's name, as this once held, takes the inputs whose names hold it.")
+            .define("midiDevice", "");
     public static final ModConfigSpec.ConfigValue<String> DJ_MIDI_OUT = BUILDER
             .comment("The MIDI output a DDJ-FLX4 you host sends its in-game controls to, as a part of its name: a virtual port (loopMIDI) that your rekordbox has mapped as a controller. Empty sends them nowhere.")
             .define("djMidiOut", "loopMIDI");

@@ -16,7 +16,6 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.haruyq.createmediasystems.client.KeysScreen;
-import org.haruyq.createmediasystems.client.MidiPort;
 import org.lwjgl.glfw.GLFW;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
@@ -28,7 +27,6 @@ import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
 final class PianoScreen extends KeysScreen {
     private static final int[] PEDALS = {SOFT, SOSTENUTO, DAMPER};
     private static final String[] PEDAL_NAMES = {"piano.soft", "piano.sostenuto", "piano.damper"};
-    private static String preferred;
     private static int preferredChannel = -1;
     private final PianoClient client;
     private final PianoClient.Instrument instrument;
@@ -68,7 +66,7 @@ final class PianoScreen extends KeysScreen {
         blackTopDown = new int[]{0xFFDDB972, 0xFFBF9450};
         this.client = client;
         this.instrument = instrument;
-        midi = new MidiKeyboard(preferred, this::queueMidi);
+        midi = new MidiKeyboard(this::queueMidi);
         if (preferredChannel >= 0) midi.channel(preferredChannel);
     }
 
@@ -78,8 +76,8 @@ final class PianoScreen extends KeysScreen {
         super.init();
         midi.scan();
         if (hidden) return;
-        button(0.6f, ROW, 13, ROW_END, this::device, this::nextInput);
-        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("piano.refresh"), midi::scan);
+        button(0.6f, ROW, 13, ROW_END, midi.port::label, midi.port::next);
+        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("keyboard.refresh"), midi::scan);
         button(17.8f, ROW, 23, ROW_END, this::channel, () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
             midi.channel(preferredChannel);
@@ -96,30 +94,9 @@ final class PianoScreen extends KeysScreen {
         }
     }
 
-    /** The MIDI input it listens to, or why it listens to none. */
-    private Component device() {
-        var status = midi.status();
-        String name = status.inputs().stream().filter(input -> input.id().equals(status.selected()))
-                .map(MidiPort.Input::name).findFirst().orElse(null);
-        return name == null || !status.message().equals("keyboard.midi_connected") ? Component.translatable(status.message())
-                : Component.literal(name);
-    }
-
     private Component channel() {
         return preferredChannel < 0 ? Component.translatable("piano.all_channels")
                 : Component.translatable("piano.channel", preferredChannel + 1);
-    }
-
-    private void nextInput() {
-        var status = midi.status();
-        var inputs = status.inputs();
-        if (inputs.isEmpty()) {
-            midi.scan();
-            return;
-        }
-        int next = 0;
-        for (int i = 0; i < inputs.size(); i++) if (inputs.get(i).id().equals(status.selected())) next = i + 1;
-        midi.select(next >= inputs.size() ? "" : inputs.get(next).id());
     }
 
     @Override public void tick() {
@@ -301,7 +278,6 @@ final class PianoScreen extends KeysScreen {
     }
 
     @Override public void removed() {
-        preferred = midi.preference();
         midi.close();
         pending.clear();
         client.command(instrument, Action.CLOSE);
