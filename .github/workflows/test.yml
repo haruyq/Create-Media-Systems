@@ -15,6 +15,8 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      # The unit tests, then the game tests on the NeoForge CMS ships (no Sable), then Sable's on the one it needs.
+      # The unit tests, then the game tests on the NeoForge CMS ships (no Sable), then Sable's on the one it needs,
+      # then the disc cell recipe with a stand-in Plant mod present.
       - run: ./gradlew build runGameTestServer
       - run: ./gradlew runGameTestServer -PsableTests
+      - run: ./gradlew runGameTestServer -PcellPlantTest
