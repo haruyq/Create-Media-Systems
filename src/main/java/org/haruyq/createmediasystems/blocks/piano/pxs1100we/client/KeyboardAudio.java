@@ -25,6 +25,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
 import org.haruyq.createmediasystems.blocks.piano.grand.client.GrandPianoSampler;
 import org.haruyq.createmediasystems.blocks.piano.grand.client.PianoClient;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardBlockEntity;
@@ -45,7 +46,7 @@ import org.lwjgl.openal.ALC10;
 
 final class KeyboardAudio implements AutoCloseable {
     private static final int SCORE_FRAMES = KeyboardSynth.RATE / 20, SLOTS = 16;
-    private static final int MAX_LIVE_FRAMES = KeyboardSynth.RATE / 80;
+    private static final int MAX_LIVE_FRAMES = 19 * Synth.BLOCK;
     private static final int DEVICE_HEADROOM_FRAMES = KeyboardSynth.RATE * 6 / 1000;
     private static final int QUEUED_BUFFERS = 4;
     private static final int MAX_PENDING = 64;
@@ -106,8 +107,7 @@ final class KeyboardAudio implements AutoCloseable {
                 return;
             }
             synchronized (this) {
-                if (closed) loaded.close();
-                else synth = loaded;
+                if (!closed) synth = loaded;
             }
         });
     }
@@ -117,6 +117,7 @@ final class KeyboardAudio implements AutoCloseable {
     synchronized void update(KeyboardSettings settings, @Nullable List<KeyboardMidi> initial, List<KeyboardMidi> events,
             Supplier<List<KeyboardMidi>> snapshot) {
         volume = settings.volume;
+        if (synth != null) synth.prepare(settings);
         int pending = changes.size() + (synth == null ? 0 : synth.queuedBatches());
         if (initial != null || pending >= MAX_PENDING) {
             changes.clear();
@@ -267,7 +268,6 @@ final class KeyboardAudio implements AutoCloseable {
             closed = true;
             changes.clear();
             if (audible != null) audible.close();
-            if (synth != null) synth.close();
         }
         stop();
     }
@@ -361,7 +361,8 @@ final class KeyboardAudio implements AutoCloseable {
                     if (rendered == 0 && refresh > 0) {
                         int period = KeyboardSynth.RATE / refresh;
                         int queued = period + Math.max(period / 2, DEVICE_HEADROOM_FRAMES);
-                        liveFrames = Math.clamp(Math.ceilDiv(queued, QUEUED_BUFFERS),
+                        // Whole synth blocks, and so whole buffers of it.
+                        liveFrames = Math.clamp(Math.ceilDiv(queued, QUEUED_BUFFERS * Synth.BLOCK) * Synth.BLOCK,
                                 framesPerBuffer, MAX_LIVE_FRAMES);
                     }
                 }

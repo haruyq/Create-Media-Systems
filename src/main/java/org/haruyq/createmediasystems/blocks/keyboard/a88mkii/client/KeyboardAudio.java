@@ -1,7 +1,5 @@
 package org.haruyq.createmediasystems.blocks.keyboard.a88mkii.client;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Comparator;
@@ -15,7 +13,6 @@ import java.util.stream.Stream;
 
 import javax.sound.sampled.AudioFormat;
 
-import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Controller;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.KeyboardFeature;
@@ -37,7 +34,6 @@ import org.lwjgl.openal.ALC10;
 
 import com.mojang.logging.LogUtils;
 
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.Sound;
@@ -46,7 +42,6 @@ import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.client.sounds.SoundBufferLibrary;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -58,8 +53,6 @@ import net.minecraft.world.phys.Vec3;
  * milliseconds after it arrives (see {@link Tap}).
  */
 public final class KeyboardAudio {
-    /** GeneralUser GS, a General MIDI bank with Roland GS's variations; a resource pack may put another in its place. */
-    private static final ResourceLocation BANK = CreateMediaSystems.id("keyboard/a88mkii/generaluser_gs.sf3");
     /** The speakers of one keyboard heard at once, the nearest first. */
     private static final int MAX_OUTPUTS = 6;
     private static final int[] EMPTY_SETUP = new int[0];
@@ -231,19 +224,12 @@ public final class KeyboardAudio {
         if (!bankAsked) {
             bankAsked = true;
             // ponytail: read once and kept until the game is closed; a resource reload doesn't read it again.
-            CompletableFuture.supplyAsync(() -> read(mc), Util.ioPool()).thenAccept(font -> bank = font);
+            SoundFont.bundled().whenComplete((font, failed) -> {
+                if (failed != null) LogUtils.getLogger().error("Could not read the keyboard's sound bank; keyboards stay silent", failed);
+                bank = font;
+            });
         }
         return bank;
-    }
-
-    @Nullable
-    private static SoundFont read(Minecraft mc) {
-        try (InputStream in = mc.getResourceManager().open(BANK)) {
-            return SoundFont.read(ByteBuffer.wrap(in.readAllBytes()));
-        } catch (IOException | RuntimeException failed) {
-            LogUtils.getLogger().error("Could not read the keyboard's sound bank {}; keyboards stay silent", BANK, failed);
-            return null;
-        }
     }
 
     private static void end(Minecraft mc, LiveSound sound) {
