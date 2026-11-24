@@ -63,6 +63,7 @@ import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
@@ -104,7 +105,7 @@ public final class DjClient implements ClientFeature {
     }
 
     /** What this client's hosting has going, for the controller's screen. */
-    public record Status(boolean hardware, boolean rekordbox, boolean sound, float level, String out, String problem) {
+    public record Status(boolean hardware, boolean rekordbox, boolean sound, float level, String out, Component problem) {
     }
 
     private static final Map<BlockPos, DjState.Track[]> TRACKS = new HashMap<>();
@@ -271,8 +272,8 @@ public final class DjClient implements ClientFeature {
         private SoundShare sound;
         private boolean soundTried;
         private int soundPid;
-        private volatile String problem = "";
-        private volatile String outProblem = "";
+        private volatile Component problem = Component.empty();
+        private volatile Component outProblem = Component.empty();
         private byte[] sent = {};
         private int ticks;
         @Nullable
@@ -295,7 +296,7 @@ public final class DjClient implements ClientFeature {
             if (wanted.isEmpty()) {
                 return;
             }
-            String why = "No MIDI output named " + named;
+            Component why = Component.translatable("create_media_systems.ddj_flx4.no_midi_out", named);
             for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
                 if (!info.getName().toLowerCase(Locale.ROOT).contains(wanted)) {
                     continue;
@@ -315,7 +316,7 @@ public final class DjClient implements ClientFeature {
                     mapping();
                     return;
                 } catch (MidiUnavailableException | RuntimeException taken) {
-                    why = "MIDI output " + info.getName() + ": " + taken.getMessage();
+                    why = Component.translatable("create_media_systems.ddj_flx4.midi_out_failed", info.getName(), String.valueOf(taken.getMessage()));
                 }
             }
             outProblem = why;
@@ -359,7 +360,8 @@ public final class DjClient implements ClientFeature {
 
         Status status() {
             return new Status(hardware(), rekordbox != null, sound != null, sound == null ? 0 : sound.level(), outName,
-                    problem.isEmpty() || outProblem.isEmpty() ? problem + outProblem : problem + "; " + outProblem);
+                    Component.empty().append(problem).append(problem.getString().isEmpty() || outProblem.getString().isEmpty() ? "" : "; ")
+                            .append(outProblem));
         }
 
         @Override
@@ -563,7 +565,7 @@ public final class DjClient implements ClientFeature {
             }
             soundTried = true;
             if (!P2pClient.connect(me)) {
-                problem = "Could not host a P2P session; check /cms p2p status";
+                problem = Component.translatable("create_media_systems.ddj_flx4.no_p2p");
                 return;
             }
             int pid = rekordbox == null ? 0 : rekordbox.pid();
@@ -575,14 +577,15 @@ public final class DjClient implements ClientFeature {
                         if (hosting == this && SoundShare.current() == started) {
                             sound = started;
                             soundPid = pid;
-                            problem = "";
+                            problem = Component.empty();
                             PacketDistributor.sendToServer(new Claim(pos, true, started.url.toString()));
                         } else if (SoundShare.current() == started) {
                             SoundShare.stopCurrent();
                         }
                     });
                 } catch (IOException | RuntimeException failed) {
-                    problem = "No sound: " + (failed.getMessage() == null ? failed : failed.getMessage());
+                    problem = Component.translatable("create_media_systems.ddj_flx4.no_sound",
+                            failed.getMessage() == null ? failed.toString() : failed.getMessage());
                 }
             });
         }

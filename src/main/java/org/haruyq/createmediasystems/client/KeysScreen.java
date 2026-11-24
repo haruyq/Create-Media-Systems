@@ -18,7 +18,6 @@ import org.lwjgl.glfw.GLFW;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -33,7 +32,7 @@ import net.minecraft.util.Mth;
  * <p>It is drawn in the window's own pixels rather than the GUI's coarser ones, so its corners can be round and its
  * edges soft; everything is measured in those, the mouse brought into them as it comes in.
  */
-public abstract class KeysScreen extends Screen {
+public abstract class KeysScreen extends InstrumentScreen {
     protected static final int EDGE = 0xFF050506, LAMP = 0xFFFFE7B8, TEXT = 0xFFE6E6EA, FAINT = 0xFF85858D, INK = 0xFF151517;
     /** Shaded faces, each lighter at the top than at the bottom: the body, a button idle, held and lit, one that is off. */
     protected static final int[] BODY = {0xF4242428, 0xF4151517}, BUTTON = {0xFF3D3D45, 0xFF2C2C32}, HELD = {0xFF5A5A63, 0xFF45454D},
@@ -75,8 +74,6 @@ public abstract class KeysScreen extends Screen {
     /** The gap between the strip and the keys; the felt along the keys' back is in it. */
     protected int deck, felt;
     protected float textScale;
-    /** Whether it is out of sight, all but the button that brings it back. */
-    protected boolean hidden;
     /** How many times their width the keys are drawn, and the first white key in sight when not all of them fit. */
     protected int zoom = 1, firstWhite;
     protected int ticks;
@@ -169,23 +166,14 @@ public abstract class KeysScreen extends Screen {
             int sliderWidth = Math.round(font.width(trailSpeedText(250)) * textScale) + keyWidth * 2;
             trailSpeed = slider((right - sliderWidth - keysX) / (float) keyWidth, (at[1] - stripY) / (float) keyWidth,
                     (right - keysX) / (float) keyWidth, (at[3] - stripY) / (float) keyWidth, KeysScreen::trailSpeedText,
-                    25, 250, NoteTrailRenderer::speed, NoteTrailRenderer::speed);
+                    25, 250, NoteTrailRenderer::speed, NoteTrailRenderer::speed)
+                    .hint(Component.translatable("create_media_systems.keys.note_speed_help"));
         }
     }
 
     /** How high a line of the small lettering is. */
     protected int lineHeight() {
         return Math.round(8 * textScale) + 2;
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
-    /** The world stays in sight behind it. */
-    @Override
-    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -220,17 +208,26 @@ public abstract class KeysScreen extends Screen {
                 drawTrailToggle(g, at, x, y);
             }
             box(g, at[0], at[1], at[2], at[3], lineHeight() / 3, true, button[0], button[1]);
-            write(g, toggleName(), (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale, text, MIDDLE);
+            write(g, toggleName().getString(), (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale, text, MIDDLE);
         });
         g.pose().popPose();
-        if (hidden) {
-            return;
+        if (!hidden) {
+            super.render(g, mouseX, mouseY, partialTick);
         }
-        super.render(g, mouseX, mouseY, partialTick);
-        Face face = grabbed == null ? faceAt(x, y) : null;
-        if (face != null && face.hint != null) {
-            g.renderTooltip(font, font.split(face.hint, 210), mouseX, mouseY);
+        Component hint = in(toggle(), x, y) ? toggleHint() : hidden || grabbed != null ? null : hintAt(x, y);
+        if (hint != null) {
+            g.renderTooltip(font, font.split(hint, 210), mouseX, mouseY);
         }
+    }
+
+    /** What the control at ({@code x}, {@code y}) of the window does; null for none. */
+    @Nullable
+    protected Component hintAt(double x, double y) {
+        if (hasNoteTrails() && in(trailToggle(toggle()), x, y)) {
+            return Component.translatable("create_media_systems.keys.note_trails_help");
+        }
+        Face face = faceAt(x, y);
+        return face == null ? null : face.hint;
     }
 
     /** The instrument's own part of it, over the body and its faces; the mouse is at ({@code x}, {@code y}) of the window. */
@@ -257,10 +254,6 @@ public abstract class KeysScreen extends Screen {
         write(g, Component.translatable("create_media_systems.keys.note_trails").getString(),
                 (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale,
                 NoteTrailRenderer.enabled() ? ink : text, MIDDLE);
-    }
-
-    private String toggleName() {
-        return Component.translatable(hidden ? "create_media_systems.keys.show" : "create_media_systems.keys.hide").getString();
     }
 
     /** The button that hides and shows it: at the right end of the top line; at the window's bottom corner while hidden. */
@@ -468,8 +461,7 @@ public abstract class KeysScreen extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         double x = mouseX * pixel, y = mouseY * pixel;
         if (in(toggle(), x, y)) {
-            hidden = !hidden;
-            rebuildWidgets();
+            toggleHidden();
             return true;
         }
         if (hidden) {

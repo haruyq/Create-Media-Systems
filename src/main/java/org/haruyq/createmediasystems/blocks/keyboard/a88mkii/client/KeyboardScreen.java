@@ -113,13 +113,18 @@ final class KeyboardScreen extends KeysScreen {
     @Override protected boolean hasNoteTrails() { return true; }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        super.render(g, mouseX, mouseY, partialTick);
-        Control hovered = controlAt(mouseX * pixel, mouseY * pixel);
-        if (hovered != null && held == null && mouseNote < 0) {
-            g.renderTooltip(font, font.split(Component.translatable(KEY + "control." + hovered.name().toLowerCase(Locale.ROOT)), 210),
-                    mouseX, mouseY);
-        }
+    @Nullable
+    protected Component hintAt(double x, double y) {
+        Control hovered = controlAt(x, y);
+        if (held != null || mouseNote >= 0) return null;
+        if (hovered != null) return Component.translatable(KEY + "control." + hovered.name().toLowerCase(Locale.ROOT));
+        Component own = super.hintAt(x, y);
+        return own != null || !midiHeader(x, y) ? own : Component.translatable("keyboard.device_help");
+    }
+
+    /** Whether ({@code x}, {@code y}) is on the MIDI input, at the right of the top line. */
+    private boolean midiHeader(double x, double y) {
+        return y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2;
     }
 
     /** Where {@code control} is: its left, top, right and bottom. */
@@ -139,7 +144,7 @@ final class KeyboardScreen extends KeysScreen {
     /** The top line: what is set off its usual on the left (nothing, on a keyboard as it comes), the MIDI inputs on the right. */
     private void drawHeader(GuiGraphics g, Panel panel) {
         MidiPort.Status midi = MidiInput.status();
-        drawHeader(g, "Koland A-88MKII", status(panel), LAMP, MidiPort.label(midi).getString(),
+        drawHeader(g, title.getString(), status(panel), LAMP, MidiPort.label(midi).getString(),
                 midi.message().equals("keyboard.midi_connected") ? 0xFF000000 | PanelLook.GREEN : FAINT);
     }
 
@@ -336,7 +341,7 @@ final class KeyboardScreen extends KeysScreen {
                 }
                 case LEVER -> lever(x, y);
             }
-        } else if (y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2) {
+        } else if (midiHeader(x, y)) {
             // The MIDI input, at the right of the top line: the next (all of them first), looked for again.
             MidiPort.Status midi = MidiInput.status();
             if (!midi.inputs().isEmpty()) MidiPort.cycle(midi.inputs(), midi.selected(), true);

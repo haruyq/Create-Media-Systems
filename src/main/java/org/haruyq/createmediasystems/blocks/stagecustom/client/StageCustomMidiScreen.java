@@ -9,17 +9,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomBlock;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomLayout.Drum;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomMidi;
+import org.haruyq.createmediasystems.client.InstrumentScreen;
 import org.haruyq.createmediasystems.client.KeysScreen;
 import org.haruyq.createmediasystems.client.MidiPort;
 
-final class StageCustomMidiScreen extends Screen {
+final class StageCustomMidiScreen extends InstrumentScreen {
     private static final Drum[] DRUMS = Drum.values();
     private static final Voice[] CYMBALS = Voice.values();
     private static final String SHORTCUTS = "ZXCVB123456";
@@ -47,6 +47,7 @@ final class StageCustomMidiScreen extends Screen {
         panelWidth = Math.min(354, width - 16);
         left = (width - panelWidth) / 2;
         top = height - panelHeight() - 15;
+        if (addToggle(left + panelWidth - 8, top + 5)) return;
         for (Drum drum : DRUMS) {
             addPad(drum.ordinal(), drum.id(), StageCustomMidi.note(drum));
         }
@@ -59,7 +60,8 @@ final class StageCustomMidiScreen extends Screen {
         input = addRenderableWidget(Button.builder(Component.empty(), button -> midi.next())
                 .bounds(left + 8, inputTop, panelWidth - refreshWidth - 20, 20).build());
         addRenderableWidget(Button.builder(refresh, button -> midi.scan())
-                .bounds(left + panelWidth - refreshWidth - 8, inputTop, refreshWidth, 20).build());
+                .bounds(left + panelWidth - refreshWidth - 8, inputTop, refreshWidth, 20)
+                .tooltip(Tooltip.create(Component.translatable("keyboard.refresh_help"))).build());
         showStatus(midi.status());
     }
 
@@ -87,9 +89,13 @@ final class StageCustomMidiScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partial) {
+        if (hidden) {
+            super.render(graphics, mouseX, mouseY, partial);
+            return;
+        }
         graphics.fill(left, top, left + panelWidth, top + panelHeight(), 0xEA111820);
         graphics.fill(left, top, left + panelWidth, top + 2, 0xFF6BA7E8);
-        graphics.drawString(font, title, left + 8, top + 9, 0xFFF1F6FC, false);
+        drawHeader(graphics, left + 8, top + 9, Component.empty(), 0);
         super.render(graphics, mouseX, mouseY, partial);
         long now = System.nanoTime();
         for (int i = 0; i < (complete ? impacts.length : DRUMS.length); i++) {
@@ -99,14 +105,11 @@ final class StageCustomMidiScreen extends Screen {
         }
     }
 
-    @Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partial) {}
-
     private void showStatus(MidiPort.Status status) {
         displayed = status;
         Component label = MidiPort.label(status);
         input.setMessage(Component.literal(font.plainSubstrByWidth(label.getString(), input.getWidth() - 12)));
-        input.setTooltip(Tooltip.create(label));
+        input.setTooltip(Tooltip.create(label.copy().append("\n").append(Component.translatable("keyboard.device_help"))));
     }
 
     @Override
@@ -122,8 +125,6 @@ final class StageCustomMidiScreen extends Screen {
         var status = midi.status();
         if (!status.equals(displayed)) showStatus(status);
     }
-
-    @Override public boolean isPauseScreen() { return false; }
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {

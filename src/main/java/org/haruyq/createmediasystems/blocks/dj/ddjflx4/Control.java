@@ -10,60 +10,60 @@ import org.jetbrains.annotations.Nullable;
  * {@link #apart} to the right.
  */
 public enum Control {
-    LOOP_IN(Kind.BUTTON, "IN", 87, 300, 26, 26, 588, Port.DECK, 0x10, 0x4C),
-    LOOP_OUT(Kind.BUTTON, "OUT", 137, 300, 26, 26, 588, Port.DECK, 0x11, 0x4E),
-    BEAT_4(Kind.BUTTON, "4 BEAT/EXIT", 183, 299, 20, 20, 588, Port.DECK, 0x4D, 0x50),
-    CALL_LEFT(Kind.BUTTON, "CUE/LOOP CALL <", 232, 300, 15, 15, 588, Port.DECK, 0x51, 0x3E),
-    CALL_RIGHT(Kind.BUTTON, "CUE/LOOP CALL >", 268, 300, 15, 15, 588, Port.DECK, 0x53, 0x3D),
-    SYNC(Kind.BUTTON, "BEAT SYNC", 314, 300, 22, 22, 588, Port.DECK, 0x58, 0x60),
+    LOOP_IN(Kind.BUTTON, 87, 300, 26, 26, 588, Port.DECK, 0x10, 0x4C),
+    LOOP_OUT(Kind.BUTTON, 137, 300, 26, 26, 588, Port.DECK, 0x11, 0x4E),
+    BEAT_4(Kind.BUTTON, 183, 299, 20, 20, 588, Port.DECK, 0x4D, 0x50),
+    CALL_LEFT(Kind.BUTTON, 232, 300, 15, 15, 588, Port.DECK, 0x51, 0x3E),
+    CALL_RIGHT(Kind.BUTTON, 268, 300, 15, 15, 588, Port.DECK, 0x53, 0x3D),
+    SYNC(Kind.BUTTON, 314, 300, 22, 22, 588, Port.DECK, 0x58, 0x60),
     /** Turned: a relative control change, 0x40 for no movement. Its touch is {@link #JOG_TOUCH}. */
-    JOG(Kind.JOG, "JOG", 200, 462, 256, 256, 588, Port.DECK, 0x22, 0x29),
-    SHIFT(Kind.BUTTON, "SHIFT", 87, 590, 18, 14, 588, Port.DECK, 0x3F, -1),
-    CUE(Kind.BUTTON, "CUE", 90, 637, 42, 42, 588, Port.DECK, 0x0C, 0x48),
-    PLAY(Kind.BUTTON, "PLAY/PAUSE", 90, 690, 42, 42, 588, Port.DECK, 0x0B, 0x0E),
-    MODE_HOT_CUE(Kind.BUTTON, "HOT CUE", 140, 617, 33, 12, 588, Port.DECK, 0x1B, 0x69),
-    MODE_PAD_FX(Kind.BUTTON, "PAD FX1", 182, 617, 33, 12, 588, Port.DECK, 0x1E, 0x6B),
-    MODE_BEAT_JUMP(Kind.BUTTON, "BEAT JUMP", 223, 617, 33, 12, 588, Port.DECK, 0x20, 0x6D),
-    MODE_SAMPLER(Kind.BUTTON, "SAMPLER", 264, 617, 33, 12, 588, Port.DECK, 0x22, 0x6F),
-    PAD_1(Kind.PAD, "PAD 1", 140, 658, 34, 34, 588, Port.PADS, 0, 0),
-    PAD_2(Kind.PAD, "PAD 2", 182, 658, 34, 34, 588, Port.PADS, 1, 1),
-    PAD_3(Kind.PAD, "PAD 3", 223, 658, 34, 34, 588, Port.PADS, 2, 2),
-    PAD_4(Kind.PAD, "PAD 4", 264, 658, 34, 34, 588, Port.PADS, 3, 3),
-    PAD_5(Kind.PAD, "PAD 5", 140, 700, 34, 34, 588, Port.PADS, 4, 4),
-    PAD_6(Kind.PAD, "PAD 6", 182, 700, 34, 34, 588, Port.PADS, 5, 5),
-    PAD_7(Kind.PAD, "PAD 7", 223, 700, 34, 34, 588, Port.PADS, 6, 6),
-    PAD_8(Kind.PAD, "PAD 8", 264, 700, 34, 34, 588, Port.PADS, 7, 7),
+    JOG(Kind.JOG, 200, 462, 256, 256, 588, Port.DECK, 0x22, 0x29),
+    SHIFT(Kind.BUTTON, 87, 590, 18, 14, 588, Port.DECK, 0x3F, -1),
+    CUE(Kind.BUTTON, 90, 637, 42, 42, 588, Port.DECK, 0x0C, 0x48),
+    PLAY(Kind.BUTTON, 90, 690, 42, 42, 588, Port.DECK, 0x0B, 0x0E),
+    MODE_HOT_CUE(Kind.BUTTON, 140, 617, 33, 12, 588, Port.DECK, 0x1B, 0x69),
+    MODE_PAD_FX(Kind.BUTTON, 182, 617, 33, 12, 588, Port.DECK, 0x1E, 0x6B),
+    MODE_BEAT_JUMP(Kind.BUTTON, 223, 617, 33, 12, 588, Port.DECK, 0x20, 0x6D),
+    MODE_SAMPLER(Kind.BUTTON, 264, 617, 33, 12, 588, Port.DECK, 0x22, 0x6F),
+    PAD_1(Kind.PAD, 140, 658, 34, 34, 588, Port.PADS, 0, 0),
+    PAD_2(Kind.PAD, 182, 658, 34, 34, 588, Port.PADS, 1, 1),
+    PAD_3(Kind.PAD, 223, 658, 34, 34, 588, Port.PADS, 2, 2),
+    PAD_4(Kind.PAD, 264, 658, 34, 34, 588, Port.PADS, 3, 3),
+    PAD_5(Kind.PAD, 140, 700, 34, 34, 588, Port.PADS, 4, 4),
+    PAD_6(Kind.PAD, 182, 700, 34, 34, 588, Port.PADS, 5, 5),
+    PAD_7(Kind.PAD, 223, 700, 34, 34, 588, Port.PADS, 6, 6),
+    PAD_8(Kind.PAD, 264, 700, 34, 34, 588, Port.PADS, 7, 7),
     /** Its place is its travel: pushed towards the front the tempo rises. */
-    TEMPO(Kind.FADER, "TEMPO", 316, 650, 26, 130, 588, Port.DECK, 0x00, 0x05),
+    TEMPO(Kind.FADER, 316, 650, 26, 130, 588, Port.DECK, 0x00, 0x05),
     /** Deck 2's is the next note up. */
-    LOAD(Kind.BUTTON, "LOAD", 435, 284, 26, 12, 120, Port.MIXER, 0x46, -1),
+    LOAD(Kind.BUTTON, 435, 284, 26, 12, 120, Port.MIXER, 0x46, -1),
     /** Turned: a relative control change, 1 a step clockwise and 0x7F one back. Its press is {@link #BROWSE_PRESS}. */
-    BROWSE(Kind.ENCODER, "BROWSE", 495, 275, 30, 30, 0, Port.MIXER, 0x40, 0x64),
-    TRIM(Kind.KNOB, "TRIM", 457, 320, 24, 24, 75, Port.DECK, 0x04, -1),
-    MASTER_LEVEL(Kind.KNOB, "MASTER LEVEL", 599, 320, 26, 26, 0, Port.MIXER, 0x08, -1),
-    HI(Kind.KNOB, "HI", 457, 366, 28, 28, 75, Port.DECK, 0x07, -1),
-    MID(Kind.KNOB, "MID", 457, 411, 28, 28, 75, Port.DECK, 0x0B, -1),
-    LOW(Kind.KNOB, "LOW", 457, 456, 28, 28, 75, Port.DECK, 0x0F, -1),
+    BROWSE(Kind.ENCODER, 495, 275, 30, 30, 0, Port.MIXER, 0x40, 0x64),
+    TRIM(Kind.KNOB, 457, 320, 24, 24, 75, Port.DECK, 0x04, -1),
+    MASTER_LEVEL(Kind.KNOB, 599, 320, 26, 26, 0, Port.MIXER, 0x08, -1),
+    HI(Kind.KNOB, 457, 366, 28, 28, 75, Port.DECK, 0x07, -1),
+    MID(Kind.KNOB, 457, 411, 28, 28, 75, Port.DECK, 0x0B, -1),
+    LOW(Kind.KNOB, 457, 456, 28, 28, 75, Port.DECK, 0x0F, -1),
     /** Channel 2's is the next control up. */
-    CFX(Kind.KNOB, "CFX", 457, 502, 28, 28, 75, Port.MIXER, 0x17, -1),
+    CFX(Kind.KNOB, 457, 502, 28, 28, 75, Port.MIXER, 0x17, -1),
     /** Works the controller's own microphone input: it sends nothing. */
-    MIC_LEVEL(Kind.KNOB, "MIC LEVEL", 389, 411, 28, 28, 0, Port.NONE, 0, -1),
-    SMART_CFX(Kind.BUTTON, "SMART CFX", 386, 502, 20, 20, 0, Port.MIXER, 0x00, 0x08),
-    HEADPHONE_MIX(Kind.KNOB, "HEADPHONES MIX", 389, 571, 24, 24, 0, Port.MIXER, 0x0C, -1),
-    HEADPHONE_LEVEL(Kind.KNOB, "HEADPHONES LEVEL", 389, 617, 24, 24, 0, Port.MIXER, 0x0D, -1),
-    SMART_FADER(Kind.BUTTON, "SMART FADER", 386, 659, 20, 20, 0, Port.MIXER, 0x01, -1),
-    MASTER_CUE(Kind.BUTTON, "MASTER CUE", 599, 367, 26, 12, 0, Port.MIXER, 0x63, 0x78),
-    CHANNEL_CUE(Kind.BUTTON, "CUE", 457, 549, 26, 12, 75, Port.DECK, 0x54, 0x68),
+    MIC_LEVEL(Kind.KNOB, 389, 411, 28, 28, 0, Port.NONE, 0, -1),
+    SMART_CFX(Kind.BUTTON, 386, 502, 20, 20, 0, Port.MIXER, 0x00, 0x08),
+    HEADPHONE_MIX(Kind.KNOB, 389, 571, 24, 24, 0, Port.MIXER, 0x0C, -1),
+    HEADPHONE_LEVEL(Kind.KNOB, 389, 617, 24, 24, 0, Port.MIXER, 0x0D, -1),
+    SMART_FADER(Kind.BUTTON, 386, 659, 20, 20, 0, Port.MIXER, 0x01, -1),
+    MASTER_CUE(Kind.BUTTON, 599, 367, 26, 12, 0, Port.MIXER, 0x63, 0x78),
+    CHANNEL_CUE(Kind.BUTTON, 457, 549, 26, 12, 75, Port.DECK, 0x54, 0x68),
     /** Its place is its travel: pushed towards the back it is loudest. */
-    CHANNEL_FADER(Kind.FADER, "CHANNEL FADER", 457, 628, 24, 92, 75, Port.DECK, 0x13, -1),
-    CROSSFADER(Kind.CROSSFADER, "CROSSFADER", 495, 712, 92, 24, 0, Port.MIXER, 0x1F, -1),
+    CHANNEL_FADER(Kind.FADER, 457, 628, 24, 92, 75, Port.DECK, 0x13, -1),
+    CROSSFADER(Kind.CROSSFADER, 495, 712, 92, 24, 0, Port.MIXER, 0x1F, -1),
     /** Three places: channel 1, channel 2, both. It says which channel the beat FX's other controls send on. */
-    FX_CHANNEL(Kind.SWITCH, "BEAT FX CH SELECT", 600, 457, 30, 14, 0, Port.NONE, 0, -1),
-    FX_SELECT(Kind.BUTTON, "FX SELECT", 600, 503, 26, 12, 0, Port.FX, 0x63, 0x64),
-    FX_BEAT_LEFT(Kind.BUTTON, "BEAT <", 586, 549, 22, 12, 0, Port.FX, 0x4A, 0x66),
-    FX_BEAT_RIGHT(Kind.BUTTON, "BEAT >", 614, 549, 22, 12, 0, Port.FX, 0x4B, 0x6B),
-    FX_DEPTH(Kind.KNOB, "LEVEL/DEPTH", 599, 607, 26, 26, 0, Port.FX, 0x02, -1),
-    FX_ON(Kind.BUTTON, "BEAT FX ON/OFF", 599, 659, 26, 26, 0, Port.FX, 0x47, 0x43);
+    FX_CHANNEL(Kind.SWITCH, 600, 457, 30, 14, 0, Port.NONE, 0, -1),
+    FX_SELECT(Kind.BUTTON, 600, 503, 26, 12, 0, Port.FX, 0x63, 0x64),
+    FX_BEAT_LEFT(Kind.BUTTON, 586, 549, 22, 12, 0, Port.FX, 0x4A, 0x66),
+    FX_BEAT_RIGHT(Kind.BUTTON, 614, 549, 22, 12, 0, Port.FX, 0x4B, 0x6B),
+    FX_DEPTH(Kind.KNOB, 599, 607, 26, 26, 0, Port.FX, 0x02, -1),
+    FX_ON(Kind.BUTTON, 599, 659, 26, 26, 0, Port.FX, 0x47, 0x43);
 
     public enum Kind {
         /** Down or up. */
@@ -147,8 +147,6 @@ public enum Control {
     public static final int SLOTS = ALL.length * 2;
 
     public final Kind kind;
-    /** As it is printed on the controller. */
-    public final String label;
     public final float x, y, width, depth;
     /** How far right the second one is; 0 if there is only one. */
     public final float apart;
@@ -156,9 +154,8 @@ public enum Control {
     /** Its note or control number, and the one it sends with SHIFT held (-1: the same). */
     public final int number, shifted;
 
-    Control(Kind kind, String label, float x, float y, float width, float depth, float apart, Port port, int number, int shifted) {
+    Control(Kind kind, float x, float y, float width, float depth, float apart, Port port, int number, int shifted) {
         this.kind = kind;
-        this.label = label;
         this.x = x;
         this.y = y;
         this.width = width;

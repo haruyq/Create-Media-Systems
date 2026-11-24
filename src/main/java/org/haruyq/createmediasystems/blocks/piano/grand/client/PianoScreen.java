@@ -76,21 +76,24 @@ final class PianoScreen extends KeysScreen {
         super.init();
         midi.scan();
         if (hidden) return;
-        button(0.6f, ROW, 13, ROW_END, midi.port::label, midi.port::next);
-        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("keyboard.refresh"), midi::scan);
+        button(0.6f, ROW, 13, ROW_END, midi.port::label, midi.port::next).hint(Component.translatable("keyboard.device_help"));
+        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("keyboard.refresh"), midi::scan)
+                .hint(Component.translatable("keyboard.refresh_help"));
         button(17.8f, ROW, 23, ROW_END, this::channel, () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
             midi.channel(preferredChannel);
-        });
-        button(23.4f, ROW, 27.4f, ROW_END, () -> Component.translatable("piano.lid"), () -> client.command(instrument, Action.ROOF));
+        }).hint(Component.translatable("keyboard.channel_help"));
+        button(23.4f, ROW, 27.4f, ROW_END, () -> Component.translatable("piano.lid"), () -> client.command(instrument, Action.ROOF))
+                .hint(Component.translatable("piano.lid_help"));
         button(27.8f, ROW, 32.8f, ROW_END, () -> Component.translatable("piano.keyboard_lid"),
-                () -> client.command(instrument, Action.KEYBOARD_LID));
-        button(33.2f, ROW, 37.2f, ROW_END, () -> Component.translatable("piano.panic"), midi::panic);
+                () -> client.command(instrument, Action.KEYBOARD_LID)).hint(Component.translatable("piano.keyboard_lid_help"));
+        button(33.2f, ROW, 37.2f, ROW_END, () -> Component.translatable("piano.panic"), midi::panic)
+                .hint(Component.translatable("keyboard.panic_help"));
         for (int i = 0; i < PEDALS.length; i++) {
             int pedal = i;
             float left = 37.8f + i * 4.6f;
             slider(left, ROW, left + 4.2f, ROW_END, value -> Component.translatable(PEDAL_NAMES[pedal]), 0, 127,
-                    () -> instrument.keys.pedal(PEDALS[pedal]), null);
+                    () -> instrument.keys.pedal(PEDALS[pedal]), null).hint(Component.translatable("keyboard.pedal_help"));
         }
     }
 

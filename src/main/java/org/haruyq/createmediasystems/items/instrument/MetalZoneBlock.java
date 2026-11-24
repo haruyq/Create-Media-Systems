@@ -54,22 +54,20 @@ public final class MetalZoneBlock extends GuitarPedalBlock implements EntityBloc
     }
 
     public enum Knob {
-        LEVEL(4.91f, Cap.FULL, "LEVEL"),
-        LOW(6.97f, Cap.OUTER, "LOW"),
-        HIGH(6.97f, Cap.INNER, "HIGH"),
-        MID_FREQ(9.03f, Cap.OUTER, "MID FREQ"),
-        MIDDLE(9.03f, Cap.INNER, "MIDDLE"),
-        DIST(11.09f, Cap.FULL, "DIST");
+        LEVEL(4.91f, Cap.FULL),
+        LOW(6.97f, Cap.OUTER),
+        HIGH(6.97f, Cap.INNER),
+        MID_FREQ(9.03f, Cap.OUTER),
+        MIDDLE(9.03f, Cap.INNER),
+        DIST(11.09f, Cap.FULL);
 
         private static final Knob[] ALL = values();
         public final float x;
         public final Cap cap;
-        public final String label;
 
-        Knob(float x, Cap cap, String label) {
+        Knob(float x, Cap cap) {
             this.x = x;
             this.cap = cap;
-            this.label = label;
         }
 
         public Knob outer() {

@@ -1,10 +1,13 @@
 package org.haruyq.createmediasystems.blocks.dj.ddjflx4.client;
 
+import java.util.Locale;
+
 import org.haruyq.createmediasystems.blocks.dj.ddjflx4.Control;
 import org.haruyq.createmediasystems.blocks.dj.ddjflx4.Control.Kind;
 import org.haruyq.createmediasystems.blocks.dj.ddjflx4.DdjFlx4Block;
 import org.haruyq.createmediasystems.blocks.dj.ddjflx4.DjState;
 import org.haruyq.createmediasystems.blocks.dj.ddjflx4.client.DjClient.View;
+import org.haruyq.createmediasystems.client.InstrumentScreen;
 
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
@@ -17,7 +20,7 @@ import com.mojang.math.Axis;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -30,7 +33,7 @@ import net.minecraft.network.chat.MutableComponent;
  * on a right click; a fader follows the mouse; a jog wheel turns with the mouse going round it. Its Host button makes
  * the controller this player's, or gives it up.
  */
-final class DjScreen extends Screen {
+final class DjScreen extends InstrumentScreen {
     /** How far (GUI pixels) a knob is dragged from one end to the other. */
     private static final float KNOB_DRAG = 110;
     /** How long (ticks) a control stays as this player left it, till the controller says how it stands: it says so
@@ -65,13 +68,15 @@ final class DjScreen extends Screen {
         displayY = 22;
         unit = wide / across;
         top = displayY + wide * DjDisplay.HEIGHT / DjDisplay.WIDTH + wide * .02f;
+        if (addToggle((int) (left + wide), 3)) return;
         host = addRenderableWidget(Button.builder(Component.empty(), button -> {
             if (DjClient.hosting(pos)) {
                 DjClient.stop();
             } else {
                 DjClient.host(pos);
             }
-        }).bounds((int) left, 3, 70, 16).build());
+        }).bounds((int) left + font.width(title) + 8, 3, 70, 16)
+                .tooltip(Tooltip.create(Component.translatable("create_media_systems.ddj_flx4.host_help"))).build());
     }
 
     @Nullable
@@ -109,17 +114,18 @@ final class DjScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         super.render(g, mouseX, mouseY, partialTick);
         DdjFlx4Block.Entity controller = controller();
-        if (controller == null) {
+        if (controller == null || hidden) {
             return;
         }
         boolean mine = DjClient.hosting(pos);
         host.setMessage(Component.translatable(mine ? "create_media_systems.ddj_flx4.stop" : "create_media_systems.ddj_flx4.host"));
         host.active = mine || controller.host() == null;
-        g.drawString(font, status(controller), (int) left + 76, 7, 0xFFFFFFFF);
+        drawHeader(g, (int) left, 7, Component.empty(), 0);
+        g.drawString(font, status(controller), host.getRight() + 6, 7, 0xFFFFFFFF);
         DjClient.Status status = DjClient.status(pos);
-        if (status != null && !status.problem().isEmpty()) {
+        if (status != null && !status.problem().getString().isEmpty()) {
             // Along the bottom, as much of it as fits.
-            g.drawCenteredString(font, font.plainSubstrByWidth(status.problem(), width - 8), width / 2, height - 11, 0xFFFF5555);
+            g.drawCenteredString(font, font.plainSubstrByWidth(status.problem().getString(), width - 8), width / 2, height - 11, 0xFFFF5555);
         }
 
         View view = DjClient.view(controller);
@@ -153,7 +159,8 @@ final class DjScreen extends Screen {
         Lighting.setupFor3DItems();
         pose.popPose();
         if (hovered >= 0 && held < 0 && moved < 0) {
-            g.renderTooltip(font, Component.literal(Control.ofSlot(hovered).label), mouseX, mouseY);
+            g.renderTooltip(font, Component.translatable("create_media_systems.ddj_flx4.control."
+                    + Control.ofSlot(hovered).name().toLowerCase(Locale.ROOT)), mouseX, mouseY);
         }
     }
 
@@ -166,7 +173,7 @@ final class DjScreen extends Screen {
         MutableComponent line = lamp("controller", status.hardware()).append("  ").append(lamp("rekordbox", status.rekordbox()))
                 .append("  ").append(lamp("sound", status.sound()));
         if (!status.out().isEmpty()) {
-            line.append(Component.literal("  MIDI OUT: " + status.out()).withStyle(ChatFormatting.GRAY));
+            line.append("  ").append(Component.translatable("create_media_systems.ddj_flx4.midi_out", status.out()).withStyle(ChatFormatting.GRAY));
         }
         return line;
     }
@@ -185,7 +192,7 @@ final class DjScreen extends Screen {
     }
 
     private int slotAt(double mouseX, double mouseY) {
-        return Control.at(viewX(mouseX), viewY(mouseY));
+        return hidden ? -1 : Control.at(viewX(mouseX), viewY(mouseY));
     }
 
     private int value(int slot) {
@@ -299,10 +306,5 @@ final class DjScreen extends Screen {
     public void removed() {
         // Nothing stays held with nobody at it.
         mouseReleased(0, 0, 0);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

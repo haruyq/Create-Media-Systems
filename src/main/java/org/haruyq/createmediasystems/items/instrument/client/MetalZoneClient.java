@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.items.instrument.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
@@ -146,7 +147,8 @@ final class MetalZoneClient implements BlockEntityRenderer<MetalZoneBlock.Entity
         }
 
         void readout() {
-            Minecraft.getInstance().player.displayClientMessage(Component.literal(knob.label + "  " + pedal.settings().readout(knob)), true);
+            Minecraft.getInstance().player.displayClientMessage(Component.translatable(
+                    "create_media_systems.boss_mt_2.knob." + knob.name().toLowerCase(Locale.ROOT)).append("  " + pedal.settings().readout(knob)), true);
         }
 
         @Override public void release(boolean gone) {

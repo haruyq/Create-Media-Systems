@@ -59,7 +59,6 @@ final class WearableScreen extends KeysScreen {
         this.session = session;
         this.kind = kind;
         this.hand = hand;
-        if (kind == Kind.MELODICA) hidden = true;
         base = kind == Kind.STRATOCASTER ? 40 : keytar() ? 48 : 60;
         lowest = kind.model == null ? base - (keytar() ? 24 : 12) : base + 12 * Math.floorDiv(kind.first - base, 12);
         highest = kind.model == null ? base + (keytar() ? 24 : 12) : base + 12 * Math.max(0, Math.ceilDiv(kind.last() - base - 28, 12));
@@ -156,59 +155,60 @@ final class WearableScreen extends KeysScreen {
             for (int index = 0; index < 8; index++) {
                 int tone = index;
                 button(index * each, 1.55f, (index + 1) * each - .12f, 2.72f,
-                        () -> tr("tone." + tone), () -> send(tone(tone))).lit(() -> view.notes.tone() == tone);
+                        () -> tr("tone." + tone), () -> send(tone(tone))).lit(() -> view.notes.tone() == tone).hint(tr("tone_help"));
             }
         }
         if (kind == Kind.STRATOCASTER) {
             float width = whiteKeyCount();
-            button(0, 4.16f, width*.54f, 5.31f, () -> device < 0 ? tr("input.none") : tr("input.device", devices.get(device).name()), this::nextDevice);
+            button(0, 4.16f, width*.54f, 5.31f, () -> device < 0 ? tr("input.none") : tr("input.device", devices.get(device).name()), this::nextDevice)
+                    .hint(tr("input.device_help"));
             button(width*.55f, 4.16f, width*.70f, 5.31f, () -> tr("input.channel", channel+1), () -> {
                 if (device < 0) return;
                 stopGuitar();
                 preferredChannel = channel = (channel+1) % devices.get(device).channels();
-            });
+            }).hint(tr("input.channel_help"));
             button(width*.71f, 4.16f, width, 5.31f,
                     () -> tr("input."+guitarInput.status().name().toLowerCase(java.util.Locale.ROOT)), this::toggleGuitar)
-                    .lit(() -> guitarInput.status() == GuitarInput.Status.LIVE);
+                    .lit(() -> guitarInput.status() == GuitarInput.Status.LIVE).hint(tr("input.help"));
             slider(0, 5.44f, width * .22f, 6.57f, v -> tr("input.gain", v), -18, 24, () -> gainDb, v -> {
                 gainDb = v; guitarInput.gainDb(v);
-            });
+            }).hint(tr("input.gain_help"));
             button(width * .23f, 5.44f, width * .42f, 6.57f, () -> tr(monitor ? "input.monitor_on" : "input.monitor_off"), () -> {
                 monitor = !monitor;
                 if (!monitor) view.audio.guitar().offer(new short[0], true);
-            }).lit(() -> monitor);
+            }).lit(() -> monitor).hint(tr("input.monitor_help"));
             button(width * .43f, 5.44f, width * .71f, 6.57f,
                     () -> tr(view.notes.amp().distortion() ? "amp.distortion" : "amp.overdrive"),
-                    () -> send(control(AMP, view.notes.amp().distortion() ? 0 : 127)));
+                    () -> send(control(AMP, view.notes.amp().distortion() ? 0 : 127))).hint(tr("amp.help"));
             slider(width * .72f, 5.44f, width, 6.57f, v -> tr("amp.drive", Math.round(v * 100 / 127f) + "%"),
-                    0, 127, () -> view.notes.amp().drive(), v -> send(control(DRIVE, v)));
+                    0, 127, () -> view.notes.amp().drive(), v -> send(control(DRIVE, v))).hint(tr("amp.drive_help"));
             button(0, 1.55f, width * .32f, 2.72f, () -> tr("pickup." + view.notes.pickup()),
-                    () -> send(control(PICKUP, Math.round(((view.notes.pickup() + 1) % 5) * 127 / 4f))));
+                    () -> send(control(PICKUP, Math.round(((view.notes.pickup() + 1) % 5) * 127 / 4f)))).hint(tr("pickup_help"));
             slider(width * .33f, 1.55f, width * .53f, 2.72f, v -> tr("volume", v), 0, 127,
-                    () -> view.notes.volume(), v -> send(control(VOLUME, v)));
+                    () -> view.notes.volume(), v -> send(control(VOLUME, v))).hint(tr("volume_help"));
             slider(width * .54f, 1.55f, width * .76f, 2.72f, v -> tr("tone_neck", v), 0, 127,
-                    () -> view.notes.neckTone(), v -> send(control(TONE_NECK, v)));
+                    () -> view.notes.neckTone(), v -> send(control(TONE_NECK, v))).hint(tr("tone_neck_help"));
             slider(width * .77f, 1.55f, width, 2.72f, v -> tr("tone_bridge", v), 0, 127,
-                    () -> view.notes.bridgeTone(), v -> send(control(TONE_BRIDGE, v)));
+                    () -> view.notes.bridgeTone(), v -> send(control(TONE_BRIDGE, v))).hint(tr("tone_bridge_help"));
         }
         if (kind.bendsPitch()) {
             slider(0, 2.86f, whiteKeyCount() * .43f, 4, value -> tr("bend", value - CENTER_BEND),
                     0, 16383, () -> bendValue, value -> {
                         bendDragged = true;
                         bendTo(value);
-                    });
+                    }).hint(tr("bend_help"));
         } else if (kind.wind()) {
             slider(0, 2.86f, whiteKeyCount() * .50f, 4, value -> tr("air", value),
                     0, 127, () -> sentAir, value -> {
                         midiAir = value;
                         pedals();
-                    });
+                    }).hint(tr("air_help"));
         } else {
             slider(0, 1.55f, whiteKeyCount() * .76f, 2.85f, value -> tr("melodica.air", Math.round(value*100/127f)),
-                    0, 127, () -> sentAir, value -> { midiAir = value; pedals(); });
+                    0, 127, () -> sentAir, value -> { midiAir = value; pedals(); }).hint(tr("air_help"));
         }
         float left = whiteKeyCount() * .60f;
-        button(left, 2.86f, whiteKeyCount() - .1f, 4, midi::label, midi::next);
+        button(left, 2.86f, whiteKeyCount() - .1f, 4, midi::label, midi::next).hint(Component.translatable("keyboard.device_help"));
     }
 
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -381,12 +381,6 @@ final class WearableScreen extends KeysScreen {
     }
 
     @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
-        if (hidden && (kind.model != null || kind == Kind.MELODICA) && button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            double sensitivity = minecraft.options.sensitivity().get() * .6 + .2;
-            double scale = pixel * 8 * sensitivity * sensitivity * sensitivity;
-            player.turn(dx * scale, dy * scale * (minecraft.options.invertYMouse().get() ? -1 : 1));
-            return true;
-        }
         if (mouseNote < 0) return super.mouseDragged(x, y, button, dx, dy);
         int next = keyAt(x * pixel, y * pixel);
         if (next >= 0 && next != mouseNote) {
