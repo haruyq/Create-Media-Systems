@@ -822,7 +822,7 @@
   "create_media_systems.ponder.wind_instruments.text_4": "音は演奏しているプレイヤーから鳴り、近くのプレイヤーにも聞こえます。スピーカーは要りません。",
   "create_media_systems.ponder.stage_custom.header": "ドラムセット",
   "create_media_systems.ponder.stage_custom.text_1": "ヤマハ Stage Custom Birch SBP2F5-DUSは5つのドラムのセットです。バスドラム、2つのタム、フロアタム、スネアがあります。",
-  "create_media_systems.ponder.stage_custom.text_2": "素手でドラムを右クリックすると、そのドラムを叩きます。",
+  "create_media_systems.ponder.stage_custom.text_2": "ドラムを右クリックすると、そのドラムを叩きます。",
   "create_media_systems.ponder.stage_custom.text_3": "SBP2F5AZM-DUSには、ハイハット、クラッシュ、ライドの3枚のシンバルが加わります。シンバルやペダルも右クリックで演奏できます。",
   "create_media_systems.ponder.stage_custom.text_4": "ハイハットのペダルを右クリックすると、ハイハットが開くか閉じます。",
   "create_media_systems.ponder.stage_custom.text_5": "スニークしながらドラムセットを右クリックすると、演奏画面が開きます。画面ではZ・X・C・V・Bのキーでドラムを、1〜6のキーでシンバルを叩きます。Shiftを押しながらだと弱く叩きます。",

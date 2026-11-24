@@ -38,11 +38,11 @@ public final class StageCustomPonder {
 
     private static void scene(SceneBuilder builder, SceneBuildingUtil util) {
         CreateSceneBuilder scene = plate(builder, "stage_custom", "The Drum Kits");
-        BlockPos root = util.grid().at(3, 1, 2);
+        BlockPos root = util.grid().at(1, 1, 2);
         scene.world().setBlock(root, kit(StageCustomFeature.BLOCK.get()), false);
         scene.world().showSection(util.select().position(root), Direction.DOWN);
         scene.idle(20);
-        Vec3 kit = util.vector().of(3.0, 2.0, 2.2);
+        Vec3 kit = util.vector().of(2.5, 2.0, 2.0);
 
         say(scene, 110, kit, "The Yamaha Stage Custom Birch SBP2F5-DUS is a set of five drums: a kick, two toms, a floor tom and a snare.");
         scene.overlay().showControls(kit, Pointing.DOWN, 40).rightClick();
@@ -52,7 +52,7 @@ public final class StageCustomPonder {
             hit(scene, root, pad);
             scene.idle(6);
         }
-        say(scene, 90, kit, "Right-click a drum with an empty hand to hit it.");
+        say(scene, 90, kit, "Right-click a drum to hit it.");
 
         // Through air, so the kit gets a new block entity and its renderer draws the cymbals.
         scene.world().setBlock(root, Blocks.AIR.defaultBlockState(), false);

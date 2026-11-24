@@ -822,7 +822,7 @@
   "create_media_systems.ponder.wind_instruments.text_4": "The sound comes from the player playing it, and players nearby hear it too. No speakers are needed.",
   "create_media_systems.ponder.stage_custom.header": "The Drum Kits",
   "create_media_systems.ponder.stage_custom.text_1": "The Yamaha Stage Custom Birch SBP2F5-DUS is a set of five drums: a kick, two toms, a floor tom and a snare.",
-  "create_media_systems.ponder.stage_custom.text_2": "Right-click a drum with an empty hand to hit it.",
+  "create_media_systems.ponder.stage_custom.text_2": "Right-click a drum to hit it.",
   "create_media_systems.ponder.stage_custom.text_3": "The SBP2F5AZM-DUS adds a hi-hat, a crash and a ride cymbal. Right-click a cymbal or a pedal to play it as well.",
   "create_media_systems.ponder.stage_custom.text_4": "Right-clicking the hi-hat pedal opens or closes the hi-hat.",
   "create_media_systems.ponder.stage_custom.text_5": "Sneak and right-click the kit to open its play screen. There, the keys Z, X, C, V and B hit the drums, 1 to 6 the cymbals, and holding Shift hits softer.",
