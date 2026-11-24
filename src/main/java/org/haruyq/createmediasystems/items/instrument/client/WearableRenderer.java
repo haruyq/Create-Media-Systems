@@ -22,11 +22,11 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 import org.haruyq.createmediasystems.client.ArmPoses;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.Worn;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
 import org.haruyq.createmediasystems.items.instrument.KeytarFinish;
@@ -53,14 +53,8 @@ final class WearableRenderer extends RenderLayer<AbstractClientPlayer, PlayerMod
             }
         });
         NeoForge.EVENT_BUS.addListener(WearableRenderer::firstPerson);
-        bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) renderer = new ItemRenderer();
-                return renderer;
-            }
-        }, WearableInstruments.KEYTAR.get(), WearableInstruments.MELODICA.get()));
+        bus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, ItemRenderer::new,
+                WearableInstruments.KEYTAR.get(), WearableInstruments.MELODICA.get()));
     }
 
     private static void arms(HumanoidModel<?> model, Player player, float yaw, float pitch) {

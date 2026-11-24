@@ -12,10 +12,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import org.haruyq.createmediasystems.blocks.broadcast.BroadcastFeature;
 import org.haruyq.createmediasystems.blocks.broadcast.BroadcastTowerBlock;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 
 public final class BroadcastClient {
     private BroadcastClient() {}
@@ -24,25 +24,17 @@ public final class BroadcastClient {
         MovingBroadcastAudio.register();
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(BroadcastFeature.TOWER_ENTITY.get(), context -> new TowerRenderer()));
-        bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    var mc = Minecraft.getInstance();
-                    renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
-                        @Override
-                        public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
-                                MultiBufferSource buffers, int light, int overlay) {
-                            if (stack.getItem() instanceof BlockItem item && item.getBlock() instanceof BroadcastTowerBlock head) {
-                                BroadcastTowerMesh.draw(head.profile(), pose, buffers, light, overlay);
-                            }
-                        }
-                    };
+        bus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, () -> {
+            var mc = Minecraft.getInstance();
+            return new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
+                @Override
+                public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
+                        MultiBufferSource buffers, int light, int overlay) {
+                    if (stack.getItem() instanceof BlockItem item && item.getBlock() instanceof BroadcastTowerBlock head) {
+                        BroadcastTowerMesh.draw(head.profile(), pose, buffers, light, overlay);
+                    }
                 }
-                return renderer;
-            }
+            };
         }, BroadcastFeature.HORN_ITEM.get(), BroadcastFeature.DIGITAL_HORN_ITEM.get(), BroadcastFeature.ARRAY_ITEM.get()));
     }
 

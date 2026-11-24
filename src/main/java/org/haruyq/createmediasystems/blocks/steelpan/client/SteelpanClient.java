@@ -20,13 +20,13 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanBlock;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanFeature;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets.Target;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.jetbrains.annotations.Nullable;
 
@@ -46,14 +46,8 @@ public final class SteelpanClient implements SteelpanPackets.Client {
                 event.registerReloadListener((ResourceManagerReloadListener) SteelpanModel::reload));
         bus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
                 event.registerBlockEntityRenderer(SteelpanFeature.ENTITY.get(), context -> new Renderer()));
-        bus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) renderer = new ItemRenderer();
-                return renderer;
-            }
-        }, SteelpanFeature.ITEM.get()));
+        bus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, ItemRenderer::new,
+                SteelpanFeature.ITEM.get()));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> SteelpanAudio.tick());
         WorldEvents.onLevelChanged(() -> {
             STATES.clear();

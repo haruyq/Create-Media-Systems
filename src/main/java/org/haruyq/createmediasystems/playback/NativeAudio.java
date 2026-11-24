@@ -467,11 +467,6 @@ public final class NativeAudio {
             return new Progress(false, length > 0 ? Math.min(seconds, length) : seconds, length);
         }
 
-        /** Where its player actually is, rather than where it should be: for the development probes. */
-        public Progress decoded() {
-            return new Progress(!plays(), Math.max(0, owner.time()) / 1000.0, owner.seconds());
-        }
-
         /** How many seconds it has left as it plays here, by this computer's clock; -1 if loading, live or unknown. */
         double remaining() {
             return plays() && !live && owner.seconds() > 0
@@ -554,8 +549,7 @@ public final class NativeAudio {
             if (live || !seekable || at < 0 || length > 0 && expected > length * 1000 - END_MARGIN_MILLIS) {
                 return;
             }
-            boolean seek = Math.abs(expected - at) >= held.driftMillis() && now - seekedAt >= held.cooldownNanos();
-            if (seek) {
+            if (Math.abs(expected - at) >= held.driftMillis() && now - seekedAt >= held.cooldownNanos()) {
                 seekedAt = now;
                 owner.seek(expected);
             }

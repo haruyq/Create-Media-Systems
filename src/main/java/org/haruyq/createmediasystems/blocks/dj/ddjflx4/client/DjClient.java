@@ -39,6 +39,7 @@ import org.haruyq.createmediasystems.blocks.dj.ddjflx4.DjState;
 import org.haruyq.createmediasystems.client.ClientConfig;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.ClientFiles;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.MidiPort;
 import org.haruyq.createmediasystems.p2p.P2pClient;
 import org.haruyq.createmediasystems.playback.ScreenPlayer;
@@ -60,7 +61,6 @@ import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -69,7 +69,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -130,17 +129,8 @@ public final class DjClient implements ClientFeature {
         });
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerBlockEntityRenderer(
                 DjFeature.ENTITY.get(), context -> new DjRenderer()));
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    renderer = new DjRenderer.Item();
-                }
-                return renderer;
-            }
-        }, DjFeature.ITEM.get()));
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, DjRenderer.Item::new,
+                DjFeature.ITEM.get()));
     }
 
     public static void open(BlockPos pos) {

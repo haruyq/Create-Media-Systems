@@ -17,6 +17,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout.Control;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Panel;
 import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -36,7 +37,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 /**
@@ -61,23 +61,15 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
     static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerBlockEntityRenderer(
                 KeyboardFeature.KEYBOARD_ENTITY.get(), context -> new KeyboardRenderer()));
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    Minecraft mc = Minecraft.getInstance();
-                    renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
-                        @Override
-                        public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
-                                                 MultiBufferSource buffers, int light, int overlay) {
-                            draw(pose, buffers, light, Direction.SOUTH, new PanelLook(NEW, 0, null), 0, 0, 8192, 0, false);
-                        }
-                    };
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, () -> {
+            Minecraft mc = Minecraft.getInstance();
+            return new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
+                @Override
+                public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
+                                         MultiBufferSource buffers, int light, int overlay) {
+                    draw(pose, buffers, light, Direction.SOUTH, new PanelLook(NEW, 0, null), 0, 0, 8192, 0, false);
                 }
-                return renderer;
-            }
+            };
         }, KeyboardFeature.KEYBOARD_ITEM.get()));
     }
 
@@ -176,13 +168,13 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
                 case BUTTON -> {
                     Mesh.box(pose, solid, x0, HEIGHT, z0, x1, HEIGHT + 0.1f, z1, PanelLook.BUTTON, light);
                     if (look.lit(control)) {
-                        glow(pose, lit, x0, z0, x1, z1, HEIGHT + 0.11f, LAMP);
+                        Mesh.glow(pose, lit, x0, z0, x1, z1, HEIGHT + 0.11f, LAMP);
                     }
                 }
                 case PAD -> {
                     int pad = control.index();
                     capped(pose, solid, x0, HEIGHT, z0, x1, HEIGHT + 0.16f, z1, ALL, 0.05f, PanelLook.BUTTON, light);
-                    glow(pose, lit, x0 + 0.06f, z0 + 0.06f, x1 - 0.06f, z1 - 0.06f, HEIGHT + 0.165f, !look.padGlows(pad) ? UNLIT
+                    Mesh.glow(pose, lit, x0 + 0.06f, z0 + 0.06f, x1 - 0.06f, z1 - 0.06f, HEIGHT + 0.165f, !look.padGlows(pad) ? UNLIT
                             : PanelLook.dim(look.padColor(pad), look.padLit(pad) ? 1 : 0.4f));
                 }
                 case KNOB -> {
@@ -207,11 +199,11 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
                         face(pose, solid, 0, high, 0, crown * ca, high, crown * sa, crown * cb, high, crown * sb,
                                 crown * cb, high, crown * sb, 0, 1, 0, PanelLook.dim(PanelLook.KNOB, 1.25f), light);
                     }
-                    glow(pose, lit, -0.035f, -crown, 0.035f, -crown * 0.25f, high + 0.01f, PanelLook.WHITE);
+                    Mesh.glow(pose, lit, -0.035f, -crown, 0.035f, -crown * 0.25f, high + 0.01f, PanelLook.WHITE);
                     pose.popPose();
                 }
                 case LEVER -> {
-                    glow(pose, lit, x0, z0, x1, z1, HEIGHT + 0.01f, 0x0A0A0B);
+                    Mesh.glow(pose, lit, x0, z0, x1, z1, HEIGHT + 0.01f, 0x0A0A0B);
                     pose.pushPose();
                     pose.translate((x0 + x1) / 2, HEIGHT - 0.2f, (z0 + z1) / 2);
                     pose.mulPose(Axis.ZP.rotationDegrees(-(bend - 8192) / 8192f * 28));
@@ -224,11 +216,11 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
         for (int light8 = 0; light8 < 8; light8++) {
             float x = podX(0.4f + light8 * 0.045f);
             int color = look.bankLight(light8);
-            glow(pose, lit, x, podZ(0.048f), x + 0.12f, podZ(0.062f), HEIGHT + 0.01f, color < 0 ? UNLIT : color);
+            Mesh.glow(pose, lit, x, podZ(0.048f), x + 0.12f, podZ(0.062f), HEIGHT + 0.01f, color < 0 ? UNLIT : color);
         }
         for (int curve = 0; curve < Panel.CURVES; curve++) {
             float x = podX(0.64f + curve * 0.052f);
-            glow(pose, lit, x, podZ(0.79f), x + 0.12f, podZ(0.804f), HEIGHT + 0.01f,
+            Mesh.glow(pose, lit, x, podZ(0.79f), x + 0.12f, podZ(0.804f), HEIGHT + 0.01f,
                     look.panel().curve == curve ? PanelLook.GREEN : UNLIT);
         }
         if (text) {
@@ -278,15 +270,6 @@ public final class KeyboardRenderer implements BlockEntityRenderer<MidiKeyboardB
         }
         float sign = (nx * ox + ny * oy + nz * oz < 0 ? -1 : 1) / length;
         Mesh.quad(pose, solid, ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, nx * sign, ny * sign, nz * sign, color, light);
-    }
-
-    /** A flat rectangle lying {@code y} high, as bright as it is whatever the light. */
-    private static void glow(PoseStack pose, VertexConsumer lit, float x0, float z0, float x1, float z1, float y, int color) {
-        int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
-        lit.addVertex(pose.last(), x0, y, z0).setColor(r, g, b, 255);
-        lit.addVertex(pose.last(), x0, y, z1).setColor(r, g, b, 255);
-        lit.addVertex(pose.last(), x1, y, z1).setColor(r, g, b, 255);
-        lit.addVertex(pose.last(), x1, y, z0).setColor(r, g, b, 255);
     }
 
     /** {@code line} lying on the deck, read from the front: its top left corner at ({@code x}, {@code z}), {@code height} tall. */

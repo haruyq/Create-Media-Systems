@@ -10,6 +10,7 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.ControlDrag;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.client.mesh.Mesh;
 import org.haruyq.createmediasystems.playback.Spectrum;
@@ -39,7 +40,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -69,27 +69,19 @@ public final class LineMixerClient implements BlockEntityRenderer<LineMixerBlock
     static void register(IEventBus modBus) {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerBlockEntityRenderer(
                 AudioFeature.LINE_MIXER_ENTITY.get(), context -> new LineMixerClient()));
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    Minecraft mc = Minecraft.getInstance();
-                    renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
-                        @Override
-                        public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
-                                                 MultiBufferSource buffers, int light, int overlay) {
-                            // Its two blocks about the middle of the item's one.
-                            pose.pushPose();
-                            pose.translate(-0.5, 0, 0);
-                            draw(pose, buffers, light, Direction.SOUTH, null, false, 0, STILL, false);
-                            pose.popPose();
-                        }
-                    };
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, () -> {
+            Minecraft mc = Minecraft.getInstance();
+            return new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) {
+                @Override
+                public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose,
+                                         MultiBufferSource buffers, int light, int overlay) {
+                    // Its two blocks about the middle of the item's one.
+                    pose.pushPose();
+                    pose.translate(-0.5, 0, 0);
+                    draw(pose, buffers, light, Direction.SOUTH, null, false, 0, STILL, false);
+                    pose.popPose();
                 }
-                return renderer;
-            }
+            };
         }, AudioFeature.LINE_MIXER_ITEM.get()));
         ControlDrag.onUse(LineMixerClient::grab);
     }
@@ -299,7 +291,7 @@ public final class LineMixerClient implements BlockEntityRenderer<LineMixerBlock
             float x = across(extension, channel), left = x - 1.5f;
             frame(pose, solid, left + 0.2f, 0.7f, left + STRIP - 0.2f, 15.3f, light);
             BlockPos source = mixer == null ? null : mixer.input(channel);
-            glow(pose, lit, x - 0.3f, 3, x + 0.3f, 3.6f, HEIGHT + 0.01f,
+            Mesh.glow(pose, lit, x - 0.3f, 3, x + 0.3f, 3.6f, HEIGHT + 0.01f,
                     source == null ? UNLIT : meters.playing[channel] ? GREEN : AMBER);
             meter(pose, lit, x + 1.3f, x + 1.9f, meters.channels[channel]);
             fader(pose, solid, x, mixer == null ? 0 : position(mixer, channel), PRINT, text, light);
@@ -342,7 +334,7 @@ public final class LineMixerClient implements BlockEntityRenderer<LineMixerBlock
         for (int lamp = 0; lamp < LAMPS; lamp++) {
             float front = LOW - lamp * LAMP_PITCH;
             int color = lamp >= shown ? UNLIT : lamp >= LAMPS - 2 ? RED : lamp >= LAMPS - 4 ? AMBER : GREEN;
-            glow(pose, lit, x0, front - LAMP_LENGTH, x1, front, HEIGHT + 0.01f, color);
+            Mesh.glow(pose, lit, x0, front - LAMP_LENGTH, x1, front, HEIGHT + 0.01f, color);
         }
     }
 
@@ -359,15 +351,6 @@ public final class LineMixerClient implements BlockEntityRenderer<LineMixerBlock
     private static void flat(PoseStack pose, VertexConsumer solid, float x0, float z0, float x1, float z1, float y,
                              int color, int light) {
         Mesh.quad(pose, solid, x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1, 0, 1, 0, color, light);
-    }
-
-    /** A flat rectangle lying {@code y} high, as bright as it is whatever the light: a lamp. */
-    private static void glow(PoseStack pose, VertexConsumer lit, float x0, float z0, float x1, float z1, float y, int color) {
-        int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
-        lit.addVertex(pose.last(), x0, y, z0).setColor(r, g, b, 255);
-        lit.addVertex(pose.last(), x0, y, z1).setColor(r, g, b, 255);
-        lit.addVertex(pose.last(), x1, y, z1).setColor(r, g, b, 255);
-        lit.addVertex(pose.last(), x1, y, z0).setColor(r, g, b, 255);
     }
 
     /** {@code line} lying on the panel, read from the front: its top edge at {@code z}, centred on {@code x}, {@code height} tall. */

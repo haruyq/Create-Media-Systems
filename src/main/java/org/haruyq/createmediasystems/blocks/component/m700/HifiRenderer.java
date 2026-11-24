@@ -10,6 +10,7 @@ import java.util.WeakHashMap;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.client.QuadOutput;
 import org.haruyq.createmediasystems.playback.NativeAudio;
 import org.haruyq.createmediasystems.playback.Spectrum;
@@ -44,7 +45,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.Entity> {
@@ -77,17 +77,8 @@ public final class HifiRenderer implements BlockEntityRenderer<HifiStackBlock.En
             event.registerBlockEntityRenderer(HifiFeature.HIFI_STACK_ENTITY.get(), context -> new HifiRenderer());
             event.registerBlockEntityRenderer(HifiFeature.HIFI_SPEAKER_ENTITY.get(), context -> new SpeakerCable());
         });
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    renderer = new UnitItems();
-                }
-                return renderer;
-            }
-        }, Arrays.stream(Unit.values()).map(HifiFeature::hifiUnit).toArray(Item[]::new)));
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, UnitItems::new,
+                Arrays.stream(Unit.values()).map(HifiFeature::hifiUnit).toArray(Item[]::new)));
     }
 
     @Override

@@ -6,6 +6,7 @@ import org.haruyq.createmediasystems.items.power.ChargeableItem;
 import org.haruyq.createmediasystems.client.mesh.CellLight;
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.client.ClientConfig;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.items.launcher.LauncherFeature;
 import org.haruyq.createmediasystems.items.launcher.LauncherTimeline;
 import org.haruyq.createmediasystems.items.launcher.DiscLauncherReloadPacket;
@@ -69,13 +70,7 @@ public final class LauncherClient {
     private static Object currentPlayer;
     private static long hitAt,lastShot=Long.MIN_VALUE;
     private static boolean headHit,killed;
-    private static float hitDamage,cameraKick;
-    private static int confirmedShots,confirmedHits,confirmedHeadshots;
-    private static java.util.function.BooleanSupplier additionalInputActive=()->false;
-    /** Lets {@code active} count as input focus besides the game window's (a harness driving the client). */
-    public static void additionalInput(java.util.function.BooleanSupplier active){additionalInputActive=active;}
-    public record Diagnostics(int confirmedShots,int confirmedHits,int confirmedHeadshots,float hitDamage,boolean reticleDrawn) {}
-    public static Diagnostics diagnostics(){return new Diagnostics(confirmedShots,confirmedHits,confirmedHeadshots,hitDamage,LauncherHud.reticleDrawn);}
+    private static float cameraKick;
     public static float aim(float partial){return MOTION.aim(partial);}
     public static float kick(float partial){return MOTION.kick(partial);}
     public static float hitAge(){return (System.nanoTime()-hitAt)/1_000_000_000f;}
@@ -149,7 +144,7 @@ public final class LauncherClient {
     /** The server fired this player's launcher: recoil once per shot. */
     public static void shot(LauncherFeedback.Shot shot) {
         var mc=Minecraft.getInstance();if(mc.player==null || shot.tick()==lastShot)return;
-        lastShot=shot.tick();confirmedShots++;MOTION.shot();
+        lastShot=shot.tick();MOTION.shot();
         if (lockedPoint(mc) == null) {
             float add=.42f-.24f*aim(1);cameraKick+=add;mc.player.setXRot(Math.max(-90,mc.player.getXRot()-add));
         }
@@ -157,9 +152,8 @@ public final class LauncherClient {
 
     /** This player's shot hit: the hit marker, damage numbers and sound. */
     public static void hit(LauncherFeedback.Hit hit) {
-        hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();hitDamage=hit.damage();
+        hitAt=System.nanoTime();headHit=hit.headshot();killed=hit.killed();
         DAMAGE.hit(new LauncherDamageDisplay.Entry(hit.target(),hit.health(),hit.shield(),hit.headshot(),hit.killed(),hit.shieldBroken(),hit.x(),hit.y(),hit.z(),hitAt/1_000_000_000.0));
-        confirmedHits++;if(headHit)confirmedHeadshots++;
         var mc=Minecraft.getInstance();
         mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
                 net.minecraft.sounds.SoundEvent.createVariableRangeEvent(CreateMediaSystems.id(headHit?"disc_headshot":"disc_hit")),1,.45f));
@@ -181,7 +175,7 @@ public final class LauncherClient {
         if(currentPlayer!=player){currentPlayer=player;triggerDown=false;lastShot=Long.MIN_VALUE;MOTION.reset();DAMAGE.reset();cameraKick=0;lock=LauncherFeedback.Lock.NONE;}
         boolean holding=player!=null && player.getMainHandItem().is(LauncherFeature.DISC_LAUNCHER.get()) && !player.isSpectator() && player.isAlive();
         boolean active=holding && mc.screen==null && mc.getOverlay()==null
-                && (mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed() || additionalInputActive.getAsBoolean());
+                && mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed();
         boolean wantsAim=active && mc.options.keyUse.isDown() && !LauncherMagazine.reloading(player.getMainHandItem());
         if(holding) {
             if(wantsAim && !player.isUsingItem() && mc.gameMode!=null)mc.gameMode.useItem(player,InteractionHand.MAIN_HAND);
@@ -228,13 +222,8 @@ public final class LauncherClient {
     }
 
     private static void registerExtensions(RegisterClientExtensionsEvent event) {
-        event.registerItem(new IClientItemExtensions() {
-            private DiscCellRenderer renderer;
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) renderer = new DiscCellRenderer();
-                return renderer;
-            }
-        }, LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
+        ItemRenderers.register(event, DiscCellRenderer::new,
+                LauncherFeature.DISC_CELLS.stream().map(entry -> entry.get()).toArray(DiscCellItem[]::new));
         event.registerItem(new IClientItemExtensions() {
             private LauncherRenderer renderer;
 

@@ -11,6 +11,7 @@ import org.haruyq.createmediasystems.blocks.boombox.zsrs81bt.BoomboxKey;
 import org.haruyq.createmediasystems.blocks.radio.RadioFeature;
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.ControlDrag;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.disc.DiscFeature;
 
 import org.jetbrains.annotations.Nullable;
@@ -25,7 +26,6 @@ import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
@@ -40,7 +40,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -72,17 +71,8 @@ public final class BoomboxClient implements ClientFeature {
         BoomboxBlock.Entity.clientTick = BoomboxClient::hiss;
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerBlockEntityRenderer(
                 BoomboxFeature.ENTITY.get(), context -> new BoomboxRenderer()));
-        modBus.addListener((RegisterClientExtensionsEvent event) -> event.registerItem(new IClientItemExtensions() {
-            private BlockEntityWithoutLevelRenderer renderer;
-
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    renderer = new BoomboxRenderer.Item();
-                }
-                return renderer;
-            }
-        }, BoomboxFeature.ITEM.get()));
+        modBus.addListener((RegisterClientExtensionsEvent event) -> ItemRenderers.register(event, BoomboxRenderer.Item::new,
+                BoomboxFeature.ITEM.get()));
     }
 
     @Nullable

@@ -7,12 +7,12 @@ import java.util.stream.Stream;
 
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.client.ItemRenderers;
 import org.haruyq.createmediasystems.items.partybox.stage320.*;
 import org.haruyq.createmediasystems.items.partybox.stage320.PartyBoxFeature;
 import org.haruyq.createmediasystems.playback.DopplerMath;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
 import org.haruyq.createmediasystems.playback.MusicEmitter;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.world.entity.Entity;
@@ -72,10 +72,7 @@ public final class PartyBoxClient {
         org.haruyq.createmediasystems.client.ArmPoses.add(PartyBoxClient::poseArms);
         bus.addListener((EntityRenderersEvent.RegisterRenderers event)->event.registerEntityRenderer(PartyBoxFeature.PARTYBOX_ENTITY.get(),PartyBoxRenderer::new));
         bus.addListener((RegisterMenuScreensEvent event)->event.register(PartyBoxFeature.PARTYBOX_MENU.get(),PartyBoxScreen::new));
-        bus.addListener((RegisterClientExtensionsEvent event)->event.registerItem(new IClientItemExtensions() {
-            private PartyBoxItemRenderer renderer;
-            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() { if(renderer==null)renderer=new PartyBoxItemRenderer();return renderer; }
-        },PartyBoxFeature.PARTYBOX.get()));
+        bus.addListener((RegisterClientExtensionsEvent event)->ItemRenderers.register(event, PartyBoxItemRenderer::new, PartyBoxFeature.PARTYBOX.get()));
         EmitterAudioManager.add(Speaker::near);
         org.haruyq.createmediasystems.client.PointLights.add(PartyBoxRenderer.LIGHTS);
     }
