@@ -120,11 +120,14 @@ final class DjScreen extends InstrumentScreen {
         boolean mine = DjClient.hosting(pos);
         host.setMessage(Component.translatable(mine ? "create_media_systems.ddj_flx4.stop" : "create_media_systems.ddj_flx4.host"));
         host.active = mine || controller.host() == null;
+        // The world is not dimmed behind this screen: strips keep the header and the problem line readable.
+        g.fill(0, 0, width, 22, 0xB0101418);
         drawHeader(g, 8, 7, Component.empty(), 0);
         g.drawString(font, status(controller), host.getRight() + 6, 7, 0xFFFFFFFF);
         DjClient.Status status = DjClient.status(pos);
         if (status != null && !status.problem().getString().isEmpty()) {
-            // Along the bottom, as much of it as fits.
+            // Along the bottom, over the hotbar, as much of it as fits.
+            g.fill(0, height - 14, width, height, 0xD0101418);
             g.drawCenteredString(font, font.plainSubstrByWidth(status.problem().getString(), width - 8), width / 2, height - 11, 0xFFFF5555);
         }
 

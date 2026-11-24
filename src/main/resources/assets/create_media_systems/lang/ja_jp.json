@@ -860,7 +860,7 @@
   "keyboard.zoom": "拡大 ×%s",
   "keyboard.zoom_help": "鍵盤にカーソルを置いてスクロールすると音域を移動します。",
   "keyboard.volume": "音量 %s",
-  "keyboard.search": "音色名・バンク:プログラムで検索",
+  "keyboard.search": "音色名・バンク:番号",
   "keyboard.main_voice": "主音色を選択",
   "keyboard.layer_voice": "レイヤー音色を選択",
   "keyboard.lower_voice": "低音域の音色を選択",

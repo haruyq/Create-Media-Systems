@@ -860,7 +860,7 @@
   "keyboard.zoom": "Zoom ×%s",
   "keyboard.zoom_help": "Scroll over the keys to move along the keyboard.",
   "keyboard.volume": "Volume %s",
-  "keyboard.search": "Search name or bank:program",
+  "keyboard.search": "Name or bank:prog",
   "keyboard.main_voice": "Select main voice",
   "keyboard.layer_voice": "Select layer voice",
   "keyboard.lower_voice": "Select lower voice",
