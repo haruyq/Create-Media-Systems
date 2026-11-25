@@ -2,18 +2,25 @@ package org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import org.haruyq.createmediasystems.CreateMediaSystems;
+
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.sounds.JOrbisAudioStream;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * A SoundFont 2 bank: its presets as the {@link Region}s a key plays, and their samples. Reads .sf2 (16-bit PCM) and
@@ -103,6 +110,10 @@ public final class SoundFont {
         return thread;
     });
 
+    /** GeneralUser GS, a General MIDI bank with Roland GS's variations; a resource pack may put another in its place. */
+    private static final ResourceLocation BANK = CreateMediaSystems.id("keyboard/a88mkii/generaluser_gs.sf3");
+    private static CompletableFuture<SoundFont> bundled;
+
     private final Map<Integer, Region[]> presets = new HashMap<>();
     private final Map<Integer, String> names = new HashMap<>();
     private final Header[] headers;
@@ -113,6 +124,24 @@ public final class SoundFont {
         this.headers = headers;
         this.samples = samples;
         decoded = new AtomicReferenceArray<>(headers.length);
+    }
+
+    /**
+     * The game's {@link #BANK}, read once in the background for every instrument that plays it: through the resource
+     * packs in game, from the mod's own files where there is no game (unit tests).
+     */
+    public static synchronized CompletableFuture<SoundFont> bundled() {
+        if (bundled == null) bundled = CompletableFuture.supplyAsync(() -> {
+            var mc = Minecraft.getInstance();
+            try (var in = mc != null ? mc.getResourceManager().open(BANK)
+                    : SoundFont.class.getResourceAsStream("/assets/" + BANK.getNamespace() + "/" + BANK.getPath())) {
+                if (in == null) throw new IOException("The bundled sound bank is missing");
+                return read(ByteBuffer.wrap(in.readAllBytes()));
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }, DECODER);
+        return bundled;
     }
 
     public static SoundFont read(ByteBuffer file) {
@@ -324,6 +353,11 @@ public final class SoundFont {
     /** The name of {@code program} of {@code bank}; null if the bank has none there. */
     public String name(int bank, int program) {
         return names.get(bank << 8 | program);
+    }
+
+    /** The name of every preset, by {@code bank << 8 | program}. */
+    public Map<Integer, String> names() {
+        return Collections.unmodifiableMap(names);
     }
 
     /**

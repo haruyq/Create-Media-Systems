@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.NoteRate;
 import org.haruyq.createmediasystems.OwnNotes;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
@@ -24,8 +25,8 @@ import org.jetbrains.annotations.Nullable;
 
 public final class StageCustomMidi {
     private static final int HEARING_RANGE = 16;
-    private static final Map<ServerPlayer, InputRate> INPUTS = new WeakHashMap<>();
-    private static final InputRate LOCAL = new InputRate();
+    private static final Map<ServerPlayer, NoteRate> INPUTS = new WeakHashMap<>();
+    private static final NoteRate LOCAL = new NoteRate();
     private static final OwnNotes OWN = new OwnNotes();
     private static Consumer<Hit> playback = hit -> {};
     private static Consumer<BlockPos> opener = root -> {};
@@ -163,7 +164,7 @@ public final class StageCustomMidi {
         if (!valid(hit)) return false;
         var kit = reachable(player, hit.root());
         Voice cymbal = voice(hit.note());
-        var rate = player instanceof ServerPlayer server ? INPUTS.computeIfAbsent(server, ignored -> new InputRate()) : LOCAL;
+        var rate = player instanceof ServerPlayer server ? INPUTS.computeIfAbsent(server, ignored -> new NoteRate()) : LOCAL;
         if (kit == null || (cymbal != null && !StageCustomBlock.isComplete(kit.getBlockState()))
                 || !rate.take(player.tickCount)) return false;
         if (cymbal == null) {
@@ -176,19 +177,5 @@ public final class StageCustomMidi {
             kit.strikeCymbal(new StageCustomCymbals.Hit(cymbal.cymbal, 0, radialHit, 0, cymbal), hit.velocity());
         }
         return true;
-    }
-
-    private static final class InputRate {
-        private static final int BURST = 32;
-        private int tokens = BURST;
-        private int tick;
-
-        boolean take(int now) {
-            tokens = Math.min(BURST, tokens + 3 * Math.clamp(now - tick, 0, BURST));
-            tick = now;
-            if (tokens == 0) return false;
-            tokens--;
-            return true;
-        }
     }
 }

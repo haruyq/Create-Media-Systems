@@ -1,53 +1,50 @@
 package org.haruyq.createmediasystems.blocks.piano.pxs1100we.client;
 
-import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
-import javax.sound.midi.Instrument;
-import javax.sound.midi.MidiChannel;
-import javax.sound.midi.MidiUnavailableException;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings.Tone;
-import org.haruyq.gervill.SoftSynthesizer;
-import org.haruyq.gervill.ModelPatch;
 
 import static org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi.*;
 
 /** One stereo SoundFont synth for one instrument, advanced by its two OpenAL sources. */
-public final class KeyboardSynth implements AutoCloseable {
-    static final int RATE = 48_000;
-    public static final int FRAMES_PER_BUFFER = RATE / 200;
+public final class KeyboardSynth {
+    static final int RATE = Synth.RATE;
+    public static final int FRAMES_PER_BUFFER = 8 * Synth.BLOCK;
     private static final int VOICES_PER_INPUT = 3, CHANNELS = 16 * VOICES_PER_INPUT + 1;
-    private static final int MAIN = 0, LAYER = 1, LOWER = 2, CLICK_CHANNEL = 9;
-    private static final int PERCUSSION_BANK = 120 << 7;
+    private static final int MAIN = 0, LAYER = 1, LOWER = 2, CLICK_CHANNEL = Synth.DRUM_CHANNEL;
     private static final int MIN_ATTACK_FRAMES = RATE * 15 / 1000;
     private static final Tone KIT = new Tone(KeyboardSettings.DRUM_BANK, 0);
+    /** The bank's tones at about the level they had before, on average. */
+    private static final float LEVEL = .77f;
+    /** The bundled piano: one strike's regions, louder and brighter with its velocity than the bank's own curves. */
+    private static final int PIANO_REGIONS = 75;
+    /** Strikes (dB) as loud as the piano was before, which sounded at half scale. */
+    private static final float PIANO_TRIM = (float) (20 * Math.log10(.5 / LEVEL));
+    private static final double MIN_GAIN = .16, BRIGHTNESS_RANGE = 840;
 
     private record Batch(KeyboardSettings settings, boolean snapshot, List<KeyboardMidi> events) {}
 
-    private final SoftSynthesizer synth = new SoftSynthesizer();
-    private final AudioInputStream pcm;
-    private final MidiChannel[] outputs;
+    private final Synth synth;
+    /** The bundled bank, for the tones a custom bank lacks, as before; null when this one is the bundled bank. */
+    private final Synth fallback;
+    private final SoundFont fallbackFont;
     private final KeyboardSoundbank.Bank bank;
-    private final Instrument[] patches = new Instrument[CHANNELS];
     private final Tone[] midiTones = new Tone[16];
-    private final Map<Instrument, Boolean> loaded = new LinkedHashMap<>(32, .75f, true);
     private final Tone[] selected = new Tone[CHANNELS];
+    private final boolean[] piano = new boolean[CHANNELS], borrowed = new boolean[CHANNELS];
     private final int[] banks = new int[16], soft = new int[16], velocityPrefixes = new int[16];
     private final int[][] notes = new int[16][128], counts = new int[CHANNELS][128];
     private final ArrayDeque<Batch> batches = new ArrayDeque<>();
     private final long[] releaseAfter = new long[16 * 128];
+    private float[] left = new float[0], right = new float[0], fallbackLeft = left, fallbackRight = left;
     private Iterator<KeyboardMidi> events = Collections.emptyIterator();
     private KeyboardMidi nextAfterAttack;
     private boolean restoring;
@@ -56,28 +53,13 @@ public final class KeyboardSynth implements AutoCloseable {
     private KeyboardSettings settings = new KeyboardSettings();
     private int framesToReleaseClick, clickNote;
 
-    public static void prepareBundled() {
-        KeyboardSoundbank.bank(KeyboardSettings.DEFAULT_FONT);
-    }
-
-    public static CompletableFuture<KeyboardSynth> bundled(int polyphony) {
-        return KeyboardSoundbank.synth(KeyboardSettings.DEFAULT_FONT, polyphony);
-    }
-
     KeyboardSynth(KeyboardSoundbank.Bank bank, int polyphony) {
         this.bank = bank;
-        try {
-            pcm = synth.openStream(new AudioFormat(RATE, 16, 2, true, false), Map.of(
-                    "load default soundbank", false, "max polyphony", polyphony, "midi channels", CHANNELS,
-                    "interpolation", "linear", "auto gain control", false,
-                    "large mode", bank.name().equals(KeyboardSettings.DEFAULT_FONT)));
-            outputs = synth.getChannels();
-            select(CLICK_CHANNEL, KIT);
-            select(0, settings.main);
-        } catch (MidiUnavailableException | RuntimeException e) {
-            synth.close();
-            throw new IllegalStateException("Could not start SoundFont synth", e);
-        }
+        synth = new Synth(bank.font(), polyphony, CHANNELS);
+        fallbackFont = bank.name().equals(KeyboardSettings.DEFAULT_FONT) ? null : SoundFont.bundled().exceptionally(e -> null).join();
+        fallback = fallbackFont == null ? null : new Synth(fallbackFont, polyphony, CHANNELS);
+        select(CLICK_CHANNEL, KIT);
+        select(0, settings.main);
     }
 
     public void apply(KeyboardSettings next, boolean snapshot, List<KeyboardMidi> events) {
@@ -91,8 +73,25 @@ public final class KeyboardSynth implements AutoCloseable {
         batches.addLast(new Batch(next, snapshot, events));
     }
 
+    /** Decodes the tones of {@code next} ahead, so their first notes don't wait for it. Any thread. */
+    void prepare(KeyboardSettings next) {
+        for (var tone : new Tone[] {next.main, next.layer, next.lower}) {
+            var font = font(tone);
+            font.prepare(font.preset(fontBank(bankSelect(font, tone)), tone.program()));
+        }
+    }
+
     int queuedBatches() {
         return batches.size() + (events.hasNext() || nextAfterAttack != null ? 1 : 0);
+    }
+
+    private void send(int status, int channel, int data1, int data2) {
+        synth.send(Synth.message(status, channel, data1, data2));
+        if (fallback != null) fallback.send(Synth.message(status, channel, data1, data2));
+    }
+
+    private Synth synth(int channel) {
+        return borrowed[channel] ? fallback : synth;
     }
 
     private void configure(KeyboardSettings next, boolean snapshot) {
@@ -103,13 +102,13 @@ public final class KeyboardSynth implements AutoCloseable {
             }
             Arrays.fill(banks, 0);
             Arrays.fill(midiTones, null);
-            outputs[CLICK_CHANNEL].allSoundOff();
+            send(Synth.CONTROL, CLICK_CHANNEL, Synth.ALL_SOUND_OFF, 0);
             framesToReleaseClick = 0;
         }
         if (snapshot || settings.reverb != next.reverb || settings.chorus != next.chorus) {
-            for (var channel : outputs) {
-                channel.controlChange(91, next.reverb);
-                channel.controlChange(93, next.chorus);
+            for (int channel = 0; channel < CHANNELS; channel++) {
+                send(Synth.CONTROL, channel, Synth.REVERB_SEND, next.reverb);
+                send(Synth.CONTROL, channel, Synth.CHORUS_SEND, next.chorus);
             }
         }
         settings = next;
@@ -131,7 +130,7 @@ public final class KeyboardSynth implements AutoCloseable {
             var next = events.next();
             long until = releaseAfter[next.channel() * 128 + next.key()];
             if (!restoring && (next.command() == ON || next.command() == OFF) && until > renderedFrames) {
-                // A release or repeated strike must wait for Gervill to render the current attack.
+                // A release or repeated strike waits until the current attack has sounded.
                 nextAfterAttack = next;
                 attackFrames = (int) (until - renderedFrames);
                 return;
@@ -155,10 +154,12 @@ public final class KeyboardSynth implements AutoCloseable {
             case OFF -> noteOff(input, key, value);
             case CONTROL -> {
                 if (event.metronome()) {
-                    var click = outputs[CLICK_CHANNEL];
-                    click.noteOff(clickNote);
+                    send(Synth.NOTE_OFF, CLICK_CHANNEL, clickNote, 0);
                     clickNote = value == 2 ? 76 : 77;
-                    click.noteOn(clickNote, value == 2 ? 100 : 79);
+                    // Each wood block at the level it had against the piano before.
+                    int velocity = value == 2 ? 100 : 79;
+                    synth(CLICK_CHANNEL).strike(Synth.message(Synth.NOTE_ON, CLICK_CHANNEL, clickNote, velocity), velocity,
+                            (value == 2 ? 9.4f : 2.6f) + PIANO_TRIM, 0);
                     framesToReleaseClick = RATE / 10;
                 } else if (key == VELOCITY_PREFIX) velocityPrefixes[input] = value;
                 else if (key == 0) banks[input] = value << 7 | banks[input] & 127;
@@ -169,7 +170,9 @@ public final class KeyboardSynth implements AutoCloseable {
                 if (input != 0) midiTones[input] = Tone.fromMidiBank(banks[input], key);
             }
             case BEND -> {
-                for (int voice = 0; voice < VOICES_PER_INPUT; voice++) outputs[route(input, voice)].setPitchBend(event.bend());
+                for (int voice = 0; voice < VOICES_PER_INPUT; voice++) {
+                    send(Synth.BEND, route(input, voice), event.bend() & 127, event.bend() >> 7);
+                }
             }
         }
     }
@@ -205,55 +208,48 @@ public final class KeyboardSynth implements AutoCloseable {
         if (tone.bank() == KeyboardSettings.DRUM_BANK) actual = key;
         notes[input][key] |= (actual + 1) << (8 * voice);
         counts[index][actual]++;
-        if (patches[index] instanceof KeyboardPianoTone piano) {
-            piano.play(outputs[index], actual, gain);
+        int message = Synth.message(Synth.NOTE_ON, index, actual, (int) Math.round(gain));
+        if (piano[index]) {
+            double touch = gain / 127;
+            synth(index).strike(message, PIANO_REGIONS, (float) (20 * Math.log10(MIN_GAIN + (1 - MIN_GAIN) * touch)) + PIANO_TRIM,
+                    (float) (BRIGHTNESS_RANGE * touch));
         } else {
-            outputs[index].noteOn(actual, (int) Math.round(gain));
+            synth(index).send(message);
         }
     }
 
+    /**
+     * The bank select (MSB) that plays {@code tone}. A saved tone's bank is the MIDI bank of the SoundFont's, but
+     * {@link KeyboardSettings#DRUM_BANK} for both the drum kits and the bank-1 variations; the variation wins.
+     */
+    private static int bankSelect(SoundFont font, Tone tone) {
+        if (tone.bank() == KeyboardSettings.DRUM_BANK) return font.name(1, tone.program()) != null ? 1 : 120;
+        return (tone.bank() & 127) == 0 ? tone.bank() >> 7 : 0;
+    }
+
+    private static int fontBank(int bankSelect) {
+        return bankSelect == 120 ? SoundFont.DRUMS : bankSelect;
+    }
+
+    /** The bank that plays {@code tone}: this one, else the bundled one if this one lacks it and its bank-0 program (or kit). */
+    private SoundFont font(Tone tone) {
+        var font = bank.font();
+        boolean drums = tone.bank() == KeyboardSettings.DRUM_BANK;
+        return fallbackFont == null || font.name(fontBank(bankSelect(font, tone)), tone.program()) != null
+                || font.name(drums ? SoundFont.DRUMS : 0, drums ? 0 : tone.program()) != null ? font : fallbackFont;
+    }
+
     private void select(int index, Tone tone) {
-        if (tone.equals(selected[index])) {
-            loaded.get(patches[index]);
-            return;
-        }
-        var instrument = bank.instruments().get(tone);
-        if (instrument == null) {
-            boolean drums = tone.bank() == KeyboardSettings.DRUM_BANK;
-            var fallback = drums ? KIT : new Tone(0, tone.program());
-            instrument = bank.instruments().get(fallback);
-            if (instrument == null) instrument = KeyboardSoundbank.bank(KeyboardSettings.DEFAULT_FONT).join().instruments().get(fallback);
-        }
-        if (instrument == null) return;
-        if (loaded.put(instrument, true) == null) {
-            // Several instruments can share the same file-backed sample buffers.
-            synchronized (bank) {
-                if (!synth.loadInstrument(instrument)) {
-                    loaded.remove(instrument);
-                    return;
-                }
-            }
-            if (loaded.size() > 32) {
-                var iterator = loaded.keySet().iterator();
-                var evicted = iterator.next();
-                synth.unloadInstrument(evicted);
-                iterator.remove();
-                for (int channel = 0; channel < CHANNELS; channel++) {
-                    if (patches[channel] == evicted) {
-                        selected[channel] = null;
-                        patches[channel] = null;
-                    }
-                }
-            }
-        }
-        if (patches[index] != instrument) {
-            var patch = instrument.getPatch();
-            boolean percussion = patch instanceof ModelPatch model && model.isPercussion();
-            int selectedBank = percussion && index != CLICK_CHANNEL ? PERCUSSION_BANK : patch.getBank();
-            outputs[index].programChange(selectedBank, patch.getProgram());
-            patches[index] = instrument;
-        }
+        if (tone.equals(selected[index])) return;
         selected[index] = tone;
+        var font = font(tone);
+        borrowed[index] = font != bank.font();
+        int msb = bankSelect(font, tone);
+        // Only to the synth that plays it: a program change decodes its samples.
+        synth(index).send(Synth.message(Synth.CONTROL, index, Synth.BANK, msb));
+        synth(index).send(Synth.message(Synth.PROGRAM, index, tone.program(), 0));
+        piano[index] = (borrowed[index] || bank.name().equals(KeyboardSettings.DEFAULT_FONT))
+                && font.preset(fontBank(msb), tone.program()) == font.preset(0, 0);
     }
 
     private void noteOff(int input, int key, int velocity) {
@@ -262,7 +258,7 @@ public final class KeyboardSynth implements AutoCloseable {
         for (int voice = 0; voice < VOICES_PER_INPUT; voice++) {
             int actual = (routes >>> (8 * voice) & 255) - 1;
             int index = route(input, voice);
-            if (actual >= 0 && --counts[index][actual] == 0) outputs[index].noteOff(actual, velocity);
+            if (actual >= 0 && --counts[index][actual] == 0) send(Synth.NOTE_OFF, index, actual, velocity);
         }
     }
 
@@ -278,13 +274,16 @@ public final class KeyboardSynth implements AutoCloseable {
         for (int voice = 0; voice < VOICES_PER_INPUT; voice++) {
             int index = route(input, voice);
             if (stopsNotes) Arrays.fill(counts[index], 0);
-            if (cc == SUSTAIN) outputs[index].controlChange(72, 64 + Math.min(value, 63) / 4);
-            if (cc == SOFT) outputs[index].controlChange(74, 64 - value / 9);
-            outputs[index].controlChange(cc, value);
+            if (cc == SUSTAIN) send(Synth.CONTROL, index, Synth.RELEASE_TIME, 64 + Math.min(value, 63) / 4);
+            // The soft pedal is this keyboard's own: quieter (see noteOn) and duller, not the synth's.
+            if (cc == SOFT) send(Synth.CONTROL, index, Synth.BRIGHTNESS, 64 - value / 9);
+            else send(Synth.CONTROL, index, cc, value);
             if (cc == RESET) {
-                outputs[index].setPitchBend(8192);
-                outputs[index].controlChange(91, settings.reverb);
-                outputs[index].controlChange(93, settings.chorus);
+                send(Synth.BEND, index, 0, 64);
+                send(Synth.CONTROL, index, Synth.RELEASE_TIME, 64);
+                send(Synth.CONTROL, index, Synth.BRIGHTNESS, 64);
+                send(Synth.CONTROL, index, Synth.REVERB_SEND, settings.reverb);
+                send(Synth.CONTROL, index, Synth.CHORUS_SEND, settings.chorus);
             }
         }
     }
@@ -294,21 +293,35 @@ public final class KeyboardSynth implements AutoCloseable {
         return index >= CLICK_CHANNEL ? index + 1 : index;
     }
 
-    void read(byte[] stereo) throws IOException {
+    void read(byte[] stereo) {
         read(stereo, stereo.length / 4);
     }
 
-    public void read(byte[] stereo, int frames) throws IOException {
+    /** Renders {@code frames}, whole synth blocks, as 16-bit stereo. */
+    public void read(byte[] stereo, int frames) {
         if (attackFrames == 0) processEvents();
-        int bytes = frames * 4;
-        int size = pcm.readNBytes(stereo, 0, bytes);
-        if (size < bytes) Arrays.fill(stereo, size, bytes, (byte) 0);
+        if (left.length < frames) {
+            left = new float[frames];
+            right = new float[frames];
+            fallbackLeft = new float[frames];
+            fallbackRight = new float[frames];
+        }
+        synth.render(left, right, 0, frames / Synth.BLOCK);
+        if (fallback != null) fallback.render(fallbackLeft, fallbackRight, 0, frames / Synth.BLOCK);
+        for (int i = 0; i < frames; i++) {
+            put(stereo, i * 4, left[i] + fallbackLeft[i]);
+            put(stereo, i * 4 + 2, right[i] + fallbackRight[i]);
+        }
         renderedFrames += frames;
         if (attackFrames > 0) attackFrames = Math.max(0, attackFrames - frames);
         if (framesToReleaseClick > 0 && (framesToReleaseClick -= frames) <= 0) {
-            outputs[CLICK_CHANNEL].noteOff(clickNote);
+            send(Synth.NOTE_OFF, CLICK_CHANNEL, clickNote, 0);
         }
     }
 
-    @Override public void close() { synth.close(); }
+    private static void put(byte[] stereo, int at, float sample) {
+        int value = Math.round(Math.clamp(sample * LEVEL, -1, 1) * 32767);
+        stereo[at] = (byte) value;
+        stereo[at + 1] = (byte) (value >> 8);
+    }
 }

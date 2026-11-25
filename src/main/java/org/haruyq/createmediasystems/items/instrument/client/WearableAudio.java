@@ -123,7 +123,6 @@ final class WearableAudio {
 
     void stop() {
         stopEmitter();
-        if (guitar != null) guitar.close();
         guitar = null;
     }
 

@@ -8,7 +8,10 @@ import org.haruyq.createmediasystems.items.instrument.InstrumentState;
 
 import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 
-/** Converts a fingering to sounding pitches. The audio thread consumes timed changes one synthesis block at a time. */
+/**
+ * Converts a fingering, its preset and its bend to sounding pitches. The audio thread consumes timed changes one
+ * synthesis block at a time.
+ */
 final class InstrumentVoices {
     private record Change(long at, int midi) {}
     private final ArrayDeque<Change> changes = new ArrayDeque<>();
@@ -16,7 +19,7 @@ final class InstrumentVoices {
     private final long[] earliestRelease = new long[128];
     private final boolean[] releasing = new boolean[128];
     private long cursor, frame;
-    private int expression = -1;
+    private int expression = -1, program = -1, bend = CENTER_BEND;
 
     synchronized void update(InstrumentState state, int message, long now) {
         if (changes.size() > 512 || !changes.isEmpty() && now - changes.getFirst().at > 1_000_000_000L) {
@@ -31,9 +34,19 @@ final class InstrumentVoices {
             expression = state.breath();
             enqueue(now, Synth.CONTROL, Synth.EXPRESSION, expression);
         }
+        // A new preset plays from the next strike on: what sounds is struck again in it.
+        boolean preset = program != state.program();
+        if (preset) {
+            program = state.program();
+            enqueue(now, Synth.PROGRAM, program, 0);
+        }
+        if (bend != state.bend()) {
+            bend = state.bend();
+            enqueue(now, Synth.BEND, bend & 127, bend >> 7);
+        }
         for (int note = state.kind.first; note <= state.kind.last(); note++) {
             int velocity = state.voicedVelocity(note);
-            if (velocity > 0 && (!playing[note] || command(message) == NOTE && first(message) == note && second(message) > 0)) {
+            if (velocity > 0 && (!playing[note] || preset || command(message) == NOTE && first(message) == note && second(message) > 0)) {
                 enqueue(now, Synth.NOTE_ON, note, velocity);
             } else if (velocity == 0 && playing[note]) {
                 enqueue(now, Synth.NOTE_OFF, note, 0);

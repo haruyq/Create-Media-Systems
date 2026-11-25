@@ -16,6 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.NoteRate;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.jetbrains.annotations.Nullable;
@@ -23,7 +24,7 @@ import org.jetbrains.annotations.Nullable;
 public final class SteelpanPackets {
     public static final double HEARING_RANGE = 32;
     private static final Map<ServerPlayer, PlayerInput> INPUTS = new WeakHashMap<>();
-    private static final PlayerInput LOCAL = new PlayerInput();
+    private static final NoteRate LOCAL = new NoteRate();
     private static Client client;
 
     private SteelpanPackets() {}
@@ -160,19 +161,8 @@ public final class SteelpanPackets {
         }
     }
 
-    private static final class PlayerInput {
-        private static final int BURST = 32;
+    private static final class PlayerInput extends NoteRate {
         Target target;
         ServerLevel level;
-        int lastTick;
-        int remaining = BURST;
-
-        boolean take(int tick) {
-            remaining = Math.min(BURST, remaining + 3 * Math.clamp(tick - lastTick, 0, BURST));
-            lastTick = tick;
-            if (remaining == 0) return false;
-            remaining--;
-            return true;
-        }
     }
 }

@@ -3,14 +3,13 @@ package org.haruyq.createmediasystems.items.instrument.client;
 import java.util.Arrays;
 import org.haruyq.createmediasystems.items.instrument.GuitarFrame;
 import org.haruyq.createmediasystems.items.instrument.InstrumentState;
-import org.haruyq.gervill.FFT;
 
 /** Transcribes the clean pickup signal before the amp or pedals can introduce extra harmonics. */
 final class GuitarTracker {
     private static final int RATE = 12000, WINDOW = 1024, N = 4096, STRINGS = GuitarFrame.STRINGS;
     private static final int FIRST = 40, LAST = 86;
     private static final double BIN = RATE / (double) N;
-    private final FFT fft = new FFT(N, -1);
+    private static final double[] COS = new double[N/2], SIN = new double[N/2];
     private final double[] history = new double[WINDOW], hann = new double[WINDOW], work = new double[2*N];
     private final double[] magnitude = new double[N/2], remaining = new double[N/2];
     private final int[] pitches = new int[STRINGS], choice = new int[STRINGS], assignment = new int[STRINGS];
@@ -19,6 +18,10 @@ final class GuitarTracker {
     private final double[] previous = new double[STRINGS], envelope = new double[STRINGS];
     private int cursor, count, signalAge;
     private double bestCost, hand = 2, inputLevel;
+
+    static {
+        for (int k = 0; k < N/2; k++) { COS[k] = Math.cos(Math.TAU * k / N); SIN[k] = -Math.sin(Math.TAU * k / N); }
+    }
 
     GuitarTracker() {
         Arrays.fill(base, -1);
@@ -76,10 +79,36 @@ final class GuitarTracker {
         return result;
     }
 
+    /** An in-place radix-2 FFT of N interleaved real and imaginary parts. */
+    static void fft(double[] data) {
+        int n = N;
+        for (int i = 1, j = 0; i < n; i++) {
+            int bit = n >> 1;
+            for (; (j & bit) != 0; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) {
+                double re = data[2*i], im = data[2*i+1];
+                data[2*i] = data[2*j]; data[2*i+1] = data[2*j+1];
+                data[2*j] = re; data[2*j+1] = im;
+            }
+        }
+        for (int length = 2; length <= n; length <<= 1) {
+            for (int start = 0; start < n; start += length) {
+                for (int k = 0; k < length / 2; k++) {
+                    double wr = COS[k*(n/length)], wi = SIN[k*(n/length)];
+                    int a = 2*(start+k), b = 2*(start+k+length/2);
+                    double re = data[b]*wr - data[b+1]*wi, im = data[b]*wi + data[b+1]*wr;
+                    data[b] = data[a] - re; data[b+1] = data[a+1] - im;
+                    data[a] += re; data[a+1] += im;
+                }
+            }
+        }
+    }
+
     private void detect() {
         Arrays.fill(work, 0);
         for (int i = 0; i < WINDOW; i++) work[2*i] = hann[i]*history[(cursor+i)%WINDOW];
-        fft.transform(work);
+        fft(work);
         double maximum = 0;
         for (int i = 1; i < magnitude.length; i++) {
             magnitude[i] = Math.hypot(work[2*i], work[2*i+1])*4/WINDOW;

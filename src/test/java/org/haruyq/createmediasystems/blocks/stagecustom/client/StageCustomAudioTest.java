@@ -2,19 +2,29 @@ package org.haruyq.createmediasystems.blocks.stagecustom.client;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.List;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardMidi;
-import org.haruyq.createmediasystems.blocks.piano.pxs1100we.client.KeyboardSynth;
-import org.haruyq.createmediasystems.playback.Pcm;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.Synth;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 final class StageCustomAudioTest {
-    private static final int CHUNK = KeyboardSynth.FRAMES_PER_BUFFER;
+    private static final int CHUNK = 15 * Synth.BLOCK;
     private static final int PEDAL = 5, AFTER_PEDAL = 8, END = 12;
+    private static SoundFont bank;
+
+    @BeforeAll
+    static void readTheBundledBank() throws IOException {
+        try (var in = StageCustomAudioTest.class.getResourceAsStream("/assets/create_media_systems/keyboard/a88mkii/generaluser_gs.sf3")) {
+            bank = SoundFont.read(ByteBuffer.wrap(in.readAllBytes()));
+        }
+    }
 
     @Test
-    void closingTheHatStopsItsSoundFontTailWithoutCuttingOffTheRide() throws Exception {
+    void closingTheHatStopsItsSoundFontTailWithoutCuttingOffTheRide() {
         var ride = render(List.of(51), false);
         var foot = render(List.of(), true);
         var footAndRide = render(List.of(51), true);
@@ -33,25 +43,16 @@ final class StageCustomAudioTest {
         assertTrue(rideTail > .01 && rideError < rideTail / 100, "The pedal should leave the ride sounding");
     }
 
-    private static double[] render(List<Integer> notes, boolean pedal) throws Exception {
-        var settings = StageCustomAudio.settings();
-        var initial = new ArrayList<KeyboardMidi>();
-        for (int note : notes) StageCustomAudio.appendNote(initial, note, 110);
-        byte[] stereo = new byte[CHUNK * 4];
+    private static double[] render(List<Integer> notes, boolean pedal) {
+        var synth = StageCustomAudio.synth(bank);
+        for (int note : notes) StageCustomAudio.hit(synth, note, 110);
+        float[] left = new float[CHUNK], right = new float[CHUNK];
+        var pcm = ByteBuffer.allocate(CHUNK * 2).order(ByteOrder.LITTLE_ENDIAN);
         double[] mono = new double[END * CHUNK];
-        try (var synth = KeyboardSynth.bundled(40).join()) {
-            synth.apply(settings, true, initial);
-            for (int offset = 0; offset < mono.length; offset += CHUNK) {
-                if (pedal && offset == PEDAL * CHUNK) {
-                    var events = new ArrayList<KeyboardMidi>();
-                    StageCustomAudio.appendNote(events, 44, 100);
-                    synth.apply(settings, false, events);
-                }
-                synth.read(stereo, CHUNK);
-                for (int i = 0; i < CHUNK; i++) {
-                    mono[offset + i] = .5 * (Pcm.sample(stereo, i, 2, 0) + Pcm.sample(stereo, i, 2, 1));
-                }
-            }
+        for (int offset = 0; offset < mono.length; offset += CHUNK) {
+            if (pedal && offset == PEDAL * CHUNK) StageCustomAudio.hit(synth, 44, 100);
+            StageCustomAudio.render(synth, left, right, CHUNK, pcm.clear());
+            for (int i = 0; i < CHUNK; i++) mono[offset + i] = pcm.getShort(i * 2) / 32768.0;
         }
         return mono;
     }

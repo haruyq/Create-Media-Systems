@@ -1,35 +1,33 @@
 package org.haruyq.createmediasystems.blocks.piano.pxs1100we.client;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import javax.sound.midi.Instrument;
 
 import com.mojang.logging.LogUtils;
 import net.neoforged.fml.loading.FMLPaths;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.synth.SoundFont;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings;
 import org.haruyq.createmediasystems.blocks.piano.pxs1100we.KeyboardSettings.Tone;
-import org.haruyq.gervill.ModelInstrument;
-import org.haruyq.gervill.ModelPatch;
-import org.haruyq.gervill.SF2Soundbank;
 
 final class KeyboardSoundbank {
     private static final int MAX_BYTES = 192 * 1024 * 1024;
-    private static final String RESOURCE = "/assets/" + CreateMediaSystems.MOD_ID + "/piano/pxs1100we/GeneralUser-GS.sf2";
     private static final java.util.concurrent.ExecutorService IO = Executors.newSingleThreadExecutor(task ->
             Thread.ofPlatform().name("CMS keyboard synth").daemon().unstarted(task));
-    private static final CompletableFuture<Bank> DEFAULT = CompletableFuture.supplyAsync(KeyboardSoundbank::bundled, IO);
+    // Not on IO: a custom bank that fails waits there for this one.
+    private static final CompletableFuture<Bank> DEFAULT = SoundFont.bundled()
+            .thenApply(font -> bank(KeyboardSettings.DEFAULT_FONT, font));
     private static String lastCustom = "";
     private static CompletableFuture<Bank> custom;
 
@@ -37,7 +35,7 @@ final class KeyboardSoundbank {
         int category() { return tone.bank() == KeyboardSettings.DRUM_BANK ? 16 : tone.program() / 8; }
     }
 
-    record Bank(String name, Map<Tone, Instrument> instruments, List<Patch> patches) {
+    record Bank(String name, SoundFont font, List<Patch> patches) {
         String title(Tone tone) {
             return patches.stream().filter(patch -> patch.tone.equals(tone)).findFirst()
                     .map(Patch::name).orElse(tone.bank() + ":" + tone.program());
@@ -57,10 +55,10 @@ final class KeyboardSoundbank {
             custom = CompletableFuture.supplyAsync(() -> {
                 try {
                     String safe = KeyboardSettings.fontName(name);
-                    if (!safe.equals(name) || !safe.toLowerCase(Locale.ROOT).endsWith(".sf2")) return DEFAULT.join();
+                    if (!safe.equals(name) || !soundFont(safe)) return DEFAULT.join();
                     var path = directory().resolve(safe);
                     if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) > MAX_BYTES) return DEFAULT.join();
-                    return bank(name, new SF2Soundbank(path.toFile()));
+                    return bank(name, SoundFont.read(ByteBuffer.wrap(Files.readAllBytes(path))));
                 } catch (IOException | RuntimeException e) {
                     LogUtils.getLogger().warn("Could not load keyboard SoundFont {}", name, e);
                     return DEFAULT.join();
@@ -68,6 +66,12 @@ final class KeyboardSoundbank {
             }, IO);
         }
         return custom;
+    }
+
+    /** An .sf2 or .sf3 file's name. */
+    private static boolean soundFont(String name) {
+        var lower = name.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".sf2") || lower.endsWith(".sf3");
     }
 
     static Path directory() {
@@ -82,7 +86,7 @@ final class KeyboardSoundbank {
             try (var files = Files.list(directory())) {
                 files.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                         .map(path -> path.getFileName().toString())
-                        .filter(name -> name.toLowerCase(Locale.ROOT).endsWith(".sf2") && KeyboardSettings.fontName(name).equals(name))
+                        .filter(name -> soundFont(name) && KeyboardSettings.fontName(name).equals(name))
                         .sorted(String.CASE_INSENSITIVE_ORDER).forEach(result::add);
             }
         } catch (IOException e) {
@@ -91,28 +95,16 @@ final class KeyboardSoundbank {
         return List.copyOf(result);
     }
 
-    private static Bank bundled() {
-        try (var stream = KeyboardSoundbank.class.getResourceAsStream(RESOURCE)) {
-            if (stream == null) throw new IOException("Missing bundled GeneralUser GS SoundFont");
-            return bank(KeyboardSettings.DEFAULT_FONT, new SF2Soundbank(stream));
-        } catch (IOException e) {
-            throw new IllegalStateException("Could not load bundled keyboard SoundFont", e);
-        }
-    }
-
-    static Bank bank(String name, SF2Soundbank soundfont) {
+    static Bank bank(String name, SoundFont font) {
         var patches = new LinkedHashMap<Tone, Patch>();
-        var instruments = new LinkedHashMap<Tone, Instrument>();
-        Arrays.stream(soundfont.getInstruments()).forEach(instrument -> {
-            var patch = instrument.getPatch();
-            int bank = patch instanceof ModelPatch model && model.isPercussion() ? KeyboardSettings.DRUM_BANK : patch.getBank();
-            var tone = new Tone(bank, patch.getProgram());
-            patches.putIfAbsent(tone, new Patch(tone, instrument.getName().strip()));
-            instruments.putIfAbsent(tone, KeyboardSettings.DEFAULT_FONT.equals(name) && bank == 0 && tone.program() == 0
-                    ? new KeyboardPianoTone((ModelInstrument) instrument) : instrument);
+        // By bank, then program: a bank-1 variation comes before the drum kit of its tone (see KeyboardSynth.bankSelect).
+        new TreeMap<>(font.names()).forEach((preset, title) -> {
+            int bank = preset >> 8;
+            var tone = new Tone(bank == SoundFont.DRUMS ? KeyboardSettings.DRUM_BANK : bank << 7, preset & 255);
+            patches.putIfAbsent(tone, new Patch(tone, title));
         });
         if (patches.isEmpty()) throw new IllegalArgumentException("No SoundFont instruments in " + name);
-        return new Bank(name, Map.copyOf(instruments), patches.values().stream()
+        return new Bank(name, font, patches.values().stream()
                 .sorted(Comparator.comparingInt(Patch::category).thenComparingInt(patch -> patch.tone.program())
                         .thenComparingInt(patch -> patch.tone.bank())).toList());
     }
