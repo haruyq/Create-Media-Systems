@@ -67,7 +67,10 @@ final class MountedSteelpan implements MovementBehaviour {
             Vec3 direction = local(carrier, eye.add(player.getLookAngle())).subtract(localEye);
             int midi = SteelpanBlock.rayNote(localEye.subtract(Vec3.atBottomCenterOf(pos)), direction, state.getValue(SteelpanBlock.FACING));
             if (midi < 0) return false;
-            if (level instanceof ServerLevel server && SteelpanPackets.canPlay(player, target)) strike(server, target, midi, 100);
+            if (SteelpanPackets.canPlay(player, target)) {
+                if (level instanceof ServerLevel server) strike(server, target, midi, 100);
+                else SteelpanPackets.played(target, midi, 100);
+            }
             return true;
         }
 

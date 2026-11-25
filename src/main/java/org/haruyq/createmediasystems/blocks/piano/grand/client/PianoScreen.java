@@ -16,7 +16,6 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoPackets.Action;
 import org.haruyq.createmediasystems.client.KeysScreen;
-import org.haruyq.createmediasystems.client.MidiPort;
 import org.lwjgl.glfw.GLFW;
 
 import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
@@ -26,15 +25,8 @@ import static org.haruyq.createmediasystems.blocks.piano.grand.PianoEvent.*;
  * lacquer, brass and gold, ivory and ebony keys under red felt, and behind them its fallboard with the maker's name.
  */
 final class PianoScreen extends KeysScreen {
-    private static final int[] PC_KEYS = {
-        GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_E,
-        GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_G,
-        GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_U, GLFW.GLFW_KEY_J,
-        GLFW.GLFW_KEY_K, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_L, GLFW.GLFW_KEY_P, GLFW.GLFW_KEY_SEMICOLON
-    };
     private static final int[] PEDALS = {SOFT, SOSTENUTO, DAMPER};
     private static final String[] PEDAL_NAMES = {"piano.soft", "piano.sostenuto", "piano.damper"};
-    private static String preferred;
     private static int preferredChannel = -1;
     private final PianoClient client;
     private final PianoClient.Instrument instrument;
@@ -50,7 +42,7 @@ final class PianoScreen extends KeysScreen {
     private static final ResourceLocation FALLBOARD = CreateMediaSystems.id("textures/block/piano/grand/grand_piano_fallboard.png");
     private static final int[] NAME = {428, 167, 169, 40};
     private static final int LACQUER = 0xFF1F2024;
-    private int pcRoot = 60, mouse = -1;
+    private int mouse = -1;
 
     PianoScreen(PianoClient client, PianoClient.Instrument instrument) {
         super(Component.translatable("block.create_media_systems.grand_piano"), 4.6f, 2.4f);
@@ -74,7 +66,7 @@ final class PianoScreen extends KeysScreen {
         blackTopDown = new int[]{0xFFDDB972, 0xFFBF9450};
         this.client = client;
         this.instrument = instrument;
-        midi = new MidiKeyboard(preferred, this::queueMidi);
+        midi = new MidiKeyboard(this::queueMidi);
         if (preferredChannel >= 0) midi.channel(preferredChannel);
     }
 
@@ -84,31 +76,25 @@ final class PianoScreen extends KeysScreen {
         super.init();
         midi.scan();
         if (hidden) return;
-        button(0.6f, ROW, 13, ROW_END, this::device, this::nextInput);
-        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("piano.refresh"), midi::scan);
+        button(0.6f, ROW, 13, ROW_END, midi.port::label, midi.port::next).hint(Component.translatable("keyboard.device_help"));
+        button(13.4f, ROW, 17.4f, ROW_END, () -> Component.translatable("keyboard.refresh"), midi::scan)
+                .hint(Component.translatable("keyboard.refresh_help"));
         button(17.8f, ROW, 23, ROW_END, this::channel, () -> {
             preferredChannel = preferredChannel == 15 ? -1 : preferredChannel + 1;
             midi.channel(preferredChannel);
-        });
-        button(23.4f, ROW, 27.4f, ROW_END, () -> Component.translatable("piano.lid"), () -> client.command(instrument, Action.ROOF));
+        }).hint(Component.translatable("keyboard.channel_help"));
+        button(23.4f, ROW, 27.4f, ROW_END, () -> Component.translatable("piano.lid"), () -> client.command(instrument, Action.ROOF))
+                .hint(Component.translatable("piano.lid_help"));
         button(27.8f, ROW, 32.8f, ROW_END, () -> Component.translatable("piano.keyboard_lid"),
-                () -> client.command(instrument, Action.KEYBOARD_LID));
-        button(33.2f, ROW, 37.2f, ROW_END, () -> Component.translatable("piano.panic"), midi::panic);
+                () -> client.command(instrument, Action.KEYBOARD_LID)).hint(Component.translatable("piano.keyboard_lid_help"));
+        button(33.2f, ROW, 37.2f, ROW_END, () -> Component.translatable("piano.panic"), midi::panic)
+                .hint(Component.translatable("keyboard.panic_help"));
         for (int i = 0; i < PEDALS.length; i++) {
             int pedal = i;
             float left = 37.8f + i * 4.6f;
             slider(left, ROW, left + 4.2f, ROW_END, value -> Component.translatable(PEDAL_NAMES[pedal]), 0, 127,
-                    () -> instrument.keys.pedal(PEDALS[pedal]), null);
+                    () -> instrument.keys.pedal(PEDALS[pedal]), null).hint(Component.translatable("keyboard.pedal_help"));
         }
-    }
-
-    /** The MIDI input it listens to, or why it listens to none. */
-    private Component device() {
-        var status = midi.status();
-        String name = status.inputs().stream().filter(input -> input.id().equals(status.selected()))
-                .map(MidiPort.Input::name).findFirst().orElse(null);
-        return name == null || !status.message().equals("keyboard.midi_connected") ? Component.translatable(status.message())
-                : Component.literal(name);
     }
 
     private Component channel() {
@@ -116,24 +102,9 @@ final class PianoScreen extends KeysScreen {
                 : Component.translatable("piano.channel", preferredChannel + 1);
     }
 
-    private void nextInput() {
-        var status = midi.status();
-        var inputs = status.inputs();
-        if (inputs.isEmpty()) {
-            midi.scan();
-            return;
-        }
-        int next = 0;
-        for (int i = 0; i < inputs.size(); i++) if (inputs.get(i).id().equals(status.selected())) next = i + 1;
-        midi.select(next >= inputs.size() ? "" : inputs.get(next).id());
-    }
-
     @Override public void tick() {
         super.tick();
         if (ticks % 40 == 0) midi.scan();
-        if (!Minecraft.getInstance().isWindowActive() && (!pcNotes.isEmpty() || mouse >= 0 || Arrays.stream(pcPedal).anyMatch(p -> p != 0))) {
-            releaseComputer();
-        }
     }
 
     private void queueMidi(List<PianoEvent> events) {
@@ -215,7 +186,7 @@ final class PianoScreen extends KeysScreen {
         if (isNote(note) && !midiHeld[note - FIRST_NOTE] && !computerHolds(note)) play(release(note, 58));
     }
 
-    private void releaseComputer() {
+    @Override protected void releaseComputer() {
         var held = new ArrayList<>(pcNotes.values());
         if (mouse >= 0) held.add(mouse);
         mouse = -1;
@@ -236,19 +207,15 @@ final class PianoScreen extends KeysScreen {
             pedal(pedal, 127);
             return true;
         }
-        if (key == GLFW.GLFW_KEY_Z || key == GLFW.GLFW_KEY_X) {
-            pcRoot = Math.clamp(pcRoot + (key == GLFW.GLFW_KEY_Z ? -12 : 12), 24, 84);
-            return true;
-        }
-        for (int i = 0; i < PC_KEYS.length; i++) {
-            if (PC_KEYS[i] == key) {
-                if (!pcNotes.containsKey(key)) {
-                    int note = pcRoot + i;
-                    pcNotes.put(key, note);
-                    play(press(note, 86));
-                }
-                return true;
+        // From C0 to C6: A0 and C8 each have a key in one of them.
+        if (octaveKey(key, 12, 84)) return true;
+        int note = typedNote(key);
+        if (note >= 0) {
+            if (isNote(note) && !pcNotes.containsKey(key)) {
+                pcNotes.put(key, note);
+                play(press(note, KEY_VELOCITY));
             }
+            return true;
         }
         return super.keyPressed(key, scan, modifiers);
     }
@@ -304,7 +271,7 @@ final class PianoScreen extends KeysScreen {
 
     @Override protected void draw(GuiGraphics g, double x, double y) {
         drawHeader(g, title.getString(), Component.translatable(PianoAudio.INSTANCE.status()).getString(), lamp,
-                Component.translatable("piano.pc_controls", pcRoot / 12 - 1).getString(), faint);
+                Component.translatable("keyboard.keys_help", base / 12 - 1).getString(), faint);
         // The fallboard behind the keys, the maker's name at its middle.
         int top = keysY - deck, bottom = keysY - felt, high = Math.round(keyWidth * 1.2f), wide = high * NAME[2] / NAME[3];
         int left = keysX + (stripWidth - wide) / 2, above = (top + bottom - high) / 2;
@@ -314,7 +281,6 @@ final class PianoScreen extends KeysScreen {
     }
 
     @Override public void removed() {
-        preferred = midi.preference();
         midi.close();
         pending.clear();
         client.command(instrument, Action.CLOSE);

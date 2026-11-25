@@ -13,11 +13,11 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout;
 import org.haruyq.createmediasystems.blocks.piano.client.NoteTrailRenderer;
 
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -32,7 +32,7 @@ import net.minecraft.util.Mth;
  * <p>It is drawn in the window's own pixels rather than the GUI's coarser ones, so its corners can be round and its
  * edges soft; everything is measured in those, the mouse brought into them as it comes in.
  */
-public abstract class KeysScreen extends Screen {
+public abstract class KeysScreen extends InstrumentScreen {
     protected static final int EDGE = 0xFF050506, LAMP = 0xFFFFE7B8, TEXT = 0xFFE6E6EA, FAINT = 0xFF85858D, INK = 0xFF151517;
     /** Shaded faces, each lighter at the top than at the bottom: the body, a button idle, held and lit, one that is off. */
     protected static final int[] BODY = {0xF4242428, 0xF4151517}, BUTTON = {0xFF3D3D45, 0xFF2C2C32}, HELD = {0xFF5A5A63, 0xFF45454D},
@@ -44,6 +44,18 @@ public abstract class KeysScreen extends Screen {
     private static final int[] INACTIVE_WHITE = {0xFF85837D, 0xFFA09D97};
     private static final int FELT = 0xFF7A1220;
     protected static final int LEFT = -1, MIDDLE = 0, RIGHT = 1;
+    /**
+     * The computer's keys that play notes, on every instrument: two rows of a piano's keys from C, the row from Z and
+     * the row from Q an octave up, the lower one running on into the upper's first notes.
+     */
+    private static final int[] LOWER_ROW = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_C,
+            GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_G, GLFW.GLFW_KEY_B, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_M,
+            GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_L, GLFW.GLFW_KEY_PERIOD, GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_SLASH};
+    private static final int[] UPPER_ROW = {GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_E,
+            GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_5, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_U,
+            GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_0, GLFW.GLFW_KEY_P};
+    /** How hard a computer key plays a note; and with Shift on an instrument that is struck, softer. */
+    public static final int KEY_VELOCITY = 96, SOFT_VELOCITY = 56;
 
     /** This instrument's colours, the Koland keyboard's until it sets its own: the lettering, the line around the body, what shows between the keys, the felt. */
     protected int text = TEXT, faint = FAINT, ink = INK, lamp = LAMP, edge = EDGE, bed = EDGE, feltColor = FELT;
@@ -62,11 +74,11 @@ public abstract class KeysScreen extends Screen {
     /** The gap between the strip and the keys; the felt along the keys' back is in it. */
     protected int deck, felt;
     protected float textScale;
-    /** Whether it is out of sight, all but the button that brings it back. */
-    protected boolean hidden;
     /** How many times their width the keys are drawn, and the first white key in sight when not all of them fit. */
     protected int zoom = 1, firstWhite;
     protected int ticks;
+    /** The note the Z key plays; ← and → move it an octave. */
+    protected int base = 48;
     private final List<Face> faces = new ArrayList<>();
     @Nullable
     private Face grabbed;
@@ -95,6 +107,34 @@ public abstract class KeysScreen extends Screen {
 
     protected int whiteKeyCount() {
         return whiteKeyCount;
+    }
+
+    /** How many notes above the Z key the computer's key {@code key} plays, 0 to 28; -1 for a key that plays none. */
+    public static int typedStep(int key) {
+        for (int i = 0; i < LOWER_ROW.length; i++) {
+            if (LOWER_ROW[i] == key) {
+                return i;
+            }
+            if (UPPER_ROW[i] == key) {
+                return 12 + i;
+            }
+        }
+        return -1;
+    }
+
+    /** The note the computer's key {@code key} plays from {@link #base}; -1 for a key that plays none. */
+    protected int typedNote(int key) {
+        int step = typedStep(key);
+        return step < 0 ? -1 : base + step;
+    }
+
+    /** True for ← and →, which move {@link #base} an octave down or up, between {@code lowest} and {@code highest}. */
+    protected boolean octaveKey(int key, int lowest, int highest) {
+        if (key != GLFW.GLFW_KEY_LEFT && key != GLFW.GLFW_KEY_RIGHT) {
+            return false;
+        }
+        base = Mth.clamp(base + (key == GLFW.GLFW_KEY_LEFT ? -12 : 12), lowest, highest);
+        return true;
     }
 
     /** Lays it out. An instrument adds its faces and widgets after this, unless it is {@link #hidden}. */
@@ -126,7 +166,8 @@ public abstract class KeysScreen extends Screen {
             int sliderWidth = Math.round(font.width(trailSpeedText(250)) * textScale) + keyWidth * 2;
             trailSpeed = slider((right - sliderWidth - keysX) / (float) keyWidth, (at[1] - stripY) / (float) keyWidth,
                     (right - keysX) / (float) keyWidth, (at[3] - stripY) / (float) keyWidth, KeysScreen::trailSpeedText,
-                    25, 250, NoteTrailRenderer::speed, NoteTrailRenderer::speed);
+                    25, 250, NoteTrailRenderer::speed, NoteTrailRenderer::speed)
+                    .hint(Component.translatable("create_media_systems.keys.note_speed_help"));
         }
     }
 
@@ -136,18 +177,14 @@ public abstract class KeysScreen extends Screen {
     }
 
     @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
-    /** The world stays in sight behind it. */
-    @Override
-    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-    }
-
-    @Override
     public void tick() {
         ticks++;
+        // A key or button let go of in another window never comes back here.
+        if (!minecraft.isWindowActive()) releaseComputer();
+    }
+
+    /** Lets go of what the computer's keys and the mouse hold; called every tick the window is out of focus. */
+    protected void releaseComputer() {
     }
 
     @Override
@@ -171,17 +208,26 @@ public abstract class KeysScreen extends Screen {
                 drawTrailToggle(g, at, x, y);
             }
             box(g, at[0], at[1], at[2], at[3], lineHeight() / 3, true, button[0], button[1]);
-            write(g, toggleName(), (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale, text, MIDDLE);
+            write(g, toggleName().getString(), (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale, text, MIDDLE);
         });
         g.pose().popPose();
-        if (hidden) {
-            return;
+        if (!hidden) {
+            super.render(g, mouseX, mouseY, partialTick);
         }
-        super.render(g, mouseX, mouseY, partialTick);
-        Face face = grabbed == null ? faceAt(x, y) : null;
-        if (face != null && face.hint != null) {
-            g.renderTooltip(font, font.split(face.hint, 210), mouseX, mouseY);
+        Component hint = in(toggle(), x, y) ? toggleHint() : hidden || grabbed != null ? null : hintAt(x, y);
+        if (hint != null) {
+            g.renderTooltip(font, font.split(hint, 210), mouseX, mouseY);
         }
+    }
+
+    /** What the control at ({@code x}, {@code y}) of the window does; null for none. */
+    @Nullable
+    protected Component hintAt(double x, double y) {
+        if (hasNoteTrails() && in(trailToggle(toggle()), x, y)) {
+            return Component.translatable("create_media_systems.keys.note_trails_help");
+        }
+        Face face = faceAt(x, y);
+        return face == null ? null : face.hint;
     }
 
     /** The instrument's own part of it, over the body and its faces; the mouse is at ({@code x}, {@code y}) of the window. */
@@ -208,10 +254,6 @@ public abstract class KeysScreen extends Screen {
         write(g, Component.translatable("create_media_systems.keys.note_trails").getString(),
                 (at[0] + at[2]) / 2f, (at[1] + at[3]) / 2f + textScale / 2, textScale,
                 NoteTrailRenderer.enabled() ? ink : text, MIDDLE);
-    }
-
-    private String toggleName() {
-        return Component.translatable(hidden ? "create_media_systems.keys.show" : "create_media_systems.keys.hide").getString();
     }
 
     /** The button that hides and shows it: at the right end of the top line; at the window's bottom corner while hidden. */
@@ -419,8 +461,7 @@ public abstract class KeysScreen extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         double x = mouseX * pixel, y = mouseY * pixel;
         if (in(toggle(), x, y)) {
-            hidden = !hidden;
-            rebuildWidgets();
+            toggleHidden();
             return true;
         }
         if (hidden) {

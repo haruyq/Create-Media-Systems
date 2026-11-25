@@ -113,7 +113,7 @@ public class DdjFlx4Block extends HorizontalDirectionalBlock implements EntityBl
         if (player.isShiftKeyDown()) {
             return InteractionResult.PASS;
         }
-        if (level.isClientSide) {
+        if (level.isClientSide && near(player, pos) != null) {
             DjClient.open(pos);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
@@ -296,7 +296,7 @@ public class DdjFlx4Block extends HorizontalDirectionalBlock implements EntityBl
     }
 
     @Nullable
-    private static Entity near(Player player, BlockPos pos) {
+    public static Entity near(Player player, BlockPos pos) {
         return Reach.blockEntity(player, pos, Reach.HAND, Entity.class);
     }
 

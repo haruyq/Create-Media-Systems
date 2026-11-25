@@ -17,7 +17,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FastColor;
@@ -26,18 +25,20 @@ import org.haruyq.createmediasystems.blocks.steelpan.SteelpanLayout;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanLayout.Note;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanPackets.Target;
+import org.haruyq.createmediasystems.client.InstrumentScreen;
+import org.haruyq.createmediasystems.client.KeysScreen;
 import org.haruyq.createmediasystems.client.MidiPort;
 import org.joml.Matrix4f;
 import org.joml.Vector2f;
 
-final class SteelpanScreen extends Screen {
+final class SteelpanScreen extends InstrumentScreen {
+    /** The key shown on each note, as {@link KeysScreen#typedStep} plays them: the upper row's where both rows have one. */
     private static final String KEYS = "ZSXDCVGBHNJMQ2W3ER5T6Y7UI9O0P";
     private static final int STEPS = 36;
     private static final Vector2f[] CIRCLE = new Vector2f[STEPS];
     private static final Vector2f[][] OUTLINES = new Vector2f[KEYS.length()][STEPS];
     private static final long GLOW = 310_000_000L;
     private static final int TEXT = 0xFFF1F5F9, MUTED = 0xFFA3B9C7, TEMPERATURE = 0xFFE6A464;
-    private static String midiPreference;
 
     static {
         for (int i = 0; i < STEPS; i++) {
@@ -68,7 +69,7 @@ final class SteelpanScreen extends Screen {
     SteelpanScreen(Target target) {
         super(Component.translatable("block.create_media_systems.steelpan_low_c"));
         this.target = target;
-        midi = new MidiPort(midiPreference, this::receiveMidi, inputs::clear);
+        midi = new MidiPort(this::receiveMidi, inputs::clear);
         midi.scan();
     }
 
@@ -84,39 +85,23 @@ final class SteelpanScreen extends Screen {
         scale = diameter / SteelpanLayout.DATA.diameter();
         centerX = width / 2;
         centerY = top + 44 + (h - 102) / 2;
+        if (addToggle(right - 8, top + 6)) return;
 
         Component refresh = Component.translatable("keyboard.refresh");
         int refreshWidth = Math.max(58, font.width(refresh) + 14);
-        input = addRenderableWidget(Button.builder(Component.empty(), button -> nextMidi())
+        input = addRenderableWidget(Button.builder(Component.empty(), button -> midi.next())
                 .bounds(left + 12, bottom - 28, w - refreshWidth - 30, 19).build());
         addRenderableWidget(Button.builder(refresh, button -> midi.scan())
-                .bounds(right - 12 - refreshWidth, bottom - 28, refreshWidth, 19).build());
+                .bounds(right - 12 - refreshWidth, bottom - 28, refreshWidth, 19)
+                .tooltip(Tooltip.create(Component.translatable("keyboard.refresh_help"))).build());
         updateMidi(midi.status());
-    }
-
-    private void nextMidi() {
-        var status = midi.status();
-        int chosen = -1;
-        for (int i = 0; i < status.inputs().size(); i++) {
-            if (status.inputs().get(i).id().equals(status.selected())) {
-                chosen = i;
-                break;
-            }
-        }
-        int next = chosen + 1;
-        midi.select(next < status.inputs().size() ? status.inputs().get(next).id() : "");
-        midiPreference = midi.preference();
     }
 
     private void updateMidi(MidiPort.Status status) {
         midiStatus = status;
-        var device = status.inputs().stream().filter(candidate -> candidate.id().equals(status.selected())).findFirst();
-        Component label = status.message().equals("keyboard.midi_connected") && device.isPresent()
-                ? Component.translatable("steelpan.midi_input", device.get().name())
-                : Component.translatable(status.message());
+        Component label = MidiPort.label(status);
         input.setMessage(Component.literal(font.plainSubstrByWidth(label.getString(), Math.max(1, input.getWidth() - 12))));
-        input.setTooltip(Tooltip.create(label));
-        input.active = !status.inputs().isEmpty();
+        input.setTooltip(Tooltip.create(label.copy().append("\n").append(Component.translatable("keyboard.device_help"))));
     }
 
     @Override
@@ -125,12 +110,12 @@ final class SteelpanScreen extends Screen {
             onClose();
             return;
         }
+        // A key let go of in another window never comes back here.
+        if (!minecraft.isWindowActive()) held.clear();
         if (++ticks % 40 == 0) midi.scan();
         var status = midi.status();
         if (status != midiStatus) updateMidi(status);
     }
-
-    @Override public boolean isPauseScreen() { return false; }
 
     @Override
     public void removed() {
@@ -169,6 +154,7 @@ final class SteelpanScreen extends Screen {
     }
 
     private void play(int midi, int velocity) {
+        if (minecraft != null && minecraft.player != null) SteelpanPackets.playLocally(minecraft.player, target, midi, velocity);
         PacketDistributor.sendToServer(new SteelpanPackets.Play(target, midi, velocity));
     }
 
@@ -186,9 +172,9 @@ final class SteelpanScreen extends Screen {
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
-        int index = KEYS.indexOf(key);
+        int index = KeysScreen.typedStep(key);
         if (index >= 0 && !hasControlDown() && !hasAltDown()) {
-            if (held.add(key)) play(SteelpanLayout.LOWEST + index, hasShiftDown() ? 120 : 91);
+            if (held.add(key)) play(SteelpanLayout.LOWEST + index, hasShiftDown() ? KeysScreen.SOFT_VELOCITY : KeysScreen.KEY_VELOCITY);
             return true;
         }
         return super.keyPressed(key, scan, modifiers);
@@ -200,17 +186,19 @@ final class SteelpanScreen extends Screen {
     }
 
     private int pick(double x, double y) {
-        return SteelpanLayout.at((float) ((x - centerX) / scale), (float) ((y - centerY) / scale));
+        return hidden ? -1 : SteelpanLayout.at((float) ((x - centerX) / scale), (float) ((y - centerY) / scale));
     }
 
     @Override
     public void render(GuiGraphics gfx, int mouseX, int mouseY, float delta) {
-        renderBackground(gfx, mouseX, mouseY, delta);
+        if (hidden) {
+            super.render(gfx, mouseX, mouseY, delta);
+            return;
+        }
         gfx.fillGradient(left, top, right, bottom, 0xFF26343C, 0xFF131B23);
         gfx.renderOutline(left, top, right - left, bottom - top, 0xFF586A74);
         gfx.fill(left + 1, top + 1, right - 1, top + 2, 0xFF7696A0);
-        gfx.drawCenteredString(font, title, centerX, top + 11, TEXT);
-        gfx.drawCenteredString(font, Component.translatable("steelpan.range"), centerX, top + 26, MUTED);
+        drawHeader(gfx, left + 12, top + 10, Component.translatable("steelpan.range"), MUTED);
 
         int hover = pick(mouseX, mouseY);
         long now = System.nanoTime();
@@ -233,11 +221,6 @@ final class SteelpanScreen extends Screen {
                 : Component.literal(SteelpanLayout.note(hover).label() + "  •  " + KEYS.charAt(hover - SteelpanLayout.LOWEST));
         gfx.drawCenteredString(font, help, centerX, bottom - 44, hover < 0 ? MUTED : 0xFFD9F2F3);
         super.render(gfx, mouseX, mouseY, delta);
-    }
-
-    @Override
-    public void renderBackground(GuiGraphics gfx, int mouseX, int mouseY, float delta) {
-        gfx.fillGradient(0, 0, width, height, 0x90202930, 0xC3080D14);
     }
 
     private void bowl(GuiGraphics gfx, int hover, long now) {

@@ -12,6 +12,7 @@ import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Layout.Control;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.MidiKeyboardBlock;
 import org.haruyq.createmediasystems.blocks.keyboard.a88mkii.Panel;
 import org.haruyq.createmediasystems.client.KeysScreen;
+import org.haruyq.createmediasystems.client.MidiPort;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -29,15 +30,6 @@ import net.minecraft.util.Mth;
  */
 final class KeyboardScreen extends KeysScreen {
     private static final String KEY = "create_media_systems.keyboard.";
-    /** The computer's keys that play notes, two rows of a piano each, from C: the row from Z, and the row from Q an octave up. */
-    private static final int[] LOWER_ROW = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_C,
-            GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_G, GLFW.GLFW_KEY_B, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_M,
-            GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_L, GLFW.GLFW_KEY_PERIOD, GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_SLASH};
-    private static final int[] UPPER_ROW = {GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_E,
-            GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_5, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_U,
-            GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_0, GLFW.GLFW_KEY_P};
-    /** The note the Z key plays: C3. */
-    private static final int ROW_BASE = 48;
     private static final String[] BUTTONS = {"<", ">", "SNAP", "", "", "", "", "", "", "", "", "PREV", "NEXT", "PROG", "CC",
             "NOTE", "SHIFT", "FUNC", "", "", "", "", "", "", "", "", "LOWER", "UPPER 1", "UPPER 2", "SPLIT", "TRANS", "S1", "S2",
             "OCT-", "OCT+", ""};
@@ -121,13 +113,18 @@ final class KeyboardScreen extends KeysScreen {
     @Override protected boolean hasNoteTrails() { return true; }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        super.render(g, mouseX, mouseY, partialTick);
-        Control hovered = controlAt(mouseX * pixel, mouseY * pixel);
-        if (hovered != null && held == null && mouseNote < 0) {
-            g.renderTooltip(font, font.split(Component.translatable(KEY + "control." + hovered.name().toLowerCase(Locale.ROOT)), 210),
-                    mouseX, mouseY);
-        }
+    @Nullable
+    protected Component hintAt(double x, double y) {
+        Control hovered = controlAt(x, y);
+        if (held != null || mouseNote >= 0) return null;
+        if (hovered != null) return Component.translatable(KEY + "control." + hovered.name().toLowerCase(Locale.ROOT));
+        Component own = super.hintAt(x, y);
+        return own != null || !midiHeader(x, y) ? own : Component.translatable("keyboard.device_help");
+    }
+
+    /** Whether ({@code x}, {@code y}) is on the MIDI input, at the right of the top line. */
+    private boolean midiHeader(double x, double y) {
+        return y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2;
     }
 
     /** Where {@code control} is: its left, top, right and bottom. */
@@ -146,18 +143,15 @@ final class KeyboardScreen extends KeysScreen {
 
     /** The top line: what is set off its usual on the left (nothing, on a keyboard as it comes), the MIDI inputs on the right. */
     private void drawHeader(GuiGraphics g, Panel panel) {
-        List<String> inputs = MidiInput.names();
-        Component midi = inputs == null ? Component.translatable(KEY + "midi.looking")
-                : inputs.isEmpty() ? Component.translatable(KEY + "midi.none")
-                : Component.translatable(KEY + "midi", String.join(", ", inputs));
-        drawHeader(g, "Koland A-88MKII", status(panel), LAMP, midi.getString(), inputs == null || inputs.isEmpty() ? FAINT
-                : 0xFF000000 | PanelLook.GREEN);
+        MidiPort.Status midi = MidiInput.status();
+        drawHeader(g, title.getString(), status(panel), LAMP, MidiPort.label(midi).getString(),
+                midi.message().equals("keyboard.midi_connected") ? 0xFF000000 | PanelLook.GREEN : FAINT);
     }
 
     private String status(Panel panel) {
         List<String> set = new ArrayList<>();
         if (controller.snapshotMode() != 0) {
-            set.add((controller.snapshotMode() == Controller.WRITE ? "STORE" : "RECALL") + ": PAD, NEXT");
+            set.add(Component.translatable(KEY + (controller.snapshotMode() == Controller.WRITE ? "snapshot_store" : "snapshot_recall")).getString());
         }
         if (panel.octave != 0) {
             set.add("OCT " + signed(panel.octave));
@@ -347,8 +341,10 @@ final class KeyboardScreen extends KeysScreen {
                 }
                 case LEVER -> lever(x, y);
             }
-        } else if (y >= stripY && y < stripY + keyWidth * 3 / 2 && x > keysX + stripWidth / 2) {
-            // The MIDI inputs, at the right of the top line: looked for again.
+        } else if (midiHeader(x, y)) {
+            // The MIDI input, at the right of the top line: the next (all of them first), looked for again.
+            MidiPort.Status midi = MidiInput.status();
+            if (!midi.inputs().isEmpty()) MidiPort.cycle(midi.inputs(), midi.selected(), true);
             KeyboardClient.listen(playing);
         }
         return true;
@@ -413,25 +409,12 @@ final class KeyboardScreen extends KeysScreen {
         return true;
     }
 
-    /** The note the computer's key {@code key} plays; -1 for a key that plays none. */
-    private static int typedNote(int key) {
-        for (int i = 0; i < LOWER_ROW.length; i++) {
-            if (LOWER_ROW[i] == key) {
-                return ROW_BASE + i;
-            }
-            if (UPPER_ROW[i] == key) {
-                return ROW_BASE + 12 + i;
-            }
-        }
-        return -1;
-    }
-
     @Override
     public boolean keyPressed(int key, int scanCode, int modifiers) {
         int note = typedNote(key);
         if (note >= 0) {
             if (typed.putIfAbsent(key, note) == null) {
-                controller.key(note, 100);
+                controller.key(note, KEY_VELOCITY);
             }
             return true;
         }
@@ -441,6 +424,7 @@ final class KeyboardScreen extends KeysScreen {
                     controller.control(64, 127);
                 }
             }
+            // Its own OCT buttons, which the panel keeps and shows, rather than the screen's base.
             case GLFW.GLFW_KEY_LEFT -> controller.press(Control.OCTAVE_DOWN);
             case GLFW.GLFW_KEY_RIGHT -> controller.press(Control.OCTAVE_UP);
             default -> {
@@ -448,6 +432,12 @@ final class KeyboardScreen extends KeysScreen {
             }
         }
         return true;
+    }
+
+    @Override
+    protected void releaseComputer() {
+        for (int key : List.copyOf(typed.keySet())) keyReleased(key, 0, 0);
+        if (mouseNote >= 0 || held != null) mouseReleased(0, 0, 0);
     }
 
     @Override

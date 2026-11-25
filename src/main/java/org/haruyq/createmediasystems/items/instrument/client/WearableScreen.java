@@ -28,14 +28,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import static org.haruyq.createmediasystems.items.instrument.InstrumentState.*;
 
 final class WearableScreen extends KeysScreen {
-    private static final int[] COMPUTER = {
-        GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_V,
-        GLFW.GLFW_KEY_G, GLFW.GLFW_KEY_B, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_M,
-        GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_2, GLFW.GLFW_KEY_W, GLFW.GLFW_KEY_3, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_R,
-        GLFW.GLFW_KEY_5, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_6, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_7, GLFW.GLFW_KEY_U,
-        GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_9, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_0, GLFW.GLFW_KEY_P
-    };
-    private static String preferred, preferredLine = "";
+    private static String preferredLine = "";
     private static int preferredChannel, gainDb;
     private static volatile boolean monitor = true;
     private final GuitarInput guitarInput;
@@ -54,7 +47,9 @@ final class WearableScreen extends KeysScreen {
     private final ArrayBlockingQueue<ShortMessage> input = new ArrayBlockingQueue<>(256);
     private final AtomicBoolean midiDispatch = new AtomicBoolean();
     private volatile boolean resetMidi;
-    private int octaves, mouseNote = -1, midiAir, midiSustain, sentAir, sentSustain, bendValue = CENTER_BEND;
+    /** How far ← and → move the computer's keys: as far as there are notes for them to play. */
+    private final int lowest, highest;
+    private int mouseNote = -1, midiAir = 127, midiSustain, sentAir = 127, sentSustain, bendValue = CENTER_BEND;
     private boolean space, bendDragged;
 
     WearableScreen(Player player, WearableClient.View view, int session, Kind kind, InteractionHand hand) {
@@ -64,8 +59,9 @@ final class WearableScreen extends KeysScreen {
         this.session = session;
         this.kind = kind;
         this.hand = hand;
-        if (kind == Kind.MELODICA) hidden = true;
-        if (kind.wind()) sentAir = midiAir = 127;
+        base = kind == Kind.STRATOCASTER ? 40 : keytar() ? 48 : 60;
+        lowest = kind.model == null ? base - (keytar() ? 24 : 12) : base + 12 * Math.floorDiv(kind.first - base, 12);
+        highest = kind.model == null ? base + (keytar() ? 24 : 12) : base + 12 * Math.max(0, Math.ceilDiv(kind.last() - base - 28, 12));
         if (kind == Kind.STRATOCASTER || kind == Kind.TRUMPET) {
             lamp = 0xFFFFCE78;
             lit = new int[] {0xFFFFE2AA, 0xFFE3AA58};
@@ -79,7 +75,7 @@ final class WearableScreen extends KeysScreen {
             lit = new int[] {0xFFC4E6FF, 0xFF86C2F1};
             body = new int[] {0xFA284764, 0xFA192F49};
         }
-        midi = new MidiPort(preferred, message -> {
+        midi = new MidiPort(message -> {
             if (!input.offer(message)) resetMidi = true;
             scheduleMidi();
         }, () -> {
@@ -159,59 +155,60 @@ final class WearableScreen extends KeysScreen {
             for (int index = 0; index < 8; index++) {
                 int tone = index;
                 button(index * each, 1.55f, (index + 1) * each - .12f, 2.72f,
-                        () -> tr("tone." + tone), () -> send(tone(tone))).lit(() -> view.notes.tone() == tone);
+                        () -> tr("tone." + tone), () -> send(tone(tone))).lit(() -> view.notes.tone() == tone).hint(tr("tone_help"));
             }
         }
         if (kind == Kind.STRATOCASTER) {
             float width = whiteKeyCount();
-            button(0, 4.16f, width*.54f, 5.31f, () -> device < 0 ? tr("input.none") : tr("input.device", devices.get(device).name()), this::nextDevice);
+            button(0, 4.16f, width*.54f, 5.31f, () -> device < 0 ? tr("input.none") : tr("input.device", devices.get(device).name()), this::nextDevice)
+                    .hint(tr("input.device_help"));
             button(width*.55f, 4.16f, width*.70f, 5.31f, () -> tr("input.channel", channel+1), () -> {
                 if (device < 0) return;
                 stopGuitar();
                 preferredChannel = channel = (channel+1) % devices.get(device).channels();
-            });
+            }).hint(tr("input.channel_help"));
             button(width*.71f, 4.16f, width, 5.31f,
                     () -> tr("input."+guitarInput.status().name().toLowerCase(java.util.Locale.ROOT)), this::toggleGuitar)
-                    .lit(() -> guitarInput.status() == GuitarInput.Status.LIVE);
+                    .lit(() -> guitarInput.status() == GuitarInput.Status.LIVE).hint(tr("input.help"));
             slider(0, 5.44f, width * .22f, 6.57f, v -> tr("input.gain", v), -18, 24, () -> gainDb, v -> {
                 gainDb = v; guitarInput.gainDb(v);
-            });
+            }).hint(tr("input.gain_help"));
             button(width * .23f, 5.44f, width * .42f, 6.57f, () -> tr(monitor ? "input.monitor_on" : "input.monitor_off"), () -> {
                 monitor = !monitor;
                 if (!monitor) view.audio.guitar().offer(new short[0], true);
-            }).lit(() -> monitor);
+            }).lit(() -> monitor).hint(tr("input.monitor_help"));
             button(width * .43f, 5.44f, width * .71f, 6.57f,
                     () -> tr(view.notes.amp().distortion() ? "amp.distortion" : "amp.overdrive"),
-                    () -> send(control(AMP, view.notes.amp().distortion() ? 0 : 127)));
+                    () -> send(control(AMP, view.notes.amp().distortion() ? 0 : 127))).hint(tr("amp.help"));
             slider(width * .72f, 5.44f, width, 6.57f, v -> tr("amp.drive", Math.round(v * 100 / 127f) + "%"),
-                    0, 127, () -> view.notes.amp().drive(), v -> send(control(DRIVE, v)));
+                    0, 127, () -> view.notes.amp().drive(), v -> send(control(DRIVE, v))).hint(tr("amp.drive_help"));
             button(0, 1.55f, width * .32f, 2.72f, () -> tr("pickup." + view.notes.pickup()),
-                    () -> send(control(PICKUP, Math.round(((view.notes.pickup() + 1) % 5) * 127 / 4f))));
+                    () -> send(control(PICKUP, Math.round(((view.notes.pickup() + 1) % 5) * 127 / 4f)))).hint(tr("pickup_help"));
             slider(width * .33f, 1.55f, width * .53f, 2.72f, v -> tr("volume", v), 0, 127,
-                    () -> view.notes.volume(), v -> send(control(VOLUME, v)));
+                    () -> view.notes.volume(), v -> send(control(VOLUME, v))).hint(tr("volume_help"));
             slider(width * .54f, 1.55f, width * .76f, 2.72f, v -> tr("tone_neck", v), 0, 127,
-                    () -> view.notes.neckTone(), v -> send(control(TONE_NECK, v)));
+                    () -> view.notes.neckTone(), v -> send(control(TONE_NECK, v))).hint(tr("tone_neck_help"));
             slider(width * .77f, 1.55f, width, 2.72f, v -> tr("tone_bridge", v), 0, 127,
-                    () -> view.notes.bridgeTone(), v -> send(control(TONE_BRIDGE, v)));
+                    () -> view.notes.bridgeTone(), v -> send(control(TONE_BRIDGE, v))).hint(tr("tone_bridge_help"));
         }
         if (kind.bendsPitch()) {
             slider(0, 2.86f, whiteKeyCount() * .43f, 4, value -> tr("bend", value - CENTER_BEND),
                     0, 16383, () -> bendValue, value -> {
                         bendDragged = true;
                         bendTo(value);
-                    });
+                    }).hint(tr("bend_help"));
         } else if (kind.wind()) {
             slider(0, 2.86f, whiteKeyCount() * .50f, 4, value -> tr("air", value),
                     0, 127, () -> sentAir, value -> {
                         midiAir = value;
                         pedals();
-                    });
+                    }).hint(tr("air_help"));
         } else {
             slider(0, 1.55f, whiteKeyCount() * .76f, 2.85f, value -> tr("melodica.air", Math.round(value*100/127f)),
-                    0, 127, () -> sentAir, value -> { midiAir = value; pedals(); });
+                    0, 127, () -> sentAir, value -> { midiAir = value; pedals(); }).hint(tr("air_help"));
         }
         float left = whiteKeyCount() * .60f;
-        button(left, 2.86f, whiteKeyCount() - .1f, 4, this::midiName, this::nextMidi);
+        button(left, 2.86f, whiteKeyCount() - .1f, 4, midi::label, midi::next).hint(Component.translatable("keyboard.device_help"));
     }
 
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -223,7 +220,7 @@ final class WearableScreen extends KeysScreen {
             if (!notes.isEmpty()) notes.append(' ');
             notes.append(NOTE_NAMES[note % 12]).append(note / 12 - 1);
         }
-        Component air = sentAir == 0 ? tr("melodica.blow") : tr("melodica.air", Math.round(sentAir*100/127f));
+        Component air = tr("melodica.air", Math.round(sentAir*100/127f));
         String readout = notes.isEmpty() ? air.getString() : air.getString() + "  ·  " + notes;
         graphics.drawString(font, readout, 6, height-14, sentAir > 0 ? 0xFFC4E6FF : 0xFFD1D3D6, true);
     }
@@ -233,7 +230,7 @@ final class WearableScreen extends KeysScreen {
     @Override protected void draw(GuiGraphics g, double x, double y) {
         var stack = player.getItemInHand(hand);
         String status = keytar() ? tr("charge", Math.round(ChargeableItem.charge(stack) * 100) + "%").getString() : "";
-        String hints = kind.model == null ? tr("keys", tr(keytar() ? "keys.damper" : "keys.breath")).getString() : "";
+        String hints = kind.model == null ? tr(keytar() ? "keys" : "keys.notes").getString() : "";
         String name = title.getString();
         if (kind.model != null) {
             int hide = Math.round((font.width(Component.translatable("create_media_systems.keys.hide")) + 12) * textScale);
@@ -280,29 +277,10 @@ final class WearableScreen extends KeysScreen {
         var keys = Set.copyOf(midiNotes.values());
         midiNotes.clear();
         for (int note : keys) release(note);
-        midiAir = kind.wind() ? 127 : 0;
+        midiAir = 127;
         midiSustain = 0;
         pedals();
         if (kind.bendsPitch() && bendValue != CENTER_BEND) bendTo(CENTER_BEND);
-    }
-
-    private Component midiName() {
-        var status = midi.status();
-        return status.inputs().stream().filter(port -> port.id().equals(status.selected())).findFirst()
-                .map(port -> tr("midi", port.name())).orElseGet(() -> Component.translatable(status.message()));
-    }
-
-    private void nextMidi() {
-        var status = midi.status();
-        var ports = status.inputs();
-        int next = 0;
-        for (int i = 0; i < ports.size(); i++) {
-            if (ports.get(i).id().equals(status.selected())) {
-                next = i + 1;
-                break;
-            }
-        }
-        midi.select(next == ports.size() ? "" : ports.get(next).id());
     }
 
     private void midiMessage(ShortMessage message) {
@@ -320,8 +298,7 @@ final class WearableScreen extends KeysScreen {
                 }
             }
             case ShortMessage.CONTROL_CHANGE -> {
-                if ((kind.wind() || kind == Kind.MELODICA) && (number == BREATH || number == 11)
-                        || kind == Kind.MELODICA && number == SUSTAIN) midiAir = value;
+                if ((kind.wind() || kind == Kind.MELODICA) && (number == BREATH || number == 11)) midiAir = value;
                 else if (keytar() && number == SUSTAIN) midiSustain = value;
                 else if (kind == Kind.STRATOCASTER && (number == VOLUME || number == PICKUP || number == TONE_NECK
                         || number == TONE_BRIDGE || number == AMP || number == DRIVE)) {
@@ -355,38 +332,28 @@ final class WearableScreen extends KeysScreen {
                 send(control(SUSTAIN, value));
             }
         } else if (kind == Kind.MELODICA || kind.wind()) {
-            int value = kind == Kind.MELODICA && (space || mouseNote >= 0) ? 112 : midiAir;
-            if (value != sentAir) {
-                sentAir = value;
-                send(control(BREATH, value));
+            if (midiAir != sentAir) {
+                sentAir = midiAir;
+                send(control(BREATH, midiAir));
             }
         }
     }
 
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
-        if (key == GLFW.GLFW_KEY_SPACE && kind.model == null) {
+        if (key == GLFW.GLFW_KEY_SPACE && keytar()) {
             space = true;
             pedals();
             return true;
         }
-        int base = kind == Kind.STRATOCASTER ? 40 : keytar() ? 48 : 60;
-        if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT) {
-            int min = kind.model == null ? (keytar() ? -2 : -1) : Math.floorDiv(kind.first - base, 12);
-            int max = kind.model == null ? (keytar() ? 2 : 1) : Math.max(0, Math.ceilDiv(kind.last() - base - COMPUTER.length + 1, 12));
-            octaves = Mth.clamp(octaves + (key == GLFW.GLFW_KEY_LEFT ? -1 : 1), min, max);
-            return true;
-        }
-        for (int i = 0; i < COMPUTER.length; i++) {
-            if (key != COMPUTER[i]) continue;
-            int note = base + 12 * octaves + i;
-            if (note >= kind.first && note <= kind.last() && typed.putIfAbsent(key, note) == null) press(note, 96);
-            return true;
-        }
-        return super.keyPressed(key, scan, modifiers);
+        if (octaveKey(key, lowest, highest)) return true;
+        int note = typedNote(key);
+        if (note < 0) return super.keyPressed(key, scan, modifiers);
+        if (note >= kind.first && note <= kind.last() && typed.putIfAbsent(key, note) == null) press(note, KEY_VELOCITY);
+        return true;
     }
 
     @Override public boolean keyReleased(int key, int scan, int modifiers) {
-        if (key == GLFW.GLFW_KEY_SPACE && kind.model == null) {
+        if (key == GLFW.GLFW_KEY_SPACE && keytar()) {
             space = false;
             pedals();
             return true;
@@ -395,6 +362,12 @@ final class WearableScreen extends KeysScreen {
         if (note == null) return super.keyReleased(key, scan, modifiers);
         release(note);
         return true;
+    }
+
+    @Override protected void releaseComputer() {
+        for (int key : List.copyOf(typed.keySet())) keyReleased(key, 0, 0);
+        if (space) keyReleased(GLFW.GLFW_KEY_SPACE, 0, 0);
+        if (mouseNote >= 0 || bendDragged) mouseReleased(0, 0, 0);
     }
 
     @Override public boolean mouseClicked(double x, double y, int button) {
@@ -408,12 +381,6 @@ final class WearableScreen extends KeysScreen {
     }
 
     @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
-        if (hidden && (kind.model != null || kind == Kind.MELODICA) && button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            double sensitivity = minecraft.options.sensitivity().get() * .6 + .2;
-            double scale = pixel * 8 * sensitivity * sensitivity * sensitivity;
-            player.turn(dx * scale, dy * scale * (minecraft.options.invertYMouse().get() ? -1 : 1));
-            return true;
-        }
         if (mouseNote < 0) return super.mouseDragged(x, y, button, dx, dy);
         int next = keyAt(x * pixel, y * pixel);
         if (next >= 0 && next != mouseNote) {
@@ -450,7 +417,6 @@ final class WearableScreen extends KeysScreen {
 
     @Override public void removed() {
         if (guitarInput != null) stopGuitar();
-        preferred = midi.preference();
         midi.close();
         send(control(RELEASE_KEYS, 0));
         send(WearablePackets.CLOSE);

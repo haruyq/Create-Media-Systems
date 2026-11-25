@@ -14,6 +14,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -43,6 +44,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.haruyq.createmediasystems.OwnNotes;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.piano.PianoPlacement;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Cymbal;
@@ -54,7 +56,7 @@ import org.jetbrains.annotations.Nullable;
 public final class StageCustomBlock extends Block implements EntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public static final EnumProperty<Part> PART = EnumProperty.create("part", Part.class);
-    static final BooleanProperty LARGE = BooleanProperty.create("large");
+    public static final BooleanProperty LARGE = BooleanProperty.create("large");
     private static final float LARGE_SCALE = 1.5f;
     private static final Set<Part> ORIGINAL_PARTS = Set.of(Part.ROOT, Part.LEFT, Part.LEFT_REAR);
     private static final Set<Part> COMPLETE_ORIGINAL_PARTS = Set.of(Part.ROOT, Part.LEFT, Part.LEFT_REAR,
@@ -200,6 +202,10 @@ public final class StageCustomBlock extends Block implements EntityBlock {
         if (!(level.getBlockEntity(root) instanceof Entity entity) || !samePart(entity.getBlockState(), state, Part.ROOT)) {
             return InteractionResult.PASS;
         }
+        if (player.isShiftKeyDown()) {
+            if (player instanceof ServerPlayer server) StageCustomMidi.open(server, root);
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        }
         Vec3 eye = SableCompat.eye(player, 1);
         Vec3 localEye = SableCompat.toBlockSpace(level, root, eye);
         Vec3 localHit = SableCompat.hitInBlockSpace(level, pos, click.getLocation());
@@ -208,29 +214,25 @@ public final class StageCustomBlock extends Block implements EntityBlock {
         Vec3 modelDirection = StageCustomLayout.toModel(facing, localHit.subtract(localEye)).normalize();
         double reach = (player.blockInteractionRange() + .08) / scale;
         var hit = StageCustomLayout.aim(modelEye, modelDirection, reach);
-        int velocity = player.isShiftKeyDown() ? 59 : 110;
+        int velocity = 110;
         if (isComplete(state)) {
             var cymbal = StageCustomCymbals.aim(modelEye, modelDirection, reach, entity.hatOpen());
             var pedal = StageCustomCymbals.aimPedal(modelEye, modelDirection, reach);
             double drumDistance = hit == null ? Double.POSITIVE_INFINITY : hit.distance();
             double cymbalDistance = cymbal == null ? Double.POSITIVE_INFINITY : cymbal.distance();
             if (pedal != null && pedal.distance() < Math.min(drumDistance, cymbalDistance)) {
-                if (!level.isClientSide) {
-                    if (pedal.pedal() == Pedal.KICK) entity.strike(Drum.BASS, 0, 0, velocity);
-                    else entity.toggleHat(player);
-                }
+                // The client cannot know the hat's state as the server sees it, so only the server toggles it.
+                if (pedal.pedal() == Pedal.KICK) entity.strike(Drum.BASS, 0, 0, velocity);
+                else if (!level.isClientSide) entity.toggleHat(player);
                 return InteractionResult.sidedSuccess(level.isClientSide);
             }
             if (cymbal != null && cymbalDistance < drumDistance) {
-                if (!level.isClientSide) {
-                    if (cymbal.cymbal() == Cymbal.HI_HAT && player.isShiftKeyDown()) entity.toggleHat(player);
-                    else entity.strikeCymbal(cymbal, velocity);
-                }
+                entity.strikeCymbal(cymbal, velocity);
                 return InteractionResult.sidedSuccess(level.isClientSide);
             }
         }
         if (hit == null) return InteractionResult.PASS;
-        if (!level.isClientSide) entity.strike(hit.drum(), hit.u(), hit.v(), velocity);
+        entity.strike(hit.drum(), hit.u(), hit.v(), velocity);
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
@@ -320,6 +322,7 @@ public final class StageCustomBlock extends Block implements EntityBlock {
         public record CymbalStrike(Cymbal cymbal, Voice voice, float u, float v, float strength, int hand, long time) {}
         private final ArrayDeque<Strike> strikes = new ArrayDeque<>();
         private final ArrayDeque<CymbalStrike> cymbalStrikes = new ArrayDeque<>();
+        private final OwnNotes own = new OwnNotes();
         private int nextHand;
         private boolean hatOpen;
 
@@ -374,24 +377,31 @@ public final class StageCustomBlock extends Block implements EntityBlock {
         }
 
         void strike(Drum drum, float u, float v, int velocity) {
-            if (level == null || level.isClientSide) return;
+            if (level == null) return;
             int hand = nextHand++ & 1;
             int strength = visualStrength(velocity);
             // Vanilla carries both arguments as unsigned bytes.
             int id = drum.ordinal() | hand << 3 | strength << 4;
             int value = encode(u) | encode(v) << 4;
-            level.blockEvent(worldPosition, getBlockState().getBlock(), id, value);
+            animate(id, value);
             StageCustomMidi.broadcast(this, StageCustomMidi.note(drum), velocity);
         }
 
         void strikeCymbal(StageCustomCymbals.Hit hit, int velocity) {
-            if (level == null || level.isClientSide || !isComplete(getBlockState())) return;
+            if (level == null || !isComplete(getBlockState())) return;
             int pad = DRUMS.length + hit.cymbal().ordinal();
             int id = pad | (nextHand++ & 1) << 3 | visualStrength(velocity) << 4;
             int value = encodeCymbal(hit.u()) | encodeCymbal(hit.v()) << 3;
             if (hit.voice() == Voice.HAT_OPEN || hit.voice() == Voice.RIDE_BELL) value |= 0x40;
-            level.blockEvent(worldPosition, getBlockState().getBlock(), id, value);
+            animate(id, value);
             StageCustomMidi.broadcast(this, StageCustomMidi.note(hit.voice()), velocity);
+        }
+
+        private void animate(int id, int value) {
+            if (!level.isClientSide) level.blockEvent(worldPosition, getBlockState().getBlock(), id, value);
+            // The striker's client shows its own hit at once and skips the server's echo of it. The server picks its
+            // own hand, and its aim may round u and v differently, so only the pad and strength identify the echo.
+            else if (receive(id, value)) own.add(id & ~8, System.nanoTime());
         }
 
         private static int visualStrength(int velocity) {
@@ -408,6 +418,10 @@ public final class StageCustomBlock extends Block implements EntityBlock {
 
         @Override
         public boolean triggerEvent(int id, int value) {
+            return level != null && level.isClientSide && own.echo(id & ~8, System.nanoTime()) || receive(id, value);
+        }
+
+        private boolean receive(int id, int value) {
             int pad = id & 7, velocity = id >>> 4;
             if (velocity == 0 || velocity > 15) return super.triggerEvent(id, value);
             if (pad >= DRUMS.length) {

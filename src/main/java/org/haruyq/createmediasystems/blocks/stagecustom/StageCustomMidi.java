@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.OwnNotes;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomCymbals.Voice;
@@ -24,7 +25,10 @@ import org.jetbrains.annotations.Nullable;
 public final class StageCustomMidi {
     private static final int HEARING_RANGE = 16;
     private static final Map<ServerPlayer, InputRate> INPUTS = new WeakHashMap<>();
+    private static final InputRate LOCAL = new InputRate();
+    private static final OwnNotes OWN = new OwnNotes();
     private static Consumer<Hit> playback = hit -> {};
+    private static Consumer<BlockPos> opener = root -> {};
 
     private StageCustomMidi() {}
 
@@ -82,6 +86,10 @@ public final class StageCustomMidi {
         playback = handler;
     }
 
+    public static void opener(Consumer<BlockPos> handler) {
+        opener = handler;
+    }
+
     @Nullable
     public static StageCustomBlock.Entity reachable(Player player, BlockPos root) {
         if (!player.isAlive() || player.isSpectator()) return null;
@@ -107,19 +115,38 @@ public final class StageCustomMidi {
         public Type<Played> type() { return TYPE; }
     }
 
+    record Open(BlockPos root) implements CustomPacketPayload {
+        private static final Type<Open> TYPE = new Type<>(CreateMediaSystems.id("stage_custom_open"));
+        private static final StreamCodec<ByteBuf, Open> CODEC = BlockPos.STREAM_CODEC.map(Open::new, Open::root);
+
+        @Override
+        public Type<Open> type() { return TYPE; }
+    }
+
     static void register(PayloadRegistrar registrar) {
         registrar.playToServer(Hit.TYPE, Hit.CODEC, (packet, context) -> {
             if (context.player() instanceof ServerPlayer player) strike(player, packet);
         });
         registrar.playToClient(Played.TYPE, Played.CODEC, (packet, context) -> {
-            if (valid(packet.hit())) playback.accept(packet.hit());
+            if (valid(packet.hit()) && !OWN.echo(packet.hit(), System.nanoTime())) playback.accept(packet.hit());
         });
+        registrar.playToClient(Open.TYPE, Open.CODEC, (packet, context) -> opener.accept(packet.root()));
+    }
+
+    static void open(ServerPlayer player, BlockPos root) {
+        if (reachable(player, root) != null) PacketDistributor.sendToPlayer(player, new Open(root));
     }
 
     static void broadcast(StageCustomBlock.Entity kit, int note, int velocity) {
-        if (!(kit.getLevel() instanceof ServerLevel level)) return;
+        var hit = new Hit(kit.getBlockPos(), note, velocity);
+        if (!(kit.getLevel() instanceof ServerLevel level)) {
+            // The striker's client hears its own hit at once and skips the server's echo of it.
+            playback.accept(hit);
+            OWN.add(hit, System.nanoTime());
+            return;
+        }
         var position = SableCompat.toWorld(level, kit.getBlockPos(), origin(kit));
-        var played = new Played(new Hit(kit.getBlockPos(), note, velocity));
+        var played = new Played(hit);
         for (var player : level.players()) {
             if (SableCompat.eye(player, 1).distanceToSqr(position) <= HEARING_RANGE * HEARING_RANGE) {
                 PacketDistributor.sendToPlayer(player, played);
@@ -131,12 +158,14 @@ public final class StageCustomMidi {
         return (drum(hit.note()) != null || voice(hit.note()) != null) && hit.velocity() >= 1 && hit.velocity() <= 127;
     }
 
-    static boolean strike(ServerPlayer player, Hit hit) {
+    /** Plays the hit on the server, or on the striker's client ahead of the server's echo. */
+    public static boolean strike(Player player, Hit hit) {
         if (!valid(hit)) return false;
         var kit = reachable(player, hit.root());
         Voice cymbal = voice(hit.note());
+        var rate = player instanceof ServerPlayer server ? INPUTS.computeIfAbsent(server, ignored -> new InputRate()) : LOCAL;
         if (kit == null || (cymbal != null && !StageCustomBlock.isComplete(kit.getBlockState()))
-                || !INPUTS.computeIfAbsent(player, ignored -> new InputRate()).take(player.tickCount)) return false;
+                || !rate.take(player.tickCount)) return false;
         if (cymbal == null) {
             kit.strike(drum(hit.note()), 0, 0, hit.velocity());
         } else if (cymbal == Voice.HAT_PEDAL) {

@@ -60,17 +60,11 @@ public class InstrumentItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        if (kind != Kind.STRATOCASTER) return;
         var links = GuitarPatch.get(stack).links();
-        if (links.isEmpty()) {
-            tooltip.add(Component.translatable("guitar_patch.create_media_systems.hint").withStyle(ChatFormatting.GRAY));
-        } else {
-            for (int i = 0; i < links.size(); i++) {
-                var link = links.get(i);
-                tooltip.add(Component.translatable("guitar_patch.create_media_systems.link", i + 1, link.effect().displayName(),
-                        link.location().pos().toShortString()).withStyle(ChatFormatting.GRAY));
-            }
-            tooltip.add(Component.translatable("guitar_patch.create_media_systems.clear_hint").withStyle(ChatFormatting.DARK_GRAY));
+        for (int i = 0; i < links.size(); i++) {
+            var link = links.get(i);
+            tooltip.add(Component.translatable("guitar_patch.create_media_systems.link", i + 1, link.effect().displayName(),
+                    link.location().pos().toShortString()).withStyle(ChatFormatting.GRAY));
         }
     }
 

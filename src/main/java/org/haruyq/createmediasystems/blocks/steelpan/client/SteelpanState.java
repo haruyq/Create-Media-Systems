@@ -30,6 +30,13 @@ public final class SteelpanState {
         return impact;
     }
 
+    /** The mallet whose last stroke is oldest, so own strikes alternate and seldom wait on a stroke in flight. */
+    int freeHand() {
+        long[] last = {Long.MIN_VALUE, Long.MIN_VALUE};
+        for (var s : strokes) last[s.hand()] = Math.max(last[s.hand()], s.impact());
+        return last[1] < last[0] ? 1 : 0;
+    }
+
     long schedule(int midi, float velocity, int hand, long now) {
         long impact = now + PREPARE;
         for (var stroke : strokes) {

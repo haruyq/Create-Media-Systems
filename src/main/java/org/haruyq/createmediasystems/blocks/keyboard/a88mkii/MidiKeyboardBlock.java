@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicLongArray;
 
+import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.LiveSource;
@@ -163,8 +164,8 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
     }
 
     public static class Entity extends BlockEntity implements LiveSource {
-        /** How far (blocks) its player may be from it, and how far it is heard without a speaker. */
-        public static final double REACH = 6, RANGE = 32;
+        /** How far (blocks) it is heard without a speaker. */
+        public static final double RANGE = 32;
         /**
          * Every keyboard a client has loaded, for what plays and works them there (see keyboard.client); on the
          * client's thread. Weakly: a Ponder scene's world never says its blocks are gone.
@@ -259,7 +260,7 @@ public class MidiKeyboardBlock extends HorizontalDirectionalBlock implements Ent
 
         private boolean inReach(ServerPlayer player) {
             return player.level() == level && player.isAlive() && !player.isSpectator()
-                    && SableCompat.eye(player, 1).distanceToSqr(center()) <= REACH * REACH;
+                    && SableCompat.eye(player, 1).distanceToSqr(center()) <= Reach.HAND * Reach.HAND;
         }
 
         /** Its player set its panel to {@code bytes}. */

@@ -51,7 +51,7 @@ public final class SteelpanPonder {
         scene.overlay().showControls(bowl, Pointing.DOWN, 40).rightClick().whileSneaking();
         scene.idle(10);
         say(scene, 130, bowl, "Sneak-right-click it to open its screen. There, click a field with the mouse or press the key shown on it. A real MIDI keyboard plugged into the computer plays it too.");
-        say(scene, 100, bowl, "On the screen, a click lower down in a field, or a key pressed while holding Shift, strikes the note harder.");
+        say(scene, 100, bowl, "On the screen, a click lower down in a field strikes the note harder, and a key pressed while holding Shift strikes it softer.");
 
         melody(scene, pan, bowl);
         say(scene, 110, bowl, PonderPalette.GREEN, "Anyone within 8 blocks can play it, and everyone within 32 blocks hears it, more quietly the farther away they are.");
