@@ -32,8 +32,8 @@ public final class TurntableLayout {
     /** The lift lever's pivot, and how far it turns up. */
     public static final double CUE_Y = 3.55, CUE_Z = 5.2;
     public static final float CUE_DEGREES = 28;
-    /** The dust cover's hinge line, and how far it opens. */
-    public static final double HINGE_Y = 3.6, HINGE_Z = 0.5;
+    /** The dust cover's hinge line (its hinges' back bottom edge, on top of their seats), and how far it opens. */
+    public static final double HINGE_Y = 3.2, HINGE_Z = 0.05;
     public static final float COVER_DEGREES = 78;
     /** The lamps of the control unit's power, 33 and 45 keys (x, z; on its top). */
     public static final double[][] LAMPS = {{10.175, 13.75}, {11.725, 13.75}, {13.275, 13.75}};

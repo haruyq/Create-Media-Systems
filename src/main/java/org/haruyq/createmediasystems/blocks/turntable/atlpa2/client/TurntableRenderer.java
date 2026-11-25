@@ -48,6 +48,8 @@ public final class TurntableRenderer implements BlockEntityRenderer<TurntableBlo
             VINYL = CreateMediaSystems.id("block/turntable/record"), LABEL = CreateMediaSystems.id("block/turntable/record_label");
     private static final int SEGMENTS = 128, POST_SEGMENTS = 32, WHITE = 0xFFFFFFFF;
     private static final float CX = (float) CENTER_X, CZ = (float) CENTER_Z;
+    /** The belt's bottom and top round the platter's rim (sixteenths); gen_at_lpa2.py draws its run to the motor. */
+    private static final float[] BELT = {3.18f, 3.32f};
     /**
      * The round posts, drawn smooth here (the item's model has them as boxes, see tools/at_lpa2/gen_at_lpa2.py):
      * x, z, radius, bottom, top (sixteenths), and 1 for black rubber, else aluminium. They are the four feet with
@@ -169,23 +171,31 @@ public final class TurntableRenderer implements BlockEntityRenderer<TurntableBlo
         }
     }
 
-    /** The clear platter: a thick acrylic disc, the belt round its rim. */
+    /** The clear platter: a thick acrylic disc, and the thin belt round its rim. */
     private static void platter(PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
         TextureAtlasSprite sprite = sprite(TEXTURE);
         VertexConsumer out = buffers.getBuffer(Sheets.translucentCullBlockSheet());
         float r = (float) PLATTER_RADIUS, top = (float) PLATTER_TOP / 16, bottom = (float) PLATTER_BOTTOM / 16;
-        // Acrylic (the texture's first material) on its faces, the black belt (its fourth) on its rim.
+        // Acrylic (the texture's first material) on its faces, its cut edge (the second) on its rim.
         ring(pose, out, sprite, CX, CZ, SEGMENTS, .125f, .125f, .12f / r, 0, r, top, 1, WHITE, light, overlay);
         ring(pose, out, sprite, CX, CZ, SEGMENTS, .125f, .125f, .12f / r, 0, r, bottom, -1, WHITE, light, overlay);
-        float u0 = sprite.getU(.76f), u1 = sprite.getU(.99f), v0 = sprite.getV(.01f), v1 = sprite.getV(.24f);
+        band(pose, out, sprite, r, bottom, top, .26f, light, overlay);
+        // The belt (the texture's fourth material, black) a hair outside the rim, as high as the model's belt.
+        band(pose, buffers.getBuffer(Sheets.cutoutBlockSheet()), sprite, r + .02f, BELT[0] / 16, BELT[1] / 16, .76f, light, overlay);
+    }
+
+    /** A round band facing out, radius {@code r} (sixteenths) about the spindle, textured from the material at u0. */
+    private static void band(PoseStack pose, VertexConsumer out, TextureAtlasSprite sprite, float r, float bottom, float top,
+            float u0, int light, int overlay) {
+        float u = sprite.getU(u0), u1 = sprite.getU(u0 + .23f), v0 = sprite.getV(.01f), v1 = sprite.getV(.24f);
         float cx = (float) CENTER_X / 16, cz = (float) CENTER_Z / 16, rim = r / 16;
         for (int i = 0; i < SEGMENTS; i++) {
             float[] a = corner(i, SEGMENTS), b = corner(i + 1, SEGMENTS);
             float nx = (a[0] + b[0]) / 2, nz = (a[1] + b[1]) / 2;
-            vertex(pose, out, cx + a[0] * rim, top, cz + a[1] * rim, u0, v0, nx, 0, nz, WHITE, light, overlay);
+            vertex(pose, out, cx + a[0] * rim, top, cz + a[1] * rim, u, v0, nx, 0, nz, WHITE, light, overlay);
             vertex(pose, out, cx + b[0] * rim, top, cz + b[1] * rim, u1, v0, nx, 0, nz, WHITE, light, overlay);
             vertex(pose, out, cx + b[0] * rim, bottom, cz + b[1] * rim, u1, v1, nx, 0, nz, WHITE, light, overlay);
-            vertex(pose, out, cx + a[0] * rim, bottom, cz + a[1] * rim, u0, v1, nx, 0, nz, WHITE, light, overlay);
+            vertex(pose, out, cx + a[0] * rim, bottom, cz + a[1] * rim, u, v1, nx, 0, nz, WHITE, light, overlay);
         }
     }
 

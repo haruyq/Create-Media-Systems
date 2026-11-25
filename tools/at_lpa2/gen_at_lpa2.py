@@ -180,17 +180,18 @@ def base():
     e = [box([0.5, 1.25, 0.5], [15.5, 2.5, 12.5], ACRYL)]
     # Inside the clear plinth: the rotation sensor under the platter's bearing.
     e.append(box([7.5, 1.35, 6.1], [8.7, 1.55, 6.9], CART))
-    # The belt from the motor's pulley to the platter's rim (at 45 degrees).
+    # The belt from the motor's pulley to the platter's rim (at 45 degrees); the renderer draws it round the rim at
+    # the same height (TurntableRenderer.BELT).
     for side in (-1, 1):
         ox, oz = 1.9 + .55 + side * .3, 11.1 - .55 + side * .3
-        e.append(box([ox - .06, 3.1, oz - .5], [ox + .06, 3.4, oz + .5], BLACK, (-45, [ox, 3.1, oz])))
+        e.append(box([ox - .06, 3.18, oz - .5], [ox + .06, 3.32, oz + .5], BLACK, (-45, [ox, 3.18, oz])))
     # The tonearm's rest, and the lift lever's post.
     e.append(box([12.95, 2.5, 9.0], [13.45, 4.4, 9.5], ALU))
     e.append(box([12.75, 4.4, 8.9], [13.65, 4.5, 9.6], BLACK))
     e.append(box([14.75, 2.5, 4.95], [15.25, 3.55, 5.45], ALU))
-    # The dust cover's hinge seats on the back of the plinth.
+    # The dust cover's hinge seats on the back face of the plinth, behind the cover's back wall.
     for x in (2.5, 12.0):
-        e.append(box([x, 2.5, 0.5], [x + 1.5, 3.3, 1.2], BLACK))
+        e.append(box([x, 1.6, 0.05], [x + 1.5, 3.2, 0.49], BLACK))
     # The control unit before the plinth: four keys on its top (power, 33, 45, start/stop) and three lamps.
     e.append(box([9.4, 0, 13.0], [15.6, 2.0, 15.8], ALU))
     e.append(box([9.6, 2.0, 13.2], [15.4, 2.05, 15.6], BLACK, faces=["up"]))
@@ -229,8 +230,10 @@ def cover():
          box([0.5, 2.5, 0.5], [15.5, 5.75, 0.75], ACRYL_EDGE),
          box([0.5, 2.5, 0.75], [0.75, 5.75, 12.25], ACRYL_EDGE),
          box([15.25, 2.5, 0.75], [15.5, 5.75, 12.25], ACRYL_EDGE)]
+    # Its hinges, behind its back wall, on their seats: they turn about their back bottom edge (TurntableLayout.HINGE_Y
+    # and HINGE_Z), so they lift off their seats as the cover opens and never swing into them.
     for x in (2.5, 12.0):
-        e.append(box([x, 3.3, 0.25], [x + 1.5, 4.8, 0.75], BLACK))
+        e.append(box([x, 3.2, 0.05], [x + 1.5, 4.8, 0.49], BLACK))
     return e
 
 
