@@ -157,7 +157,10 @@ public final class TurntableClient implements ClientFeature {
         }
     }
 
-    /** A turntable playing its record, as this listener hears it. */
+    /**
+     * A turntable playing a music disc, as this listener hears it. A Custom Disc's link it plays as a source instead,
+     * with its linked speakers (see TurntableBlock.Entity#nowPlaying).
+     */
     private record Deck(TurntableBlock.Entity turntable) implements MusicEmitter {
         static Stream<Deck> near(Entity ear) {
             return LOADED.stream().filter(turntable -> turntable.getLevel() == ear.level()).map(Deck::new);
@@ -180,7 +183,8 @@ public final class TurntableClient implements ClientFeature {
 
         @Override
         public boolean present() {
-            return !turntable.isRemoved() && turntable.playing() && WorldEvents.isClientWorld(turntable.getLevel());
+            return !turntable.isRemoved() && turntable.playing() && turntable.link() == null
+                    && WorldEvents.isClientWorld(turntable.getLevel());
         }
 
         @Override

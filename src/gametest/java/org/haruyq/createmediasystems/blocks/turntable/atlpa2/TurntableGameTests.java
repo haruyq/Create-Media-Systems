@@ -6,7 +6,11 @@ import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.blocks.audio.AudioFeature;
 import org.haruyq.createmediasystems.blocks.component.m700.HifiLayout;
 import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableLayout.Part;
+import org.haruyq.createmediasystems.blocks.audio.SpeakerBlock;
 import org.haruyq.createmediasystems.disc.DiscFeature;
+import org.haruyq.createmediasystems.stream.DiscUrl;
+import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Streams;
 
 import com.mojang.authlib.GameProfile;
 
@@ -102,8 +106,9 @@ public final class TurntableGameTests {
     }
 
     /**
-     * Switched on and started, with the arm off its rest and the lever down, the record plays once the platter is up
-     * to speed and the needle has come down; START/STOP stops it where it is, and raising the lever does too.
+     * Switched on and started, with the arm taken off its rest (which sets the needle down), the record plays once
+     * the platter is up to speed and the needle has come down; START/STOP stops it where it is, and raising the
+     * lever does too.
      */
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void theRecordPlaysWhileTheNeedleIsDownOnTheTurningPlatter(GameTestHelper h) {
@@ -116,10 +121,9 @@ public final class TurntableGameTests {
         deck.click(Part.POWER);
         deck.click(Part.START_STOP);
         deck.click(Part.ARM);
-        deck.click(Part.LIFT);
         TurntableBlock.Entity turntable = deck.turntable();
         h.assertTrue(turntable.turning() && !turntable.onRest() && !turntable.raised() && !turntable.playing(),
-                "Started, the arm over the record and the lever down: the needle is still on its way down");
+                "Started, the arm taken off its rest sets the needle down: it is still on its way down");
         int waited = Math.max(TurntableBlock.Entity.SPIN_UP_TICKS, TurntableBlock.Entity.DROP_TICKS) + 2;
         h.runAfterDelay(waited, () -> {
             h.assertTrue(turntable.playing(), "Up to speed with the needle down, it plays");
@@ -145,9 +149,89 @@ public final class TurntableGameTests {
     }
 
     /**
-     * Right-clicking a spot of the record sets the arm over the groove there: half way across is half way through
-     * the track. Lowered, it plays on from there; at 45 the needle runs through the record 35 % faster, and at the
-     * run-out it stops.
+     * Left off its rest with the lever up (as a player leaves it who never found the lever), a click on the record
+     * sets the needle down there and it plays; the lift lever still raises and lowers it.
+     */
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void aClickOnTheRecordSetsTheNeedleDown(GameTestHelper h) {
+        Deck deck = Deck.place(h, Direction.NORTH);
+        deck.click(Part.COVER);
+        TurntableBlock.Entity turntable = deck.turntable();
+        turntable.arrange(new ItemStack(Items.MUSIC_DISC_CAT), true, true, TurntableBlock.Speed.RPM_33, false, true, 0, CAT);
+        deck.clickGroove(.2);
+        int waited = TurntableBlock.Entity.DROP_TICKS + 2;
+        h.runAfterDelay(waited, () -> {
+            h.assertTrue(turntable.playing() && !turntable.raised() && turntable.seconds(deck.now()) >= CAT * .2,
+                    "The needle came down where the record was clicked, and it plays: " + turntable.seconds(deck.now()));
+            deck.click(Part.LIFT);
+            double held = turntable.seconds(deck.now());
+            h.assertTrue(!turntable.playing() && turntable.raised(), "The lever raises it and it stops");
+            deck.click(Part.LIFT);
+            h.runAfterDelay(waited, () -> {
+                h.assertTrue(turntable.playing() && Math.abs(turntable.seconds(deck.now()) - held) < .2,
+                        "The lever sets it down again where it was: " + turntable.seconds(deck.now()) + " against " + held);
+                h.succeed();
+            });
+        });
+    }
+
+    /**
+     * A speaker linked to the turntable plays its Custom Disc's link: from where the needle came down, not while the
+     * needle is up, and from the groove clicked, as a new load its listeners start over on.
+     */
+    @GameTest(template = "empty", timeoutTicks = 300)
+    public static void aLinkedSpeakerPlaysWhatTheNeedlePlays(GameTestHelper h) {
+        Deck deck = Deck.place(h, Direction.NORTH);
+        deck.click(Part.COVER);
+        TurntableBlock.Entity turntable = deck.turntable();
+        String url = new DiscUrl(UUID.randomUUID(), UUID.randomUUID()).toString();
+        ItemStack disc = new ItemStack(AudioFeature.CUSTOM_DISC.get());
+        disc.set(AudioFeature.URL.get(), url);
+        double length = 180;
+        turntable.arrange(disc, true, true, TurntableBlock.Speed.RPM_33, false, true, 0, length);
+        BlockPos speakerAt = h.absolutePos(new BlockPos(4, 2, 1));
+        h.getLevel().setBlockAndUpdate(speakerAt, AudioFeature.SPEAKER.get().defaultBlockState());
+        var speaker = (SpeakerBlock.Entity) h.getLevel().getBlockEntity(speakerAt);
+        h.assertTrue(turntable instanceof org.haruyq.createmediasystems.stream.MediaSource, "A speaker quill takes it for a source");
+        speaker.configure(h.getLevel(), deck.pos, 1, Streams.Channel.MIX);
+        h.assertTrue(Streams.source(h.getLevel(), deck.pos) == null, "Nothing plays with the needle up");
+
+        deck.clickGroove(.5);
+        // The needle comes down; its listeners load the track (no one is near: a second), and the speaker relays it.
+        int settle = TurntableBlock.Entity.DROP_TICKS + 3 * Streams.RELAY_TICKS;
+        h.runAfterDelay(settle, () -> {
+            Streams.Source playing = Streams.source(h.getLevel(), deck.pos);
+            double from = length / 2 * PlaybackClock.TICKS_PER_SECOND;
+            h.assertTrue(turntable.playing() && playing != null && playing.url().equals(url)
+                    && playing.ticks() >= from && playing.ticks() < from + 2 * PlaybackClock.TICKS_PER_SECOND,
+                    "It plays the link from where the needle came down: " + (playing == null ? null : playing.ticks()));
+            h.assertTrue(Streams.emitters(h.getLevel(), deck.pos).contains(speaker), "The speaker plays it");
+            h.assertTrue(Math.abs(playing.ticks() / (double) PlaybackClock.TICKS_PER_SECOND - turntable.seconds(deck.now())) < .1,
+                    "The needle is where the speaker's track is");
+            long load = Streams.loadId(turntable);
+
+            deck.click(Part.LIFT);
+            h.assertTrue(Streams.source(h.getLevel(), deck.pos) == null, "With the needle up it plays nothing");
+            h.runAfterDelay(Streams.RELAY_TICKS + 1, () -> {
+                h.assertFalse(Streams.emitters(h.getLevel(), deck.pos).contains(speaker), "And the speaker stops");
+
+                deck.clickGroove(.25);
+                h.runAfterDelay(settle, () -> {
+                    Streams.Source sought = Streams.source(h.getLevel(), deck.pos);
+                    double at = length / 4 * PlaybackClock.TICKS_PER_SECOND;
+                    h.assertTrue(sought != null && sought.ticks() >= at && sought.ticks() < at + 2 * PlaybackClock.TICKS_PER_SECOND
+                            && Streams.loadId(turntable) > load && Streams.emitters(h.getLevel(), deck.pos).contains(speaker),
+                            "From the groove clicked, as a new load the speaker plays: " + (sought == null ? null : sought.ticks()));
+                    h.succeed();
+                });
+            });
+        });
+    }
+
+    /**
+     * Right-clicking a spot of the record sets the needle down in the groove there: half way across is half way
+     * through the track, and it plays on from there; at 45 the needle runs through the record 35 % faster, and at
+     * the run-out it stops.
      */
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void theArmSeeksToTheGrooveClicked(GameTestHelper h) {
@@ -163,10 +247,10 @@ public final class TurntableGameTests {
         h.runAfterDelay(25, () -> {
             h.assertTrue(turntable.length() == CAT, "It knows the record is " + CAT + " s: " + turntable.length());
             deck.clickGroove(.5);
-            h.assertTrue(Math.abs(turntable.seconds(deck.now()) - CAT / 2) < 1e-6 && turntable.raised(),
-                    "Half way across the record is half way through: " + turntable.seconds(deck.now()));
+            h.assertTrue(Math.abs(turntable.seconds(deck.now()) - CAT / 2) < 1e-6 && !turntable.raised()
+                    && !turntable.playing(), "Half way across the record is half way through, the needle on its way down: "
+                    + turntable.seconds(deck.now()));
             deck.click(Part.SPEED_45);
-            deck.click(Part.LIFT);
             long lowered = deck.now();
             h.runAfterDelay(TurntableBlock.Entity.DROP_TICKS + 20, () -> {
                 double ran = (deck.now() - lowered - TurntableBlock.Entity.DROP_TICKS) / 20.0 * 1.35;
@@ -174,7 +258,6 @@ public final class TurntableGameTests {
                 h.assertTrue(turntable.playing() && Math.abs(at - (CAT / 2 + ran)) < .2,
                         "At 45 it plays on from there 35 % fast: " + at + " against " + (CAT / 2 + ran));
                 deck.clickGroove(1);
-                deck.click(Part.LIFT);
                 h.runAfterDelay(TurntableBlock.Entity.DROP_TICKS + 5, () -> {
                     h.assertTrue(!turntable.playing() && turntable.seconds(deck.now()) == CAT,
                             "At the run-out the needle stays down and nothing plays");

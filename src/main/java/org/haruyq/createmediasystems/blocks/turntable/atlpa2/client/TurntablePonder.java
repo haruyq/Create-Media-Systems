@@ -60,7 +60,7 @@ final class TurntablePonder {
         scene.overlay().showControls(platter, Pointing.DOWN, 40).rightClick().withItem(disc);
         scene.idle(15);
         arrange(scene, pos, disc, false, false, Speed.RPM_33, true, true, 0);
-        say(scene, 130, platter, "With the arm on its rest, right-click the platter with a music disc or a Custom Disc to put the record on. An empty hand takes it off again.");
+        say(scene, 130, platter, "With the arm on its rest, right-click the platter with a music disc or a Custom Disc to put the record on. An empty hand takes it off again. Speakers linked to the turntable with a Jukebox Range Quill play a Custom Disc with it.");
 
         Vec3 power = point(pos, Part.POWER.x0 + .8, 2.3, 14.7);
         Vec3 start = point(pos, Part.START_STOP.x0 + .8, 2.3, 14.7);
@@ -75,24 +75,23 @@ final class TurntablePonder {
         Vec3 arm = point(pos, TurntableLayout.PIVOT_X, 4.6, 9);
         scene.overlay().showControls(arm, Pointing.DOWN, 30).rightClick();
         scene.idle(10);
-        arrange(scene, pos, disc, true, true, Speed.RPM_33, false, true, 0);
-        say(scene, 120, arm, "Right-click the tonearm to lift it off its rest over the record's first groove, or back onto its rest.");
+        arrange(scene, pos, disc, true, true, Speed.RPM_33, false, false, 0);
+        notes(scene, point(pos, TurntableLayout.CENTER_X, 6, TurntableLayout.CENTER_Z), 150);
+        say(scene, 150, arm, "Right-click the tonearm to take it off its rest and set the needle down in the record's first groove: the record plays while the platter turns. Right-click it again to put it back on its rest.");
 
         Vec3 lever = point(pos, 15, 3.8, 6.8);
         scene.overlay().showControls(lever, Pointing.RIGHT, 30).rightClick();
         scene.idle(10);
-        arrange(scene, pos, disc, true, true, Speed.RPM_33, false, false, 0);
-        notes(scene, point(pos, TurntableLayout.CENTER_X, 6, TurntableLayout.CENTER_Z), 150);
-        say(scene, 150, lever, "Right-click the lift lever to set the needle down: the record plays from that groove while the platter turns. Raise the lever again and it stops, the arm staying where it is.");
+        arrange(scene, pos, disc, true, true, Speed.RPM_33, false, true, 4);
+        say(scene, 120, lever, "Right-click the lift lever to raise the needle: the record stops, the arm staying where it is. Right-click it again to set the needle down there.");
 
         Vec3 groove = point(pos, TurntableLayout.CENTER_X, TurntableLayout.RECORD_TOP, TurntableLayout.CENTER_Z + TurntableLayout.radiusAt(.55));
         scene.overlay().showControls(groove, Pointing.DOWN, 30).rightClick();
         scene.idle(10);
-        arrange(scene, pos, disc, true, true, Speed.RPM_33, false, true, .55 * LENGTH);
-        say(scene, 140, groove, "To play from elsewhere, right-click that spot of the record: the arm is lifted and set over the groove there. The outer edge is the start of the record, the inner edge its end.");
-
         arrange(scene, pos, disc, true, true, Speed.RPM_33, false, false, .55 * LENGTH);
-        notes(scene, point(pos, TurntableLayout.CENTER_X, 6, TurntableLayout.CENTER_Z), 120);
+        notes(scene, point(pos, TurntableLayout.CENTER_X, 6, TurntableLayout.CENTER_Z), 140);
+        say(scene, 140, groove, "To play from elsewhere, right-click that spot of the record: the arm is lifted, moved over the groove there and set down. The outer edge is the start of the record, the inner edge its end.");
+
         say(scene, 120, groove, PonderPalette.GREEN, "There is no auto-return: at the run-out the music ends and the needle stays in the groove. Raise the lever and put the arm back on its rest.");
     }
 

@@ -1,12 +1,17 @@
 package org.haruyq.createmediasystems.blocks.turntable.atlpa2;
 
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.component.m700.HifiLayout;
 import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableLayout.Part;
 import org.haruyq.createmediasystems.stream.DiscKind;
+import org.haruyq.createmediasystems.stream.EmitterRange;
 import org.haruyq.createmediasystems.stream.MediaItem;
+import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
+import org.haruyq.createmediasystems.stream.Streams;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -20,6 +25,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -54,6 +60,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * the platter; a record goes on the platter under the open dust cover; the arm is taken off its rest to the record's
  * first groove, or to any groove by clicking that spot of the record, and the lift lever lowers it. The record plays
  * while the needle is down on it and the platter turns, from the groove the needle is in, until its run-out.
+ * A Custom Disc's link it plays as a source (see MediaSource), like a jukebox: itself and any speakers linked to it
+ * play the track in sync, from where the needle is, while it plays.
  */
 public class TurntableBlock extends HorizontalDirectionalBlock implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<TurntableBlock> CODEC = simpleCodec(TurntableBlock::new);
@@ -158,7 +166,7 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
         }
     }
 
-    public static class Entity extends BlockEntity {
+    public static class Entity extends BlockEntity implements MediaSource {
         /** Ticks the platter takes to come up to speed: the record plays only once it is there. */
         public static final int SPIN_UP_TICKS = 30;
         /** Ticks the lift lever takes to set the needle down on the record (it is damped); raising it is quicker. */
@@ -195,9 +203,29 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
         private double length = -1;
         /** Client only: animation (see client.TurntableClient). */
         public Object animation;
+        /**
+         * Server: where a Custom Disc's link plays for its listeners (itself and linked speakers), started where the
+         * needle comes down. It stands while they load the track, and the needle with it (see tick).
+         */
+        private final PlaybackClock clock = PlaybackClock.unattended();
+        /** Server: whether its listeners were loading the track at the last tick. */
+        private boolean loading;
 
         public Entity(BlockPos pos, BlockState state) {
             super(TurntableFeature.ENTITY.get(), pos, state);
+        }
+
+        /** The link of the Custom Disc on it; null for a music disc, or none. */
+        @Nullable
+        public String link() {
+            return MediaItem.url(record);
+        }
+
+        @Override
+        @Nullable
+        public Streams.Source nowPlaying() {
+            String url = link();
+            return url != null && playing && clock.running() ? new Streams.Source(url, clock.position(), null) : null;
         }
 
         /** Whether a record of {@code stack} goes on the platter: a music disc, or a Custom Disc. */
@@ -277,6 +305,29 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
             anchoredAt = now;
             playing = play;
             revision++;
+            stream(now);
+        }
+
+        /** Its link's listeners start over on how it plays now: from where the needle is, or not at all. */
+        private void stream(long now) {
+            if (!(level instanceof ServerLevel server)) {
+                return;
+            }
+            if (playing && link() != null) {
+                clock.start(Math.round(at * PlaybackClock.TICKS_PER_SECOND));
+                Streams.loading(this, null, clock, now);
+            } else {
+                clock.stop();
+            }
+            relay(server);
+        }
+
+        /** It plays its link itself, from its spindle (see Streams#relay): every RELAY_TICKS, and as it changes. */
+        private void relay(ServerLevel server) {
+            Vec3 spindle = HifiLayout.toBlock(getBlockState().getValue(FACING), TurntableLayout.CENTER_X,
+                    TurntableLayout.RECORD_TOP, TurntableLayout.CENTER_Z);
+            Streams.relay(server, this, new Streams.Sound(Vec3.atLowerCornerOf(worldPosition).add(spindle), Optional.empty(),
+                    Streams.Channel.MIX, worldPosition), EmitterRange.DEFAULT);
         }
 
         void tick() {
@@ -297,6 +348,26 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
                 changed();
             } else if (playing && now % 100 == 0) {
                 setChanged();
+            }
+            ServerLevel server = (ServerLevel) level;
+            if (playing && link() != null && !clock.running()) {
+                // Taken up where the needle is after its chunk loaded again.
+                anchor(now, true);
+                changed();
+            }
+            if (clock.running()) {
+                Streams.tick(this, clock, now);
+                boolean waits = !Streams.loaded(this);
+                if (waits) {
+                    anchoredAt = now;
+                }
+                if (waits != loading) {
+                    loading = waits;
+                    changed();
+                }
+            }
+            if (Streams.relayDue(level)) {
+                relay(server);
             }
         }
 
@@ -348,19 +419,23 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
                     click(1.5f);
                 }
                 case ARM -> {
-                    // Off its rest it goes over the first groove; back, onto its rest. Either way the lever is up.
+                    // Off its rest it is set down in the first groove; back, it is lifted onto its rest.
                     lever(now);
                     onRest = !onRest;
                     at = 0;
+                    if (!onRest) {
+                        lower(now);
+                    }
                     level.playSound(null, worldPosition, SoundEvents.ITEM_FRAME_ROTATE_ITEM, SoundSource.BLOCKS, .4f, 1.6f);
                 }
                 case PLATTER -> {
                     if (!onRest) {
-                        // The arm is lifted and set down over the groove at the spot clicked.
+                        // The arm is lifted and set down in the groove at the spot clicked.
                         lever(now);
                         Vec3 spot = TurntableLayout.toTurntable(getBlockState().getValue(FACING), inBlock);
                         double fraction = TurntableLayout.fractionAt(TurntableLayout.radius(spot.x, spot.z));
                         at = length > 0 ? fraction * length : 0;
+                        lower(now);
                         level.playSound(null, worldPosition, SoundEvents.ITEM_FRAME_ROTATE_ITEM, SoundSource.BLOCKS, .4f, 1.8f);
                     } else if (record.isEmpty() && takes(held)) {
                         record = held.split(1);
@@ -385,6 +460,12 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
                 anchor(now, !playing);
             }
             changed();
+        }
+
+        /** Lowers the lever: the needle comes down DROP_TICKS from now. */
+        private void lower(long now) {
+            raised = false;
+            leverAt = now;
         }
 
         /** Raises the lever if it is down, holding the needle where it is. */
@@ -431,6 +512,8 @@ public class TurntableBlock extends HorizontalDirectionalBlock implements Entity
             super.setRemoved();
             if (level != null && level.isClientSide) {
                 clientRemoved.accept(this);
+            } else {
+                Streams.stop(this);
             }
         }
 

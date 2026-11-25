@@ -1155,10 +1155,10 @@
   "create_media_systems.ponder.turntable.header": "The audio-techtech AT-LPA2 Turntable",
   "create_media_systems.ponder.turntable.text_1": "A fully manual turntable of clear acrylic. Point at a part and right-click it; the part you point at is named above the hotbar.",
   "create_media_systems.ponder.turntable.text_2": "Right-click the dust cover to open or close it. A record plays on with the cover shut.",
-  "create_media_systems.ponder.turntable.text_3": "With the arm on its rest, right-click the platter with a music disc or a Custom Disc to put the record on. An empty hand takes it off again.",
+  "create_media_systems.ponder.turntable.text_3": "With the arm on its rest, right-click the platter with a music disc or a Custom Disc to put the record on. An empty hand takes it off again. Speakers linked to the turntable with a Jukebox Range Quill play a Custom Disc with it.",
   "create_media_systems.ponder.turntable.text_4": "The control unit in front: POWER, then 33 or 45 for the speed, and START/STOP turns the platter. Music discs are LPs, cut at 33; at 45 they play fast and high. A Custom Disc plays at its own speed.",
-  "create_media_systems.ponder.turntable.text_5": "Right-click the tonearm to lift it off its rest over the record's first groove, or back onto its rest.",
-  "create_media_systems.ponder.turntable.text_6": "Right-click the lift lever to set the needle down: the record plays from that groove while the platter turns. Raise the lever again and it stops, the arm staying where it is.",
-  "create_media_systems.ponder.turntable.text_7": "To play from elsewhere, right-click that spot of the record: the arm is lifted and set over the groove there. The outer edge is the start of the record, the inner edge its end.",
+  "create_media_systems.ponder.turntable.text_5": "Right-click the tonearm to take it off its rest and set the needle down in the record's first groove: the record plays while the platter turns. Right-click it again to put it back on its rest.",
+  "create_media_systems.ponder.turntable.text_6": "Right-click the lift lever to raise the needle: the record stops, the arm staying where it is. Right-click it again to set the needle down there.",
+  "create_media_systems.ponder.turntable.text_7": "To play from elsewhere, right-click that spot of the record: the arm is lifted, moved over the groove there and set down. The outer edge is the start of the record, the inner edge its end.",
   "create_media_systems.ponder.turntable.text_8": "There is no auto-return: at the run-out the music ends and the needle stays in the groove. Raise the lever and put the arm back on its rest."
 }
