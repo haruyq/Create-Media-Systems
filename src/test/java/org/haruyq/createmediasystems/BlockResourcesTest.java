@@ -56,6 +56,7 @@ class BlockResourcesTest {
             Map.entry("disc_reader", new Row(Tool.AXE, false, true)),
             Map.entry("display", new Row(Tool.PICKAXE, false, true)),
             Map.entry("equalizer", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("acoustic_panel", new Row(Tool.NONE, false, true)),
             Map.entry("grand_piano", new Row(Tool.AXE, false, true)),
             Map.entry("hifi_speaker", new Row(Tool.PICKAXE, false, true)),
             // Drops its units as it is removed; it has no item of its own.
@@ -79,6 +80,10 @@ class BlockResourcesTest {
             Map.entry("zs_rs81bt", new Row(Tool.PICKAXE, false, true)),
             Map.entry("screen_share_monitor", new Row(Tool.PICKAXE, false, true)),
             Map.entry("screen_share_server", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("soundproof_door", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("soundproof_double_door", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("soundproof_glass_door", new Row(Tool.PICKAXE, false, true)),
+            Map.entry("soundproof_sliding_door", new Row(Tool.PICKAXE, false, true)),
             Map.entry("speaker", new Row(Tool.AXE, false, true)),
             Map.entry("stage_light", new Row(Tool.PICKAXE, false, true)),
             Map.entry("strip_light", new Row(Tool.PICKAXE, false, true)),

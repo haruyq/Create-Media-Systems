@@ -215,6 +215,13 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     }
 
     /** Moves to where it plays from now (a block on a moving structure, a train). */
+    /** Where its sound comes from, for what is in its way: its loudest emitter, not the middle of them all. */
+    public Vec3 tracedFrom() {
+        var traced = spec.emitter().tracedFrom();
+        Vec3 from = traced == null ? null : traced.get();
+        return from != null ? from : new Vec3(x, y, z);
+    }
+
     private void follow() {
         if (spec.emitter().position() != null) {
             Vec3 at = spec.emitter().position().get();

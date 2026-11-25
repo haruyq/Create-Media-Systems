@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "create_media_systems:soundproof_door"
+    },
+    {
+      "item": "create_media_systems:soundproof_door"
+    }
+  ],
+  "result": {
+    "id": "create_media_systems:soundproof_double_door",
+    "count": 1
+  }
+}
