@@ -15,6 +15,7 @@ import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.Ships;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -28,7 +29,7 @@ public class PianoSableGameTests {
                 .setValue(GrandPianoBlock.FULL_SIZE, true);
         helper.assertTrue(GrandPianoBlock.placeParts(level, root, state), "Piano placement failed");
         List<BlockPos> parts = GrandPianoBlock.parts(state).stream().map(part -> part.at(root, state)).toList();
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, root, parts, new BoundingBox3i(
+        var ship = Ships.assemble(level, root, parts, new BoundingBox3i(
                 root.getX() - 1, root.getY(), root.getZ(), root.getX() + 2, root.getY() + 1, root.getZ() + 5));
         var plot = ship.getPlot().getCenterBlock();
         var mounted = (PianoBlockEntity) level.getBlockEntity(plot);

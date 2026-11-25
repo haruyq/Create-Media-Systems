@@ -57,7 +57,7 @@ public class LightingLinkShipGameTests {
         blocks.add(aboard);
         blocks.add(video);
 
-        ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, blocks,
+        ServerSubLevel ship = Ships.assemble(level, origin, blocks,
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ() - 1,
                         origin.getX() + 4, origin.getY() + 1, origin.getZ()));
         BlockPos plot = ship.getPlot().getCenterBlock();
@@ -68,7 +68,7 @@ public class LightingLinkShipGameTests {
         helper.assertTrue(((LightingConsoleBlock.Entity) level.getBlockEntity(plot)).settings.groups[2].colors[0] == 0x123456,
                 "palette survives console assembly");
 
-        ServerSubLevel second = SubLevelAssemblyHelper.assembleBlocks(level, ground, List.of(ground),
+        ServerSubLevel second = Ships.assemble(level, ground, List.of(ground),
                 new BoundingBox3i(ground.getX(), ground.getY(), ground.getZ(), ground.getX(), ground.getY(), ground.getZ()));
         BlockPos secondPlot = second.getPlot().getCenterBlock();
         check(helper, plot, movedAboard, secondPlot, audio, movedVideo, operator, false);

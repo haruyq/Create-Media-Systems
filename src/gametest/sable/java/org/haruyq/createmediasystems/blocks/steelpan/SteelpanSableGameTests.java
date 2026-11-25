@@ -2,7 +2,6 @@ package org.haruyq.createmediasystems.blocks.steelpan;
 
 import java.util.List;
 
-import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
 import dev.ryanhcode.sable.companion.math.BoundingBox3i;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -11,6 +10,7 @@ import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.Ships;
 
 @GameTestHolder(CreateMediaSystems.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -20,7 +20,7 @@ public class SteelpanSableGameTests {
         var level = helper.getLevel();
         var initial = helper.absolutePos(new BlockPos(2, 3, 2));
         level.setBlockAndUpdate(initial, SteelpanFeature.BLOCK.get().defaultBlockState());
-        var ship = SubLevelAssemblyHelper.assembleBlocks(level, initial, List.of(initial),
+        var ship = Ships.assemble(level, initial, List.of(initial),
                 new BoundingBox3i(initial.getX(), initial.getY(), initial.getZ(), initial.getX(), initial.getY(), initial.getZ()));
         var plot = ship.getPlot().getCenterBlock();
         var target = SteelpanPackets.Target.placed(plot);

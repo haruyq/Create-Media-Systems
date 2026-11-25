@@ -7,7 +7,6 @@ import java.util.List;
 import org.haruyq.createmediasystems.blocks.display.DisplayBlock;
 import org.haruyq.createmediasystems.lighting.LightingRaycast;
 
-import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3i;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
@@ -42,7 +41,7 @@ public final class LightingRaycastShipGameTests {
         BlockState state = DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING,
                 Direction.NORTH);
         level.setBlockAndUpdate(origin, state);
-        ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),
+        ServerSubLevel ship = Ships.assemble(level, origin, List.of(origin),
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
         remove(ship);
         BlockPos plot = ship.getPlot().getCenterBlock();
@@ -213,7 +212,7 @@ public final class LightingRaycastShipGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(relative);
         level.setBlockAndUpdate(origin, state);
-        ServerSubLevel ship = SubLevelAssemblyHelper.assembleBlocks(level, origin, List.of(origin),
+        ServerSubLevel ship = Ships.assemble(level, origin, List.of(origin),
                 new BoundingBox3i(origin.getX(), origin.getY(), origin.getZ(), origin.getX(), origin.getY(), origin.getZ()));
         helper.assertTrue(level.getBlockState(ship.getPlot().getCenterBlock()).equals(state), "assembly did not copy the test block");
         ship.logicalPose().position().add(0, 12, 0);
