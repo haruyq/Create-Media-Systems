@@ -102,8 +102,11 @@ public final class EmitterAudioManager {
         ticks++;
         PLAYING.values().removeIf(p -> {
             int age = ticks - p.startedAt;
+            // Its drift is weighed in the listener's seconds: a record turning fast runs through more of its track
+            // in the same start-up delay.
+            double rate = p.emitter.rate();
             if (heard(p.emitter, p.revision) && (p.active() || age < GRACE_TICKS)
-                    && !realign(p.audibleSeconds(), p.emitter.seconds(), age, pitch(p.emitter))) {
+                    && !realign(p.audibleSeconds() / rate, p.emitter.seconds() / rate, age, doppler(p.emitter))) {
                 return false;
             }
             p.stop();
@@ -198,8 +201,13 @@ public final class EmitterAudioManager {
         return ear == null ? 0 : emitter.gain(ear);
     }
 
-    /** Physical Doppler of the emitter's music for this listener: 1 while either stands still or jumped. */
+    /** The pitch of the emitter's music for this listener: its Doppler shift, at the rate its record turns. */
     static double pitch(MusicEmitter emitter) {
+        return doppler(emitter) * emitter.rate();
+    }
+
+    /** Physical Doppler of the emitter's music for this listener: 1 while either stands still or jumped. */
+    static double doppler(MusicEmitter emitter) {
         Entity ear = Minecraft.getInstance().getCameraEntity();
         Vec3 velocity = emitter.velocity();
         Vec3 earVelocity = ear == null || ear.tickCount < 2 ? null : DopplerMath.step(ear);

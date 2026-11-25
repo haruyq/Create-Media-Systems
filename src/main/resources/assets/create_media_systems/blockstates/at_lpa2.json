@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "facing=north,open=false": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=north,open=true": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=east,open=false": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=east,open=true": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=south,open=false": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=south,open=true": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=west,open=false": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    },
+    "facing=west,open=true": {
+      "model": "create_media_systems:block/turntable/at_lpa2/particle"
+    }
+  }
+}

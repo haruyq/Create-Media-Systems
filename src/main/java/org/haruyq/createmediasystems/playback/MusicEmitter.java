@@ -47,6 +47,14 @@ public interface MusicEmitter {
     /** Where in its track its server clock is now (s). */
     double seconds();
 
+    /**
+     * How fast its record plays against the speed it was cut at (a turntable at 45 playing an LP): its music is that
+     * much higher, and its clock (see seconds) runs that much faster.
+     */
+    default double rate() {
+        return 1;
+    }
+
     /** How far it is heard (blocks). */
     double range();
 

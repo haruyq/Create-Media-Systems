@@ -1,0 +1,31 @@
+{
+  "parent": "minecraft:block/block",
+  "loader": "neoforge:composite",
+  "render_type": "minecraft:translucent",
+  "textures": {
+    "particle": "create_media_systems:block/turntable/at_lpa2"
+  },
+  "children": {
+    "base": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/base"
+    },
+    "posts": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/posts"
+    },
+    "hub": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/hub"
+    },
+    "arm": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/arm"
+    },
+    "cue": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/cue"
+    },
+    "cover": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/cover"
+    },
+    "platter_item": {
+      "parent": "create_media_systems:block/turntable/at_lpa2/platter_item"
+    }
+  }
+}
