@@ -1,0 +1,144 @@
+{
+  "textures": {
+    "0": "create_media_systems:block/soundproof/soundproof_door",
+    "particle": "create_media_systems:block/soundproof/soundproof_door"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        3,
+        16,
+        1
+      ],
+      "faces": {
+        "east": {
+          "uv": [
+            8.25,
+            4.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "west": {
+          "uv": [
+            8.0,
+            4.0,
+            8.25,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "north": {
+          "uv": [
+            8.0,
+            4.0,
+            8.75,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "south": {
+          "uv": [
+            8.0,
+            4.0,
+            8.75,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "up": {
+          "uv": [
+            8.0,
+            0.0,
+            8.25,
+            0.75
+          ],
+          "texture": "#0"
+        },
+        "down": {
+          "uv": [
+            8.0,
+            7.25,
+            8.25,
+            8.0
+          ],
+          "texture": "#0"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        15
+      ],
+      "to": [
+        3,
+        16,
+        16
+      ],
+      "faces": {
+        "east": {
+          "uv": [
+            12.0,
+            4.0,
+            11.75,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "west": {
+          "uv": [
+            11.75,
+            4.0,
+            12.0,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "north": {
+          "uv": [
+            8.0,
+            4.0,
+            8.75,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "south": {
+          "uv": [
+            8.0,
+            4.0,
+            8.75,
+            8.0
+          ],
+          "texture": "#0"
+        },
+        "up": {
+          "uv": [
+            11.75,
+            0.0,
+            12.0,
+            0.75
+          ],
+          "texture": "#0"
+        },
+        "down": {
+          "uv": [
+            11.75,
+            7.25,
+            12.0,
+            8.0
+          ],
+          "texture": "#0"
+        }
+      }
+    }
+  ]
+}

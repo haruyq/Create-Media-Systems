@@ -36,6 +36,10 @@
     "create_media_systems:screen_share_server",
     "create_media_systems:screen_share_monitor",
     "create_media_systems:zs_rs81bt",
-    "create_media_systems:ddj_flx4"
+    "create_media_systems:ddj_flx4",
+    "create_media_systems:soundproof_door",
+    "create_media_systems:soundproof_glass_door",
+    "create_media_systems:soundproof_sliding_door",
+    "create_media_systems:soundproof_double_door"
   ]
 }

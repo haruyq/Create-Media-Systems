@@ -1,0 +1,76 @@
+{
+  "textures": {
+    "0": "create_media_systems:block/soundproof/soundproof_door",
+    "particle": "create_media_systems:block/soundproof/soundproof_door"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        15
+      ],
+      "to": [
+        3,
+        16,
+        16
+      ],
+      "faces": {
+        "east": {
+          "uv": [
+            0.0,
+            12.0,
+            0.25,
+            16.0
+          ],
+          "texture": "#0"
+        },
+        "west": {
+          "uv": [
+            0.25,
+            12.0,
+            0.0,
+            16.0
+          ],
+          "texture": "#0"
+        },
+        "up": {
+          "uv": [
+            0.25,
+            8.0,
+            0.0,
+            8.75
+          ],
+          "texture": "#0"
+        },
+        "down": {
+          "uv": [
+            0.25,
+            15.25,
+            0.0,
+            16.0
+          ],
+          "texture": "#0"
+        },
+        "north": {
+          "uv": [
+            0.0,
+            12.0,
+            0.75,
+            16.0
+          ],
+          "texture": "#0"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            12.0,
+            0.75,
+            16.0
+          ],
+          "texture": "#0"
+        }
+      }
+    }
+  ]
+}

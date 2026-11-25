@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    " D ",
+    "WWW"
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:black_dye"
+    },
+    "W": {
+      "tag": "minecraft:wool"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:acoustic_panel",
+    "count": 6
+  }
+}

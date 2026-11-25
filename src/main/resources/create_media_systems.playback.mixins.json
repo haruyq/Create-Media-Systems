@@ -12,6 +12,7 @@
     "LibraryMixin",
     "SoundEngineAccessor",
     "SoundEngineMixin",
+    "SoundproofMixin",
     "SoundManagerAccessor"
   ]
 }

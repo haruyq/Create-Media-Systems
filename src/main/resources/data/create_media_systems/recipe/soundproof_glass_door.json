@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "GS",
+    "GS",
+    "GS"
+  ],
+  "key": {
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "S": {
+      "item": "create_media_systems:sound_insulation_sheet"
+    }
+  },
+  "result": {
+    "id": "create_media_systems:soundproof_glass_door",
+    "count": 1
+  }
+}
