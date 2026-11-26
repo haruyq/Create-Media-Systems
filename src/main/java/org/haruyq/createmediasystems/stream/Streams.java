@@ -517,7 +517,7 @@ public final class Streams {
      * unless the API has told a length already. Also while its /info waits to be asked again (see duration).
      */
     static void learnDuration(@Nullable Source playing, double duration) {
-        if (playing != null && duration > 0) {
+        if (playing != null && MediaItem.plausibleLength(duration)) {
             DURATIONS.compute(playing.url(), (url, known) -> known != null && known > 0 ? known : duration);
         }
     }

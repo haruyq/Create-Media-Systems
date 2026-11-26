@@ -1340,16 +1340,13 @@ public final class Transport implements AutoCloseable {
         synchronized void close() {
             closed = true;
             WebSocket socket = ws;
+            // The client is P2p's shared one (its API calls, the natives' download, later sessions): never shut down here.
             if (socket == null) {
-                http.shutdownNow();
                 return;
             }
             sending.thenCompose(v -> socket.sendClose(WebSocket.NORMAL_CLOSURE, ""))
                     .orTimeout(2, TimeUnit.SECONDS)
-                    .whenComplete((v, e) -> {
-                        socket.abort();
-                        http.shutdownNow();
-                    });
+                    .whenComplete((v, e) -> socket.abort());
         }
     }
 }

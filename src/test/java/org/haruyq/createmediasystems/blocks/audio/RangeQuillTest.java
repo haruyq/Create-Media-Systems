@@ -1,6 +1,8 @@
 package org.haruyq.createmediasystems.blocks.audio;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
 
@@ -29,5 +31,14 @@ class RangeQuillTest {
         assertEquals(0.5f, settings.volume());
         assertEquals(settings, RangeQuill.JUKEBOX_SERIALIZER.read(null,
                 RangeQuill.JUKEBOX_SERIALIZER.write(settings, RegistryAccess.EMPTY), RegistryAccess.EMPTY));
+    }
+
+    @Test
+    void areasAreMeasuredWithoutOverflow() {
+        assertFalse(RangeQuill.tooBig(new BoundingBox(0, 0, 0, RangeQuill.MAX_SIZE - 1, 0, 0)));
+        assertTrue(RangeQuill.tooBig(new BoundingBox(0, 0, 0, RangeQuill.MAX_SIZE, 0, 0)));
+        // max - min + 1 is 0 in int: the whole axis must not pass as no width.
+        assertTrue(RangeQuill.tooBig(new BoundingBox(Integer.MIN_VALUE, 0, 0, Integer.MAX_VALUE, 0, 0)));
+        assertTrue(RangeQuill.tooBig(new BoundingBox(0, 0, Integer.MIN_VALUE, 0, 0, Integer.MAX_VALUE)));
     }
 }

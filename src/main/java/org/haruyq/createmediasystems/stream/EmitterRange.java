@@ -37,7 +37,7 @@ public record EmitterRange(Optional<BoundingBox> area, float volume, int radius)
     public static final StreamCodec<ByteBuf, EmitterRange> STREAM_CODEC = ByteBufCodecs.fromCodec(CODEC);
 
     public EmitterRange {
-        volume = Mth.clamp(volume, 0, 1);
+        volume = Float.isNaN(volume) ? 1 : Mth.clamp(volume, 0, 1);
     }
 
     public EmitterRange(Optional<BoundingBox> area, float volume) {
