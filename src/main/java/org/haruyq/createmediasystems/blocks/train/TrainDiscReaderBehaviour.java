@@ -89,6 +89,14 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         }
     }
 
+    /** Disassembled or unloaded: those aboard stop hearing its announcement, which no tick will relay again. */
+    @Override
+    public void stopMoving(MovementContext context) {
+        if (context.world instanceof ServerLevel && context.temporaryData instanceof Reader reader) {
+            Streams.stop(reader);
+        }
+    }
+
     /** Which of the train's announcements clients play {@code context}'s on. */
     private static String channel(MovementContext context, Train train) {
         return train.id + "/" + context.localPos.asLong();
