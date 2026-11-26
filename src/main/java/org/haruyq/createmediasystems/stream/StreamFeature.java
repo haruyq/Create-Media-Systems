@@ -10,7 +10,10 @@ import org.haruyq.createmediasystems.Feature;
 
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.sounds.SoundEvent;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
@@ -20,6 +23,11 @@ public final class StreamFeature implements Feature {
             SOUNDS.register("stream", SoundEvent::createVariableRangeEvent);
     public static final Supplier<AttachmentType<UUID>> SOURCE_ID = ATTACHMENTS.register(
             "source_id", () -> AttachmentType.builder(UUID::randomUUID).serialize(UUIDUtil.CODEC).build());
+
+    @Override
+    public void register(IEventBus modBus) {
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> Streams.serverStopped());
+    }
 
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {

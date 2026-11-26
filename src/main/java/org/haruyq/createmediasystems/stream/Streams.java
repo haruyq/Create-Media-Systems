@@ -83,13 +83,22 @@ public final class Streams {
      * Per source, how its listeners load its track (see Load). Kept by the source's identity, or its place before it
      * is linked (see key), so moving or reloading a block entity keeps its playback offset.
      */
-    // ponytail: never evicted, one entry per place a track was started since the server started; prune on removal if that grows.
+    // ponytail: never evicted while the server runs, one entry per place a track was started; prune on removal if that grows.
     private static final Map<UUID, Load> LOADS = new HashMap<>();
     /**
      * The last Load#id given out; on the server thread. From a random start, so a client still holding a playback
      * from before a server restart never takes a new load for it.
      */
     private static long lastLoadId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE / 2);
+
+    /**
+     * The server stopped: forget its loads and relays, which hold its players, so a world opened next in this JVM
+     * (an integrated server) neither keeps them alive nor finds a track of its own still loading from before.
+     */
+    static void serverStopped() {
+        LOADS.clear();
+        RELAYS.clear();
+    }
 
     /**
      * A source's track as its listeners load it. Its clock stands until they all have it loaded (or the first of them,
