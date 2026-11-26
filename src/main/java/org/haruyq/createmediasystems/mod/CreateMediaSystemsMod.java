@@ -30,6 +30,7 @@ import org.haruyq.createmediasystems.screen.ScreenFeature;
 import org.haruyq.createmediasystems.items.partybox.stage320.PartyBoxFeature;
 import org.haruyq.createmediasystems.blocks.piano.grand.PianoFeature;
 import org.haruyq.createmediasystems.blocks.soundproof.SoundproofFeature;
+import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableFeature;
 import org.haruyq.createmediasystems.blocks.stagecustom.StageCustomFeature;
 import org.haruyq.createmediasystems.blocks.steelpan.SteelpanFeature;
 import org.haruyq.createmediasystems.items.power.PowerFeature;
@@ -54,7 +55,8 @@ public final class CreateMediaSystemsMod {
             new DisplayFeature(), new LightingFeature(), new HifiFeature(), new P2pFeature(), new BroadcastFeature(),
             new KeyboardFeature(), new PianoFeature(), new WearableInstruments(), new InstrumentFeature(), new SteelpanFeature(),
             new StageCustomFeature(), new ScreenFeature(),
-            new RadioFeature(), new LoudmanFeature(), new BoomboxFeature(), new DjFeature(), new SoundproofFeature());
+            new RadioFeature(), new LoudmanFeature(), new BoomboxFeature(), new DjFeature(), new SoundproofFeature(),
+            new TurntableFeature());
 
     public static final Supplier<CreativeModeTab> TAB = CreateMediaSystems.TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.create_media_systems"))
@@ -85,7 +87,8 @@ public final class CreateMediaSystemsMod {
         audio.addAll(HifiFeature.hifiUnits());
         audio.addAll(List.of(HifiFeature.HIFI_SPEAKER_ITEM, HifiFeature.HIFI_CABLE,
                 KeyboardFeature.KEYBOARD_ITEM, PxS1100Feature.ITEM, PxS1100Feature.ADAPTER_ITEM, PianoFeature.PIANO_ITEM,
-                SteelpanFeature.ITEM, StageCustomFeature.ITEM, StageCustomFeature.COMPLETE_ITEM, DjFeature.ITEM));
+                SteelpanFeature.ITEM, StageCustomFeature.ITEM, StageCustomFeature.COMPLETE_ITEM, DjFeature.ITEM,
+                TurntableFeature.ITEM));
         audio.addAll(InstrumentFeature.PEDALS);
         audio.addAll(List.of(SoundproofFeature.DOOR_ITEM, SoundproofFeature.GLASS_DOOR_ITEM, SoundproofFeature.SLIDING_DOOR_ITEM,
                 SoundproofFeature.DOUBLE_DOOR_ITEM, SoundproofFeature.PANEL_ITEM, SoundproofFeature.SHEET));

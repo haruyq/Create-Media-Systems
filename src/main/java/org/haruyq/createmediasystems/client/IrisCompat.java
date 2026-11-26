@@ -22,6 +22,11 @@ public final class IrisCompat {
     private IrisCompat() {
     }
 
+    /** Whether Iris is installed, with a shader pack on or not. */
+    public static boolean loaded() {
+        return LOADED;
+    }
+
     public static boolean shaderPackInUse() {
         return ask(IN_USE);
     }

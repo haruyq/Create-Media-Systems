@@ -37,6 +37,7 @@ import org.haruyq.createmediasystems.items.launcher.client.LauncherPonder;
 import org.haruyq.createmediasystems.items.megaphone.megaphone30.client.MegaphonePonder;
 import org.haruyq.createmediasystems.items.partybox.stage320.client.PartyBoxPonder;
 import org.haruyq.createmediasystems.blocks.soundproof.client.SoundproofClient;
+import org.haruyq.createmediasystems.blocks.turntable.atlpa2.client.TurntableClient;
 import org.haruyq.createmediasystems.blocks.stagecustom.client.StageCustomClient;
 import org.haruyq.createmediasystems.blocks.stagecustom.client.StageCustomPonder;
 import org.haruyq.createmediasystems.blocks.steelpan.client.SteelpanPonder;
@@ -79,7 +80,7 @@ public final class CreateMediaSystemsClient {
             ClientFeature.withPonder(StageCustomClient::register, StageCustomPonder::register),
             ClientFeature.withPonder(ScreenClient::register, ScreenPonder::register),
             ClientFeature.withPonder(RadioClient::register, RadioPonder::register), LoudmanClient::register,
-            new BoomboxClient(), new DjClient(), new SoundproofClient());
+            new BoomboxClient(), new DjClient(), new SoundproofClient(), new TurntableClient());
 
     public CreateMediaSystemsClient(IEventBus modBus, ModContainer container) {
         FEATURES.forEach(feature -> feature.register(modBus));

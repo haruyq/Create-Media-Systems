@@ -40,6 +40,7 @@
     "create_media_systems:soundproof_door",
     "create_media_systems:soundproof_glass_door",
     "create_media_systems:soundproof_sliding_door",
-    "create_media_systems:soundproof_double_door"
+    "create_media_systems:soundproof_double_door",
+    "create_media_systems:at_lpa2"
   ]
 }

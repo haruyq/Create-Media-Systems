@@ -39,6 +39,7 @@ class BlockResourcesTest {
     }
 
     private static final Map<String, Row> BLOCKS = new TreeMap<>(Map.ofEntries(
+            Map.entry("at_lpa2", new Row(Tool.PICKAXE, false, true)),
             Map.entry("auto_chorus_pedal", new Row(Tool.PICKAXE, false, true)),
             Map.entry("auto_compressor_pedal", new Row(Tool.PICKAXE, false, true)),
             Map.entry("auto_tremolo_pedal", new Row(Tool.PICKAXE, false, true)),

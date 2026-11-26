@@ -31,7 +31,8 @@ final class EmitterRecordSound extends AbstractTickableSoundInstance {
         relative = false;
         attenuation = SoundInstance.Attenuation.NONE;
         volume = 0;
-        pitch = 1;
+        // It starts at its record's speed: only the Doppler shift on top of that is eased in.
+        pitch = (float) EmitterAudioManager.pitch(emitter);
         tick();
     }
 
