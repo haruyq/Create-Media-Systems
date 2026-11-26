@@ -1,31 +1,108 @@
 {
-  "parent": "minecraft:block/block",
-  "loader": "neoforge:composite",
-  "render_type": "minecraft:translucent",
-  "textures": {
-    "particle": "create_media_systems:block/turntable/at_lpa2"
-  },
-  "children": {
-    "base": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/base"
+  "parent": "minecraft:builtin/entity",
+  "gui_light": "side",
+  "display": {
+    "gui": {
+      "rotation": [
+        30,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.625,
+        0.625,
+        0.625
+      ]
     },
-    "posts": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/posts"
+    "ground": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        3,
+        0
+      ],
+      "scale": [
+        0.25,
+        0.25,
+        0.25
+      ]
     },
-    "hub": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/hub"
+    "fixed": {
+      "rotation": [
+        0,
+        180,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
     },
-    "arm": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/arm"
+    "thirdperson_righthand": {
+      "rotation": [
+        75,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.375,
+        0.375,
+        0.375
+      ]
     },
-    "cue": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/cue"
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
     },
-    "cover": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/cover"
-    },
-    "platter_item": {
-      "parent": "create_media_systems:block/turntable/at_lpa2/platter_item"
+    "firstperson_lefthand": {
+      "rotation": [
+        0,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
     }
   }
 }

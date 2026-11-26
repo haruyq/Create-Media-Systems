@@ -9,7 +9,6 @@ import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableBlock;
 import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableBlock.Speed;
 import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableFeature;
 import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableLayout;
-import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableLayout.Part;
 
 import com.simibubi.create.Create;
 import com.simibubi.create.foundation.ponder.CreateSceneBuilder;
@@ -49,7 +48,7 @@ final class TurntablePonder {
         scene.world().showSection(util.select().position(pos), Direction.DOWN);
         scene.idle(15);
 
-        Vec3 cover = point(pos, 8, 6, 8);
+        Vec3 cover = point(pos, 8, TurntableLayout.COVER_TOP, 8);
         say(scene, 120, cover, PonderPalette.GREEN, "A fully manual turntable of clear acrylic. Point at a part and right-click it; the part you point at is named above the hotbar.");
         scene.overlay().showControls(cover, Pointing.DOWN, 40).rightClick();
         scene.idle(10);
@@ -62,8 +61,8 @@ final class TurntablePonder {
         arrange(scene, pos, disc, false, false, Speed.RPM_33, true, true, 0);
         say(scene, 130, platter, "With the arm on its rest, right-click the platter with a music disc or a Custom Disc to put the record on. An empty hand takes it off again. Speakers linked to the turntable with a Jukebox Range Quill play a Custom Disc with it.");
 
-        Vec3 power = point(pos, Part.POWER.x0 + .8, 2.3, 14.7);
-        Vec3 start = point(pos, Part.START_STOP.x0 + .8, 2.3, 14.7);
+        Vec3 power = point(pos, TurntableLayout.KEYS[0][0], TurntableLayout.UNIT_TOP, TurntableLayout.UNIT_Z1 - .3);
+        Vec3 start = point(pos, TurntableLayout.KEYS[3][0], TurntableLayout.UNIT_TOP, TurntableLayout.UNIT_Z1 - .3);
         scene.overlay().showControls(power, Pointing.DOWN, 30).rightClick();
         scene.idle(10);
         arrange(scene, pos, disc, true, false, Speed.RPM_33, true, true, 0);
@@ -72,14 +71,14 @@ final class TurntablePonder {
         arrange(scene, pos, disc, true, true, Speed.RPM_33, true, true, 0);
         say(scene, 150, start, "The control unit in front: POWER, then 33 or 45 for the speed, and START/STOP turns the platter. Music discs are LPs, cut at 33; at 45 they play fast and high. A Custom Disc plays at its own speed.");
 
-        Vec3 arm = point(pos, TurntableLayout.PIVOT_X, 4.6, 9);
+        Vec3 arm = point(pos, TurntableLayout.PIVOT_X, TurntableLayout.PIVOT_Y + .25, 9);
         scene.overlay().showControls(arm, Pointing.DOWN, 30).rightClick();
         scene.idle(10);
         arrange(scene, pos, disc, true, true, Speed.RPM_33, false, false, 0);
         notes(scene, point(pos, TurntableLayout.CENTER_X, 6, TurntableLayout.CENTER_Z), 150);
         say(scene, 150, arm, "Right-click the tonearm to take it off its rest and set the needle down in the record's first groove: the record plays while the platter turns. Right-click it again to put it back on its rest.");
 
-        Vec3 lever = point(pos, 15, 3.8, 6.8);
+        Vec3 lever = point(pos, 15, TurntableLayout.CUE_Y + .25, 6.8);
         scene.overlay().showControls(lever, Pointing.RIGHT, 30).rightClick();
         scene.idle(10);
         arrange(scene, pos, disc, true, true, Speed.RPM_33, false, true, 4);

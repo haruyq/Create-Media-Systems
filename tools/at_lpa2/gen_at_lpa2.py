@@ -1,86 +1,208 @@
-"""Writes the audio-techtech AT-LPA2 turntable's models and texture.
+"""Writes the audio-techtech AT-LPA2 turntable's textures.
 
-Every model is in the turntable's own space, in sixteenths of its block: x across from its left as one faces its
-front, y up, z from its back to its front (its front is the block's south side). TurntableLayout holds the same
-numbers for the game. One 256x256 texture holds every material; a face's uv is eight texels per sixteenth, from the
-corner of its material. Clear acrylic faces carry tintindex 0, so the renderer draws only them translucent.
+One 512x512 sheet holds every material of the deck. TurntableRenderer builds the deck's shapes and has each
+material's place in the sheet under the same name. Nothing in the game shines or refracts, so the light a real deck
+shows is painted here: clear acrylic is all but unseen but for a bright line along each of its edges, turned
+aluminium has bright and dark bands round it. The record and its label have their own textures.
 
 Run from the repository root: python tools/at_lpa2/gen_at_lpa2.py
 """
-import json
 import math
-import os
 import random
 
 from PIL import Image
 
-ASSETS = "src/main/resources/assets/create_media_systems"
-TEXTURE = "create_media_systems:block/turntable/at_lpa2"
-MODELS = ASSETS + "/models/block/turntable/at_lpa2"
-
-# Materials: where each one's 16x16 texels start in the texture (in texels).
-ACRYL, ACRYL_EDGE, ALU, BLACK = (0, 0), (16, 0), (32, 0), (48, 0)
-CARBON, PLATE, BUTTON, HEADSHELL = (0, 16), (16, 16), (32, 16), (48, 16)
-LAMP_OFF, LAMP_ON, CART = (0, 32), (16, 32), (32, 32)
-GLASS = {ACRYL, ACRYL_EDGE}
-
-
-S = 4  # texels of the texture per texel of the 64x64 grid the models' uvs are in
+OUT = "src/main/resources/assets/create_media_systems/textures/block/turntable"
 RECORD, LABEL = 512, 128  # the record's and its label's own square textures, in texels across
 
+# Where each material is in the sheet: x, y, width, height (texels). The first row's are drawn with their borders
+# kept unstretched (eight texels at each edge), so a line along a border is as wide on a face of any size.
+GLOW, EDGE, SATIN, BLACK = (0, 0, 24, 24), (32, 0, 24, 24), (64, 0, 24, 24), (96, 0, 24, 24)
+WHITE, IVORY, WIRES, GLINT = (128, 0, 24, 24), (160, 0, 24, 24), (192, 0, 24, 24), (224, 0, 8, 8)
+# The sides of round parts, once round them from left to right.
+TURNED, KNURL, CARBON, SHINE, RUBBER = (0, 32, 64, 32), (64, 32, 64, 32), (128, 32, 64, 32), (192, 32, 64, 8), (192, 48, 64, 8)
+# The ends of round parts, and other faces seen whole.
+CAP, CAP_BLACK, KEY, PLATE, LAMP = (0, 64, 64, 64), (64, 64, 64, 64), (128, 64, 64, 64), (192, 64, 64, 64), (256, 64, 16, 16)
+# The platter's faces, down from the spindle to the rim.
+PLATTER, FRONT, LOGO = (0, 128, 8, 128), (128, 128, 256, 56), (128, 192, 64, 8)
 
-def texture():
+# The control unit's front, 8.1 by 1.8 sixteenths: its keys' middles and radii (texels across and down from its top
+# left corner), and what is printed under each. TurntableRenderer has the keys themselves.
+UNIT_WIDTH, UNIT_HEIGHT = 8.1, 1.8
+KEYS = [(.95, .42, "POWER"), (2.75, .27, "33"), (4.45, .27, "45"), (7.3, .42, "START/STOP")]
+LEDS = 3  # the first keys have a lamp over them
+
+FONT = {
+    "a": ("...", ".##", "#.#", "#.#", ".##"), "u": ("...", "#.#", "#.#", "#.#", ".##"),
+    "d": ("..#", ".##", "#.#", "#.#", ".##"), "i": (".#.", "...", ".#.", ".#.", ".#."),
+    "o": ("...", ".#.", "#.#", "#.#", ".#."), "-": ("...", "...", "###", "...", "..."),
+    "t": (".#.", "###", ".#.", ".#.", "..#"), "e": ("...", ".#.", "###", "#..", ".##"),
+    "c": ("...", ".##", "#..", "#..", ".##"), "h": ("#..", "#..", "##.", "#.#", "#.#"),
+    "P": ("##.", "#.#", "##.", "#..", "#.."), "O": (".#.", "#.#", "#.#", "#.#", ".#."),
+    "W": ("#.#", "#.#", "#.#", "###", "#.#"), "E": ("###", "#..", "##.", "#..", "###"),
+    "R": ("##.", "#.#", "##.", "#.#", "#.#"), "S": (".##", "#..", ".#.", "..#", "##."),
+    "T": ("###", ".#.", ".#.", ".#.", ".#."), "A": (".#.", "#.#", "###", "#.#", "#.#"),
+    "/": ("..#", "..#", ".#.", "#..", "#.."), "3": ("##.", "..#", ".#.", "..#", "##."),
+    "4": ("#.#", "#.#", "###", "..#", "..#"), "5": ("###", "#..", "##.", "..#", "##."),
+}
+BRAND = "audio-techtech"
+
+
+def glint(angle, at, width):
+    """A highlight round a cylinder: 1 at `at` degrees, fading over `width` degrees either side."""
+    d = (angle - at + 180) % 360 - 180
+    return math.exp(-(d / width) ** 2)
+
+
+def sheet():
     rnd = random.Random(7)
-    n = 16 * S
-    img = Image.new("RGBA", (64 * S, 64 * S), (0, 0, 0, 0))
+    img = Image.new("RGBA", (512, 512), (255, 255, 255, 0))
     px = img.load()
 
-    def fill(at, colour):
-        for y in range(n):
-            for x in range(n):
-                px[at[0] * S + x, at[1] * S + y] = tuple(int(max(0, min(255, c))) for c in colour(x, y))
+    def paint(tile, colour):
+        for y in range(tile[3]):
+            for x in range(tile[2]):
+                px[tile[0] + x, tile[1] + y] = tuple(int(max(0, min(255, c))) for c in colour(x, y))
 
-    def disc(x, y, cx, cy, r):
-        """How far inside a circle (0 outside, 1 well inside), smoothed over a texel."""
-        return max(0.0, min(1.0, r - math.hypot(x + .5 - cx, y + .5 - cy) + .5))
+    def grey(v, blue=4):
+        return (v, v + 1, v + blue, 255)
 
-    # Clear acrylic: faint, a little blue, with soft diagonal streaks; its cut edges show green-white and thick,
-    # in the fine layers of a polished edge.
-    fill(ACRYL, lambda x, y: (226, 239, 246, 48 + 14 * (math.sin((x + y) * .21) > .92)))
-    fill(ACRYL_EDGE, lambda x, y: (204, 232, 226, 150 + 24 * (y % 6 == 0) - 10 * (y % 6 == 3)))
-    # Brushed aluminium: light grey with fine horizontal lines.
-    rows = [rnd.randint(-9, 9) for _ in range(n)]
-    fill(ALU, lambda x, y: (201 + rows[y] + rnd.randint(-2, 2), 204 + rows[y], 209 + rows[y], 255))
-    fill(BLACK, lambda x, y: (21 + rnd.randint(0, 5), 21 + rnd.randint(0, 5), 24 + rnd.randint(0, 5), 255))
+    def inset(tile, x, y):
+        """How many texels in from the tile's nearest edge."""
+        return min(x, y, tile[2] - 1 - x, tile[3] - 1 - y)
 
-    # Carbon fibre twill: 2x2 weave of 4-texel tows, each lit along its length.
+    def text(x, y, string, colour):
+        for i, letter in enumerate(string):
+            for row, line in enumerate(FONT[letter]):
+                for col, dot in enumerate(line):
+                    if dot == "#":
+                        px[x + 4 * i + col, y + row] = colour
+
+    def ring(cx, cy, r0, r1, colour):
+        for y in range(int(cy - r1 - 1), int(cy + r1 + 2)):
+            for x in range(int(cx - r1 - 1), int(cx + r1 + 2)):
+                if r0 <= math.hypot(x + .5 - cx, y + .5 - cy) < r1:
+                    px[x, y] = colour
+
+    # Clear acrylic's faces: a white line along each edge, fading inwards to a faint haze. The game drops what is
+    # less than a tenth opaque (26 of 255), so the haze stays above that.
+    paint(GLOW, lambda x, y: (246, 250, 252, (215, 120, 70, 46, 36)[inset(GLOW, x, y)] if inset(GLOW, x, y) < 5 else 30))
+
+    # Its cut edges, polished: brighter, a white line along the top and the bottom and at each end, and the dark
+    # line and the light one of what is seen inside it.
+    def edge(x, y):
+        if y in (0, 23) or x in (0, 23):
+            return (255, 255, 255, 232)
+        if y in (1, 22):
+            return (250, 252, 253, 156)
+        if y in (8, 9):
+            return (168, 180, 187, 124)
+        if y == 10:
+            return (255, 255, 255, 150)
+        return (232, 240, 243, 92)
+    paint(EDGE, edge)
+    paint(GLINT, lambda x, y: (255, 255, 255, 228))
+
+    # Blasted aluminium: even and fine-grained, lighter above, each face's edges catching the light.
+    def satin(x, y):
+        d = inset(SATIN, x, y)
+        return grey(232 if d == 0 else 196 - (y - 12) * .6 + rnd.randint(-2, 2) + (8 if d == 1 else 0))
+    paint(SATIN, satin)
+    paint(BLACK, lambda x, y: grey((60, 38)[inset(BLACK, x, y)] if inset(BLACK, x, y) < 2 else 26 + rnd.randint(0, 3), 3))
+    paint(WHITE, lambda x, y: grey((246, 214)[inset(WHITE, x, y)] if inset(WHITE, x, y) < 2 else 228, 1))
+    paint(IVORY, lambda x, y: (244, 238, 224, 255) if inset(IVORY, x, y) == 0 else (228, 219, 200, 255))
+    # The cartridge's four leads, side by side.
+    paint(WIRES, lambda x, y: ((200, 40, 40), (236, 236, 236), (40, 150, 70), (40, 80, 200))[x // 6] + (255,))
+
+    # Turned aluminium, round a part: a broad highlight to the front left, a fainter one opposite, dark between,
+    # and the lathe's fine lines.
+    lathe = [rnd.randint(-3, 3) for _ in range(32)]
+
+    def turned(x, y):
+        a = (x + .5) / 64 * 360
+        return 138 + 105 * glint(a, 125, 24) + 50 * glint(a, 300, 34) - 48 * glint(a, 215, 40) - 30 * glint(a, 30, 40)
+    paint(TURNED, lambda x, y: grey(turned(x, y) + lathe[y]))
+    # A foot's knurled side: the same light on upright ridges, between two smooth rims.
+    paint(KNURL, lambda x, y: grey(turned(x, y) + 14 if y < 3 or y > 28 else turned(x, y) * .8 + (15 if x % 2 else -15)))
+    # The carbon tube: a twill of tows, glossy along its top.
     def carbon(x, y):
-        cell = ((x // 4) + (y // 4)) % 4 < 2
-        along = (y % 4) if cell else (x % 4)
-        shade = 30 + (40 if cell else 18) * math.sin(math.pi * (along + .5) / 4)
-        return (shade, shade, shade + 4, 255)
-    fill(CARBON, carbon)
+        a = (x + .5) / 64 * 360
+        tow = ((x // 8) + (y // 2)) % 4 < 2
+        return grey((38 if tow else 22) + 120 * glint(a, 90, 13) + 24 * glint(a, 230, 30), 3)
+    paint(CARBON, carbon)
+    # A bevel's bright line round a metal part, and a black part's side.
+    paint(SHINE, lambda x, y: grey(200 + 55 * glint((x + .5) / 64 * 360, 125, 30) + 30 * glint((x + .5) / 64 * 360, 300, 40)
+                                   - 40 * glint((x + .5) / 64 * 360, 215, 40)))
+    paint(RUBBER, lambda x, y: grey(24 + 46 * glint((x + .5) / 64 * 360, 125, 22) + 16 * glint((x + .5) / 64 * 360, 300, 30), 3))
 
-    # The square plate under the platter: aluminium with round holes, a dark boss in its middle.
+    # A round part's end, turned: bright and dark quarters about its middle, fine rings, darker towards its rim.
+    def spun(base, swing, groove=None):
+        def colour(x, y):
+            r = math.hypot(x + .5 - 32, y + .5 - 32) / 30
+            a = math.atan2(y + .5 - 32, x + .5 - 32)
+            v = base + swing * math.cos(2 * (a - math.radians(35))) + swing * .09 * math.sin(r * 51)
+            if groove and groove[0] < r < groove[1]:
+                v -= 70
+            return grey(v - (22 if r > .88 else 0) * swing / 56)
+        return colour
+    paint(CAP, spun(176, 56))
+    paint(CAP_BLACK, spun(34, 12))
+    paint(KEY, spun(208, 24, (.62, .7)))
+
+    # The top of the sensor's housing under the spindle: its white rim, the perforated board in it, and the
+    # bearing's collar in the middle.
     def plate(x, y):
-        hole = max(disc(x % 20, y % 20, 10, 10, 2.6), disc(x, y, 32, 32, 7))
-        base = 186 + rows[y] // 2
-        return tuple(base * (1 - hole) + 58 * hole for _ in range(3)) + (255,)
-    fill(PLATE, plate)
+        d = inset(PLATE, x, y)
+        if d < 7:
+            return grey(246 if d == 0 else 190 if d == 6 else 228, 1)
+        r = math.hypot(x + .5 - 32, y + .5 - 32)
+        if r < 10:
+            return grey(112 if r > 8.5 else 200 + 36 * math.cos(2 * (math.atan2(y - 31.5, x - 31.5) - .6)))
+        hole = (x - 10) % 6 < 2 and (y - 10) % 6 < 2
+        return grey(60 if hole else 150 + lathe[y % 32], 7)
+    paint(PLATE, plate)
 
-    # A key: a light face bevelled into a darker ring.
-    def button(x, y):
-        edge = min(x, y, n - 1 - x, n - 1 - y)
-        shade = 150 if edge < 4 else 200 + min(edge, 14) * 2 - (y - 32) * .3
-        return (shade, shade + 2, shade + 6, 255)
-    fill(BUTTON, button)
-    fill(HEADSHELL, lambda x, y: (226 + 18 * math.sin(y * .18), 228 + 18 * math.sin(y * .18), 234 + 16 * math.sin(y * .18), 255))
-    fill(LAMP_OFF, lambda x, y: (42 + 14 * disc(x, y, 32, 32, 22), 46 + 14 * disc(x, y, 32, 32, 22), 52 + 16 * disc(x, y, 32, 32, 22), 255))
-    fill(LAMP_ON, lambda x, y: (70 + 120 * disc(x, y, 32, 32, 20), 150 + 90 * disc(x, y, 32, 32, 20), 230 + 25 * disc(x, y, 32, 32, 20), 255))
-    fill(CART, lambda x, y: (36, 36, 40, 255) if y < 48 else (190, 160, 70, 255))
-    os.makedirs(ASSETS + "/textures/block/turntable", exist_ok=True)
-    img.save(ASSETS + "/textures/block/turntable/at_lpa2.png")
-    record()
+    # A lit lamp.
+    def lamp(x, y):
+        r = math.hypot(x + .5 - 8, y + .5 - 8) / 7
+        return (255, 255, 255, 0) if r > 1 else (235 - 175 * r, 250 - 90 * r, 255, 255)
+    paint(LAMP, lamp)
+
+    # The platter's faces, from the spindle (the top) out to the rim (the bottom): clear, the faint ring of the
+    # step a label lies over, a haze that grows towards the rim, and the rim's bright line.
+    def platter(x, y):
+        r = (y + .5) / PLATTER[3]
+        if r >= .975:
+            alpha = 225
+        elif .335 < r < .352:
+            alpha = 84
+        else:
+            t = max(0.0, min(1.0, (r - .88) / .09))
+            alpha = 28 + 62 * t * t * (3 - 2 * t)
+        return (246, 250, 252, alpha)
+    paint(PLATTER, platter)
+
+    # The control unit's front: blasted aluminium, a ring let in round each key, a lamp's dark lens over the
+    # first three, each key's name under it and the maker's over the last.
+    sx, sy = FRONT[2] / UNIT_WIDTH, FRONT[3] / UNIT_HEIGHT
+    paint(FRONT, lambda x, y: grey(240 if y == 0 else 160 if y == FRONT[3] - 1 else 214 - 26 * y / FRONT[3] + rnd.randint(-2, 2)))
+    for i, (at, r, name) in enumerate(KEYS):
+        cx, cy = FRONT[0] + at * sx, FRONT[1] + FRONT[3] / 2
+        ring(cx, cy, r * sx - .5, r * sx + 2.5, grey(118))
+        text(int(cx - (4 * len(name) - 1) / 2), FRONT[1] + FRONT[3] - 9, name, grey(86))
+        if i < LEDS:
+            ring(cx, FRONT[1] + 9.5, 0, 3.6, grey(150))
+            ring(cx, FRONT[1] + 9.5, 0, 2.6, (36, 46, 60, 255))
+    brand(px, FRONT[0] + FRONT[2] - 70, FRONT[1] + 3, grey(86), ring, text)
+    # The maker's name printed white on the plinth.
+    brand(px, LOGO[0], LOGO[1] + 1, (255, 255, 255, 236), ring, text)
+    img.save(OUT + "/at_lpa2.png")
+
+
+def brand(px, x, y, colour, ring, text):
+    """The maker's mark, a ring, and name: 64 texels across, 6 down."""
+    ring(x + 3, y + 3, 2, 3.2, colour)
+    text(x + 9, y, BRAND, colour)
 
 
 def record():
@@ -107,7 +229,7 @@ def record():
             elif r > label:
                 shade = 21 + 3 * math.sin(r * half * .9)
             px[x, y] = (int(shade), int(shade), int(shade + 2), 255)
-    img.save(ASSETS + "/textures/block/turntable/record.png")
+    img.save(OUT + "/record.png")
 
     img = Image.new("RGBA", (LABEL, LABEL))
     px = img.load()
@@ -124,151 +246,9 @@ def record():
             elif .45 < r < .58 and .5 < a < 2.6:
                 shade = 120  # and a brand mark under the spindle
             px[x, y] = (shade, shade, shade, 255)
-    img.save(ASSETS + "/textures/block/turntable/record_label.png")
-
-
-def box(lo, hi, material, rotate=None, faces=None):
-    """One element from lo to hi; rotate is (angle about y, origin) for round parts."""
-    size = [hi[i] - lo[i] for i in range(3)]
-    dims = {"north": (size[0], size[1]), "south": (size[0], size[1]), "east": (size[2], size[1]),
-            "west": (size[2], size[1]), "up": (size[0], size[2]), "down": (size[0], size[2])}
-    out = {}
-    for face, (w, h) in dims.items():
-        if faces is not None and face not in faces:
-            continue
-        mat = material if not (material == ACRYL and face not in ("up", "down")) else ACRYL_EDGE
-        u0, v0 = mat[0] / 4, mat[1] / 4
-        uw, vh = min(w * 2, 16) / 4, min(h * 2, 16) / 4
-        f = {"uv": [u0, v0, u0 + max(uw, .25), v0 + max(vh, .25)], "texture": "#0"}
-        if mat in GLASS:
-            f["tintindex"] = 0
-        out[face] = f
-    element = {"from": [round(v, 4) for v in lo], "to": [round(v, 4) for v in hi], "faces": out}
-    if rotate:
-        element["rotation"] = {"angle": rotate[0], "axis": "y", "origin": rotate[1]}
-    return element
-
-
-def round_post(cx, cz, r, y0, y1, material):
-    """A short round post: a square turned 0, 22.5, 45 and -22.5 degrees, sixteen sides."""
-    lo, hi = [cx - r, y0, cz - r], [cx + r, y1, cz + r]
-    return [box(lo, hi, material)] + [box(lo, hi, material, (a, [cx, y0, cz])) for a in (22.5, 45, -22.5)]
-
-
-def model(name, elements):
-    os.makedirs(MODELS, exist_ok=True)
-    data = {"textures": {"0": TEXTURE, "particle": TEXTURE}, "elements": elements}
-    with open(f"{MODELS}/{name}.json", "w", newline="\n") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-
-
-# The round posts: x, z, radius, bottom, top, material. The renderer draws them smooth (TurntableRenderer.POSTS has
-# the same numbers); the item's model has them as boxes. They are the four feet with their rubber rings, the
-# platter's bearing (inside the clear plinth), the motor and its pulley, the tonearm's pillar, and the spindle.
-POSTS = [(x, z, .9, 0, 1.25, ALU) for x, z in ((2, 2), (14, 2), (2, 11), (14, 11))] \
-    + [(x, z, .95, .9, 1.05, BLACK) for x, z in ((2, 2), (14, 2), (2, 11), (14, 11))] \
-    + [(6.5, 6.5, .8, 1.3, 2.5, ALU), (1.9, 11.1, .7, 1.3, 2.5, ALU), (1.9, 11.1, .45, 2.5, 3.45, ALU),
-       (13.2, 3.7, .9, 2.5, 3.0, ALU), (13.2, 3.7, .4, 3.0, 3.95, ALU), (6.5, 6.5, .25, 2.72, 4.3, ALU)]
-
-
-def posts():
-    return [b for x, z, r, y0, y1, mat in POSTS for b in round_post(x, z, r, y0, y1, mat)]
-
-
-def base():
-    e = [box([0.5, 1.25, 0.5], [15.5, 2.5, 12.5], ACRYL)]
-    # Inside the clear plinth: the rotation sensor under the platter's bearing.
-    e.append(box([7.5, 1.35, 6.1], [8.7, 1.55, 6.9], CART))
-    # The belt from the motor's pulley to the platter's rim (at 45 degrees); the renderer draws it round the rim at
-    # the same height (TurntableRenderer.BELT).
-    for side in (-1, 1):
-        ox, oz = 1.9 + .55 + side * .3, 11.1 - .55 + side * .3
-        e.append(box([ox - .06, 3.18, oz - .5], [ox + .06, 3.32, oz + .5], BLACK, (-45, [ox, 3.18, oz])))
-    # The tonearm's rest, and the lift lever's post.
-    e.append(box([12.95, 2.5, 9.0], [13.45, 4.4, 9.5], ALU))
-    e.append(box([12.75, 4.4, 8.9], [13.65, 4.5, 9.6], BLACK))
-    e.append(box([14.75, 2.5, 4.95], [15.25, 3.55, 5.45], ALU))
-    # The dust cover's hinge seats on the back face of the plinth, behind the cover's back wall.
-    for x in (2.5, 12.0):
-        e.append(box([x, 1.6, 0.05], [x + 1.5, 3.2, 0.49], BLACK))
-    # The control unit before the plinth: four keys on its top (power, 33, 45, start/stop) and three lamps.
-    e.append(box([9.4, 0, 13.0], [15.6, 2.0, 15.8], ALU))
-    e.append(box([9.6, 2.0, 13.2], [15.4, 2.05, 15.6], BLACK, faces=["up"]))
-    for i in range(4):
-        cx = 9.4 + 1.55 * i + .775
-        e.append(box([cx - .45, 2.0, 14.3], [cx + .45, 2.3, 15.2], BUTTON))
-        if i < 3:
-            e.append(box([cx - .25, 2.0, 13.5], [cx + .25, 2.12, 14.0], LAMP_OFF))
-    return e
-
-
-def hub():
-    return [box([4.3, 2.72, 4.3], [8.7, 2.88, 8.7], PLATE)]
-
-
-def arm():
-    e = [box([12.75, 3.9, 3.25], [13.65, 4.7, 4.15], ALU),
-         box([13.0, 4.15, 4.15], [13.4, 4.55, 10.7], CARBON),
-         box([13.05, 4.2, 1.9], [13.35, 4.5, 3.25], ALU),
-         box([12.6, 3.95, 1.2], [13.8, 4.75, 2.3], ALU),
-         box([12.55, 3.9, 1.9], [13.85, 4.8, 2.1], BLACK),
-         box([12.85, 3.95, 10.6], [13.55, 4.1, 12.0], HEADSHELL),
-         box([13.55, 4.0, 11.2], [14.15, 4.06, 11.4], HEADSHELL),
-         box([12.95, 3.72, 11.0], [13.45, 3.95, 11.9], CART),
-         box([13.15, 3.66, 11.6], [13.25, 3.72, 11.8], ALU)]
-    return e
-
-
-def cue():
-    return [box([14.85, 3.45, 5.2], [15.15, 3.65, 7.0], ALU), box([14.8, 3.4, 6.7], [15.2, 3.7, 7.1], BLACK)]
-
-
-def cover():
-    e = [box([0.5, 5.75, 0.5], [15.5, 6.0, 12.5], ACRYL),
-         box([0.5, 2.5, 12.25], [15.5, 5.75, 12.5], ACRYL_EDGE),
-         box([0.5, 2.5, 0.5], [15.5, 5.75, 0.75], ACRYL_EDGE),
-         box([0.5, 2.5, 0.75], [0.75, 5.75, 12.25], ACRYL_EDGE),
-         box([15.25, 2.5, 0.75], [15.5, 5.75, 12.25], ACRYL_EDGE)]
-    # Its hinges, behind its back wall, on their seats: they turn about their back bottom edge (TurntableLayout.HINGE_Y
-    # and HINGE_Z), so they lift off their seats as the cover opens and never swing into them.
-    for x in (2.5, 12.0):
-        e.append(box([x, 3.2, 0.05], [x + 1.5, 4.8, 0.49], BLACK))
-    return e
-
-
-def lamp():
-    return [box([-.25, 2.12, -.25], [.25, 2.14, .25], LAMP_ON, faces=["up"])]
-
-
-def platter_item():
-    """The platter as the item shows it: the renderer draws the game's round one."""
-    e = []
-    for hx, hz in ((5.4, 1.2), (4.8, 2.6), (3.8, 3.8), (2.6, 4.8), (1.2, 5.4)):
-        e.append(box([6.5 - hx, 2.9, 6.5 - hz], [6.5 + hx, 3.6, 6.5 + hz], ACRYL))
-    return e
-
-
-def item():
-    children = {name: {"parent": f"create_media_systems:block/turntable/at_lpa2/{name}"}
-                for name in ("base", "posts", "hub", "arm", "cue", "cover", "platter_item")}
-    data = {"parent": "minecraft:block/block", "loader": "neoforge:composite",
-            "render_type": "minecraft:translucent", "textures": {"particle": TEXTURE}, "children": children}
-    with open(ASSETS + "/models/item/at_lpa2.json", "w", newline="\n") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-
-
-def main():
-    texture()
-    for name, build in (("base", base), ("posts", posts), ("hub", hub), ("arm", arm), ("cue", cue), ("cover", cover),
-                        ("lamp", lamp), ("platter_item", platter_item)):
-        model(name, build())
-    with open(f"{MODELS}/particle.json", "w", newline="\n") as f:
-        json.dump({"textures": {"particle": TEXTURE}}, f, indent=2)
-        f.write("\n")
-    item()
+    img.save(OUT + "/record_label.png")
 
 
 if __name__ == "__main__":
-    main()
+    sheet()
+    record()

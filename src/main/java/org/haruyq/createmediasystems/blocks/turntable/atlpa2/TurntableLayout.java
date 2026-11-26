@@ -20,23 +20,31 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * front, y up, z from its back to its front. At its scale a sixteenth is 28 mm of the real deck.
  */
 public final class TurntableLayout {
+    /** The clear plinth's bottom and top, on its feet; and the shut dust cover's top. */
+    public static final double PLINTH_BOTTOM = 1.25, PLINTH_TOP = 2.32, COVER_TOP = 5.82;
     /** The platter's centre (the spindle), its radius, and the heights of its top and of a record's top on it. */
-    public static final double CENTER_X = 6.5, CENTER_Z = 6.5, PLATTER_RADIUS = 5.4, PLATTER_BOTTOM = 2.9,
-            PLATTER_TOP = 3.6, RECORD_TOP = 3.66;
+    public static final double CENTER_X = 6.5, CENTER_Z = 6.5, PLATTER_RADIUS = 5.4, PLATTER_BOTTOM = 2.72,
+            PLATTER_TOP = 3.42, RECORD_TOP = 3.48;
     /** A 12-inch record's radius, and the radii of its first groove and of its run-out, where its sound ends. */
     public static final double RECORD_RADIUS = 5.45, LEAD_IN = 5.2, RUN_OUT = 2.2;
+    /** The motor's pulley, at the back left: the belt runs from it round the platter's rim. */
+    public static final double MOTOR_X = 2.9, MOTOR_Z = 1.7;
     /** The tonearm's pivot, and how far from it its stylus is (223.6 mm effective length). */
-    public static final double PIVOT_X = 13.2, PIVOT_Y = 4.35, PIVOT_Z = 3.7, ARM_LENGTH = 8.0;
+    public static final double PIVOT_X = 13.2, PIVOT_Y = 4.17, PIVOT_Z = 3.7, ARM_LENGTH = 8.0;
     /** How far the lift lever raises the arm's head (degrees about its pivot). */
     public static final float LIFT_DEGREES = 3.6f;
     /** The lift lever's pivot, and how far it turns up. */
-    public static final double CUE_Y = 3.55, CUE_Z = 5.2;
+    public static final double CUE_Y = 3.37, CUE_Z = 5.2;
     public static final float CUE_DEGREES = 28;
     /** The dust cover's hinge line (its hinges' back bottom edge, on top of their seats), and how far it opens. */
-    public static final double HINGE_Y = 3.2, HINGE_Z = 0.05;
+    public static final double HINGE_Y = 2.62, HINGE_Z = 0.5;
     public static final float COVER_DEGREES = 78;
-    /** The lamps of the control unit's power, 33 and 45 keys (x, z; on its top). */
-    public static final double[][] LAMPS = {{10.175, 13.75}, {11.725, 13.75}, {13.275, 13.75}};
+    /** The control unit before the plinth, its keys on its front: its left, right, top, back and front. */
+    public static final double UNIT_X0 = 7.6, UNIT_X1 = 15.7, UNIT_TOP = 1.8, UNIT_Z0 = 12.65, UNIT_Z1 = 15.8;
+    /** The power, 33, 45 and start/stop keys on the control unit's front: each one's middle (x, y) and radius. */
+    public static final double[][] KEYS = {{8.55, .9, .42}, {10.35, .9, .27}, {12.05, .9, .27}, {14.9, .9, .42}};
+    /** How far above its key's middle the lamp of each of the first three keys is. */
+    public static final double LAMP_RISE = .6;
 
     private static final double PIVOT_TO_SPINDLE = Math.hypot(CENTER_X - PIVOT_X, CENTER_Z - PIVOT_Z);
     /** The direction from the pivot to the spindle, in degrees from the arm at rest (+z) towards the platter (-x). */
@@ -45,18 +53,19 @@ public final class TurntableLayout {
     /** What can be pointed at and right-clicked. Each is a box in the turntable's space. */
     public enum Part {
         /** The plinth: nothing happens. */
-        BASE(0.5, 0, 0.5, 15.5, 2.5, 12.5),
-        COVER(0.5, 2.5, 0.5, 15.5, 6.0, 12.5),
+        BASE(0.5, 0, 0.5, 15.5, PLINTH_TOP, 12.5),
+        COVER(0.5, PLINTH_TOP, 0.5, 15.5, COVER_TOP, 12.5),
         /** The open cover, standing up behind the deck, as far as it is inside the block. */
-        COVER_OPEN(0.5, 6.0, 0, 15.5, 16, 2.5),
+        COVER_OPEN(0.5, COVER_TOP, 0, 15.5, 16, 2.5),
         /** Up to just over a record's top, so that a click lands on the groove it points at. */
-        PLATTER(1.0, 2.5, 1.0, 12.0, 3.7, 12.0),
-        ARM(12.2, 2.5, 1.0, 14.2, 5.2, 12.5),
-        LIFT(14.2, 2.5, 4.5, 15.5, 4.5, 7.6),
-        POWER(9.4, 0, 13.0, 10.95, 2.4, 15.8),
-        SPEED_33(10.95, 0, 13.0, 12.5, 2.4, 15.8),
-        SPEED_45(12.5, 0, 13.0, 14.05, 2.4, 15.8),
-        START_STOP(14.05, 0, 13.0, 15.6, 2.4, 15.8);
+        PLATTER(1.0, PLINTH_TOP, 1.0, 12.0, 3.52, 12.0),
+        ARM(12.2, PLINTH_TOP, 1.0, 14.2, 5.02, 12.5),
+        LIFT(14.2, PLINTH_TOP, 4.5, 15.5, 4.32, 7.6),
+        /** The control unit's keys: each is the part of the unit it is on, out to the key's face. */
+        POWER(UNIT_X0, 0, UNIT_Z0, 9.5, UNIT_TOP, 15.95),
+        SPEED_33(9.5, 0, UNIT_Z0, 11.2, UNIT_TOP, 15.95),
+        SPEED_45(11.2, 0, UNIT_Z0, 12.9, UNIT_TOP, 15.95),
+        START_STOP(12.9, 0, UNIT_Z0, UNIT_X1, UNIT_TOP, 15.95);
 
         public final double x0, y0, z0, x1, y1, z1;
 
