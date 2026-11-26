@@ -111,7 +111,7 @@ public class SpeakerBlock extends DirectionalBlock implements EntityBlock, IWren
         /** New volume: listeners keep playing at the new volume. New source or channel: they start over. */
         public void configure(ServerLevel level, @Nullable BlockPos source, float volume, Streams.Channel channel) {
             this.source = Link.to(level, source);
-            this.volume = Mth.clamp(volume, 0, 1);
+            this.volume = Float.isNaN(volume) ? 1 : Mth.clamp(volume, 0, 1);
             this.channel = channel;
             setChanged();
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);

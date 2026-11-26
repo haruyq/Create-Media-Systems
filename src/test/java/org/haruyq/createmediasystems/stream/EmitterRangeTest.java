@@ -54,4 +54,11 @@ class EmitterRangeTest {
         assertEquals(1, new EmitterRange(Optional.empty(), 3).volume());
         assertEquals(0, new EmitterRange(Optional.empty(), -1).volume());
     }
+
+    @Test
+    void aVolumeThatIsNoNumberIsFull() {
+        assertEquals(1f, EmitterRange.at(Float.NaN).volume());
+        assertEquals(1f, EmitterRange.at(Float.POSITIVE_INFINITY).volume());
+        assertEquals(0f, EmitterRange.at(Float.NEGATIVE_INFINITY).volume());
+    }
 }

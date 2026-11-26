@@ -187,8 +187,7 @@ public final class RangeQuill {
         if (!(quillTarget(player, payload.jukebox()) instanceof JukeboxBlockEntity jukebox)) {
             return;
         }
-        boolean tooBig = payload.area().map(box -> box.getXSpan() > MAX_SIZE
-                || box.getYSpan() > MAX_SIZE || box.getZSpan() > MAX_SIZE).orElse(false);
+        boolean tooBig = payload.area().map(RangeQuill::tooBig).orElse(false);
         if (tooBig) {
             player.displayClientMessage(Component.translatable("create_media_systems.range.too_big", MAX_SIZE)
                     .withStyle(ChatFormatting.RED), true);
@@ -201,6 +200,12 @@ public final class RangeQuill {
         Jukeboxes.relay(player.serverLevel(), jukebox);
         sendBlockSettings(player, payload.jukebox());
         player.displayClientMessage(Component.translatable("create_media_systems.range.saved"), true);
+    }
+
+    /** Whether a side of {@code box} is over MAX_SIZE: counted in long, as BoundingBox's own spans overflow. */
+    static boolean tooBig(BoundingBox box) {
+        return (long) box.maxX() - box.minX() >= MAX_SIZE || (long) box.maxY() - box.minY() >= MAX_SIZE
+                || (long) box.maxZ() - box.minZ() >= MAX_SIZE;
     }
 
     /** {@code box}, given in place, as an area of the jukebox at {@code jukebox}. */
