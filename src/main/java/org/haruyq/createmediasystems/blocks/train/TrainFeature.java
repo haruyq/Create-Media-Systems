@@ -65,6 +65,8 @@ public final class TrainFeature implements Feature {
             MovingInteractionBehaviour.REGISTRY.register(TRAIN_DISC_READER.get(), new TrainDiscReaderBehaviour.Interaction());
         }));
         NeoForge.EVENT_BUS.addListener(TrainSignals::onServerTick);
+        NeoForge.EVENT_BUS.addListener(TrainAnnouncer::onServerTick);
+        NeoForge.EVENT_BUS.addListener(TrainAnnouncer::onServerStopped);
     }
 
     @Override

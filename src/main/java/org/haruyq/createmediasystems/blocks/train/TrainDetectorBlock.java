@@ -83,6 +83,11 @@ public class TrainDetectorBlock extends Block implements IBE<TrainDetectorBlock.
         }
 
         @Override
+        public String channel() {
+            return channel;
+        }
+
+        @Override
         public void setChannel(String channel) {
             this.channel = TrainSignals.normalize(channel);
             setChanged();

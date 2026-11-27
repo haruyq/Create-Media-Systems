@@ -78,6 +78,11 @@ public class TrainSignalReceiverBlock extends Block implements EntityBlock {
         }
 
         @Override
+        public String channel() {
+            return channel;
+        }
+
+        @Override
         public void setChannel(String channel) {
             this.channel = TrainSignals.normalize(channel);
             setChanged();
