@@ -1,6 +1,7 @@
 package org.haruyq.createmediasystems.blocks.display;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.haruyq.createmediasystems.client.IrisCompat;
 import org.haruyq.createmediasystems.client.Workers;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.BlockPos;
@@ -43,6 +45,7 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
@@ -83,6 +86,7 @@ public final class DisplayLight {
     private static CompletableFuture<Void> scanning = CompletableFuture.completedFuture(null);
     private static final Map<Block, float[]> MATERIALS = new ConcurrentHashMap<>();
     private static final float[] MATTE_MATERIAL = {1, 0.04f};
+    private static final Map<BlockState, Long> SHAPES = new ConcurrentHashMap<>();
     private static volatile boolean warned;
 
     static final class Refresh {
@@ -483,7 +487,8 @@ public final class DisplayLight {
         Mesh found = faces.finish();
         try {
             Mesh wet = water.finish();
-            int hash = Objects.hash(found.hash, wet.hash, grid.cells, screen, width, height);
+            int hash = Objects.hash(found.hash, wet.hash, grid.cells, Arrays.hashCode(grid.shapes), screen, width,
+                    height);
             return new Found(new Mesh[] {found, wet}, grid, screen, width, height, hash);
         } catch (Throwable failed) {
             found.close();
@@ -501,9 +506,7 @@ public final class DisplayLight {
             water.add(corners, new float[8], Direction.UP, 0, 0.04f, 0.02f);
         }
         BlockState state = level.getBlockState(pos);
-        if (state.canOcclude()) {
-            grid.block(pos.getX() - at.getX(), pos.getY() - at.getY(), pos.getZ() - at.getZ());
-        }
+        grid.block(pos.getX() - at.getX(), pos.getY() - at.getY(), pos.getZ() - at.getZ(), shape(level, pos, state));
         float[] material = material(state);
         SurfaceLight.forEachQuad(level, pos, state, random, quad -> {
             Vec3[] corners = new Vec3[4];
@@ -511,6 +514,30 @@ public final class DisplayLight {
             SurfaceLight.read(quad, offset, corners, uv);
             faces.add(corners, uv, quad.getDirection(), 1, material[0], material[1]);
         });
+    }
+
+    /**
+     * What of a block stands in the light's way (DisplayShadows.cells): what one can't walk through, a door, a slab
+     * or a fence as much as a whole block, unless it is seen through.
+     */
+    // ponytail: a state's shape where first met; one that differs by where it stands (bamboo) keeps that.
+    private static long shape(Level level, BlockPos pos, BlockState state) {
+        if (state.isAir()) {
+            return 0;
+        }
+        Long known = SHAPES.get(state);
+        if (known != null) {
+            return known;
+        }
+        long[] bits = new long[1];
+        if (!(state.getBlock() instanceof DisplayBlock) && state.getRenderShape() != RenderShape.INVISIBLE
+                && !state.is(Tags.Blocks.GLASS_BLOCKS) && !state.is(Tags.Blocks.GLASS_PANES)
+                && !ItemBlockRenderTypes.getRenderLayers(state).contains(RenderType.translucent())) {
+            state.getCollisionShape(level, pos).forAllBoxes((x0, y0, z0, x1, y1, z1) ->
+                    bits[0] |= DisplayShadows.cells(x0, y0, z0, x1, y1, z1));
+        }
+        SHAPES.put(state, bits[0]);
+        return bits[0];
     }
 
     /** The lit faces, whose shadows are computed from the block grid once uploaded. */

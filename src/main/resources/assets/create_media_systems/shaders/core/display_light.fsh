@@ -15,7 +15,8 @@
 // All of it seen as a camera would in a dark cinema, exposed for the room: what is near the screen saturates softly
 // (1 - exp(-x)), and the far seats still show.
 // - Shadows, of the screen's light and of its room's alike: how many of SPOTS points spread over the screen a pixel
-//   sees past the blocks about the display (Voxels, DisplayShadows' grid). What the face's four corners agree on
+//   sees past what stands about the display (Voxels and Shapes, DisplayShadows.Grid's: a block, or the part of it a
+//   door, a slab or a fence fills). What the face's four corners agree on
 //   (sure) is so all over it; a point only some of them see (unsure), each pixel looks for.
 // material: roughness, F0 (above 0.5, a metal), display_shadow.vsh's, and 1 for a block's face or 0 for water.
 // No ternaries inside expressions: Veil (with Sable) reprints this shader and drops their parentheses.
@@ -23,6 +24,7 @@
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform usampler3D Voxels;
+uniform usampler2D Shapes;
 
 // Not ScreenSize: vanilla sets a uniform of that name to the window's size on every draw.
 uniform vec2 PictureSize;
@@ -209,19 +211,71 @@ float boundary(float from, float d, int cell) {
     return 1e20;
 }
 
-// Whether a block stands between two points of the display's block space (as display_shadow.fsh's).
+// What of a block stands in the light's way (DisplayShadows.Grid): 0 nothing, 255 all of it, else which of Shapes.
+int kind(ivec3 cell) {
+    ivec3 at = cell - ivec3(VoxelMin);
+    if (any(lessThan(at, ivec3(0))) || any(greaterThanEqual(at, textureSize(Voxels, 0)))) return 0;
+    return int(texelFetch(Voxels, at, 0).r);
+}
+
+// A shape is its block's 4 x 4 x 4 cells, a bit each: x + 4 y + 16 z.
+bool filled(uvec2 shape, ivec3 sub) {
+    int bit = sub.x + 4 * sub.y + 16 * sub.z;
+    if (bit < 32) return (shape.x & (1u << uint(bit))) != 0u;
+    return (shape.y & (1u << uint(bit - 32))) != 0u;
+}
+
+bool solid(vec3 p) {
+    ivec3 cell = ivec3(floor(p));
+    int k = kind(cell);
+    if (k == 0) return false;
+    if (k == 255) return true;
+    return filled(texelFetch(Shapes, ivec2(k, 0), 0).rg, ivec3((p - vec3(cell)) * 4.0));
+}
+
+// Whether a ray meets a filled cell of a block's shape: from p, in the block's cells (0 to 4 a side), for `time` of
+// its way d, a block's.
+bool crosses(uvec2 shape, vec3 p, vec3 d, ivec3 step, vec3 delta, float time) {
+    p = clamp(p, 0.0, 3.999);
+    ivec3 sub = ivec3(p);
+    vec3 next = vec3(boundary(p.x, d.x, sub.x), boundary(p.y, d.y, sub.y), boundary(p.z, d.z, sub.z)) * 0.25;
+    for (int i = 0; i < 10; i++) {
+        if (filled(shape, sub)) return true;
+        if (min(next.x, min(next.y, next.z)) >= time) return false;
+        if (next.x < next.y && next.x < next.z) {
+            sub.x += step.x;
+            next.x += delta.x * 0.25;
+        } else if (next.y < next.z) {
+            sub.y += step.y;
+            next.y += delta.y * 0.25;
+        } else {
+            sub.z += step.z;
+            next.z += delta.z * 0.25;
+        }
+        if (any(lessThan(sub, ivec3(0))) || any(greaterThan(sub, ivec3(3)))) return false;
+    }
+    return false;
+}
+
+// Whether something stands between two points of the display's block space, the first not in it (solid).
 bool blocked(vec3 from, vec3 to) {
     vec3 d = to - from;
     ivec3 cell = ivec3(floor(from));
-    ivec3 end = ivec3(floor(to));
     ivec3 step = ivec3(sign(d));
     vec3 next = vec3(boundary(from.x, d.x, cell.x), boundary(from.y, d.y, cell.y), boundary(from.z, d.z, cell.z));
     vec3 delta = vec3(1e20);
     if (d.x != 0.0) delta.x = abs(1.0 / d.x);
     if (d.y != 0.0) delta.y = abs(1.0 / d.y);
     if (d.z != 0.0) delta.z = abs(1.0 / d.z);
-    ivec3 size = textureSize(Voxels, 0) * 2;
+    float t = 0.0;
     for (int guard = 0; guard < 1024; guard++) {
+        float leave = min(min(next.x, min(next.y, next.z)), 1.0);
+        int k = kind(cell);
+        if (k == 255) return true;
+        if (k != 0 && crosses(texelFetch(Shapes, ivec2(k, 0), 0).rg, (from + d * t - vec3(cell)) * 4.0, d, step, delta,
+                leave - t)) return true;
+        if (leave >= 1.0) return false;
+        t = leave;
         if (next.x < next.y && next.x < next.z) {
             cell.x += step.x;
             next.x += delta.x;
@@ -232,25 +286,34 @@ bool blocked(vec3 from, vec3 to) {
             cell.z += step.z;
             next.z += delta.z;
         }
-        if (min(next.x, min(next.y, next.z)) > 1.0 || all(equal(cell, end))) return false;
-        ivec3 at = cell - ivec3(VoxelMin);
-        if (any(lessThan(at, ivec3(0))) || any(greaterThanEqual(at, size))) continue;
-        uint mask = texelFetch(Voxels, at / 2, 0).r;
-        int bit = (at.x & 1) | ((at.y & 1) << 1) | ((at.z & 1) << 2);
-        if ((mask & (1u << uint(bit))) != 0u) return true;
     }
     return false;
 }
 
-// How much of the screen P, on a face turned N, sees past the blocks between (x: of what is in front of the face,
+// Where a ray off a face at p, turned n, starts: just off it. A shape's cells are a quarter of a block, so may cover
+// the face of what they stand for (a chest's lid is inside its top ones): then a cell further. w: 0 if still covered.
+vec4 off(vec3 p, vec3 n) {
+    vec3 from = p + n * 0.02;
+    if (!solid(from)) return vec4(from, 1.0);
+    from += n * 0.25;
+    if (!solid(from)) return vec4(from, 1.0);
+    return vec4(from, 0.0);
+}
+
+// How much of the screen P, on a face turned N, sees past what stands between (x: of what is in front of the face,
 // from the face, for the screen's light), and how much of it shares P's room (y: of it all, from ROOM_STEP out of the
 // face, for the light bounced about).
 vec2 sees(vec3 P, vec3 N) {
     // ToScreen's rows are the screen's right, up and out: turned back, the screen's space to the display's blocks'.
     mat3 toBlock = transpose(mat3(ToScreen));
     vec3 origin = ToScreen[3].xyz;
-    vec3 near = toBlock * (P + N * 0.02 - origin);
-    vec3 off = toBlock * (P + N * ROOM_STEP - origin);
+    vec4 near = vec4(0.0);
+    vec3 far = toBlock * (P + N * ROOM_STEP - origin);
+    bool roomy = false;
+    if (unsure != ivec2(0)) {
+        near = off(toBlock * (P - origin), toBlock * N);
+        roomy = !solid(far);
+    }
     int facing = 0;
     int lit = 0;
     int open = 0;
@@ -264,13 +327,13 @@ vec2 sees(vec3 P, vec3 N) {
             facing += 1;
             if ((sure.x & bit) != 0) {
                 lit += 1;
-            } else if ((unsure.x & bit) != 0 && !blocked(near, to)) {
+            } else if ((unsure.x & bit) != 0 && near.w > 0.5 && !blocked(near.xyz, to)) {
                 lit += 1;
             }
         }
         if ((sure.y & bit) != 0) {
             open += 1;
-        } else if ((unsure.y & bit) != 0 && !blocked(off, to)) {
+        } else if ((unsure.y & bit) != 0 && roomy && !blocked(far, to)) {
             open += 1;
         }
     }

@@ -10,6 +10,7 @@
         { "name": "ScreenOut", "type": "float", "count": 3, "values": [ 0.0, 0.0, 1.0 ] },
         { "name": "PictureSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
         { "name": "Voxels", "type": "int", "count": 1, "values": [ 0 ] },
+        { "name": "Shapes", "type": "int", "count": 1, "values": [ 1 ] },
         { "name": "VoxelMin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] }
     ]
 }

@@ -15,6 +15,7 @@ import org.lwjgl.system.MemoryUtil;
 
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.TextureUtil;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 
@@ -33,7 +34,10 @@ final class DisplayShadows implements AutoCloseable {
     private static final int RAYS_PER_FRAME = 262_144;
     /** Rays a vertex traces: to each of display_shadow.fsh's SPOTS for the screen's light, and again for its room. */
     private static final int RAYS = 32;
-    /** display_light.json's Voxels: a texture unit of its own, as no unit may hold a 2D and a 3D sampler's textures. */
+    /**
+     * display_light.json's Voxels, and Shapes on the unit after: units of their own, as no unit may hold a 2D and a 3D
+     * sampler's textures.
+     */
     private static final int VOXEL_UNIT = 3;
     private static ShaderInstance shader;
     private static final Budget BUDGET = new Budget(RAYS_PER_FRAME);
@@ -43,6 +47,7 @@ final class DisplayShadows implements AutoCloseable {
     private final float width;
     private final float height;
     private int voxels;
+    private int shapes;
     private int shaded;
 
     static void setShader(ShaderInstance loaded) {
@@ -69,29 +74,59 @@ final class DisplayShadows implements AutoCloseable {
         }
     }
 
-    /** Eight block occupancy bits per texel, keeping even the largest screen's grid below 256 texels per side. */
+    /**
+     * The cells of a block's 4 × 4 × 4 whose middles the box holds, a bit each (x + 4y + 16z): what of the block
+     * stands in the light's way, to a quarter of a block.
+     */
+    static long cells(double x0, double y0, double z0, double x1, double y1, double z1) {
+        long bits = 0;
+        for (int i = 0; i < 64; i++) {
+            double x = ((i & 3) + 0.5) / 4, y = ((i >> 2 & 3) + 0.5) / 4, z = ((i >> 4) + 0.5) / 4;
+            if (x >= x0 && x < x1 && y >= y0 && y < y1 && z >= z0 && z < z1) {
+                bits |= 1L << i;
+            }
+        }
+        return bits;
+    }
+
+    /** A byte per block of what stands in the light's way there: 0 nothing, 255 all of it, else which of shapes. */
     static final class Grid implements AutoCloseable {
         final BlockPos min;
         final int width;
         final int height;
         final int depth;
         final ByteBuffer cells;
+        /** What less than a whole block fills of it (see DisplayShadows.cells), from 1. */
+        final long[] shapes = new long[255];
+        private int count = 1;
 
         Grid(BlockPos min, BlockPos max) {
             this.min = min;
-            width = (max.getX() - min.getX() + 2) / 2;
-            height = (max.getY() - min.getY() + 2) / 2;
-            depth = (max.getZ() - min.getZ() + 2) / 2;
+            width = max.getX() - min.getX() + 1;
+            height = max.getY() - min.getY() + 1;
+            depth = max.getZ() - min.getZ() + 1;
             cells = MemoryUtil.memCalloc(Math.multiplyExact(Math.multiplyExact(width, height), depth));
         }
 
-        void block(int x, int y, int z) {
-            x -= min.getX();
-            y -= min.getY();
-            z -= min.getZ();
-            int index = x / 2 + width * (y / 2 + height * (z / 2));
-            int bit = (x & 1) | (y & 1) << 1 | (z & 1) << 2;
-            cells.put(index, (byte) (cells.get(index) | 1 << bit));
+        void block(int x, int y, int z, long shape) {
+            if (shape == 0) {
+                return;
+            }
+            int kind = 255;
+            if (shape != -1L) {
+                int known = 1;
+                while (known < count && shapes[known] != shape) {
+                    known++;
+                }
+                // ponytail: past 254 shapes about one display, the rest stand as whole blocks; two bytes a block if
+                // a room ever has more.
+                if (known < shapes.length) {
+                    shapes[known] = shape;
+                    count = Math.max(count, known + 1);
+                    kind = known;
+                }
+            }
+            cells.put(x - min.getX() + width * (y - min.getY() + height * (z - min.getZ())), (byte) kind);
         }
 
         @Override
@@ -136,6 +171,17 @@ final class DisplayShadows implements AutoCloseable {
             }
             GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8UI, grid.width, grid.height, grid.depth, 0,
                     GL30.GL_RED_INTEGER, GL11.GL_UNSIGNED_BYTE, grid.cells);
+            // A shape's low half in red, its high half in green.
+            shapes = TextureUtil.generateTextureId();
+            RenderSystem.bindTexture(shapes);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                ByteBuffer bits = stack.malloc(256 * Long.BYTES);
+                bits.asLongBuffer().put(grid.shapes).put(0);
+                GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RG32UI, 256, 1, 0, GL30.GL_RG_INTEGER,
+                        GL11.GL_UNSIGNED_INT, bits);
+            }
         } catch (Throwable error) {
             close();
             throw error;
@@ -171,6 +217,8 @@ final class DisplayShadows implements AutoCloseable {
             int framebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
             int readFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
             int active = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+            RenderSystem.activeTexture(GL13.GL_TEXTURE1);
+            RenderSystem.bindTexture(shapes);
             RenderSystem.activeTexture(GL13.GL_TEXTURE0);
             int previous = GL11.glGetInteger(GL12.GL_TEXTURE_BINDING_3D);
             boolean depth = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
@@ -231,11 +279,13 @@ final class DisplayShadows implements AutoCloseable {
         return shaded == total;
     }
 
-    /** The block grid as {@code light}'s Voxels, for it to find each pixel's shadow in (display_light.fsh). */
+    /** The block grid as {@code light}'s Voxels and Shapes, to find each pixel's shadow in (display_light.fsh). */
     void bindVoxels(ShaderInstance light) {
         int active = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         RenderSystem.activeTexture(GL13.GL_TEXTURE0 + VOXEL_UNIT);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, voxels);
+        RenderSystem.activeTexture(GL13.GL_TEXTURE0 + VOXEL_UNIT + 1);
+        RenderSystem.bindTexture(shapes);
         RenderSystem.activeTexture(active);
         light.safeGetUniform("VoxelMin").set((float) min.getX(), (float) min.getY(), (float) min.getZ());
     }
@@ -251,6 +301,7 @@ final class DisplayShadows implements AutoCloseable {
         if (voxels != 0) {
             GL11.glDeleteTextures(voxels);
             voxels = 0;
+            TextureUtil.releaseTextureId(shapes);
         }
     }
 
