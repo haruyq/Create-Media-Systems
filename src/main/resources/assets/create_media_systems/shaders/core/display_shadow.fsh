@@ -1,13 +1,19 @@
 #version 150
 
+// For a vertex of a face a display lights (DisplayShadows): which of SPOTS points spread over the screen it sees past
+// the blocks about the display (Voxels, eight to a texel). display_light.vsh reads a face's four, and
+// display_light.fsh traces again, per pixel, only to the points they don't agree on.
+
 uniform usampler3D Voxels;
 uniform vec3 VoxelMin;
-uniform vec3 Targets[24];
-uniform int RayCount;
+uniform vec3 ScreenOrigin;
+uniform vec3 ScreenRight;
+uniform vec3 ScreenOut;
+uniform vec2 PictureSize;
 
-// Rays (to the first targets, spread over the screen) for whether a point shares the screen's room, for its bounced
-// light: from a little way out of its face, whichever way the face is turned.
-const int ROOM_RAYS = 4;
+// As display_light.fsh's, both: the points, and how far out of its face a point looks from for whether it shares the
+// screen's room (for its bounced light), whichever way the face is turned.
+const int SPOTS = 16;
 const float ROOM_STEP = 0.6;
 
 in vec3 point;
@@ -54,22 +60,16 @@ bool blocked(vec3 from, vec3 to) {
 }
 
 void main() {
-    int rays = 0;
-    int clear = 0;
-    for (int i = 0; i < RayCount; i++) {
-        if (dot(normal, Targets[i] - point) <= 0.0) continue;
-        rays += 1;
-        if (!blocked(point + normal * 0.02, Targets[i])) clear += 1;
-    }
-    float seen = 1.0;
-    if (rays != 0) seen = floor(float(clear) / float(rays) * 255.0) / 255.0;
-    // Red: how much of the screen it sees past blocks between. Green: how much of it is in the screen's room, so
-    // faces turned away still get the light bounced about it, and those behind a wall none.
-    int probes = min(RayCount, ROOM_RAYS);
+    // A bit per point. lit: in front of the face, and seen from it. open: seen from ROOM_STEP out of it.
+    int lit = 0;
     int open = 0;
-    for (int i = 0; i < probes; i++) {
-        if (!blocked(point + normal * ROOM_STEP, Targets[i])) open += 1;
+    for (int i = 0; i < SPOTS; i++) {
+        // Each point on a column and a row of its own.
+        int row = ((i & 1) << 3) | ((i & 2) << 1) | ((i & 4) >> 1) | ((i & 8) >> 3);
+        vec2 at = (vec2(i, row) + 0.5) / float(SPOTS) * PictureSize;
+        vec3 spot = ScreenOrigin + ScreenRight * at.x + vec3(0.0, at.y, 0.0) + ScreenOut * 0.05;
+        if (dot(normal, spot - point) > 0.0 && !blocked(point + normal * 0.02, spot)) lit |= 1 << i;
+        if (!blocked(point + normal * ROOM_STEP, spot)) open |= 1 << i;
     }
-    float room = float(open) / float(max(probes, 1));
-    fragColor = vec4(seen, room, seen, 1.0);
+    fragColor = vec4(lit & 255, lit >> 8, open & 255, open >> 8) / 255.0;
 }

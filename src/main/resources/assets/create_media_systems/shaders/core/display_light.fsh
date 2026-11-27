@@ -14,15 +14,20 @@
 //   the screen's plane, beside it.
 // All of it seen as a camera would in a dark cinema, exposed for the room: what is near the screen saturates softly
 // (1 - exp(-x)), and the far seats still show.
-// material: roughness, F0 (above 0.5, a metal), how much of the screen the point sees past blocks between, and 1 for
-// a block's face or 0 for water.
+// - Shadows, of the screen's light and of its room's alike: how many of SPOTS points spread over the screen a pixel
+//   sees past the blocks about the display (Voxels, DisplayShadows' grid). What the face's four corners agree on
+//   (sure) is so all over it; a point only some of them see (unsure), each pixel looks for.
+// material: roughness, F0 (above 0.5, a metal), display_shadow.vsh's, and 1 for a block's face or 0 for water.
 // No ternaries inside expressions: Veil (with Sable) reprints this shader and drops their parentheses.
 
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
+uniform usampler3D Voxels;
 
 // Not ScreenSize: vanilla sets a uniform of that name to the window's size on every draw.
 uniform vec2 PictureSize;
+uniform mat4 ToScreen;
+uniform vec3 VoxelMin;
 uniform vec3 CameraPos;
 uniform float Range;
 uniform float Strength;
@@ -33,7 +38,8 @@ in vec2 texCoord0;
 in vec4 material;
 in vec3 localPos;
 in vec3 localNormal;
-in float room;
+flat in ivec2 sure;
+flat in ivec2 unsure;
 
 out vec4 fragColor;
 
@@ -42,6 +48,10 @@ const float PI = 3.14159265;
 const float EXPOSURE = 3.0;
 // How bright the light bounced about the room is, against the screen's average colour.
 const float BOUNCE = 0.3;
+// As display_shadow.fsh's, both: the screen's points a shadow is found from, and how far out of its face a point looks
+// from for whether it shares the screen's room.
+const int SPOTS = 16;
+const float ROOM_STEP = 0.6;
 
 // The picture around `at` (blocks on the screen), blurred to about `footprint` blocks across.
 vec3 video(vec2 at, float footprint) {
@@ -193,6 +203,82 @@ vec3 specular(vec3 P, vec3 N, float roughness, float f0, vec3 albedo) {
     return fresnel * light * coverage;
 }
 
+float boundary(float from, float d, int cell) {
+    if (d > 0.0) return (float(cell + 1) - from) / d;
+    if (d < 0.0) return (float(cell) - from) / d;
+    return 1e20;
+}
+
+// Whether a block stands between two points of the display's block space (as display_shadow.fsh's).
+bool blocked(vec3 from, vec3 to) {
+    vec3 d = to - from;
+    ivec3 cell = ivec3(floor(from));
+    ivec3 end = ivec3(floor(to));
+    ivec3 step = ivec3(sign(d));
+    vec3 next = vec3(boundary(from.x, d.x, cell.x), boundary(from.y, d.y, cell.y), boundary(from.z, d.z, cell.z));
+    vec3 delta = vec3(1e20);
+    if (d.x != 0.0) delta.x = abs(1.0 / d.x);
+    if (d.y != 0.0) delta.y = abs(1.0 / d.y);
+    if (d.z != 0.0) delta.z = abs(1.0 / d.z);
+    ivec3 size = textureSize(Voxels, 0) * 2;
+    for (int guard = 0; guard < 1024; guard++) {
+        if (next.x < next.y && next.x < next.z) {
+            cell.x += step.x;
+            next.x += delta.x;
+        } else if (next.y < next.z) {
+            cell.y += step.y;
+            next.y += delta.y;
+        } else {
+            cell.z += step.z;
+            next.z += delta.z;
+        }
+        if (min(next.x, min(next.y, next.z)) > 1.0 || all(equal(cell, end))) return false;
+        ivec3 at = cell - ivec3(VoxelMin);
+        if (any(lessThan(at, ivec3(0))) || any(greaterThanEqual(at, size))) continue;
+        uint mask = texelFetch(Voxels, at / 2, 0).r;
+        int bit = (at.x & 1) | ((at.y & 1) << 1) | ((at.z & 1) << 2);
+        if ((mask & (1u << uint(bit))) != 0u) return true;
+    }
+    return false;
+}
+
+// How much of the screen P, on a face turned N, sees past the blocks between (x: of what is in front of the face,
+// from the face, for the screen's light), and how much of it shares P's room (y: of it all, from ROOM_STEP out of the
+// face, for the light bounced about).
+vec2 sees(vec3 P, vec3 N) {
+    // ToScreen's rows are the screen's right, up and out: turned back, the screen's space to the display's blocks'.
+    mat3 toBlock = transpose(mat3(ToScreen));
+    vec3 origin = ToScreen[3].xyz;
+    vec3 near = toBlock * (P + N * 0.02 - origin);
+    vec3 off = toBlock * (P + N * ROOM_STEP - origin);
+    int facing = 0;
+    int lit = 0;
+    int open = 0;
+    for (int i = 0; i < SPOTS; i++) {
+        int bit = 1 << i;
+        // Each point on a column and a row of its own.
+        int row = ((i & 1) << 3) | ((i & 2) << 1) | ((i & 4) >> 1) | ((i & 8) >> 3);
+        vec3 spot = vec3((vec2(i, row) + 0.5) / float(SPOTS) * PictureSize, 0.05);
+        vec3 to = toBlock * (spot - origin);
+        if (dot(N, spot - P) > 0.0) {
+            facing += 1;
+            if ((sure.x & bit) != 0) {
+                lit += 1;
+            } else if ((unsure.x & bit) != 0 && !blocked(near, to)) {
+                lit += 1;
+            }
+        }
+        if ((sure.y & bit) != 0) {
+            open += 1;
+        } else if ((unsure.y & bit) != 0 && !blocked(off, to)) {
+            open += 1;
+        }
+    }
+    float seen = 1.0;
+    if (facing != 0) seen = float(lit) / float(facing);
+    return vec2(seen, float(open) / float(SPOTS));
+}
+
 void main() {
     vec3 P = localPos;
     if (P.z <= 0.0) {
@@ -219,7 +305,10 @@ void main() {
         }
         albedo = texel.rgb;
     }
-    float seen = material.b;
+    // From the face as it is, not as its ripples turn it.
+    vec2 shade = sees(P, normalize(localNormal));
+    float seen = shade.x;
+    float room = shade.y;
     vec3 light = vec3(0.0);
     if (!water) {
         vec2 size = vec2(textureSize(Sampler1, 0));

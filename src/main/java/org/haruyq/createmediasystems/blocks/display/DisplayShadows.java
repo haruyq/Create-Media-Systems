@@ -7,7 +7,6 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL32;
@@ -24,28 +23,30 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
-/** Cached vertex visibility, computed from a block grid in bounded GPU batches without a CPU readback. */
+/**
+ * Which of the screen's points each vertex of a display's lit faces sees (display_shadow.fsh), computed from a block
+ * grid in bounded GPU batches without a CPU readback, and that grid, for the pixels of a face whose corners don't
+ * agree to look for themselves (display_light.fsh).
+ */
 final class DisplayShadows implements AutoCloseable {
     private static final int WIDTH = 1024;
-    private static final int RAYS_PER_FRAME = 65_536;
-    /** As display_shadow.fsh's: rays a vertex traces for whether it shares the screen's room. */
-    private static final int ROOM_RAYS = 4;
+    private static final int RAYS_PER_FRAME = 262_144;
+    /** Rays a vertex traces: to each of display_shadow.fsh's SPOTS for the screen's light, and again for its room. */
+    private static final int RAYS = 32;
+    /** display_light.json's Voxels: a texture unit of its own, as no unit may hold a 2D and a 3D sampler's textures. */
+    private static final int VOXEL_UNIT = 3;
     private static ShaderInstance shader;
-    private static int targetsProgram;
-    private static int targetsLocation;
     private static final Budget BUDGET = new Budget(RAYS_PER_FRAME);
     private final TextureTarget visibility;
     private final BlockPos min;
-    private final float[] targets;
-    private final Vec3 right;
-    private final Vec3 out;
+    private final DisplayBlock.Screen screen;
+    private final float width;
+    private final float height;
     private int voxels;
     private int shaded;
 
     static void setShader(ShaderInstance loaded) {
         shader = loaded;
-        targetsProgram = loaded.getId();
-        targetsLocation = GL20.glGetUniformLocation(targetsProgram, "Targets");
     }
 
     static final class Budget {
@@ -99,16 +100,11 @@ final class DisplayShadows implements AutoCloseable {
         }
     }
 
-    DisplayShadows(Grid grid, Vec3[] targets, DisplayBlock.Screen screen, int vertices) {
+    DisplayShadows(Grid grid, DisplayBlock.Screen screen, float width, float height, int vertices) {
         min = grid.min;
-        this.targets = new float[targets.length * 3];
-        for (int i = 0; i < targets.length; i++) {
-            this.targets[i * 3] = (float) targets[i].x;
-            this.targets[i * 3 + 1] = (float) targets[i].y;
-            this.targets[i * 3 + 2] = (float) targets[i].z;
-        }
-        right = screen.right();
-        out = screen.out();
+        this.screen = screen;
+        this.width = width;
+        this.height = height;
         int framebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int readFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -160,15 +156,12 @@ final class DisplayShadows implements AutoCloseable {
     boolean advance(long frame, VertexBuffer[] buffers, int[] counts) {
         int total = counts[0] + counts[1];
         if (shaded == total) {
-            releaseVoxels();
             return true;
         }
         if (shader == null) {
             return false;
         }
-        int rays = targets.length / 3;
-        // Each vertex also traces whether it is in the screen's room (display_shadow.fsh, ROOM_RAYS).
-        int count = BUDGET.take(frame, total - shaded, rays + Math.min(rays, ROOM_RAYS));
+        int count = BUDGET.take(frame, total - shaded, RAYS);
         if (count == 0) {
             return false;
         }
@@ -196,9 +189,13 @@ final class DisplayShadows implements AutoCloseable {
                 GL11.glBindTexture(GL12.GL_TEXTURE_3D, voxels);
                 shader.safeGetUniform("Size").set((float) WIDTH, (float) visibility.height);
                 shader.safeGetUniform("VoxelMin").set((float) min.getX(), (float) min.getY(), (float) min.getZ());
+                Vec3 origin = screen.origin();
+                Vec3 right = screen.right();
+                Vec3 out = screen.out();
+                shader.safeGetUniform("ScreenOrigin").set((float) origin.x, (float) origin.y, (float) origin.z);
                 shader.safeGetUniform("ScreenRight").set((float) right.x, (float) right.y, (float) right.z);
                 shader.safeGetUniform("ScreenOut").set((float) out.x, (float) out.y, (float) out.z);
-                shader.safeGetUniform("RayCount").set(rays);
+                shader.safeGetUniform("PictureSize").set(width, height);
                 int end = shaded + count;
                 if (shaded < counts[0]) {
                     draw(buffers[0], shaded, Math.min(end, counts[0]) - shaded, 0);
@@ -231,22 +228,22 @@ final class DisplayShadows implements AutoCloseable {
                 RenderSystem.viewport(viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3));
             }
         }
-        if (shaded == total) {
-            releaseVoxels();
-            return true;
-        }
-        return false;
+        return shaded == total;
+    }
+
+    /** The block grid as {@code light}'s Voxels, for it to find each pixel's shadow in (display_light.fsh). */
+    void bindVoxels(ShaderInstance light) {
+        int active = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        RenderSystem.activeTexture(GL13.GL_TEXTURE0 + VOXEL_UNIT);
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, voxels);
+        RenderSystem.activeTexture(active);
+        light.safeGetUniform("VoxelMin").set((float) min.getX(), (float) min.getY(), (float) min.getZ());
     }
 
     private void draw(VertexBuffer buffer, int first, int count, int offset) {
         shader.safeGetUniform("VertexOffset").set(offset);
         buffer.bind();
         shader.apply();
-        if (targetsProgram != shader.getId()) {
-            targetsProgram = shader.getId();
-            targetsLocation = GL20.glGetUniformLocation(targetsProgram, "Targets");
-        }
-        GL20.glUniform3fv(targetsLocation, targets);
         GL11.glDrawArrays(GL11.GL_POINTS, first, count);
     }
 

@@ -1,11 +1,11 @@
 package org.haruyq.createmediasystems.blocks.display;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -68,13 +68,12 @@ public final class DisplayLight {
     static final float STRENGTH = 0.7f;
     /** Ticks between looks at which faces the light reaches, at least. */
     private static final int REFRESH_TICKS = 20;
-    /** Chooses fewer shadow samples per vertex in a big room; DisplayShadows bounds their work per frame. */
-    private static final int RAY_BUDGET = 200_000;
     /** Frames a display may go undrawn before its buffers are freed. */
     private static final int FORGET_FRAMES = 600;
     /*
-     * Per vertex, in the display's block space: x, y, z; atlas u, v; as its colour, roughness, F0, unused,
-     * whether a block's face (1) or a water surface (0); its normal in the screen's space.
+     * Per vertex, in the display's block space: x, y, z; atlas u, v; as its colour, roughness, F0, which way its
+     * face's middle is (Lighting.add), whether a block's face (1) or a water surface (0); its normal in the screen's
+     * space.
      */
     private static ShaderInstance shader;
     private static int shaderVersion;
@@ -149,6 +148,7 @@ public final class DisplayLight {
             RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
             RenderSystem.setShaderTexture(1, video);
             RenderSystem.setShaderTexture(2, current.shadows.texture());
+            current.shadows.bindVoxels(shader);
             shader.safeGetUniform("ToScreen").set(toScreen);
             shader.safeGetUniform("CameraPos").set(camera.x, camera.y, camera.z);
             shader.safeGetUniform("PictureSize").set(width, height);
@@ -227,8 +227,8 @@ public final class DisplayLight {
         }
     }
 
-    private record Found(Mesh[] meshes, DisplayShadows.Grid grid, Vec3[] targets, DisplayBlock.Screen screen,
-                         int hash) implements AutoCloseable {
+    private record Found(Mesh[] meshes, DisplayShadows.Grid grid, DisplayBlock.Screen screen, float width,
+                         float height, int hash) implements AutoCloseable {
         @Override
         public void close() {
             Mesh.close(meshes);
@@ -255,7 +255,8 @@ public final class DisplayLight {
                         buffers[i].upload(data);
                     }
                 }
-                shadows = new DisplayShadows(found.grid, found.targets, found.screen, counts[0] + counts[1]);
+                shadows = new DisplayShadows(found.grid, found.screen, found.width, found.height,
+                        counts[0] + counts[1]);
             } catch (Throwable error) {
                 close();
                 throw error;
@@ -479,12 +480,11 @@ public final class DisplayLight {
                 }
             }
         }
-        Vec3[] targets = shadeTargets(screen, width, height, faces.size() + water.size());
         Mesh found = faces.finish();
         try {
             Mesh wet = water.finish();
-            int hash = ((found.hash * 31 + wet.hash) * 31 + grid.cells.hashCode()) * 31 + Arrays.hashCode(targets);
-            return new Found(new Mesh[] {found, wet}, grid, targets, screen, hash);
+            int hash = Objects.hash(found.hash, wet.hash, grid.cells, screen, width, height);
+            return new Found(new Mesh[] {found, wet}, grid, screen, width, height, hash);
         } catch (Throwable failed) {
             found.close();
             throw failed;
@@ -521,17 +521,12 @@ public final class DisplayLight {
         private final float range;
         final ByteBufferBuilder bytes = new ByteBufferBuilder(1024 * SurfaceLight.FORMAT.getVertexSize());
         private final BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, SurfaceLight.FORMAT);
-        private int count;
 
         Lighting(DisplayBlock.Screen screen, float width, float height, float range) {
             this.screen = screen;
             this.width = width;
             this.height = height;
             this.range = range;
-        }
-
-        int size() {
-            return count;
         }
 
         /**
@@ -552,12 +547,22 @@ public final class DisplayLight {
             }
             Vec3 normal = Vec3.atLowerCornerOf(side.getNormal());
             Vec3 n = new Vec3(normal.dot(screen.right()), normal.y, normal.dot(screen.out()));
+            Vec3 middle = corners[0].add(corners[1]).add(corners[2]).add(corners[3]).scale(0.25);
             for (int k = 0; k < 4; k++) {
                 Vec3 p = corners[k];
+                // Which way the face's middle is from here, a third of a byte per axis: a corner's shadow is looked
+                // for from just inside its face (display_shadow.vsh), as on the corner itself, where blocks meet,
+                // which of them a ray starts in is a toss-up.
+                int inward = side(middle.x - p.x) + 3 * side(middle.y - p.y) + 9 * side(middle.z - p.z);
                 out.addVertex((float) p.x, (float) p.y, (float) p.z).setUv(uv[2 * k], uv[2 * k + 1])
-                        .setColor(roughness, f0, 1, kind).setNormal((float) n.x, (float) n.y, (float) n.z);
-                count++;
+                        .setColor(roughness, f0, (inward + 0.5f) / 255, kind)
+                        .setNormal((float) n.x, (float) n.y, (float) n.z);
             }
+        }
+
+        /** 0, 1 or 2: {@code d} below, about or above zero. */
+        private static int side(double d) {
+            return d < -1e-4 ? 0 : d > 1e-4 ? 2 : 1;
         }
 
         Mesh finish() {
@@ -598,24 +603,5 @@ public final class DisplayLight {
             }
             return MATTE_MATERIAL;
         });
-    }
-
-    static Vec3[] shadeTargets(DisplayBlock.Screen screen, float width, float height, int points) {
-        int across = Mth.clamp(Math.round(width / 2), 3, 6);
-        int up = Mth.clamp(Math.round(height / 2), 2, 4);
-        // Corners are shared by about four faces each.
-        int rays = Mth.clamp(RAY_BUDGET * 4 / Math.max(points, 1), 2, across * up);
-        Vec3[] targets = new Vec3[rays];
-        int bits = 32 - Integer.numberOfLeadingZeros(rays - 1);
-        int next = 0;
-        // Bit reversal spreads even the smallest budgets across both dimensions without changing between scans.
-        for (int k = 0; k < (1 << bits); k++) {
-            int row = Integer.reverse(k) >>> (32 - bits);
-            if (row < rays) {
-                targets[next] = screen.at(width * (next + 0.5f) / rays, height * (row + 0.5f) / rays, 0.05f);
-                next++;
-            }
-        }
-        return targets;
     }
 }
