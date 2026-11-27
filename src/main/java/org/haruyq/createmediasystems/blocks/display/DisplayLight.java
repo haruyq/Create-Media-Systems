@@ -151,7 +151,7 @@ public final class DisplayLight {
             RenderSystem.setShaderTexture(2, current.shadows.texture());
             shader.safeGetUniform("ToScreen").set(toScreen);
             shader.safeGetUniform("CameraPos").set(camera.x, camera.y, camera.z);
-            shader.safeGetUniform("ScreenSize").set(width, height);
+            shader.safeGetUniform("PictureSize").set(width, height);
             shader.safeGetUniform("Range").set(range);
             shader.safeGetUniform("Strength").set(strength);
             shader.safeGetUniform("Specular").set(specular ? 1f : 0f);
