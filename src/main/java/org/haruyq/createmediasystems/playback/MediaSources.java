@@ -202,6 +202,26 @@ public final class MediaSources {
     }
 
     /**
+     * Resolves the record at {@code url} (a Custom Disc just put on a deck) in the background and starts keeping its
+     * audio (see AudioCache), as playing it would: playing it later opens the kept copy, or joins that resolution.
+     */
+    public static void fetchRecordAhead(String url) {
+        try {
+            URI uri = URI.create(url);
+            if (resolvable(url, uri)) {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        web(uri, false, 0);
+                    } catch (IOException | RuntimeException failed) {
+                        // resolved again as it plays, which says why it can't
+                    }
+                }, Util.nonCriticalIoPool());
+            }
+        } catch (IllegalArgumentException invalid) {
+        }
+    }
+
+    /**
      * Starts keeping the video at {@code url} (a disc's next) as its disc plays it, if
      * it is a page yt-dlp may fetch and the server allows.
      */

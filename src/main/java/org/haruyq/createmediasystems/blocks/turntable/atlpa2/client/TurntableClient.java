@@ -15,6 +15,7 @@ import org.haruyq.createmediasystems.blocks.turntable.atlpa2.TurntableLayout.Par
 import org.haruyq.createmediasystems.client.ClientFeature;
 import org.haruyq.createmediasystems.client.WorldEvents;
 import org.haruyq.createmediasystems.playback.EmitterAudioManager;
+import org.haruyq.createmediasystems.playback.MediaSources;
 import org.haruyq.createmediasystems.playback.MusicEmitter;
 
 import org.jetbrains.annotations.Nullable;
@@ -43,6 +44,12 @@ public final class TurntableClient implements ClientFeature {
     private static final double RANGE = 48, HALF = 12;
     /** How fast the arm swings to where it is set (degrees a tick), and the platter slows with the motor off. */
     private static final double SWING = 3, COAST = .12;
+    /**
+     * How often (ticks) a Custom Disc waiting on the platter is fetched ahead again: well inside a resolution's
+     * lifetime (see NativeMediaResolver), which it keeps; a kept or still-resolved track costs no request.
+     */
+    // ponytail: one API resolve per client every few minutes per idle Custom Disc it has loaded; gate on distance if that grows.
+    private static final int FETCH_TICKS = 400;
     private static final Set<TurntableBlock.Entity> LOADED = Collections.newSetFromMap(new WeakHashMap<>());
     @Nullable
     private static Part hovered;
@@ -54,6 +61,9 @@ public final class TurntableClient implements ClientFeature {
         double platter, lastPlatter, spin;
         double arm, lastArm;
         float cover, lastCover;
+        /** The Custom Disc link it last fetched ahead (see animate); null for none. */
+        @Nullable
+        String fetched;
 
         float platter(float partialTick) {
             return (float) (Mth.lerp(partialTick, lastPlatter, platter) % 360);
@@ -117,6 +127,14 @@ public final class TurntableClient implements ClientFeature {
         }
         m.arm += Mth.clamp(armTarget(turntable) - m.arm, -SWING, SWING);
         m.cover = Mth.approach(m.cover, turntable.getBlockState().getValue(TurntableBlock.OPEN) ? 1 : 0, 1 / 15f);
+        // A Custom Disc's track loads as it goes on the platter, and again as it waits there (a resolution lasts
+        // minutes, and a track the API gives no single file for is not kept), so it is here as the needle comes down.
+        String link = turntable.link();
+        if (link != null && !turntable.playing() && WorldEvents.isClientWorld(turntable.getLevel())
+                && (!link.equals(m.fetched) || turntable.getLevel().getGameTime() % FETCH_TICKS == 0)) {
+            MediaSources.fetchRecordAhead(link);
+        }
+        m.fetched = link;
     }
 
     /** How far the arm's head is raised (0 down, 1 up), at this part of a tick. */
