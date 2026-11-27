@@ -72,7 +72,7 @@ public final class SoundproofPonder {
         say(scene, 120, face, "Right-click a full block with a Sound Insulation Sheet to put the sheet into it. The block looks the same, and it now lets through a quarter of the sound.");
         say(scene, 120, face, "Holding a sheet outlines the blocks nearby that have one. Right-click such a block with a sheet to take it out again; breaking the block drops it.");
 
-        BlockState panel = SoundproofFeature.PANEL.get().defaultBlockState().setValue(AcousticPanelBlock.FACING, Direction.WEST);
+        BlockState panel = SoundproofFeature.PANEL.get().against(Direction.EAST);
         for (int y = 1; y <= 3; y++) {
             for (int z = 0; z <= 4; z++) {
                 BlockPos at = util.grid().at(1, y, z);
