@@ -1,15 +1,17 @@
 #version 150
 
 // A display's light on a block face or water surface in front of it (DisplayLight), added to it as it is.
-// The screen is an area light, x 0..ScreenSize.x and y 0..ScreenSize.y on z = 0, shining towards +z, its colours the
+// The screen is an area light, x 0..PictureSize.x and y 0..PictureSize.y on z = 0, shining towards +z, its colours the
 // video's (Sampler1, whose mipmaps are its blur). Everything here is in that space.
 // - Diffuse: the screen's exact form factor (Lambert's polygon formula, clipped to the face's horizon), coloured by
 //   the part of the picture the face mostly sees, blurred as widely as it sees it (after Heitz et al. 2016's
 //   textured area lights).
 // - Specular: where the mirrored view ray meets the screen, the picture there blurred to the face's roughness,
 //   weighted by how much of that blur falls on the screen and by Fresnel.
-// - Bounce: some of the screen's light, its average colour, reflected about the room onto every face near enough,
-//   turned towards it or not, as much as it is in the screen's room (room: none behind a wall).
+// - Bounce: some of the screen's light, its average colour, reflected about the room onto every face within reach,
+//   turned towards it or not, as much as it is in the screen's room (room: none behind a wall). It does not fall
+//   off with distance, as a lit room's walls and seats keep it in; the light's reach fades it at the end, and so does
+//   the screen's plane, beside it.
 // All of it seen as a camera would in a dark cinema, exposed for the room: what is near the screen saturates softly
 // (1 - exp(-x)), and the far seats still show.
 // material: roughness, F0 (above 0.5, a metal), how much of the screen the point sees past blocks between, and 1 for
@@ -19,7 +21,8 @@
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 
-uniform vec2 ScreenSize;
+// Not ScreenSize: vanilla sets a uniform of that name to the window's size on every draw.
+uniform vec2 PictureSize;
 uniform vec3 CameraPos;
 uniform float Range;
 uniform float Strength;
@@ -37,16 +40,16 @@ out vec4 fragColor;
 const float PI = 3.14159265;
 // How brightly the room is exposed: the gain on the light before it saturates.
 const float EXPOSURE = 3.0;
-// The share of the screen's light bounced about the room.
-const float BOUNCE = 0.04;
+// How bright the light bounced about the room is, against the screen's average colour.
+const float BOUNCE = 0.3;
 
 // The picture around `at` (blocks on the screen), blurred to about `footprint` blocks across.
 vec3 video(vec2 at, float footprint) {
     vec2 size = vec2(textureSize(Sampler1, 0));
-    float texelsPerBlock = max(size.x / ScreenSize.x, size.y / ScreenSize.y);
+    float texelsPerBlock = max(size.x / PictureSize.x, size.y / PictureSize.y);
     float lod = clamp(log2(max(footprint * texelsPerBlock, 1.0)), 0.0, floor(log2(max(size.x, size.y))));
-    at = clamp(at, vec2(0.0), ScreenSize);
-    return textureLod(Sampler1, vec2(at.x / ScreenSize.x, 1.0 - at.y / ScreenSize.y), lod).rgb;
+    at = clamp(at, vec2(0.0), PictureSize);
+    return textureLod(Sampler1, vec2(at.x / PictureSize.x, 1.0 - at.y / PictureSize.y), lod).rgb;
 }
 
 // The quad L[0..3] (directions from the shaded point, its normal +z) cut to the part above the horizon, in L[0..n-1].
@@ -134,9 +137,9 @@ vec3 diffuse(vec3 P, vec3 N) {
     mat3 toFrame = transpose(frame);
     vec3 L[5];
     L[0] = toFrame * (vec3(0.0, 0.0, 0.0) - P);
-    L[1] = toFrame * (vec3(ScreenSize.x, 0.0, 0.0) - P);
-    L[2] = toFrame * (vec3(ScreenSize, 0.0) - P);
-    L[3] = toFrame * (vec3(0.0, ScreenSize.y, 0.0) - P);
+    L[1] = toFrame * (vec3(PictureSize.x, 0.0, 0.0) - P);
+    L[2] = toFrame * (vec3(PictureSize, 0.0) - P);
+    L[3] = toFrame * (vec3(0.0, PictureSize.y, 0.0) - P);
     L[4] = L[3];
     int n;
     clipToHorizon(L, n);
@@ -157,7 +160,7 @@ vec3 diffuse(vec3 P, vec3 N) {
     if (towards.z < -1e-4) {
         at = (P + towards * (-P.z / towards.z)).xy;
     }
-    return video(at, 0.5 + distance(P, vec3(clamp(at, vec2(0.0), ScreenSize), 0.0))) * formFactor;
+    return video(at, 0.5 + distance(P, vec3(clamp(at, vec2(0.0), PictureSize), 0.0))) * formFactor;
 }
 
 vec3 specular(vec3 P, vec3 N, float roughness, float f0, vec3 albedo) {
@@ -175,7 +178,7 @@ vec3 specular(vec3 P, vec3 N, float roughness, float f0, vec3 albedo) {
     // Half the width, on the screen, of the blur a surface this rough sees there.
     float s = t * max(roughness * roughness * 1.5, 0.004) + 0.01;
     vec2 lo = max(hit - s, vec2(0.0));
-    vec2 hi = min(hit + s, ScreenSize);
+    vec2 hi = min(hit + s, PictureSize);
     vec2 cover = clamp(hi - lo, 0.0, 2.0 * s) / (2.0 * s);
     float coverage = cover.x * cover.y;
     if (coverage <= 0.0) {
@@ -195,7 +198,7 @@ void main() {
     if (P.z <= 0.0) {
         discard;
     }
-    float distanceToScreen = distance(P, vec3(clamp(P.xy, vec2(0.0), ScreenSize), 0.0));
+    float distanceToScreen = distance(P, vec3(clamp(P.xy, vec2(0.0), PictureSize), 0.0));
     if (distanceToScreen >= Range) {
         fragColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
@@ -221,8 +224,7 @@ void main() {
     if (!water) {
         vec2 size = vec2(textureSize(Sampler1, 0));
         vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
-        float area = ScreenSize.x * ScreenSize.y;
-        vec3 bounce = BOUNCE * average * area / (area + PI * distanceToScreen * distanceToScreen) * room;
+        vec3 bounce = BOUNCE * average * room * P.z / max(distanceToScreen, 1e-4);
         vec3 direct = vec3(0.0);
         if (seen > 0.0) {
             direct = diffuse(P, N) * seen;

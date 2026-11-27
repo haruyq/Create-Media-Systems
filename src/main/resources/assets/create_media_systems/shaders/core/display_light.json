@@ -12,7 +12,7 @@
         { "name": "ToScreen", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
         { "name": "CameraPos", "type": "float", "count": 3, "values": [ 0.0, 0.0, 1.0 ] },
         { "name": "VisibilityOffset", "type": "int", "count": 1, "values": [ 0 ] },
-        { "name": "ScreenSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "PictureSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
         { "name": "Range", "type": "float", "count": 1, "values": [ 10.0 ] },
         { "name": "Strength", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "Specular", "type": "float", "count": 1, "values": [ 0.0 ] },
