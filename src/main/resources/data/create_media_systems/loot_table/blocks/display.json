@@ -3,15 +3,13 @@
   "pools": [
     {
       "rolls": 1,
-      "entries": [
-        {
-          "type": "minecraft:item",
-          "name": "create_media_systems:display"
-        }
-      ],
+      "entries": [{ "type": "minecraft:item", "name": "create_media_systems:display" }],
       "conditions": [
+        { "condition": "minecraft:survives_explosion" },
         {
-          "condition": "minecraft:survives_explosion"
+          "condition": "minecraft:block_state_property",
+          "block": "create_media_systems:display",
+          "properties": { "part": "false" }
         }
       ]
     }

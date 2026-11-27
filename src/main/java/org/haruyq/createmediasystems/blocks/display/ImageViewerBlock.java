@@ -68,9 +68,9 @@ public class ImageViewerBlock extends DisplayBlock {
         if (!stack.is(Tags.Items.TOOLS_WRENCH)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
-        if (level.isClientSide && level.getBlockEntity(pos) instanceof Entity viewer) {
+        if (level.isClientSide && level.getBlockEntity(anchor(level, pos)) instanceof Entity viewer) {
             TextPromptScreen.open("create_media_systems.screen.image", viewer.image(), UrlPolicy.MAX_LENGTH,
-                    value -> PacketDistributor.sendToServer(new SetImage(pos, value)));
+                    value -> PacketDistributor.sendToServer(new SetImage(viewer.getBlockPos(), value)));
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
     }
@@ -162,7 +162,7 @@ public class ImageViewerBlock extends DisplayBlock {
     /** A wrench holder set an image viewer's link (empty clears it); only to a host the server allows. */
     static void setImage(ServerPlayer player, SetImage payload) {
         BlockPos pos = payload.viewer();
-        Entity viewer = Reach.blockEntity(player, pos, Reach.HAND, Entity.class);
+        Entity viewer = ScreenEntity.near(player, pos, Reach.HAND, Entity.class);
         if (!player.isHolding(stack -> stack.is(Tags.Items.TOOLS_WRENCH)) || viewer == null) {
             return;
         }

@@ -219,12 +219,14 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
 
     /**
      * The black panel over the whole screen, its edges reaching back to the wall so it sits on it rather than floating
-     * off it past the block's own model; a hair wider than the model, so as not to flicker into its sides.
+     * off it past the block's own model, and closed behind; a hair larger than the model all round, so as not to
+     * flicker into it.
      */
     static void panel(VertexConsumer out, Matrix4f matrix, DisplayBlock.Screen screen, float width, float height) {
         quad(out, matrix, screen, 0, 0, width, height, LIFT, null);
-        float back = -(float) DisplayBlock.DEPTH;
+        float back = -(float) DisplayBlock.DEPTH - LIFT;
         float x0 = -LIFT, y0 = -LIFT, x1 = width + LIFT, y1 = height + LIFT;
+        side(out, matrix, screen.at(x0, y0, back), screen.at(x0, y1, back), screen.at(x1, y1, back), screen.at(x1, y0, back));
         side(out, matrix, screen.at(x0, y0, LIFT), screen.at(x0, y0, back), screen.at(x1, y0, back), screen.at(x1, y0, LIFT));
         side(out, matrix, screen.at(x0, y1, LIFT), screen.at(x1, y1, LIFT), screen.at(x1, y1, back), screen.at(x0, y1, back));
         side(out, matrix, screen.at(x0, y0, LIFT), screen.at(x0, y1, LIFT), screen.at(x0, y1, back), screen.at(x0, y0, back));

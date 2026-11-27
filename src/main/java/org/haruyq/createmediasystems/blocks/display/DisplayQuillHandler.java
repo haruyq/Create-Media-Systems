@@ -135,7 +135,7 @@ final class DisplayQuillHandler {
             return;
         }
         BlockHitResult trace = Quill.pointedAt();
-        hovered = trace == null ? null : trace.getBlockPos();
+        hovered = trace == null ? null : DisplayBlock.anchor(Minecraft.getInstance().level, trace.getBlockPos());
         ScreenEntity display = screen(hovered);
         if (display != null && !display.getBlockPos().equals(hinted)) {
             boolean linked = linked(display);

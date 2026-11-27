@@ -37,7 +37,9 @@ public final class LightingRaycastShipGameTests {
     @GameTest(batch = "lighting_raycast", template = "empty", timeoutTicks = 100)
     public static void enlargedDisplayOnRotatedScaledShipUsesMovedBlockEntityRegistration(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 3, 2));
+        // In the middle of the test's area: at (2, 3, 2), once the display had parts on the ship, the turned ship put
+        // the trace's start in the barriers around the area in about half the runs.
+        BlockPos origin = helper.absolutePos(new BlockPos(6, 3, 6));
         BlockState state = DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING,
                 Direction.NORTH);
         level.setBlockAndUpdate(origin, state);
