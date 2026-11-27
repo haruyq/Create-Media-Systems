@@ -13,6 +13,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -51,7 +52,7 @@ public class SoundproofGameTests {
             }
         }
         // A board on the face a sound starts on is in its way.
-        helper.setBlock(WALL.east(), SoundproofFeature.PANEL.get().defaultBlockState().setValue(AcousticPanelBlock.FACING, Direction.EAST));
+        helper.setBlock(WALL.east(), SoundproofFeature.PANEL.get().against(Direction.WEST));
         expect(helper, Soundproofing.LAYER, Soundproofing.transmission(level, pos -> Soundproofing.sheeted(level, pos),
                 corner.add(1, .5, .5), Vec3.atCenterOf(helper.absolutePos(WALL.east(2)))), "a board on the speaking face");
         helper.setBlock(WALL.east(), Blocks.AIR);
@@ -180,7 +181,7 @@ public class SoundproofGameTests {
     @GameTest(template = "empty")
     public static void aBoardSoundproofsWhereTheLineMeetsIt(GameTestHelper helper) {
         // On the east face of the block west of it: against that block, facing east.
-        helper.setBlock(WALL, SoundproofFeature.PANEL.get().defaultBlockState().setValue(AcousticPanelBlock.FACING, Direction.EAST));
+        helper.setBlock(WALL, SoundproofFeature.PANEL.get().against(Direction.WEST));
         expect(helper, Soundproofing.LAYER, heard(helper, WALL.west(), WALL.east()), "through a board");
         // A listener in the board's own block, in front of it.
         expect(helper, 1, heard(helper, WALL.east(), WALL), "in front of a board");
@@ -196,10 +197,38 @@ public class SoundproofGameTests {
                 new BlockHitResult(Vec3.atCenterOf(helper.absolutePos(WALL)), Direction.EAST, helper.absolutePos(WALL), false)))
                 .consumesAction(), "The wrench did nothing to a panel");
         BlockState after = helper.getBlockState(WALL);
-        helper.assertTrue(after.is(SoundproofFeature.PANEL.get()) && after.getValue(AcousticPanelBlock.FACING) == Direction.EAST
+        helper.assertTrue(after.is(SoundproofFeature.PANEL.get()) && after.getValue(AcousticPanelBlock.ON.get(Direction.WEST))
                 && after.getValue(AcousticPanelBlock.CROSS) != before.getValue(AcousticPanelBlock.CROSS),
                 "The wrench left the panel as " + after);
         helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void panelsMeetInACornerAndDropOneEach(GameTestHelper helper) {
+        // An inner corner at WALL, its walls west and north of it.
+        helper.setBlock(WALL.west(), Blocks.STONE);
+        helper.setBlock(WALL.north(), Blocks.STONE);
+        Player player = helper.makeMockPlayer(GameType.CREATIVE);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(SoundproofFeature.PANEL_ITEM.get(), 4));
+        click(helper, player, WALL.west(), Direction.EAST);
+        click(helper, player, WALL.north(), Direction.SOUTH);
+        BlockState corner = helper.getBlockState(WALL);
+        helper.assertTrue(corner.is(SoundproofFeature.PANEL.get()) && corner.getValue(AcousticPanelBlock.ON.get(Direction.WEST))
+                && corner.getValue(AcousticPanelBlock.ON.get(Direction.NORTH)), "The corner holds " + corner);
+        // A click on a panel's front puts the next panel in the block in front of it.
+        click(helper, player, WALL, Direction.EAST);
+        helper.assertBlockState(WALL, corner::equals, () -> "A click on a panel's front changed its block");
+        helper.assertBlockProperty(WALL.east(), AcousticPanelBlock.ON.get(Direction.WEST), true);
+        int dropped = Block.getDrops(corner, helper.getLevel(), helper.absolutePos(WALL), null).stream()
+                .filter(stack -> stack.is(SoundproofFeature.PANEL_ITEM.get())).mapToInt(ItemStack::getCount).sum();
+        helper.assertTrue(dropped == 2, "Two panels in a block dropped " + dropped);
+        helper.succeed();
+    }
+
+    private static void click(GameTestHelper helper, Player player, BlockPos pos, Direction face) {
+        BlockPos at = helper.absolutePos(pos);
+        player.getMainHandItem().useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(at).relative(face, .5), face, at, false)));
     }
 
     private static double heard(GameTestHelper helper, BlockPos from, BlockPos to) {
