@@ -26,12 +26,16 @@ public final class StreamFeature implements Feature {
 
     @Override
     public void register(IEventBus modBus) {
-        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> Streams.serverStopped());
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
+            Streams.serverStopped();
+            AudioClips.serverStopped();
+        });
     }
 
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
         StreamPackets.registerPayloads(registrar);
         Portable.Length.register(registrar);
+        AudioClips.registerPayloads(registrar);
     }
 }

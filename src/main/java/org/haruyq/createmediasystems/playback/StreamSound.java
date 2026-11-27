@@ -264,6 +264,20 @@ public final class StreamSound extends AbstractTickableSoundInstance {
     }
 
     private AudioStream open() {
+        if (MediaKind.of(spec.track()) == MediaKind.RAW) {
+            // Live: nothing to load or keep in step, it plays as the feed makes it.
+            AudioStream feed = LiveFeeds.open(spec.track(), spec.source(), spec.channel());
+            spec.started().accept(0);
+            if (feed == null) {
+                stop();
+                return new Silence();
+            }
+            direct = feed;
+            if (released) {
+                close(feed);
+            }
+            return feed;
+        }
         if (playsNatively()) {
             try {
                 String missing = Vlc.missing();

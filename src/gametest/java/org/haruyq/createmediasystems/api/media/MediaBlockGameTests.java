@@ -95,4 +95,19 @@ public final class MediaBlockGameTests {
                 "Stopped and cleared, its display shows nothing");
         h.succeed();
     }
+
+    @GameTest(batch = "launcher", template = "empty")
+    public static void rawAudioPlaysAsAnyLink(GameTestHelper h) {
+        var level = h.getLevel();
+        MediaPlayer media = place(h, new BlockPos(1, 2, 1)).media();
+        BlockPos source = h.absolutePos(new BlockPos(1, 2, 1));
+        String feed = RawAudio.feed(CreateMediaSystems.id("test_feed"));
+        h.assertTrue(media.play(feed, 0, null) && Streams.source(level, source).url().equals(feed), "A live feed plays");
+        String clip = RawAudio.clip(new byte[] {'O', 'g', 'g', 'S'});
+        h.assertTrue(media.play(clip, 0, null) && Streams.source(level, source).url().equals(clip), "So does a clip");
+        h.assertTrue(!media.play("cms-clip:nothex", 0, null) && !media.play("cms-raw:Bad Id", 0, null),
+                "Malformed ones don't");
+        media.stop();
+        h.succeed();
+    }
 }
