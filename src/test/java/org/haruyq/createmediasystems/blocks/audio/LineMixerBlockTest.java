@@ -7,9 +7,11 @@ import org.junit.jupiter.api.Test;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 class LineMixerBlockTest {
@@ -46,6 +48,19 @@ class LineMixerBlockTest {
                     assertEquals(left, LineMixerBlock.root(otherAt, other), how);
                 }
             }
+        }
+    }
+
+    /** Aimed at, either half outlines the whole mixer; each still stands on its own block alone. */
+    @Test
+    void eitherHalfOutlinesBothAndCollidesAsItself() {
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            BlockPos left = BlockPos.ZERO, right = left.relative(LineMixerBlock.right(half(facing, false)));
+            AABB whole = new AABB(left).minmax(new AABB(right)).setMaxY(LineMixerBlock.HEIGHT / 16);
+            assertEquals(whole, half(facing, false).getShape(EmptyBlockGetter.INSTANCE, left).bounds().move(left), facing.toString());
+            assertEquals(whole, half(facing, true).getShape(EmptyBlockGetter.INSTANCE, right).bounds().move(right), facing.toString());
+            assertEquals(new AABB(0, 0, 0, 1, LineMixerBlock.HEIGHT / 16, 1),
+                    half(facing, true).getCollisionShape(EmptyBlockGetter.INSTANCE, right).bounds(), facing.toString());
         }
     }
 
