@@ -330,6 +330,7 @@ public final class ClientStreams {
     }
 
     public static void register(IEventBus modBus) {
+        AudioClipClient.register();
         StreamPackets.client(new StreamPackets.Client() {
             @Override
             public void play(StreamPackets.PlayAtBlock payload) {

@@ -253,6 +253,19 @@ org/haruyq/createmediasystems/api/media/MediaSources$Track millis ()J
 org/haruyq/createmediasystems/api/media/MediaSources$Track toString ()Ljava/lang/String;
 org/haruyq/createmediasystems/api/media/MediaSources$Track url ()Ljava/lang/String;
 org/haruyq/createmediasystems/api/media/MediaSources$Track videoHeight ()I
+org/haruyq/createmediasystems/api/media/RawAudio class 16
+org/haruyq/createmediasystems/api/media/RawAudio static MAX_CLIP_BYTES I
+org/haruyq/createmediasystems/api/media/RawAudio static clip ([B)Ljava/lang/String;
+org/haruyq/createmediasystems/api/media/RawAudio static feed (Lnet/minecraft/resources/ResourceLocation;)Ljava/lang/String;
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds class 16
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds static RATE I
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds static provide (Lnet/minecraft/resources/ResourceLocation;Lorg/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Opener;)V
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds static remove (Lnet/minecraft/resources/ResourceLocation;)V
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Feed abstract read ([SI)I
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Feed class 512
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Feed close ()V
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Opener abstract open (Lnet/minecraft/core/BlockPos;)Lorg/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Feed;
+org/haruyq/createmediasystems/api/media/client/LiveAudioFeeds$Opener class 512
 org/haruyq/createmediasystems/api/media/client/MediaListener class 512
 org/haruyq/createmediasystems/api/media/client/MediaListener picture (IILjava/util/function/IntUnaryOperator;J)V
 org/haruyq/createmediasystems/api/media/client/MediaListener restarted ()V
