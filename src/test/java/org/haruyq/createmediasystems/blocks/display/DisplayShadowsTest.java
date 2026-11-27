@@ -8,17 +8,18 @@ import net.minecraft.core.BlockPos;
 
 class DisplayShadowsTest {
     @Test
-    void blockGridKeepsAByteABlockWithoutAliasingNegativeCoordinatesOrUnequalSides() {
+    void blockGridKeepsTwoBytesABlockWithoutAliasingNegativeCoordinatesOrUnequalSides() {
         long slab = DisplayShadows.cells(0, 0, 0, 1, 0.5, 1);
         try (var grid = new DisplayShadows.Grid(new BlockPos(-3, -5, -7), new BlockPos(1, -3, -4))) {
-            assertEquals(5 * 3 * 4, grid.cells.capacity());
-            grid.block(-3, -5, -7, -1L);
-            grid.block(-2, -5, -7, slab);
-            grid.block(-3, -4, -7, 1L);
-            grid.block(-3, -5, -6, 0);
-            grid.block(1, -3, -4, slab);
-            for (int i = 0; i < grid.cells.capacity(); i++) {
-                assertEquals(i == 0 ? 255 : i == 1 || i == 59 ? 1 : i == 5 ? 2 : 0, grid.cells.get(i) & 255);
+            assertEquals(2 * 5 * 3 * 4, grid.cells.capacity());
+            grid.block(-3, -5, -7, -1L, 7);
+            grid.block(-2, -5, -7, slab, 8);
+            grid.block(-3, -4, -7, 1L, 9);
+            grid.block(-3, -5, -6, 0, 10);
+            grid.block(1, -3, -4, slab, 11);
+            for (int i = 0; i < 5 * 3 * 4; i++) {
+                assertEquals(i == 0 ? 255 : i == 1 || i == 59 ? 1 : i == 5 ? 2 : 0, grid.cells.get(2 * i) & 255);
+                assertEquals(i == 0 ? 7 : i == 1 ? 8 : i == 5 ? 9 : i == 59 ? 11 : 0, grid.cells.get(2 * i + 1));
             }
             assertEquals(slab, grid.shapes[1]);
             assertEquals(1L, grid.shapes[2]);
@@ -39,10 +40,10 @@ class DisplayShadowsTest {
     void shapesPastWhatABlocksByteCanNameStandAsWholeBlocks() {
         try (var grid = new DisplayShadows.Grid(BlockPos.ZERO, new BlockPos(255, 0, 0))) {
             for (int i = 0; i < 256; i++) {
-                grid.block(i, 0, 0, i + 1);
+                grid.block(i, 0, 0, i + 1, 0);
             }
-            assertEquals(254, grid.cells.get(253) & 255);
-            assertEquals(255, grid.cells.get(254) & 255);
+            assertEquals(254, grid.cells.get(2 * 253) & 255);
+            assertEquals(255, grid.cells.get(2 * 254) & 255);
         }
     }
 

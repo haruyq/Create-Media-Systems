@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.blocks.display;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -14,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import org.lwjgl.opengl.GL20;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
@@ -41,6 +43,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -49,6 +52,7 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -57,18 +61,20 @@ import net.neoforged.neoforge.common.Tags;
 /**
  * A playing display lights the room in front of it as a cinema screen does: an area light the size of the screen, its
  * colours the video's (shaders/core/display_light). Each block face it reaches is drawn again, added to what's there:
- * lit by the part of the picture it faces, shaded softly by blocks between, with some of the screen's light bounced
- * about the room on faces turned away; and, if glossy (glass, ice, polished stone, metal, water), mirroring the
+ * lit by the part of the picture it faces, shaded softly by what stands between, and by the screen's light off the
+ * faces about it, in their colours, and by the mobs and players in it; and, if glossy (glass, ice, polished stone, metal, water), mirroring the
  * picture, blurred by its roughness. Under a shader pack, no reflections (the pack draws its own), and the light is
  * added once the pack has finished the frame.
  * The faces are found in the background when blocks change and kept in a vertex buffer, drawn each frame.
  */
 public final class DisplayLight {
-    /** How far from the picture, in blocks, the light reaches at least; a big screen's reaches further (see range). */
+    /** How far from the picture, in blocks, the light is drawn at least; a big screen's is further (see range). */
     private static final float MIN_RANGE = 16;
     private static final float MAX_RANGE = 64;
     /** Its brightness at a Blu-ray player's 100% lighting. */
     static final float STRENGTH = 0.7f;
+    /** The mobs and players whose shadows a light draws, at most (display_light.fsh's Bodies). */
+    private static final int BODIES = 8;
     /** Ticks between looks at which faces the light reaches, at least. */
     private static final int REFRESH_TICKS = 20;
     /** Frames a display may go undrawn before its buffers are freed. */
@@ -143,6 +149,9 @@ public final class DisplayLight {
         float height;
         float range;
         float strength;
+        /** The bodies in the light, each's box in the screen's space: its least corner, then its greatest. */
+        final float[] bodies = new float[BODIES * 6];
+        int bodyCount;
         boolean specular;
         ResourceLocation video;
         final RenderType type = SurfaceLight.type("create_media_systems_display_light", () -> shader, this::setup);
@@ -158,6 +167,7 @@ public final class DisplayLight {
             shader.safeGetUniform("PictureSize").set(width, height);
             shader.safeGetUniform("Range").set(range);
             shader.safeGetUniform("Strength").set(strength);
+            shader.safeGetUniform("BodyCount").set(bodyCount);
             shader.safeGetUniform("Specular").set(specular ? 1f : 0f);
         }
 
@@ -209,7 +219,12 @@ public final class DisplayLight {
             type.setupRenderState();
             shader.safeGetUniform("VisibilityOffset").set(part == 0 ? 0 : current.counts[0]);
             current.buffers[part].bind();
-            current.buffers[part].drawWithShader(modelView, projection, shader);
+            // As VertexBuffer.drawWithShader, but for Bodies: an array, which a shader's JSON can't declare.
+            shader.setDefaultUniforms(VertexFormat.Mode.QUADS, modelView, projection, Minecraft.getInstance().getWindow());
+            shader.apply();
+            GL20.glUniform3fv(GL20.glGetUniformLocation(shader.getId(), "Bodies"), bodies);
+            current.buffers[part].draw();
+            shader.clear();
             VertexBuffer.unbind();
             type.clearRenderState();
         }
@@ -335,9 +350,12 @@ public final class DisplayLight {
         blocksChanged(x << 4, Integer.MIN_VALUE, z << 4, (x << 4) + 15, Integer.MAX_VALUE, (z << 4) + 15);
     }
 
-    /** How far a screen {@code width} × {@code height} blocks lights: a room a few times its size, as a real one does. */
+    /**
+     * How far a screen {@code width} × {@code height} blocks is drawn lighting: to where its light, falling off with
+     * the square of the distance and growing with its area, is too little to see (display_light.fsh's reach).
+     */
     static float range(double width, double height) {
-        return Mth.clamp((float) Math.max(width, height) * 2.5f, MIN_RANGE, MAX_RANGE);
+        return Mth.clamp((float) Math.sqrt(width * height) * 6, MIN_RANGE, MAX_RANGE);
     }
 
     static void render(DisplayBlock.Entity display, DisplayBlock.Screen screen, float width, float height,
@@ -390,6 +408,7 @@ public final class DisplayLight {
         lit.height = height;
         lit.range = range;
         lit.strength = strength;
+        lit.bodyCount = bodies(level, lit.toScreen, matrix, range, lit.bodies);
         // Under a shader pack, its reflections are the pack's to draw.
         lit.specular = !IrisCompat.shaderPackInUse();
         lit.video = video;
@@ -401,6 +420,45 @@ public final class DisplayLight {
         if (lit.specular && lit.current != null && lit.current.buffers[1] != null) {
             WATER.add(() -> lit.draw(1, modelView, projection));
         }
+    }
+
+    /**
+     * The mobs and players the light reaches, for their shadows: each's box, in the screen's space, into {@code out};
+     * the nearest to the display, if more than fit. None in a world that isn't the client's (a Ponder scene).
+     */
+    private static int bodies(Level level, Matrix4f toScreen, Matrix4f matrix, float range, float[] out) {
+        if (!WorldEvents.isClientWorld(level)) {
+            return 0;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
+        float partial = minecraft.getTimer().getGameTimeDeltaPartialTick(true);
+        // matrix draws the display's blocks from the camera: back through it, the world to the screen's space.
+        Matrix4f toLight = new Matrix4f(toScreen).mul(new Matrix4f(matrix).invert());
+        Vec3 display = camera.add(new Vec3(matrix.transformPosition(new Vector3f())));
+        List<LivingEntity> found = level.getEntitiesOfClass(LivingEntity.class,
+                AABB.ofSize(display, 2 * range, 2 * range, 2 * range), body -> !body.isSpectator() && !body.isInvisible());
+        found.sort(Comparator.comparingDouble(body -> body.distanceToSqr(display)));
+        int count = Math.min(found.size(), BODIES);
+        Vector3f corner = new Vector3f();
+        for (int i = 0; i < count; i++) {
+            LivingEntity body = found.get(i);
+            // Where it is drawn this frame, between its ticks.
+            AABB box = body.getBoundingBox().move(body.getPosition(partial).subtract(body.position()))
+                    .move(camera.reverse());
+            Arrays.fill(out, 6 * i, 6 * i + 3, Float.MAX_VALUE);
+            Arrays.fill(out, 6 * i + 3, 6 * i + 6, -Float.MAX_VALUE);
+            for (int c = 0; c < 8; c++) {
+                toLight.transformPosition((float) ((c & 1) == 0 ? box.minX : box.maxX),
+                        (float) ((c & 2) == 0 ? box.minY : box.maxY), (float) ((c & 4) == 0 ? box.minZ : box.maxZ),
+                        corner);
+                for (int k = 0; k < 3; k++) {
+                    out[6 * i + k] = Math.min(out[6 * i + k], corner.get(k));
+                    out[6 * i + 3 + k] = Math.max(out[6 * i + 3 + k], corner.get(k));
+                }
+            }
+        }
+        return count;
     }
 
     /**
@@ -506,7 +564,11 @@ public final class DisplayLight {
             water.add(corners, new float[8], Direction.UP, 0, 0.04f, 0.02f);
         }
         BlockState state = level.getBlockState(pos);
-        grid.block(pos.getX() - at.getX(), pos.getY() - at.getY(), pos.getZ() - at.getZ(), shape(level, pos, state));
+        long shape = shape(level, pos, state);
+        if (shape != 0) {
+            grid.block(pos.getX() - at.getX(), pos.getY() - at.getY(), pos.getZ() - at.getZ(), shape,
+                    state.getMapColor(level, pos).id);
+        }
         float[] material = material(state);
         SurfaceLight.forEachQuad(level, pos, state, random, quad -> {
             Vec3[] corners = new Vec3[4];

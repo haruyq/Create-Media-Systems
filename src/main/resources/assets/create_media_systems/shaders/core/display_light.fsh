@@ -8,16 +8,17 @@
 //   textured area lights).
 // - Specular: where the mirrored view ray meets the screen, the picture there blurred to the face's roughness,
 //   weighted by how much of that blur falls on the screen and by Fresnel.
-// - Bounce: some of the screen's light, its average colour, reflected about the room onto every face within reach,
-//   turned towards it or not, as much as it is in the screen's room (room: none behind a wall). It does not fall
-//   off with distance, as a lit room's walls and seats keep it in; the light's reach fades it at the end, and so does
-//   the screen's plane, beside it.
+// - Bounce: the screen's light, its average colour, that reaches the face by way of one other face, tinted by that
+//   face's block (bounced, display_shadow.fsh's second pass, a face's corners blended over it): what lights a face
+//   turned away from the screen, or one in a shadow.
 // All of it seen as a camera would in a dark cinema, exposed for the room: what is near the screen saturates softly
 // (1 - exp(-x)), and the far seats still show.
-// - Shadows, of the screen's light and of its room's alike: how many of SPOTS points spread over the screen a pixel
+// - Shadows: how many of SPOTS points spread over the screen a pixel
 //   sees past what stands about the display (Voxels and Shapes, DisplayShadows.Grid's: a block, or the part of it a
 //   door, a slab or a fence fills). What the face's four corners agree on
 //   (sure) is so all over it; a point only some of them see (unsure), each pixel looks for.
+// - Bodies' shadows: a mob or a player in the light is a box (Bodies: its least corner, then its greatest, BodyCount of
+//   them), hiding from a pixel the part of the screen its shadow, cast from the pixel, falls on.
 // material: roughness, F0 (above 0.5, a metal), display_shadow.vsh's, and 1 for a block's face or 0 for water.
 // No ternaries inside expressions: Veil (with Sable) reprints this shader and drops their parentheses.
 
@@ -35,25 +36,26 @@ uniform float Range;
 uniform float Strength;
 uniform float Specular;
 uniform float GameTime;
+uniform vec3 Bodies[16];
+uniform int BodyCount;
 
 in vec2 texCoord0;
 in vec4 material;
 in vec3 localPos;
 in vec3 localNormal;
-flat in ivec2 sure;
-flat in ivec2 unsure;
+flat in int sure;
+flat in int unsure;
+in vec3 bounced;
 
 out vec4 fragColor;
 
 const float PI = 3.14159265;
 // How brightly the room is exposed: the gain on the light before it saturates.
-const float EXPOSURE = 3.0;
-// How bright the light bounced about the room is, against the screen's average colour.
-const float BOUNCE = 0.3;
-// As display_shadow.fsh's, both: the screen's points a shadow is found from, and how far out of its face a point looks
-// from for whether it shares the screen's room.
-const int SPOTS = 16;
-const float ROOM_STEP = 0.6;
+const float EXPOSURE = 12.0;
+// How bright the light bounced off one face is: above 1, for the light that bounces on, off a second and a third.
+const float BOUNCE = 1.5;
+// As display_shadow.fsh's: the screen's points a shadow is found from.
+const int SPOTS = 32;
 
 // The picture around `at` (blocks on the screen), blurred to about `footprint` blocks across.
 vec3 video(vec2 at, float footprint) {
@@ -233,34 +235,41 @@ bool solid(vec3 p) {
     return filled(texelFetch(Shapes, ivec2(k, 0), 0).rg, ivec3((p - vec3(cell)) * 4.0));
 }
 
-// Whether a ray meets a filled cell of a block's shape: from p, in the block's cells (0 to 4 a side), for `time` of
-// its way d, a block's.
-bool crosses(uvec2 shape, vec3 p, vec3 d, ivec3 step, vec3 delta, float time) {
+// When a ray meets a filled cell of a block's shape, or -1: from p, in the block's cells (0 to 4 a side), within
+// `time` of its way d, a block's. face: the side of the cell it comes in by.
+float crosses(uvec2 shape, vec3 p, vec3 d, ivec3 step, vec3 delta, float time, inout vec3 face) {
     p = clamp(p, 0.0, 3.999);
     ivec3 sub = ivec3(p);
     vec3 next = vec3(boundary(p.x, d.x, sub.x), boundary(p.y, d.y, sub.y), boundary(p.z, d.z, sub.z)) * 0.25;
+    float t = 0.0;
     for (int i = 0; i < 10; i++) {
-        if (filled(shape, sub)) return true;
-        if (min(next.x, min(next.y, next.z)) >= time) return false;
+        if (filled(shape, sub)) return t;
+        t = min(next.x, min(next.y, next.z));
+        if (t >= time) return -1.0;
         if (next.x < next.y && next.x < next.z) {
             sub.x += step.x;
             next.x += delta.x * 0.25;
+            face = vec3(-step.x, 0.0, 0.0);
         } else if (next.y < next.z) {
             sub.y += step.y;
             next.y += delta.y * 0.25;
+            face = vec3(0.0, -step.y, 0.0);
         } else {
             sub.z += step.z;
             next.z += delta.z * 0.25;
+            face = vec3(0.0, 0.0, -step.z);
         }
-        if (any(lessThan(sub, ivec3(0))) || any(greaterThan(sub, ivec3(3)))) return false;
+        if (any(lessThan(sub, ivec3(0))) || any(greaterThan(sub, ivec3(3)))) return -1.0;
     }
-    return false;
+    return -1.0;
 }
 
-// Whether something stands between two points of the display's block space, the first not in it (solid).
-bool blocked(vec3 from, vec3 to) {
+// How far along the way between two points of the display's block space (0 to 1) something stands, or 2 if nothing
+// does; the first point is not in anything (solid). cell: the block met, face: the side of it the ray comes in by.
+float meets(vec3 from, vec3 to, out ivec3 cell, out vec3 face) {
     vec3 d = to - from;
-    ivec3 cell = ivec3(floor(from));
+    cell = ivec3(floor(from));
+    face = vec3(0.0);
     ivec3 step = ivec3(sign(d));
     vec3 next = vec3(boundary(from.x, d.x, cell.x), boundary(from.y, d.y, cell.y), boundary(from.z, d.z, cell.z));
     vec3 delta = vec3(1e20);
@@ -271,23 +280,35 @@ bool blocked(vec3 from, vec3 to) {
     for (int guard = 0; guard < 1024; guard++) {
         float leave = min(min(next.x, min(next.y, next.z)), 1.0);
         int k = kind(cell);
-        if (k == 255) return true;
-        if (k != 0 && crosses(texelFetch(Shapes, ivec2(k, 0), 0).rg, (from + d * t - vec3(cell)) * 4.0, d, step, delta,
-                leave - t)) return true;
-        if (leave >= 1.0) return false;
+        if (k == 255) return t;
+        if (k != 0) {
+            float within = crosses(texelFetch(Shapes, ivec2(k, 0), 0).rg, (from + d * t - vec3(cell)) * 4.0, d, step,
+                    delta, leave - t, face);
+            if (within >= 0.0) return t + within;
+        }
+        if (leave >= 1.0) return 2.0;
         t = leave;
         if (next.x < next.y && next.x < next.z) {
             cell.x += step.x;
             next.x += delta.x;
+            face = vec3(-step.x, 0.0, 0.0);
         } else if (next.y < next.z) {
             cell.y += step.y;
             next.y += delta.y;
+            face = vec3(0.0, -step.y, 0.0);
         } else {
             cell.z += step.z;
             next.z += delta.z;
+            face = vec3(0.0, 0.0, -step.z);
         }
     }
-    return false;
+    return 2.0;
+}
+
+bool blocked(vec3 from, vec3 to) {
+    ivec3 cell;
+    vec3 face;
+    return meets(from, to, cell, face) < 1.5;
 }
 
 // Where a ray off a face at p, turned n, starts: just off it. A shape's cells are a quarter of a block, so may cover
@@ -300,46 +321,57 @@ vec4 off(vec3 p, vec3 n) {
     return vec4(from, 0.0);
 }
 
-// How much of the screen P, on a face turned N, sees past what stands between (x: of what is in front of the face,
-// from the face, for the screen's light), and how much of it shares P's room (y: of it all, from ROOM_STEP out of the
-// face, for the light bounced about).
-vec2 sees(vec3 P, vec3 N) {
+// How much of the screen P, on a face turned N, sees past what stands between: of what is in front of the face.
+float sees(vec3 P, vec3 N) {
     // ToScreen's rows are the screen's right, up and out: turned back, the screen's space to the display's blocks'.
     mat3 toBlock = transpose(mat3(ToScreen));
     vec3 origin = ToScreen[3].xyz;
     vec4 near = vec4(0.0);
-    vec3 far = toBlock * (P + N * ROOM_STEP - origin);
-    bool roomy = false;
-    if (unsure != ivec2(0)) {
+    if (unsure != 0) {
         near = off(toBlock * (P - origin), toBlock * N);
-        roomy = !solid(far);
     }
     int facing = 0;
     int lit = 0;
-    int open = 0;
     for (int i = 0; i < SPOTS; i++) {
         int bit = 1 << i;
         // Each point on a column and a row of its own.
-        int row = ((i & 1) << 3) | ((i & 2) << 1) | ((i & 4) >> 1) | ((i & 8) >> 3);
+        int row = ((i & 1) << 4) | ((i & 2) << 2) | (i & 4) | ((i & 8) >> 2) | ((i & 16) >> 4);
         vec3 spot = vec3((vec2(i, row) + 0.5) / float(SPOTS) * PictureSize, 0.05);
-        vec3 to = toBlock * (spot - origin);
-        if (dot(N, spot - P) > 0.0) {
-            facing += 1;
-            if ((sure.x & bit) != 0) {
-                lit += 1;
-            } else if ((unsure.x & bit) != 0 && near.w > 0.5 && !blocked(near.xyz, to)) {
-                lit += 1;
-            }
-        }
-        if ((sure.y & bit) != 0) {
-            open += 1;
-        } else if ((unsure.y & bit) != 0 && roomy && !blocked(far, to)) {
-            open += 1;
+        if (dot(N, spot - P) <= 0.0) continue;
+        facing += 1;
+        if ((sure & bit) != 0) {
+            lit += 1;
+        } else if ((unsure & bit) != 0 && near.w > 0.5 && !blocked(near.xyz, toBlock * (spot - origin))) {
+            lit += 1;
         }
     }
-    float seen = 1.0;
-    if (facing != 0) seen = float(lit) / float(facing);
-    return vec2(seen, float(open) / float(SPOTS));
+    if (facing == 0) return 1.0;
+    return float(lit) / float(facing);
+}
+
+// How much of the screen the bodies in the light leave P to see.
+float unhidden(vec3 P) {
+    float left = 1.0;
+    for (int i = 0; i < 8; i++) {
+        if (i >= BodyCount) break;
+        vec3 lo = Bodies[2 * i];
+        vec3 hi = Bodies[2 * i + 1];
+        // Only what of it is nearer the screen than P stands between them.
+        hi.z = min(hi.z, P.z - 0.01);
+        if (hi.z <= lo.z) continue;
+        // The box's shadow on the screen's plane, cast from P: about its corners'.
+        vec2 least = vec2(1e9);
+        vec2 most = vec2(-1e9);
+        for (int c = 0; c < 8; c++) {
+            vec3 corner = mix(lo, hi, vec3(c & 1, (c >> 1) & 1, c >> 2));
+            vec2 on = P.xy + (corner.xy - P.xy) * (P.z / (P.z - corner.z));
+            least = min(least, on);
+            most = max(most, on);
+        }
+        vec2 hid = max(min(most, PictureSize) - max(least, vec2(0.0)), vec2(0.0));
+        left *= 1.0 - hid.x * hid.y / (PictureSize.x * PictureSize.y);
+    }
+    return left;
 }
 
 void main() {
@@ -369,27 +401,23 @@ void main() {
         albedo = texel.rgb;
     }
     // From the face as it is, not as its ripples turn it.
-    vec2 shade = sees(P, normalize(localNormal));
-    float seen = shade.x;
-    float room = shade.y;
+    float seen = sees(P, normalize(localNormal)) * unhidden(P);
     vec3 light = vec3(0.0);
     if (!water) {
         vec2 size = vec2(textureSize(Sampler1, 0));
         vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
-        vec3 bounce = BOUNCE * average * room * P.z / max(distanceToScreen, 1e-4);
         vec3 direct = vec3(0.0);
         if (seen > 0.0) {
             direct = diffuse(P, N) * seen;
         }
-        light = albedo * (direct + bounce);
+        light = albedo * (direct + BOUNCE * average * bounced);
     }
     float roughness = material.r;
     if (Specular > 0.5 && roughness < 0.75 && seen > 0.0) {
         light += specular(P, N, roughness, material.g, albedo) * seen;
     }
-    // Fading out towards the light's reach, rather than stopping at it.
-    float d = min(distanceToScreen / Range, 1.0);
-    float d4 = d * d * d * d;
-    float reach = (1.0 - d4) * (1.0 - d4);
+    // The light falls off as the screen's does, by how much of what a face looks at is screen. Range only ends the
+    // faces drawn, where little of it is left: no edge there, fading out over the last of it.
+    float reach = 1.0 - smoothstep(0.6, 1.0, distanceToScreen / Range);
     fragColor = vec4((vec3(1.0) - exp(-EXPOSURE * Strength * light)) * reach, 1.0);
 }

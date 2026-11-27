@@ -22,18 +22,23 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Which of the screen's points each vertex of a display's lit faces sees (display_shadow.fsh), computed from a block
- * grid in bounded GPU batches without a CPU readback, and that grid, for the pixels of a face whose corners don't
- * agree to look for themselves (display_light.fsh).
+ * Which of the screen's points each vertex of a display's lit faces sees, and the screen's light that reaches it by
+ * way of other faces (display_shadow.fsh's two passes), computed from a block grid in bounded GPU batches without a
+ * CPU readback, and that grid, for the pixels of a face whose corners don't agree to look for themselves
+ * (display_light.fsh).
  */
 final class DisplayShadows implements AutoCloseable {
     private static final int WIDTH = 1024;
     private static final int RAYS_PER_FRAME = 262_144;
-    /** Rays a vertex traces: to each of display_shadow.fsh's SPOTS for the screen's light, and again for its room. */
-    private static final int RAYS = 32;
+    /**
+     * Rays a vertex traces: to each of display_shadow.fsh's SPOTS for the screen's light, and for the light by way of
+     * other faces, as many to those faces and one from each on to the screen.
+     */
+    private static final int RAYS = 96;
     /**
      * display_light.json's Voxels, and Shapes on the unit after: units of their own, as no unit may hold a 2D and a 3D
      * sampler's textures.
@@ -46,6 +51,7 @@ final class DisplayShadows implements AutoCloseable {
     private final DisplayBlock.Screen screen;
     private final float width;
     private final float height;
+    private final int rows;
     private int voxels;
     private int shapes;
     private int shaded;
@@ -89,7 +95,10 @@ final class DisplayShadows implements AutoCloseable {
         return bits;
     }
 
-    /** A byte per block of what stands in the light's way there: 0 nothing, 255 all of it, else which of shapes. */
+    /**
+     * Two bytes per block: what stands in the light's way there (0 nothing, 255 all of it, else which of shapes), and
+     * its map colour's id, for the light it reflects.
+     */
     static final class Grid implements AutoCloseable {
         final BlockPos min;
         final int width;
@@ -105,10 +114,10 @@ final class DisplayShadows implements AutoCloseable {
             width = max.getX() - min.getX() + 1;
             height = max.getY() - min.getY() + 1;
             depth = max.getZ() - min.getZ() + 1;
-            cells = MemoryUtil.memCalloc(Math.multiplyExact(Math.multiplyExact(width, height), depth));
+            cells = MemoryUtil.memCalloc(Math.multiplyExact(Math.multiplyExact(width, height), depth * 2));
         }
 
-        void block(int x, int y, int z, long shape) {
+        void block(int x, int y, int z, long shape, int colour) {
             if (shape == 0) {
                 return;
             }
@@ -126,7 +135,8 @@ final class DisplayShadows implements AutoCloseable {
                     kind = known;
                 }
             }
-            cells.put(x - min.getX() + width * (y - min.getY() + height * (z - min.getZ())), (byte) kind);
+            int index = 2 * (x - min.getX() + width * (y - min.getY() + height * (z - min.getZ())));
+            cells.put(index, (byte) kind).put(index + 1, (byte) colour);
         }
 
         @Override
@@ -145,7 +155,9 @@ final class DisplayShadows implements AutoCloseable {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer viewport = stack.mallocInt(4);
             GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-            visibility = new TextureTarget(WIDTH, Math.max(1, (vertices + WIDTH - 1) / WIDTH), false, Minecraft.ON_OSX);
+            // The second pass's texels above the first's.
+            rows = Math.max(1, (vertices + WIDTH - 1) / WIDTH);
+            visibility = new TextureTarget(WIDTH, rows * 2, false, Minecraft.ON_OSX);
             RenderSystem.viewport(viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3));
         }
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
@@ -169,17 +181,21 @@ final class DisplayShadows implements AutoCloseable {
             for (int i = 0; i < stores.length; i++) {
                 GL11.glPixelStorei(stores[i], i == 0 ? 1 : 0);
             }
-            GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8UI, grid.width, grid.height, grid.depth, 0,
-                    GL30.GL_RED_INTEGER, GL11.GL_UNSIGNED_BYTE, grid.cells);
-            // A shape's low half in red, its high half in green.
+            GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_RG8UI, grid.width, grid.height, grid.depth, 0,
+                    GL30.GL_RG_INTEGER, GL11.GL_UNSIGNED_BYTE, grid.cells);
+            // A row of shapes, each one's low half in red, its high half in green; and a row of the map colours, in
+            // red.
             shapes = TextureUtil.generateTextureId();
             RenderSystem.bindTexture(shapes);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
             try (MemoryStack stack = MemoryStack.stackPush()) {
-                ByteBuffer bits = stack.malloc(256 * Long.BYTES);
-                bits.asLongBuffer().put(grid.shapes).put(0);
-                GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RG32UI, 256, 1, 0, GL30.GL_RG_INTEGER,
+                ByteBuffer bits = stack.calloc(2 * 256 * Long.BYTES);
+                bits.asLongBuffer().put(grid.shapes);
+                for (int id = 0; id < 64; id++) {
+                    bits.putLong((256 + id) * Long.BYTES, MapColor.byId(id).col);
+                }
+                GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RG32UI, 256, 2, 0, GL30.GL_RG_INTEGER,
                         GL11.GL_UNSIGNED_INT, bits);
             }
         } catch (Throwable error) {
@@ -245,12 +261,16 @@ final class DisplayShadows implements AutoCloseable {
                 shader.safeGetUniform("ScreenOut").set((float) out.x, (float) out.y, (float) out.z);
                 shader.safeGetUniform("PictureSize").set(width, height);
                 int end = shaded + count;
-                if (shaded < counts[0]) {
-                    draw(buffers[0], shaded, Math.min(end, counts[0]) - shaded, 0);
-                }
-                if (end > counts[0]) {
-                    int start = Math.max(shaded, counts[0]);
-                    draw(buffers[1], start - counts[0], end - start, counts[0]);
+                for (int pass = 0; pass < 2; pass++) {
+                    shader.safeGetUniform("Pass").set(pass);
+                    int above = pass * rows * WIDTH;
+                    if (shaded < counts[0]) {
+                        draw(buffers[0], shaded, Math.min(end, counts[0]) - shaded, above);
+                    }
+                    if (end > counts[0]) {
+                        int start = Math.max(shaded, counts[0]);
+                        draw(buffers[1], start - counts[0], end - start, counts[0] + above);
+                    }
                 }
                 shaded = end;
             } finally {
