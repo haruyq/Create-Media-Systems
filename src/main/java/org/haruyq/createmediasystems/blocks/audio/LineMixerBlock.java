@@ -2,9 +2,11 @@ package org.haruyq.createmediasystems.blocks.audio;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
@@ -19,6 +21,7 @@ import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.MapCodec;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.api.equipment.goggles.IProxyHoveringInformation;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 
 import io.netty.buffer.ByteBuf;
@@ -58,6 +61,7 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
@@ -71,7 +75,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * and the master, each one to its left is an extension, with {@link #EXTENSION_CHANNELS} channels and no master.
  */
 public class LineMixerBlock extends HorizontalDirectionalBlock implements EntityBlock, IWrenchable,
-        SableCompat.SilentAssemblyRemoval {
+        IProxyHoveringInformation, SableCompat.SilentAssemblyRemoval {
     private static final MapCodec<LineMixerBlock> CODEC = simpleCodec(LineMixerBlock::new);
     public static final int MAIN_CHANNELS = 5, EXTENSION_CHANNELS = 7;
     /** The master fader's number, after any channel's. */
@@ -88,6 +92,14 @@ public class LineMixerBlock extends HorizontalDirectionalBlock implements Entity
     /** Its top, where the faders are (sixteenths). */
     public static final float HEIGHT = 4;
     private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, HEIGHT, 16);
+    /** Both halves, from the one whose other half is that way. */
+    private static final Map<Direction, VoxelShape> WHOLE = new EnumMap<>(Direction.class);
+
+    static {
+        for (Direction other : Direction.Plane.HORIZONTAL) {
+            WHOLE.put(other, Shapes.or(SHAPE, SHAPE.move(other.getStepX(), 0, other.getStepZ())));
+        }
+    }
 
     public LineMixerBlock(Properties properties) {
         super(properties);
@@ -159,9 +171,22 @@ public class LineMixerBlock extends HorizontalDirectionalBlock implements Entity
         return RenderShape.INVISIBLE;
     }
 
+    /** Outlined whole, from either half: its own block and the other half's. */
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return WHOLE.get(state.getValue(RIGHT) ? right(state).getOpposite() : right(state));
+    }
+
+    /** Each half stands on its own block. */
+    @Override
+    protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return SHAPE;
+    }
+
+    /** Goggles on either half read the left one, which has its entity. */
+    @Override
+    public BlockPos getInformationSource(Level level, BlockPos pos, BlockState state) {
+        return root(pos, state);
     }
 
     @Override

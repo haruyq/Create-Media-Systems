@@ -37,6 +37,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -255,7 +256,10 @@ public final class RangeQuillHandler {
                     .highlightFace(selectedFace);
         }
         if (source != null) {
-            Outliner.getInstance().showAABB(SOURCE_OUTLINE, toWorld(new AABB(source)))
+            // All of it, where it is more than a block (a line mixer's two halves).
+            VoxelShape shape = player.level().getBlockState(source).getShape(player.level(), source);
+            AABB box = shape.isEmpty() ? new AABB(source) : new AABB(source).minmax(shape.bounds().move(source));
+            Outliner.getInstance().showAABB(SOURCE_OUTLINE, toWorld(box))
                     .colored(Quill.PICKED)
                     .lineWidth(Quill.LINE_WIDTH);
         }
