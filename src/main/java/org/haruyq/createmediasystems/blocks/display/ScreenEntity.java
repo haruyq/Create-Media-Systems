@@ -2,7 +2,10 @@ package org.haruyq.createmediasystems.blocks.display;
 
 import java.util.List;
 
+import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.client.Occluders;
+
+import org.jetbrains.annotations.Nullable;
 
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 
@@ -15,6 +18,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.TickTask;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -38,6 +46,15 @@ public abstract class ScreenEntity extends BlockEntity implements IHaveGoggleInf
     public void onLoad() {
         super.onLoad();
         Occluders.add(this);
+        // Fills the parts that screens saved before they had any lack, once the chunk has loaded.
+        if (level instanceof ServerLevel server) {
+            MinecraftServer host = server.getServer();
+            host.tell(new TickTask(host.getTickCount(), () -> {
+                if (!isRemoved()) {
+                    DisplayBlock.fitParts(server, worldPosition, getBlockState(), 0, 0, width, height);
+                }
+            }));
+        }
     }
 
     @Override
@@ -72,10 +89,28 @@ public abstract class ScreenEntity extends BlockEntity implements IHaveGoggleInf
 
     /** A new size (sixteenths) and ratio. */
     public void resize(int width, int height, DisplayBlock.Ratio ratio) {
+        int fromWidth = this.width;
+        int fromHeight = this.height;
         this.width = DisplayBlock.clampSize(width);
         this.height = DisplayBlock.clampSize(height);
         this.ratio = ratio;
         changed();
+        if (level != null) {
+            DisplayBlock.fitParts(level, worldPosition, getBlockState(), fromWidth, fromHeight, this.width, this.height);
+        }
+    }
+
+    /** Whether {@code player} is within {@code reach} of its panel: of a wide screen, of the part before them, not of its block. */
+    public boolean near(Player player, double reach) {
+        return SableCompat.toWorld(level, box(0, 0)).distanceToSqr(player.position()) <= reach * reach;
+    }
+
+    /** The screen of {@code type} at {@code pos}, when it is loaded and {@code player} is {@link #near} it. */
+    @Nullable
+    public static <T extends ScreenEntity> T near(Player player, BlockPos pos, double reach, Class<T> type) {
+        Level level = player.level();
+        return level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ScreenEntity screen && type.isInstance(screen)
+                && screen.near(player, reach) ? type.cast(screen) : null;
     }
 
     protected void changed() {

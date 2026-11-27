@@ -68,7 +68,8 @@ public final class DisplayQuill {
 
     @Nullable
     static <T extends ScreenEntity> T withQuill(ServerPlayer player, BlockPos pos, Class<T> kind) {
-        return Reach.withQuill(player, DisplayFeature.DISPLAY_QUILL.get(), pos, kind);
+        return player.getMainHandItem().is(DisplayFeature.DISPLAY_QUILL.get())
+                ? ScreenEntity.near(player, pos, Reach.QUILL, kind) : null;
     }
 
     static void linkDisplay(ServerPlayer player, LinkDisplay payload) {
