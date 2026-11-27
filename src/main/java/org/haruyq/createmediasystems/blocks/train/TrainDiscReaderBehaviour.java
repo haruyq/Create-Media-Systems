@@ -74,9 +74,11 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         Train train = entity.getCarriage().train;
         long now = level.getGameTime();
         Reader reader = Reader.of(context, now);
+        TrainAnnouncer.READERS.put(reader, train.id);
         String due = dueAnnouncement(now, context.data, train, reader.schedule(level, context));
         if (due != null) {
             reader.play(due, now);
+            TrainAnnouncer.announced(level.getServer(), train.id, due);
         }
         reader.tick(context, now);
         if (due != null || Streams.relayDue(level)) {
@@ -304,7 +306,7 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         return found[0];
     }
 
-    private static Set<ServerPlayer> passengers(Train train) {
+    static Set<ServerPlayer> passengers(Train train) {
         return carriages(train).filter(entity -> entity.level() instanceof ServerLevel)
                 .flatMap(entity -> ((ServerLevel) entity.level()).players().stream().filter(p -> aboard(entity, p)))
                 .collect(Collectors.toSet());
@@ -339,11 +341,11 @@ public class TrainDiscReaderBehaviour implements MovementBehaviour {
         return false;
     }
 
-    private static List<Integer> carriageIds(Train train) {
+    static List<Integer> carriageIds(Train train) {
         return carriages(train).map(CarriageContraptionEntity::getId).toList();
     }
 
-    private static Stream<CarriageContraptionEntity> carriages(Train train) {
+    static Stream<CarriageContraptionEntity> carriages(Train train) {
         return train.carriages.stream().map(Carriage::anyAvailableEntity).filter(Objects::nonNull);
     }
 

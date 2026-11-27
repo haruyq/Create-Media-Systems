@@ -2,9 +2,12 @@ package org.haruyq.createmediasystems.blocks.train;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
 import org.haruyq.createmediasystems.Reach;
@@ -73,10 +76,36 @@ public class TrainSignals extends SavedData {
         }
     }
 
+    /** Every channel on right now. */
+    public Set<String> active() {
+        return active;
+    }
+
+    /** Told of each channel that turned on or off, at the end of the server tick it did (see api.train.TrainChannels). */
+    public interface Change {
+        void changed(MinecraftServer server, String channel, boolean on);
+    }
+
+    private static final List<Change> CHANGES = new CopyOnWriteArrayList<>();
+
+    public static void onChange(Change change) {
+        CHANGES.add(change);
+    }
+
     public static void onServerTick(ServerTickEvent.Post event) {
         TrainSignals signals = get(event.getServer());
-        signals.active = activeChannels(signals.channels,
-                Create.RAILWAYS.trains.values().stream().map(train -> train.occupiedObservers).toList());
+        Set<String> was = signals.active;
+        signals.active = Set.copyOf(activeChannels(signals.channels,
+                Create.RAILWAYS.trains.values().stream().map(train -> train.occupiedObservers).toList()));
+        if (!CHANGES.isEmpty()) {
+            changes(was, signals.active, (channel, on) -> CHANGES.forEach(c -> c.changed(event.getServer(), channel, on)));
+        }
+    }
+
+    /** Each channel in only one of {@code was} and {@code now}: on if it is in {@code now}. */
+    static void changes(Set<String> was, Set<String> now, BiConsumer<String, Boolean> changed) {
+        now.stream().filter(channel -> !was.contains(channel)).forEach(channel -> changed.accept(channel, true));
+        was.stream().filter(channel -> !now.contains(channel)).forEach(channel -> changed.accept(channel, false));
     }
 
     static Set<String> activeChannels(Map<UUID, String> channels, Iterable<? extends Set<UUID>> occupiedByTrain) {

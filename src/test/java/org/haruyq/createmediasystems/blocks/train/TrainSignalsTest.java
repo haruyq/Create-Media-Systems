@@ -30,4 +30,14 @@ class TrainSignalsTest {
         assertEquals("", TrainSignals.normalize("x".repeat(TrainSignals.MAX_CHANNEL_LENGTH + 1)));
         assertEquals("", TrainSignals.normalize("bad\nname"));
     }
+
+    @Test
+    void eachChannelThatTurnedOnOrOffIsToldOnce() {
+        Map<String, Boolean> told = new java.util.HashMap<>();
+        TrainSignals.changes(Set.of("a", "b"), Set.of("b", "c"), told::put);
+        assertEquals(Map.of("a", false, "c", true), told);
+        told.clear();
+        TrainSignals.changes(Set.of("a"), Set.of("a"), told::put);
+        assertEquals(Map.of(), told);
+    }
 }
