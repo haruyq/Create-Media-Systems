@@ -15,6 +15,7 @@
     "HumanoidModelMixin",
     "WearableHandLayerMixin",
     "ItemPickerMenuMixin",
-    "LevelRendererMixin"
+    "LevelRendererMixin",
+    "ModelCubeMixin"
   ]
 }
