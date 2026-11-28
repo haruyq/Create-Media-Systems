@@ -1,6 +1,9 @@
 package org.haruyq.createmediasystems.blocks.display;
 
 import org.haruyq.createmediasystems.CreateMediaSystems;
+import org.haruyq.createmediasystems.blocks.video.VideoFeature;
+import org.haruyq.createmediasystems.lighting.LightingFeature;
+import org.haruyq.createmediasystems.lighting.LightingLinkItem;
 
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.contraptions.bearing.MechanicalBearingBlockEntity;
@@ -8,13 +11,19 @@ import com.simibubi.create.content.contraptions.glue.SuperGlueEntity;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -106,6 +115,53 @@ public class DisplayGameTests {
                 "the screen and its parts are back");
         test.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(anchor).inflate(5)).isEmpty(),
                 "moving the screen dropped nothing");
+        test.succeed();
+    }
+
+    /**
+     * The Tuning Wrench on a display: with a console picked it puts that down, then picks a player and links any
+     * part's display to it; Shift unlinks. Lighting is the display's own, and one saved before has it for both.
+     */
+    @GameTest(template = "empty")
+    public static void wrenchLinksAndLightsDisplays(GameTestHelper test) {
+        var level = test.getLevel();
+        BlockPos anchor = test.absolutePos(new BlockPos(3, 2, 3));
+        BlockPos source = test.absolutePos(new BlockPos(0, 2, 0));
+        level.setBlockAndUpdate(anchor, DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, Direction.NORTH));
+        level.setBlockAndUpdate(source, VideoFeature.VIDEO_PLAYER.get().defaultBlockState());
+        var display = (DisplayBlock.Entity) level.getBlockEntity(anchor);
+        display.resize(32, 16, DisplayBlock.Ratio.FREE);
+        ServerPlayer player = FakePlayerFactory.getMinecraft(level);
+        player.setPos(Vec3.atCenterOf(anchor.north(2)));
+        ItemStack wrench = new ItemStack(LightingFeature.LIGHTING_LINK.get());
+        wrench.set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), anchor.east(6)));
+        player.setItemInHand(InteractionHand.MAIN_HAND, wrench);
+        try {
+            LightingLinkItem.link(player, anchor);
+            test.assertTrue(!wrench.has(LightingFeature.LIGHTING_TARGET.get()), "a display clicked with a console picked puts it down");
+            LightingLinkItem.link(player, source);
+            test.assertTrue(source.equals(DisplayWrench.picked(wrench, level)), "then a click on the player picks it");
+            LightingLinkItem.link(player, anchor.west());
+            test.assertTrue(display.source().filter(source::equals).isPresent(), "a click on a part links its display");
+            player.setShiftKeyDown(true);
+            LightingLinkItem.link(player, anchor);
+            test.assertTrue(display.source().isEmpty(), "Shift+right-click unlinks it");
+            player.setShiftKeyDown(false);
+
+            DisplayWrench.lightDisplay(player, new DisplayWrench.LightDisplay(anchor, 30, 150));
+            test.assertTrue(display.cinematic() == 0.3f && display.ambient() == 1,
+                    "the panel sets both, kept within 0..100%: " + display.cinematic() + ", " + display.ambient());
+            CompoundTag saved = display.saveWithFullMetadata(level.registryAccess());
+            saved.remove("Cinematic");
+            saved.remove("Ambient");
+            saved.putInt("Lighting", 40);
+            display.loadWithComponents(saved, level.registryAccess());
+            test.assertTrue(display.cinematic() == 0.4f && display.ambient() == 0.4f,
+                    "a display saved with one lighting loads it as both: " + display.cinematic() + ", " + display.ambient());
+        } finally {
+            player.setShiftKeyDown(false);
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        }
         test.succeed();
     }
 

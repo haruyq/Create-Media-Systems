@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.lighting;
 
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.display.DisplayWrench;
 import org.haruyq.createmediasystems.blocks.radio.RadioLink;
 import org.haruyq.createmediasystems.stream.Link;
 
@@ -35,7 +36,7 @@ public class LightingLinkItem extends Item {
     /** Does what {@code player}'s right-click on {@code pos} does (see LinkAction), on the server. */
     public static void link(Player player, BlockPos pos) {
         Level level = player.level();
-        if (RadioLink.perform(player, pos)) {
+        if (RadioLink.perform(player, pos) || DisplayWrench.perform(player, pos)) {
             return;
         }
         if (level.isLoaded(pos) && level.getBlockEntity(pos) instanceof LightingConsoleBlock.Entity part && !part.formed) {

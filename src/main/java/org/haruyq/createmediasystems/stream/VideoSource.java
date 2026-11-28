@@ -4,11 +4,6 @@ import net.minecraft.server.level.ServerPlayer;
 
 /** A source whose track may be a video, which the displays linked to it show. */
 public interface VideoSource extends MediaSource {
-    /** How brightly its displays light their surroundings, 0..1 (0: not at all); the same for everyone. */
-    default float lighting() {
-        return 1;
-    }
-
     /**
      * The link of a still picture its displays show while they show no video of it, which every client fetches itself
      * (as an image viewer's); empty for none.

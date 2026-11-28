@@ -54,7 +54,7 @@ public final class MediaBlockGameTests {
         BlockPos anchor = h.absolutePos(new BlockPos(6, 2, 3));
         level.setBlockAndUpdate(anchor, DisplayFeature.DISPLAY.get().defaultBlockState().setValue(DisplayBlock.FACING, Direction.NORTH));
         var display = (DisplayBlock.Entity) level.getBlockEntity(anchor);
-        h.assertTrue(level.getBlockEntity(source) instanceof VideoSource, "A display quill takes it for a source");
+        h.assertTrue(level.getBlockEntity(source) instanceof VideoSource, "A Tuning Wrench takes it for a source");
         display.link(source);
         display.relay(level);
         h.assertTrue(!media.playing() && MediaSources.screens(level, source).isEmpty(), "It plays nothing yet");

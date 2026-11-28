@@ -4,6 +4,7 @@ import static org.haruyq.createmediasystems.client.PonderScenes.plate;
 import static org.haruyq.createmediasystems.client.PonderScenes.say;
 
 import org.haruyq.createmediasystems.client.ClientFeature;
+import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.blocks.video.VideoFeature;
 import org.haruyq.createmediasystems.blocks.video.VideoPlayerBlock;
 
@@ -35,7 +36,7 @@ public final class DisplayClient implements ClientFeature {
 
     @Override
     public void registerPonder(PonderSceneRegistrationHelper<ResourceLocation> helper) {
-        helper.forComponents(DisplayFeature.DISPLAY.getId(), DisplayFeature.DISPLAY_QUILL.getId())
+        helper.forComponents(DisplayFeature.DISPLAY.getId(), LightingFeature.LIGHTING_LINK.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), DisplayClient::display);
         helper.forComponents(DisplayFeature.IMAGE_VIEWER.getId())
                 .addStoryBoard(Create.asResource("redstone_link"), DisplayClient::imageViewer);
@@ -63,23 +64,24 @@ public final class DisplayClient implements ClientFeature {
                 .setValue(VideoPlayerBlock.FACING, Direction.NORTH), false);
         scene.world().showSection(util.select().position(player), Direction.DOWN);
         scene.idle(15);
-        ItemStack quill = new ItemStack(DisplayFeature.DISPLAY_QUILL.get());
-        scene.overlay().showControls(util.vector().topOf(player), Pointing.DOWN, 30).rightClick().withItem(quill);
+        ItemStack wrench = new ItemStack(LightingFeature.LIGHTING_LINK.get());
+        scene.overlay().showControls(util.vector().topOf(player), Pointing.DOWN, 30).rightClick().withItem(wrench);
         scene.overlay().chaseBoundingBoxOutline(PonderPalette.OUTPUT, player, new AABB(player), 140);
         scene.idle(35);
-        scene.overlay().showControls(util.vector().centerOf(display), Pointing.DOWN, 30).rightClick().withItem(quill);
-        say(scene, 110, util.vector().centerOf(display), PonderPalette.GREEN, "Hold a Display Quill, right-click a Blu-ray Player to pick it, then right-click displays to link them; again to unlink. Any number of displays can show one player.");
+        scene.overlay().showControls(util.vector().centerOf(display), Pointing.DOWN, 30).rightClick().withItem(wrench);
+        say(scene, 110, util.vector().centerOf(display), PonderPalette.GREEN, "Hold a Tuning Wrench, right-click a Blu-ray Player to pick it, then right-click displays to link them; Shift+right-click a display to unlink it. Any number of displays can show one player.");
 
-        scene.overlay().showControls(util.vector().centerOf(display), Pointing.DOWN, 40).scroll().whileCTRL()
-                .withItem(quill);
+        scene.overlay().showControls(util.vector().centerOf(display), Pointing.DOWN, 40).scroll().withItem(wrench);
         scene.idle(10);
         scene.world().modifyBlockEntity(display, DisplayBlock.Entity.class, entity -> entity.resize(3 * DisplayBlock.UNIT,
                 (int) Math.round(3 * DisplayBlock.UNIT / DisplayBlock.Ratio.WIDE.value), DisplayBlock.Ratio.WIDE));
-        say(scene, 110, picture, "Looking at a display with the quill, Ctrl+scroll makes it a block wider or narrower (a sixteenth with Shift). It grows right and up, and its height follows its ratio.");
+        say(scene, 110, picture, "Looking at a display with the wrench, scroll makes it a block wider or narrower (a sixteenth with Shift). It grows right and up, and its height follows its ratio.");
 
-        scene.overlay().showControls(util.vector().centerOf(display), Pointing.DOWN, 40).rightClick().whileSneaking()
-                .withItem(quill);
-        say(scene, 110, picture, "Shift+right-click steps through the ratios: free, 16:9, 4:3, 21:9, 1:1, and the video's own. Alt+scroll sets the height alone.");
+        scene.overlay().showControls(picture, Pointing.DOWN, 40).scroll().whileCTRL().withItem(wrench);
+        say(scene, 110, picture, "Ctrl+scroll steps through the ratios: free, 16:9, 4:3, 21:9, 1:1, and the video's own. Alt+scroll sets the height alone.");
+
+        scene.overlay().showControls(picture, Pointing.DOWN, 40).rightClick().whileCTRL().withItem(wrench);
+        say(scene, 110, picture, "Ctrl+right-click it for its lighting: Cinematic lights the room in front of it in the video's colours, Ambient glows on the wall around it.");
 
         say(scene, 110, picture, PonderPalette.GREEN, "Its sound comes from the middle of the picture, at the player's volume. While a speaker plays that Blu-ray Player, only the speakers are heard.");
     }
@@ -104,20 +106,19 @@ public final class DisplayClient implements ClientFeature {
                 .withItem(AllItems.WRENCH.asStack());
         say(scene, 120, util.vector().centerOf(viewer), "Right-click it with a Wrench to type the image's link: a PNG, JPEG, GIF (its first frame) or BMP, from a site the server allows. Each player's game downloads it.");
 
-        ItemStack quill = new ItemStack(DisplayFeature.DISPLAY_QUILL.get());
-        scene.overlay().showControls(util.vector().centerOf(viewer), Pointing.DOWN, 40).scroll().whileCTRL()
-                .withItem(quill);
+        ItemStack wrench = new ItemStack(LightingFeature.LIGHTING_LINK.get());
+        scene.overlay().showControls(util.vector().centerOf(viewer), Pointing.DOWN, 40).scroll().withItem(wrench);
         scene.idle(10);
         scene.world().modifyBlockEntity(viewer, ImageViewerBlock.Entity.class, entity -> entity.resize(3 * DisplayBlock.UNIT,
                 (int) Math.round(3 * DisplayBlock.UNIT / DisplayBlock.Ratio.WIDE.value), DisplayBlock.Ratio.WIDE));
-        say(scene, 120, picture, "Size it with a Display Quill, just like a display. Shift+right-click's last ratio is the image's own.");
+        say(scene, 120, picture, "Size it with a Tuning Wrench, just like a display. The last ratio Ctrl+scroll steps to is the image's own.");
 
-        scene.overlay().showControls(util.vector().centerOf(viewer), Pointing.DOWN, 40).rightClick().withItem(quill);
+        scene.overlay().showControls(util.vector().centerOf(viewer), Pointing.DOWN, 40).rightClick().withItem(wrench);
         scene.idle(10);
         scene.world().cycleBlockProperty(viewer, ImageViewerBlock.FRAMED);
         scene.overlay().chaseBoundingBoxOutline(PonderPalette.GREEN, viewer,
                 new AABB(1, 1, 2.9, 4, 2 + 11 / 16.0, 3), 120);
-        say(scene, 120, picture, PonderPalette.GREEN, "Right-click it with the quill to take its frame away: only the picture is left, and the wall shows through where the image is transparent. Right-click again to put the frame back.");
+        say(scene, 120, picture, PonderPalette.GREEN, "Right-click it with the wrench to take its frame away: only the picture is left, and the wall shows through where the image is transparent. Right-click again to put the frame back.");
 
         say(scene, 90, picture, "Through Engineer's Goggles it shows its link and size.");
     }

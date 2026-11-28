@@ -44,7 +44,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public class VideoPlayerGameTests {
     @GameTest(template = "empty")
-    public static void wrenchSetsLightingAndVolumeApart(GameTestHelper helper) {
+    public static void wrenchSetsTheVolume(GameTestHelper helper) {
         BlockPos pos = new BlockPos(1, 2, 1);
         helper.setBlock(pos, VideoFeature.VIDEO_PLAYER.get());
         VideoPlayerBlock.Entity player = helper.getBlockEntity(pos);
@@ -52,16 +52,12 @@ public class VideoPlayerGameTests {
         wrencher.setPos(Vec3.atCenterOf(helper.absolutePos(pos.north())));
         List<ScrollValueBehaviour> boxes = player.getAllBehaviours().stream().filter(ScrollValueBehaviour.class::isInstance)
                 .map(ScrollValueBehaviour.class::cast).toList();
-        helper.assertTrue(boxes.size() == 2, "a value box for each: " + boxes.size());
+        // Lighting is each display's own (see DisplayWrench).
+        helper.assertTrue(boxes.size() == 1, "a value box for the volume alone: " + boxes.size());
         // What the client sends when a value box is set with a wrench (see Create's ValueSettingsClient).
-        new ValueSettingsPacket(helper.absolutePos(pos), 0, 40, null, null, Direction.NORTH, false, boxes.get(0).netId())
+        new ValueSettingsPacket(helper.absolutePos(pos), 0, 40, null, null, Direction.UP, false, boxes.get(0).netId())
                 .handle(wrencher);
-        helper.assertTrue((player.lighting() == 0.4f) != (player.volume() == 0.4f),
-                "one box sets one of them, lighting " + player.lighting() + ", volume " + player.volume());
-        new ValueSettingsPacket(helper.absolutePos(pos), 0, 70, null, null, Direction.NORTH, false, boxes.get(1).netId())
-                .handle(wrencher);
-        helper.assertTrue(java.util.Set.of(player.lighting(), player.volume()).equals(java.util.Set.of(0.4f, 0.7f)),
-                "and the other the other, lighting " + player.lighting() + ", volume " + player.volume());
+        helper.assertTrue(player.volume() == 0.4f, "it sets the volume: " + player.volume());
         helper.succeed();
     }
 

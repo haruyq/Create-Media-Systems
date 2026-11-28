@@ -3,6 +3,9 @@ package org.haruyq.createmediasystems.lighting;
 import java.util.List;
 
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.display.DisplayBlock;
+import org.haruyq.createmediasystems.blocks.display.DisplayWrench;
+import org.haruyq.createmediasystems.blocks.display.DisplayWrenchHandler;
 import org.haruyq.createmediasystems.blocks.radio.RadioLink;
 import org.haruyq.createmediasystems.client.Quill;
 
@@ -18,10 +21,11 @@ import net.minecraft.world.phys.HitResult;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * The lighting link's controls, like the display quill's: right-click a lighting console to pick it, then
+ * The lighting link's controls, like the range quill's: right-click a lighting console to pick it, then
  * right-click fixtures to link them to its selected group (again, or with Shift, to unlink) and media players to
  * have it follow them. What a right-click would do is said once, when a block comes into view; the picked console
- * and its fixtures are outlined. Right-clicks on anything else are left to the game.
+ * and its fixtures are outlined. Radio stations (RadioLink) and screens (DisplayWrench) come first; right-clicks on
+ * anything else are left to the game.
  */
 final class LightingLinkHandler {
     private static final Object CONSOLE_OUTLINE = new Object();
@@ -42,6 +46,9 @@ final class LightingLinkHandler {
     }
 
     private static boolean onRightClick() {
+        if (DisplayWrenchHandler.openPanel()) {
+            return true;
+        }
         if (!isActive() || hovered == null) {
             return false;
         }
@@ -60,7 +67,9 @@ final class LightingLinkHandler {
         BlockHitResult trace = mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.ENTITY ? null : Quill.pointedAt();
         BlockPos pos = trace == null ? null : trace.getBlockPos();
         Component radio = pos == null ? null : RadioLink.hint(mc.player, pos);
-        Component hint = pos == null ? null : radio != null ? radio : LinkAction.resolve(mc.player, pos).hint();
+        Component screen = pos == null || radio != null ? null : DisplayWrench.hint(mc.player, pos);
+        Component hint = pos == null ? null : radio != null ? radio : screen != null ? screen
+                : LinkAction.resolve(mc.player, pos).hint();
         hovered = hint == null ? null : pos;
         if (hovered != null && !hovered.equals(hinted)) {
             mc.player.displayClientMessage(hint, true);
@@ -77,7 +86,8 @@ final class LightingLinkHandler {
                 outline(List.of(FIXTURE_OUTLINE, fixture), new AABB(fixture), Quill.SETTING, 1 / 32f);
             }
         }
-        if (hovered == null) {
+        // A screen's outline is DisplayWrenchHandler's.
+        if (hovered == null || mc.level.getBlockState(hovered).getBlock() instanceof DisplayBlock) {
             return;
         }
         LightingConsoleBlock.Entity console = LightingConsoleBlock.find(mc.level, hovered);

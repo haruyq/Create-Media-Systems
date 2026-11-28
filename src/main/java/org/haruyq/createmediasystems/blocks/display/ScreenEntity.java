@@ -30,7 +30,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
 /**
- * A picture on a wall that the display quill sizes: a display's video, an image viewer's image. Its size (in
+ * A picture on a wall that the Tuning Wrench sizes: a display's video, an image viewer's image. Its size (in
  * sixteenths, from its block to the right and up as seen from the front) and ratio, its panel, and the light it stops.
  */
 public abstract class ScreenEntity extends BlockEntity implements IHaveGoggleInformation, Occluders.Occluder {
