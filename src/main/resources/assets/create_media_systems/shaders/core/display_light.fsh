@@ -331,7 +331,7 @@ int begins[8];
 int ends[8];
 int bodies;
 
-void cast(vec3 P) {
+void shadows(vec3 P) {
     bodies = 0;
     int next = 0;
     for (int b = 0; b < 8; b++) {
@@ -360,7 +360,7 @@ void cast(vec3 P) {
     }
 }
 
-// Whether the line from P on by d, to its end, passes through one of the boxes of the body cast() kept as b.
+// Whether the line from P on by d, to its end, passes through one of the boxes of the body shadows() kept as b.
 bool hides(int b, vec3 P, vec3 d) {
     for (int p = begins[b]; p < ends[b]; p++) {
         // In the box's own space, where it is the unit cube.
@@ -381,7 +381,7 @@ bool hides(int b, vec3 P, vec3 d) {
 
 // The screen's light on P, on a face turned N, of what it would be were the screen white and nothing in its way: its
 // colour (rgb), the picture's at each of the screen's points P sees past what stands between, and how much of it
-// comes (a). If no point is in front of the face, `average`, all of it. After cast(). A point stands for the screen
+// comes (a). If no point is in front of the face, `average`, all of it. After shadows(). A point stands for the screen
 // `around` it.
 vec4 shines(vec3 P, vec3 N, vec3 average, float around) {
     // ToScreen's rows are the screen's right, up and out: turned back, the screen's space to the display's blocks'.
@@ -461,7 +461,7 @@ void main() {
     // A point stands for the screen about it: a square of half again its share of the screen, so that no part of
     // the picture falls between two points.
     float around = 0.75 * sqrt(PictureSize.x * PictureSize.y / float(SPOTS));
-    cast(P);
+    shadows(P);
     vec4 lit = shone;
     if (unsure != 0 || bodies > 0) {
         // From the face as it is, not as its ripples turn it.
