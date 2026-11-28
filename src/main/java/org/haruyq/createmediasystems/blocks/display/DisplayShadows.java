@@ -7,7 +7,6 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL32;
@@ -16,36 +15,49 @@ import org.lwjgl.system.MemoryUtil;
 
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.TextureUtil;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.Vec3;
 
-/** Cached vertex visibility, computed from a block grid in bounded GPU batches without a CPU readback. */
+/**
+ * Which of the screen's points each vertex of a display's lit faces sees, and the screen's light that reaches it by
+ * way of other faces (display_shadow.fsh's two passes), computed from a block grid in bounded GPU batches without a
+ * CPU readback, and that grid, for the pixels of a face whose corners don't agree to look for themselves
+ * (display_light.fsh).
+ */
 final class DisplayShadows implements AutoCloseable {
     private static final int WIDTH = 1024;
-    private static final int RAYS_PER_FRAME = 65_536;
-    /** As display_shadow.fsh's: rays a vertex traces for whether it shares the screen's room. */
-    private static final int ROOM_RAYS = 4;
+    private static final int RAYS_PER_FRAME = 262_144;
+    /**
+     * Rays a vertex traces: to each of display_shadow.fsh's SPOTS for the screen's light, and for the light by way of
+     * other faces, as many to those faces and one from each on to the screen.
+     */
+    private static final int RAYS = 96;
+    /**
+     * display_light.json's Voxels, and Shapes on the unit after: units of their own, as no unit may hold a 2D and a 3D
+     * sampler's textures.
+     */
+    private static final int VOXEL_UNIT = 3;
     private static ShaderInstance shader;
-    private static int targetsProgram;
-    private static int targetsLocation;
     private static final Budget BUDGET = new Budget(RAYS_PER_FRAME);
     private final TextureTarget visibility;
     private final BlockPos min;
-    private final float[] targets;
-    private final Vec3 right;
-    private final Vec3 out;
+    private final DisplayBlock.Screen screen;
+    private final float width;
+    private final float height;
+    private final int rows;
     private int voxels;
+    private int shapes;
     private int shaded;
 
     static void setShader(ShaderInstance loaded) {
         shader = loaded;
-        targetsProgram = loaded.getId();
-        targetsLocation = GL20.glGetUniformLocation(targetsProgram, "Targets");
     }
 
     static final class Budget {
@@ -68,29 +80,63 @@ final class DisplayShadows implements AutoCloseable {
         }
     }
 
-    /** Eight block occupancy bits per texel, keeping even the largest screen's grid below 256 texels per side. */
+    /**
+     * The cells of a block's 4 × 4 × 4 whose middles the box holds, a bit each (x + 4y + 16z): what of the block
+     * stands in the light's way, to a quarter of a block.
+     */
+    static long cells(double x0, double y0, double z0, double x1, double y1, double z1) {
+        long bits = 0;
+        for (int i = 0; i < 64; i++) {
+            double x = ((i & 3) + 0.5) / 4, y = ((i >> 2 & 3) + 0.5) / 4, z = ((i >> 4) + 0.5) / 4;
+            if (x >= x0 && x < x1 && y >= y0 && y < y1 && z >= z0 && z < z1) {
+                bits |= 1L << i;
+            }
+        }
+        return bits;
+    }
+
+    /**
+     * Two bytes per block: what stands in the light's way there (0 nothing, 255 all of it, else which of shapes), and
+     * its map colour's id, for the light it reflects.
+     */
     static final class Grid implements AutoCloseable {
         final BlockPos min;
         final int width;
         final int height;
         final int depth;
         final ByteBuffer cells;
+        /** What less than a whole block fills of it (see DisplayShadows.cells), from 1. */
+        final long[] shapes = new long[255];
+        private int count = 1;
 
         Grid(BlockPos min, BlockPos max) {
             this.min = min;
-            width = (max.getX() - min.getX() + 2) / 2;
-            height = (max.getY() - min.getY() + 2) / 2;
-            depth = (max.getZ() - min.getZ() + 2) / 2;
-            cells = MemoryUtil.memCalloc(Math.multiplyExact(Math.multiplyExact(width, height), depth));
+            width = max.getX() - min.getX() + 1;
+            height = max.getY() - min.getY() + 1;
+            depth = max.getZ() - min.getZ() + 1;
+            cells = MemoryUtil.memCalloc(Math.multiplyExact(Math.multiplyExact(width, height), depth * 2));
         }
 
-        void block(int x, int y, int z) {
-            x -= min.getX();
-            y -= min.getY();
-            z -= min.getZ();
-            int index = x / 2 + width * (y / 2 + height * (z / 2));
-            int bit = (x & 1) | (y & 1) << 1 | (z & 1) << 2;
-            cells.put(index, (byte) (cells.get(index) | 1 << bit));
+        void block(int x, int y, int z, long shape, int colour) {
+            if (shape == 0) {
+                return;
+            }
+            int kind = 255;
+            if (shape != -1L) {
+                int known = 1;
+                while (known < count && shapes[known] != shape) {
+                    known++;
+                }
+                // ponytail: past 254 shapes about one display, the rest stand as whole blocks; two bytes a block if
+                // a room ever has more.
+                if (known < shapes.length) {
+                    shapes[known] = shape;
+                    count = Math.max(count, known + 1);
+                    kind = known;
+                }
+            }
+            int index = 2 * (x - min.getX() + width * (y - min.getY() + height * (z - min.getZ())));
+            cells.put(index, (byte) kind).put(index + 1, (byte) colour);
         }
 
         @Override
@@ -99,22 +145,19 @@ final class DisplayShadows implements AutoCloseable {
         }
     }
 
-    DisplayShadows(Grid grid, Vec3[] targets, DisplayBlock.Screen screen, int vertices) {
+    DisplayShadows(Grid grid, DisplayBlock.Screen screen, float width, float height, int vertices) {
         min = grid.min;
-        this.targets = new float[targets.length * 3];
-        for (int i = 0; i < targets.length; i++) {
-            this.targets[i * 3] = (float) targets[i].x;
-            this.targets[i * 3 + 1] = (float) targets[i].y;
-            this.targets[i * 3 + 2] = (float) targets[i].z;
-        }
-        right = screen.right();
-        out = screen.out();
+        this.screen = screen;
+        this.width = width;
+        this.height = height;
         int framebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int readFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer viewport = stack.mallocInt(4);
             GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-            visibility = new TextureTarget(WIDTH, Math.max(1, (vertices + WIDTH - 1) / WIDTH), false, Minecraft.ON_OSX);
+            // The second pass's texels above the first's.
+            rows = Math.max(1, (vertices + WIDTH - 1) / WIDTH);
+            visibility = new TextureTarget(WIDTH, rows * 2, false, Minecraft.ON_OSX);
             RenderSystem.viewport(viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3));
         }
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
@@ -138,8 +181,23 @@ final class DisplayShadows implements AutoCloseable {
             for (int i = 0; i < stores.length; i++) {
                 GL11.glPixelStorei(stores[i], i == 0 ? 1 : 0);
             }
-            GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8UI, grid.width, grid.height, grid.depth, 0,
-                    GL30.GL_RED_INTEGER, GL11.GL_UNSIGNED_BYTE, grid.cells);
+            GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_RG8UI, grid.width, grid.height, grid.depth, 0,
+                    GL30.GL_RG_INTEGER, GL11.GL_UNSIGNED_BYTE, grid.cells);
+            // A row of shapes, each one's low half in red, its high half in green; and a row of the map colours, in
+            // red.
+            shapes = TextureUtil.generateTextureId();
+            RenderSystem.bindTexture(shapes);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                ByteBuffer bits = stack.calloc(2 * 256 * Long.BYTES);
+                bits.asLongBuffer().put(grid.shapes);
+                for (int id = 0; id < 64; id++) {
+                    bits.putLong((256 + id) * Long.BYTES, MapColor.byId(id).col);
+                }
+                GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RG32UI, 256, 2, 0, GL30.GL_RG_INTEGER,
+                        GL11.GL_UNSIGNED_INT, bits);
+            }
         } catch (Throwable error) {
             close();
             throw error;
@@ -160,15 +218,12 @@ final class DisplayShadows implements AutoCloseable {
     boolean advance(long frame, VertexBuffer[] buffers, int[] counts) {
         int total = counts[0] + counts[1];
         if (shaded == total) {
-            releaseVoxels();
             return true;
         }
         if (shader == null) {
             return false;
         }
-        int rays = targets.length / 3;
-        // Each vertex also traces whether it is in the screen's room (display_shadow.fsh, ROOM_RAYS).
-        int count = BUDGET.take(frame, total - shaded, rays + Math.min(rays, ROOM_RAYS));
+        int count = BUDGET.take(frame, total - shaded, RAYS);
         if (count == 0) {
             return false;
         }
@@ -178,6 +233,8 @@ final class DisplayShadows implements AutoCloseable {
             int framebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
             int readFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
             int active = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+            RenderSystem.activeTexture(GL13.GL_TEXTURE1);
+            RenderSystem.bindTexture(shapes);
             RenderSystem.activeTexture(GL13.GL_TEXTURE0);
             int previous = GL11.glGetInteger(GL12.GL_TEXTURE_BINDING_3D);
             boolean depth = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
@@ -196,16 +253,24 @@ final class DisplayShadows implements AutoCloseable {
                 GL11.glBindTexture(GL12.GL_TEXTURE_3D, voxels);
                 shader.safeGetUniform("Size").set((float) WIDTH, (float) visibility.height);
                 shader.safeGetUniform("VoxelMin").set((float) min.getX(), (float) min.getY(), (float) min.getZ());
+                Vec3 origin = screen.origin();
+                Vec3 right = screen.right();
+                Vec3 out = screen.out();
+                shader.safeGetUniform("ScreenOrigin").set((float) origin.x, (float) origin.y, (float) origin.z);
                 shader.safeGetUniform("ScreenRight").set((float) right.x, (float) right.y, (float) right.z);
                 shader.safeGetUniform("ScreenOut").set((float) out.x, (float) out.y, (float) out.z);
-                shader.safeGetUniform("RayCount").set(rays);
+                shader.safeGetUniform("PictureSize").set(width, height);
                 int end = shaded + count;
-                if (shaded < counts[0]) {
-                    draw(buffers[0], shaded, Math.min(end, counts[0]) - shaded, 0);
-                }
-                if (end > counts[0]) {
-                    int start = Math.max(shaded, counts[0]);
-                    draw(buffers[1], start - counts[0], end - start, counts[0]);
+                for (int pass = 0; pass < 2; pass++) {
+                    shader.safeGetUniform("Pass").set(pass);
+                    int above = pass * rows * WIDTH;
+                    if (shaded < counts[0]) {
+                        draw(buffers[0], shaded, Math.min(end, counts[0]) - shaded, above);
+                    }
+                    if (end > counts[0]) {
+                        int start = Math.max(shaded, counts[0]);
+                        draw(buffers[1], start - counts[0], end - start, counts[0] + above);
+                    }
                 }
                 shaded = end;
             } finally {
@@ -231,22 +296,24 @@ final class DisplayShadows implements AutoCloseable {
                 RenderSystem.viewport(viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3));
             }
         }
-        if (shaded == total) {
-            releaseVoxels();
-            return true;
-        }
-        return false;
+        return shaded == total;
+    }
+
+    /** The block grid as {@code light}'s Voxels and Shapes, to find each pixel's shadow in (display_light.fsh). */
+    void bindVoxels(ShaderInstance light) {
+        int active = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        RenderSystem.activeTexture(GL13.GL_TEXTURE0 + VOXEL_UNIT);
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, voxels);
+        RenderSystem.activeTexture(GL13.GL_TEXTURE0 + VOXEL_UNIT + 1);
+        RenderSystem.bindTexture(shapes);
+        RenderSystem.activeTexture(active);
+        light.safeGetUniform("VoxelMin").set((float) min.getX(), (float) min.getY(), (float) min.getZ());
     }
 
     private void draw(VertexBuffer buffer, int first, int count, int offset) {
         shader.safeGetUniform("VertexOffset").set(offset);
         buffer.bind();
         shader.apply();
-        if (targetsProgram != shader.getId()) {
-            targetsProgram = shader.getId();
-            targetsLocation = GL20.glGetUniformLocation(targetsProgram, "Targets");
-        }
-        GL20.glUniform3fv(targetsLocation, targets);
         GL11.glDrawArrays(GL11.GL_POINTS, first, count);
     }
 
@@ -254,6 +321,7 @@ final class DisplayShadows implements AutoCloseable {
         if (voxels != 0) {
             GL11.glDeleteTextures(voxels);
             voxels = 0;
+            TextureUtil.releaseTextureId(shapes);
         }
     }
 
