@@ -19,6 +19,8 @@ import org.lwjgl.opengl.GL20;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -62,7 +64,8 @@ import net.neoforged.neoforge.common.Tags;
  * A playing display lights the room in front of it as a cinema screen does: an area light the size of the screen, its
  * colours the video's (shaders/core/display_light). Each block face it reaches is drawn again, added to what's there:
  * lit by every part of the picture, each in its colour and the nearer the more, shaded softly by what stands between
- * and by the mobs and players in it, and by the screen's light off the faces about it, in their colours; and, if
+ * and by the mobs and players in it, in their models' shapes, and by the screen's light off the faces about it, in
+ * their colours; and, if
  * glossy (glass, ice, polished stone, metal, water), mirroring the picture, blurred by its roughness. Under a shader pack, no reflections (the pack draws its own), and the light is
  * added once the pack has finished the frame.
  * The faces are found in the background when blocks change and kept in a vertex buffer, drawn each frame.
@@ -75,8 +78,15 @@ public final class DisplayLight {
     static final float STRENGTH = 0.7f;
     /** The mobs and players whose shadows a light draws, at most (display_light.fsh's Bodies). */
     private static final int BODIES = 8;
+    /** The boxes those are made of, at most, between them (display_light.fsh's Parts). */
+    private static final int PARTS = 64;
+    /** Lights found before, kept per display for when its blocks are again as they were: a door shut again. */
+    // ponytail: four, two doors' worth of states; more if rooms with more that open and shut are slow to relight.
+    private static final int KEPT = 4;
     /** Ticks between looks at which faces the light reaches, at least. */
-    private static final int REFRESH_TICKS = 20;
+    private static final int REFRESH_TICKS = 4;
+    /** Ticks between lights found anew, at least. One kept from before is shown as soon as a look asks for it. */
+    private static final int ANEW_TICKS = 20;
     /** Frames a display may go undrawn before its buffers are freed. */
     private static final int FORGET_FRAMES = 600;
     /*
@@ -94,6 +104,74 @@ public final class DisplayLight {
     private static final float[] MATTE_MATERIAL = {1, 0.04f};
     private static final Map<BlockState, Long> SHAPES = new ConcurrentHashMap<>();
     private static volatile boolean warned;
+    private static boolean shapeWarned;
+    /** The boxes of each body in a light this frame, in the world as the camera draws it: none if it has no such. */
+    private static final Map<LivingEntity, List<Matrix4f>> SHAPES_DRAWN = new HashMap<>();
+
+    /**
+     * What a mob's or a player's renderer is handed in place of a buffer to draw into: the boxes its model is made
+     * of, as posed, are kept (ModelCubeMixin), and nothing is drawn. One for each buffer asked for, as an enchanted
+     * item is drawn into two at once, which may not be the same.
+     */
+    public static final class Shape implements VertexConsumer {
+        /** Each box: the unit cube to where it stands. */
+        private final List<Matrix4f> parts;
+        private final Vector3f middle = new Vector3f();
+        private final Vector3f other = new Vector3f();
+
+        Shape(List<Matrix4f> parts) {
+            this.parts = parts;
+        }
+
+        /** A box of a model: from {@code min} to {@code max}, sixteenths of a block, as {@code pose} places them. */
+        public void add(Matrix4f pose, float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+            // No thinner than half a sixteenth: a fin or a wing is a box of no depth.
+            Matrix4f part = new Matrix4f(pose).translate(minX / 16, minY / 16, minZ / 16).scale(
+                    Math.max(maxX - minX, 0.5f) / 16, Math.max(maxY - minY, 0.5f) / 16, Math.max(maxZ - minZ, 0.5f) / 16);
+            part.transformPosition(0.5f, 0.5f, 0.5f, middle);
+            // A box about the same middle as one before is that one again, a little larger or smaller (armour, a
+            // sleeve, eyes that glow): the larger stands for both.
+            for (int i = 0; i < parts.size(); i++) {
+                if (parts.get(i).transformPosition(0.5f, 0.5f, 0.5f, other).distanceSquared(middle) < 1e-4f) {
+                    if (Math.abs(part.determinant3x3()) > Math.abs(parts.get(i).determinant3x3())) {
+                        parts.set(i, part);
+                    }
+                    return;
+                }
+            }
+            parts.add(part);
+        }
+
+        @Override
+        public VertexConsumer addVertex(float x, float y, float z) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(int red, int green, int blue, int alpha) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv(float u, float v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv1(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv2(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setNormal(float x, float y, float z) {
+            return this;
+        }
+    }
 
     static final class Refresh {
         private long last = -REFRESH_TICKS;
@@ -141,6 +219,10 @@ public final class DisplayLight {
         private Surface current;
         @Nullable
         private Surface pending;
+        /** Those drawn before, the latest last. */
+        private final List<Surface> kept = new ArrayList<>();
+        /** When the last was found anew. */
+        private long anew = -ANEW_TICKS;
         long drawn;
         /** As drawn this frame. */
         final Matrix4f toScreen = new Matrix4f();
@@ -149,8 +231,12 @@ public final class DisplayLight {
         float height;
         float range;
         float strength;
-        /** The bodies in the light, each's box in the screen's space: its least corner, then its greatest. */
+        /** The bodies in the light, each's bounds in the screen's space: its least corner, then its greatest. */
         final float[] bodies = new float[BODIES * 6];
+        /** The boxes they are made of: the screen's space to each's unit cube, three rows of four. */
+        final float[] parts = new float[PARTS * 12];
+        /** Each body's boxes end before this one of parts. */
+        final int[] partEnds = new int[BODIES];
         int bodyCount;
         boolean specular;
         ResourceLocation video;
@@ -183,7 +269,7 @@ public final class DisplayLight {
             found = next;
         }
 
-        void upload() {
+        void upload(long now) {
             if (pending != null) {
                 return;
             }
@@ -192,13 +278,47 @@ public final class DisplayLight {
                 next = found;
                 found = null;
             }
-            if (next != null) {
-                try (next) {
-                    if (current == null || current.hash != next.hash || current.version != shaderVersion) {
-                        pending = new Surface(next);
-                    }
+            if (next == null) {
+                return;
+            }
+            if (current != null && current.matches(next)) {
+                next.close();
+                return;
+            }
+            for (Surface before : kept) {
+                if (before.matches(next)) {
+                    kept.remove(before);
+                    show(before);
+                    next.close();
+                    return;
                 }
             }
+            if (now >= anew && now - anew < ANEW_TICKS) {
+                // Too soon after the last: it waits, unless a later look has found another meanwhile.
+                synchronized (this) {
+                    if (found == null && !closed) {
+                        found = next;
+                        return;
+                    }
+                }
+                next.close();
+                return;
+            }
+            anew = now;
+            try (next) {
+                pending = new Surface(next);
+            }
+        }
+
+        /** {@code next} in place of what's drawn, which is kept for when the blocks are as they were again. */
+        private void show(Surface next) {
+            if (current != null) {
+                kept.add(current);
+                if (kept.size() > KEPT) {
+                    kept.remove(0).close();
+                }
+            }
+            current = next;
         }
 
         void draw(int part, Matrix4f modelView, Matrix4f projection) {
@@ -207,10 +327,7 @@ public final class DisplayLight {
             }
             if (part == 0 && pending != null
                     && pending.shadows.advance(WorldEvents.frame(), pending.buffers, pending.counts)) {
-                if (current != null) {
-                    current.close();
-                }
-                current = pending;
+                show(pending);
                 pending = null;
             }
             if (current == null || current.buffers[part] == null) {
@@ -223,6 +340,8 @@ public final class DisplayLight {
             shader.setDefaultUniforms(VertexFormat.Mode.QUADS, modelView, projection, Minecraft.getInstance().getWindow());
             shader.apply();
             GL20.glUniform3fv(GL20.glGetUniformLocation(shader.getId(), "Bodies"), bodies);
+            GL20.glUniform4fv(GL20.glGetUniformLocation(shader.getId(), "Parts"), parts);
+            GL20.glUniform1iv(GL20.glGetUniformLocation(shader.getId(), "PartEnds"), partEnds);
             current.buffers[part].draw();
             shader.clear();
             VertexBuffer.unbind();
@@ -243,6 +362,8 @@ public final class DisplayLight {
             if (pending != null) {
                 pending.close();
             }
+            kept.forEach(Surface::close);
+            kept.clear();
         }
     }
 
@@ -261,6 +382,12 @@ public final class DisplayLight {
         final int hash;
         final int version = shaderVersion;
         DisplayShadows shadows;
+
+        /** Whether this is {@code found}'s, as the shader now loaded draws it. */
+        boolean matches(Found found) {
+            return hash == found.hash && version == shaderVersion && counts[0] == found.meshes[0].count()
+                    && counts[1] == found.meshes[1].count();
+        }
 
         Surface(Found found) {
             hash = found.hash;
@@ -299,6 +426,10 @@ public final class DisplayLight {
 
     /** Vertices built off the render thread, in native memory (no large arrays for the GC), till uploaded. */
     private record Mesh(ByteBufferBuilder bytes, @Nullable MeshData data, int hash) implements AutoCloseable {
+        int count() {
+            return data == null ? 0 : data.drawState().vertexCount();
+        }
+
         static void close(Mesh[] meshes) {
             for (Mesh mesh : meshes) {
                 mesh.close();
@@ -327,6 +458,8 @@ public final class DisplayLight {
                 lit.pending.close();
                 lit.pending = null;
             }
+            lit.kept.forEach(Surface::close);
+            lit.kept.clear();
         }
     }
 
@@ -376,7 +509,7 @@ public final class DisplayLight {
             lit.refresh.invalidate();
         }
         lit.drawn = frame;
-        lit.upload();
+        lit.upload(now);
         if (lit.refresh.begin(now)) {
             BlockPos at = display.getBlockPos();
             Bounds bounds = lit.bounds;
@@ -408,7 +541,7 @@ public final class DisplayLight {
         lit.height = height;
         lit.range = range;
         lit.strength = strength;
-        lit.bodyCount = bodies(level, lit.toScreen, matrix, range, lit.bodies);
+        lit.bodyCount = bodies(level, lit.toScreen, matrix, range, lit.bodies, lit.parts, lit.partEnds);
         // Under a shader pack, its reflections are the pack's to draw.
         lit.specular = !IrisCompat.shaderPackInUse();
         lit.video = video;
@@ -423,10 +556,12 @@ public final class DisplayLight {
     }
 
     /**
-     * The mobs and players the light reaches, for their shadows: each's box, in the screen's space, into {@code out};
-     * the nearest to the display, if more than fit. None in a world that isn't the client's (a Ponder scene).
+     * The mobs and players the light reaches, for their shadows: each's bounds, in the screen's space, into
+     * {@code out}, and the boxes its model is made of into {@code parts}, to where {@code ends} says; the nearest to
+     * the display, if more than fit. None in a world that isn't the client's (a Ponder scene).
      */
-    private static int bodies(Level level, Matrix4f toScreen, Matrix4f matrix, float range, float[] out) {
+    private static int bodies(Level level, Matrix4f toScreen, Matrix4f matrix, float range, float[] out,
+                              float[] parts, int[] ends) {
         if (!WorldEvents.isClientWorld(level)) {
             return 0;
         }
@@ -440,25 +575,68 @@ public final class DisplayLight {
                 AABB.ofSize(display, 2 * range, 2 * range, 2 * range), body -> !body.isSpectator() && !body.isInvisible());
         found.sort(Comparator.comparingDouble(body -> body.distanceToSqr(display)));
         int count = Math.min(found.size(), BODIES);
+        int used = 0;
         Vector3f corner = new Vector3f();
+        Vector4f row = new Vector4f();
         for (int i = 0; i < count; i++) {
             LivingEntity body = found.get(i);
             // Where it is drawn this frame, between its ticks.
-            AABB box = body.getBoundingBox().move(body.getPosition(partial).subtract(body.position()))
-                    .move(camera.reverse());
+            Vec3 at = body.getPosition(partial).subtract(camera);
+            List<Matrix4f> shape = SHAPES_DRAWN.computeIfAbsent(body, drawn -> shape(drawn, at, partial));
+            // ponytail: one whose model isn't of such boxes (or is of more than fit) shades as its bounding box.
+            if (shape.isEmpty() || used + shape.size() > PARTS - (count - 1 - i)) {
+                AABB box = body.getBoundingBox().move(body.position().reverse()).move(at);
+                shape = List.of(new Matrix4f().translate((float) box.minX, (float) box.minY, (float) box.minZ)
+                        .scale((float) box.getXsize(), (float) box.getYsize(), (float) box.getZsize()));
+            }
             Arrays.fill(out, 6 * i, 6 * i + 3, Float.MAX_VALUE);
             Arrays.fill(out, 6 * i + 3, 6 * i + 6, -Float.MAX_VALUE);
-            for (int c = 0; c < 8; c++) {
-                toLight.transformPosition((float) ((c & 1) == 0 ? box.minX : box.maxX),
-                        (float) ((c & 2) == 0 ? box.minY : box.maxY), (float) ((c & 4) == 0 ? box.minZ : box.maxZ),
-                        corner);
-                for (int k = 0; k < 3; k++) {
-                    out[6 * i + k] = Math.min(out[6 * i + k], corner.get(k));
-                    out[6 * i + 3 + k] = Math.max(out[6 * i + 3 + k], corner.get(k));
+            for (Matrix4f drawn : shape) {
+                Matrix4f part = new Matrix4f(toLight).mul(drawn);
+                for (int c = 0; c < 8; c++) {
+                    part.transformPosition(c & 1, c >> 1 & 1, c >> 2, corner);
+                    for (int k = 0; k < 3; k++) {
+                        out[6 * i + k] = Math.min(out[6 * i + k], corner.get(k));
+                        out[6 * i + 3 + k] = Math.max(out[6 * i + 3 + k], corner.get(k));
+                    }
                 }
+                part.invertAffine();
+                for (int k = 0; k < 3; k++) {
+                    part.getRow(k, row);
+                    parts[12 * used + 4 * k] = row.x;
+                    parts[12 * used + 4 * k + 1] = row.y;
+                    parts[12 * used + 4 * k + 2] = row.z;
+                    parts[12 * used + 4 * k + 3] = row.w;
+                }
+                used++;
             }
+            ends[i] = used;
         }
         return count;
+    }
+
+    /**
+     * The boxes {@code body}'s model is made of, as it is posed this frame, drawn {@code at} from the camera: its
+     * renderer draws it into Shapes, which keep them. None if it draws no such boxes.
+     */
+    private static List<Matrix4f> shape(LivingEntity body, Vec3 at, float partial) {
+        List<Matrix4f> parts = new ArrayList<>();
+        try {
+            var renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(body);
+            PoseStack pose = new PoseStack();
+            Vec3 drawn = at.add(renderer.getRenderOffset(body, partial));
+            pose.translate(drawn.x, drawn.y, drawn.z);
+            renderer.render(body, Mth.lerp(partial, body.yRotO, body.getYRot()), partial, pose,
+                    type -> new Shape(parts), 0);
+        } catch (RuntimeException error) {
+            parts.clear();
+            if (!shapeWarned) {
+                // Once: its shadow is its box's.
+                shapeWarned = true;
+                LogUtils.getLogger().warn("A display's light couldn't find the shape of {}", body, error);
+            }
+        }
+        return parts;
     }
 
     /**
@@ -474,6 +652,7 @@ public final class DisplayLight {
 
     private static void frameEnded() {
         WATER.clear();
+        SHAPES_DRAWN.clear();
         long frame = WorldEvents.frame();
         for (Iterator<Map.Entry<DisplayBlock.Entity, Lit>> it = LIT.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<DisplayBlock.Entity, Lit> entry = it.next();
@@ -610,6 +789,8 @@ public final class DisplayLight {
         private final float range;
         final ByteBufferBuilder bytes = new ByteBufferBuilder(1024 * SurfaceLight.FORMAT.getVertexSize());
         private final BufferBuilder out = new BufferBuilder(bytes, VertexFormat.Mode.QUADS, SurfaceLight.FORMAT);
+        /** Of what the vertices are made from: not of their bytes, whose padding is whatever the memory held. */
+        private int hash;
 
         Lighting(DisplayBlock.Screen screen, float width, float height, float range) {
             this.screen = screen;
@@ -643,6 +824,8 @@ public final class DisplayLight {
                 // for from just inside its face (display_shadow.vsh), as on the corner itself, where blocks meet,
                 // which of them a ray starts in is a toss-up.
                 int inward = side(middle.x - p.x) + 3 * side(middle.y - p.y) + 9 * side(middle.z - p.z);
+                hash = 31 * hash + Arrays.hashCode(new float[] {(float) p.x, (float) p.y, (float) p.z, uv[2 * k],
+                        uv[2 * k + 1], roughness, f0, inward, kind, side.ordinal()});
                 out.addVertex((float) p.x, (float) p.y, (float) p.z).setUv(uv[2 * k], uv[2 * k + 1])
                         .setColor(roughness, f0, (inward + 0.5f) / 255, kind)
                         .setNormal((float) n.x, (float) n.y, (float) n.z);
@@ -656,7 +839,7 @@ public final class DisplayLight {
 
         Mesh finish() {
             MeshData mesh = out.build();
-            return new Mesh(bytes, mesh, mesh == null ? 0 : mesh.vertexBuffer().hashCode());
+            return new Mesh(bytes, mesh, hash);
         }
     }
 

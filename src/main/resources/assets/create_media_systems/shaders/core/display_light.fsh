@@ -18,8 +18,9 @@
 //   DisplayShadows.Grid's: a block, or the part of it a door, a slab or a fence fills). What the face's four corners
 //   agree on (sure) is so all over it; a point only some of them see (unsure), each pixel looks for. A face no
 //   shadow's edge crosses takes its light as its corners found it (shone, display_light.vsh's), between them.
-// - Bodies' shadows: a mob or a player in the light is a box (Bodies: its least corner, then its greatest, BodyCount of
-//   them), hiding from a pixel the points its shadow, cast from the pixel onto the screen, falls on.
+// - Bodies' shadows: a mob or a player in the light is the boxes its model is made of (Parts: for each, the screen's
+//   space to its unit cube, three rows; a body's end before its PartEnds), hiding from a pixel the points a line to
+//   which passes through one. Bodies: each's bounds, its least corner, then its greatest, BodyCount of them.
 // material: roughness, F0 (above 0.5, a metal), display_shadow.vsh's, and 1 for a block's face or 0 for water.
 // No ternaries inside expressions: Veil (with Sable) reprints this shader and drops their parentheses.
 
@@ -39,6 +40,8 @@ uniform float Specular;
 uniform float GameTime;
 uniform vec3 Bodies[16];
 uniform int BodyCount;
+uniform vec4 Parts[192];
+uniform int PartEnds[8];
 
 in vec2 texCoord0;
 in vec4 material;
@@ -320,16 +323,21 @@ vec4 off(vec3 p, vec3 n) {
     return vec4(from, 0.0);
 }
 
-// Each body's shadow on the screen's plane, cast from the pixel: about its corners'. Those of them that fall within
-// `around` of the screen.
+// Each body's shadow on the screen's plane, cast from the pixel: about its bounds' corners'. Those of them that fall
+// on the screen, and which of Parts each is made of.
 vec2 least[8];
 vec2 most[8];
+int begins[8];
+int ends[8];
 int bodies;
 
-void cast(vec3 P, float around) {
+void cast(vec3 P) {
     bodies = 0;
+    int next = 0;
     for (int b = 0; b < 8; b++) {
         if (b >= BodyCount) break;
+        int begin = next;
+        next = PartEnds[b];
         vec3 lo = Bodies[2 * b];
         vec3 hi = Bodies[2 * b + 1];
         // Only what of it is nearer the screen than P stands between them.
@@ -343,16 +351,38 @@ void cast(vec3 P, float around) {
             from = min(from, on);
             to = max(to, on);
         }
-        if (any(greaterThan(from, PictureSize + around)) || any(lessThan(to, vec2(-around)))) continue;
+        if (any(greaterThan(from, PictureSize)) || any(lessThan(to, vec2(0.0)))) continue;
         least[bodies] = from;
         most[bodies] = to;
+        begins[bodies] = begin;
+        ends[bodies] = next;
         bodies += 1;
     }
 }
 
+// Whether the line from P on by d, to its end, passes through one of the boxes of the body cast() kept as b.
+bool hides(int b, vec3 P, vec3 d) {
+    for (int p = begins[b]; p < ends[b]; p++) {
+        // In the box's own space, where it is the unit cube.
+        vec3 o = vec3(dot(Parts[3 * p], vec4(P, 1.0)), dot(Parts[3 * p + 1], vec4(P, 1.0)),
+                dot(Parts[3 * p + 2], vec4(P, 1.0)));
+        vec3 along = vec3(dot(Parts[3 * p].xyz, d), dot(Parts[3 * p + 1].xyz, d), dot(Parts[3 * p + 2].xyz, d));
+        along += vec3(lessThan(abs(along), vec3(1e-6))) * 1e-6;
+        vec3 one = -o / along;
+        vec3 two = (1.0 - o) / along;
+        vec3 enters = min(one, two);
+        vec3 leaves = max(one, two);
+        float enter = max(max(enters.x, enters.y), enters.z);
+        float leave = min(min(leaves.x, leaves.y), leaves.z);
+        if (enter < leave && leave > 0.0 && enter < 1.0) return true;
+    }
+    return false;
+}
+
 // The screen's light on P, on a face turned N, of what it would be were the screen white and nothing in its way: its
 // colour (rgb), the picture's at each of the screen's points P sees past what stands between, and how much of it
-// comes (a). If no point is in front of the face, `average`, all of it. After cast(), of the same `around`.
+// comes (a). If no point is in front of the face, `average`, all of it. After cast(). A point stands for the screen
+// `around` it.
 vec4 shines(vec3 P, vec3 N, vec3 average, float around) {
     // ToScreen's rows are the screen's right, up and out: turned back, the screen's space to the display's blocks'.
     mat3 toBlock = transpose(mat3(ToScreen));
@@ -386,8 +416,11 @@ vec4 shines(vec3 P, vec3 N, vec3 average, float around) {
             through = 1.0;
         }
         for (int b = 0; b < bodies; b++) {
-            vec2 hid = clamp(min(most[b], spot.xy + around) - max(least[b], spot.xy - around), 0.0, 2.0 * around);
-            through *= 1.0 - hid.x * hid.y / (4.0 * around * around);
+            if (through <= 0.0) break;
+            if (any(lessThan(spot.xy, least[b])) || any(greaterThan(spot.xy, most[b]))) continue;
+            if (hides(b, P, d)) {
+                through = 0.0;
+            }
         }
         if (through > 0.0) {
             lit += weight * through * vec4(video(spot.xy, lod), 1.0);
@@ -426,9 +459,9 @@ void main() {
     vec2 size = vec2(textureSize(Sampler1, 0));
     vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
     // A point stands for the screen about it: a square of half again its share of the screen, so that no part of
-    // the picture falls between two points, and a body's shadow darkens it by as much of the square as it covers.
+    // the picture falls between two points.
     float around = 0.75 * sqrt(PictureSize.x * PictureSize.y / float(SPOTS));
-    cast(P, around);
+    cast(P);
     vec4 lit = shone;
     if (unsure != 0 || bodies > 0) {
         // From the face as it is, not as its ripples turn it.
