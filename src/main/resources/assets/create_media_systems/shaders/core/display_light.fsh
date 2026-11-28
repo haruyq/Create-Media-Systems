@@ -4,8 +4,9 @@
 // The screen is an area light, x 0..PictureSize.x and y 0..PictureSize.y on z = 0, shining towards +z, its colours the
 // video's (Sampler1, whose mipmaps are its blur). Everything here is in that space.
 // - Diffuse: the screen's exact form factor (Lambert's polygon formula, clipped to the face's horizon), coloured by
-//   the part of the picture the face mostly sees, blurred as widely as it sees it (after Heitz et al. 2016's
-//   textured area lights).
+//   all of the picture: SPOTS points spread over the screen, each the picture about it, weighing as that part of the
+//   screen lights the face (nearer and more squarely, more). So a wall beside a red half is red, the middle of the
+//   room both halves' mix, and a shadow the colour of the parts still seen.
 // - Specular: where the mirrored view ray meets the screen, the picture there blurred to the face's roughness,
 //   weighted by how much of that blur falls on the screen and by Fresnel.
 // - Bounce: the screen's light, its average colour, that reaches the face by way of one other face, tinted by that
@@ -13,12 +14,12 @@
 //   turned away from the screen, or one in a shadow.
 // All of it seen as a camera would in a dark cinema, exposed for the room: what is near the screen saturates softly
 // (1 - exp(-x)), and the far seats still show.
-// - Shadows: how many of SPOTS points spread over the screen a pixel
-//   sees past what stands about the display (Voxels and Shapes, DisplayShadows.Grid's: a block, or the part of it a
-//   door, a slab or a fence fills). What the face's four corners agree on
-//   (sure) is so all over it; a point only some of them see (unsure), each pixel looks for.
+// - Shadows: which of those points a pixel sees past what stands about the display (Voxels and Shapes,
+//   DisplayShadows.Grid's: a block, or the part of it a door, a slab or a fence fills). What the face's four corners
+//   agree on (sure) is so all over it; a point only some of them see (unsure), each pixel looks for. A face no
+//   shadow's edge crosses takes its light as its corners found it (shone, display_light.vsh's), between them.
 // - Bodies' shadows: a mob or a player in the light is a box (Bodies: its least corner, then its greatest, BodyCount of
-//   them), hiding from a pixel the part of the screen its shadow, cast from the pixel, falls on.
+//   them), hiding from a pixel the points its shadow, cast from the pixel onto the screen, falls on.
 // material: roughness, F0 (above 0.5, a metal), display_shadow.vsh's, and 1 for a block's face or 0 for water.
 // No ternaries inside expressions: Veil (with Sable) reprints this shader and drops their parentheses.
 
@@ -46,6 +47,7 @@ in vec3 localNormal;
 flat in int sure;
 flat in int unsure;
 in vec3 bounced;
+in vec4 shone;
 
 out vec4 fragColor;
 
@@ -54,14 +56,18 @@ const float PI = 3.14159265;
 const float EXPOSURE = 12.0;
 // How bright the light bounced off one face is: above 1, for the light that bounces on, off a second and a third.
 const float BOUNCE = 1.5;
-// As display_shadow.fsh's: the screen's points a shadow is found from.
+// As display_shadow.fsh's: the screen's points its light and its shadows are found from.
 const int SPOTS = 32;
 
-// The picture around `at` (blocks on the screen), blurred to about `footprint` blocks across.
-vec3 video(vec2 at, float footprint) {
+// The picture's mipmap that blurs it to about `footprint` blocks across.
+float level(float footprint) {
     vec2 size = vec2(textureSize(Sampler1, 0));
     float texelsPerBlock = max(size.x / PictureSize.x, size.y / PictureSize.y);
-    float lod = clamp(log2(max(footprint * texelsPerBlock, 1.0)), 0.0, floor(log2(max(size.x, size.y))));
+    return clamp(log2(max(footprint * texelsPerBlock, 1.0)), 0.0, floor(log2(max(size.x, size.y))));
+}
+
+// The picture around `at` (blocks on the screen), blurred as level() says.
+vec3 video(vec2 at, float lod) {
     at = clamp(at, vec2(0.0), PictureSize);
     return textureLod(Sampler1, vec2(at.x / PictureSize.x, 1.0 - at.y / PictureSize.y), lod).rgb;
 }
@@ -140,7 +146,8 @@ vec3 edge(vec3 a, vec3 b) {
     return cross(a, b) * (theta / sin(theta));
 }
 
-vec3 diffuse(vec3 P, vec3 N) {
+// How much of all that P, on a face turned N, looks at is the screen.
+float formFactor(vec3 P, vec3 N) {
     vec3 up = vec3(0.0, 1.0, 0.0);
     if (abs(N.y) > 0.99) {
         up = vec3(1.0, 0.0, 0.0);
@@ -158,7 +165,7 @@ vec3 diffuse(vec3 P, vec3 N) {
     int n;
     clipToHorizon(L, n);
     if (n == 0) {
-        return vec3(0.0);
+        return 0.0;
     }
     for (int i = 0; i < 5; i++) {
         L[i] = normalize(L[i]);
@@ -166,15 +173,7 @@ vec3 diffuse(vec3 P, vec3 N) {
     vec3 sum = edge(L[0], L[1]) + edge(L[1], L[2]) + edge(L[2], L[3]);
     if (n >= 4) sum += edge(L[3], L[4]);
     if (n == 5) sum += edge(L[4], L[0]);
-    float formFactor = abs(sum.z) / (2.0 * PI);
-    // The part of the picture lighting it most: where the form factor's direction meets the screen.
-    vec3 lobe = sum * sign(sum.z);
-    vec3 towards = frame * lobe;
-    vec2 at = P.xy;
-    if (towards.z < -1e-4) {
-        at = (P + towards * (-P.z / towards.z)).xy;
-    }
-    return video(at, 0.5 + distance(P, vec3(clamp(at, vec2(0.0), PictureSize), 0.0))) * formFactor;
+    return abs(sum.z) / (2.0 * PI);
 }
 
 vec3 specular(vec3 P, vec3 N, float roughness, float f0, vec3 albedo) {
@@ -198,7 +197,7 @@ vec3 specular(vec3 P, vec3 N, float roughness, float f0, vec3 albedo) {
     if (coverage <= 0.0) {
         return vec3(0.0);
     }
-    vec3 light = video((lo + hi) * 0.5, 2.0 * s);
+    vec3 light = video((lo + hi) * 0.5, level(2.0 * s));
     vec3 F0 = vec3(f0);
     if (f0 > 0.5) {
         F0 = albedo;
@@ -321,8 +320,40 @@ vec4 off(vec3 p, vec3 n) {
     return vec4(from, 0.0);
 }
 
-// How much of the screen P, on a face turned N, sees past what stands between: of what is in front of the face.
-float sees(vec3 P, vec3 N) {
+// Each body's shadow on the screen's plane, cast from the pixel: about its corners'. Those of them that fall within
+// `around` of the screen.
+vec2 least[8];
+vec2 most[8];
+int bodies;
+
+void cast(vec3 P, float around) {
+    bodies = 0;
+    for (int b = 0; b < 8; b++) {
+        if (b >= BodyCount) break;
+        vec3 lo = Bodies[2 * b];
+        vec3 hi = Bodies[2 * b + 1];
+        // Only what of it is nearer the screen than P stands between them.
+        hi.z = min(hi.z, P.z - 0.01);
+        if (hi.z <= lo.z) continue;
+        vec2 from = vec2(1e9);
+        vec2 to = vec2(-1e9);
+        for (int c = 0; c < 8; c++) {
+            vec3 corner = mix(lo, hi, vec3(c & 1, (c >> 1) & 1, c >> 2));
+            vec2 on = P.xy + (corner.xy - P.xy) * (P.z / (P.z - corner.z));
+            from = min(from, on);
+            to = max(to, on);
+        }
+        if (any(greaterThan(from, PictureSize + around)) || any(lessThan(to, vec2(-around)))) continue;
+        least[bodies] = from;
+        most[bodies] = to;
+        bodies += 1;
+    }
+}
+
+// The screen's light on P, on a face turned N, of what it would be were the screen white and nothing in its way: its
+// colour (rgb), the picture's at each of the screen's points P sees past what stands between, and how much of it
+// comes (a). If no point is in front of the face, `average`, all of it. After cast(), of the same `around`.
+vec4 shines(vec3 P, vec3 N, vec3 average, float around) {
     // ToScreen's rows are the screen's right, up and out: turned back, the screen's space to the display's blocks'.
     mat3 toBlock = transpose(mat3(ToScreen));
     vec3 origin = ToScreen[3].xyz;
@@ -330,48 +361,40 @@ float sees(vec3 P, vec3 N) {
     if (unsure != 0) {
         near = off(toBlock * (P - origin), toBlock * N);
     }
-    int facing = 0;
-    int lit = 0;
+    float share = PictureSize.x * PictureSize.y / float(SPOTS);
+    float lod = level(2.0 * around);
+    float whole = 0.0;
+    vec4 lit = vec4(0.0);
     for (int i = 0; i < SPOTS; i++) {
         int bit = 1 << i;
         // Each point on a column and a row of its own.
         int row = ((i & 1) << 4) | ((i & 2) << 2) | (i & 4) | ((i & 8) >> 2) | ((i & 16) >> 4);
         vec3 spot = vec3((vec2(i, row) + 0.5) / float(SPOTS) * PictureSize, 0.05);
-        if (dot(N, spot - P) <= 0.0) continue;
-        facing += 1;
+        vec3 d = spot - P;
+        float facing = dot(N, d);
+        if (facing <= 0.0) continue;
+        // As a patch of the screen lights a face: by the cosines at the face and at the screen, over the distance
+        // squared. Of these, how far out of the screen P is is the same for every point, so left out. No nearer than
+        // the patch is wide, which a point is not.
+        float r2 = dot(d, d) + share;
+        float weight = facing / (r2 * r2);
+        whole += weight;
+        float through = 0.0;
         if ((sure & bit) != 0) {
-            lit += 1;
+            through = 1.0;
         } else if ((unsure & bit) != 0 && near.w > 0.5 && !blocked(near.xyz, toBlock * (spot - origin))) {
-            lit += 1;
+            through = 1.0;
+        }
+        for (int b = 0; b < bodies; b++) {
+            vec2 hid = clamp(min(most[b], spot.xy + around) - max(least[b], spot.xy - around), 0.0, 2.0 * around);
+            through *= 1.0 - hid.x * hid.y / (4.0 * around * around);
+        }
+        if (through > 0.0) {
+            lit += weight * through * vec4(video(spot.xy, lod), 1.0);
         }
     }
-    if (facing == 0) return 1.0;
-    return float(lit) / float(facing);
-}
-
-// How much of the screen the bodies in the light leave P to see.
-float unhidden(vec3 P) {
-    float left = 1.0;
-    for (int i = 0; i < 8; i++) {
-        if (i >= BodyCount) break;
-        vec3 lo = Bodies[2 * i];
-        vec3 hi = Bodies[2 * i + 1];
-        // Only what of it is nearer the screen than P stands between them.
-        hi.z = min(hi.z, P.z - 0.01);
-        if (hi.z <= lo.z) continue;
-        // The box's shadow on the screen's plane, cast from P: about its corners'.
-        vec2 least = vec2(1e9);
-        vec2 most = vec2(-1e9);
-        for (int c = 0; c < 8; c++) {
-            vec3 corner = mix(lo, hi, vec3(c & 1, (c >> 1) & 1, c >> 2));
-            vec2 on = P.xy + (corner.xy - P.xy) * (P.z / (P.z - corner.z));
-            least = min(least, on);
-            most = max(most, on);
-        }
-        vec2 hid = max(min(most, PictureSize) - max(least, vec2(0.0)), vec2(0.0));
-        left *= 1.0 - hid.x * hid.y / (PictureSize.x * PictureSize.y);
-    }
-    return left;
+    if (whole <= 0.0) return vec4(average, 1.0);
+    return lit / whole;
 }
 
 void main() {
@@ -400,21 +423,24 @@ void main() {
         }
         albedo = texel.rgb;
     }
-    // From the face as it is, not as its ripples turn it.
-    float seen = sees(P, normalize(localNormal)) * unhidden(P);
+    vec2 size = vec2(textureSize(Sampler1, 0));
+    vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
+    // A point stands for the screen about it: a square of half again its share of the screen, so that no part of
+    // the picture falls between two points, and a body's shadow darkens it by as much of the square as it covers.
+    float around = 0.75 * sqrt(PictureSize.x * PictureSize.y / float(SPOTS));
+    cast(P, around);
+    vec4 lit = shone;
+    if (unsure != 0 || bodies > 0) {
+        // From the face as it is, not as its ripples turn it.
+        lit = shines(P, normalize(localNormal), average, around);
+    }
     vec3 light = vec3(0.0);
     if (!water) {
-        vec2 size = vec2(textureSize(Sampler1, 0));
-        vec3 average = textureLod(Sampler1, vec2(0.5), floor(log2(max(size.x, size.y)))).rgb;
-        vec3 direct = vec3(0.0);
-        if (seen > 0.0) {
-            direct = diffuse(P, N) * seen;
-        }
-        light = albedo * (direct + BOUNCE * average * bounced);
+        light = albedo * (formFactor(P, N) * lit.rgb + BOUNCE * average * bounced);
     }
     float roughness = material.r;
-    if (Specular > 0.5 && roughness < 0.75 && seen > 0.0) {
-        light += specular(P, N, roughness, material.g, albedo) * seen;
+    if (Specular > 0.5 && roughness < 0.75 && lit.a > 0.0) {
+        light += specular(P, N, roughness, material.g, albedo) * lit.a;
     }
     // The light falls off as the screen's does, by how much of what a face looks at is screen. Range only ends the
     // faces drawn, where little of it is left: no edge there, fading out over the last of it.
