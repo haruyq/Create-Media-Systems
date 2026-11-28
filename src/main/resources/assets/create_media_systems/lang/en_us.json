@@ -261,6 +261,7 @@
   "create_media_systems.ponder.speakers.text_5": "Right",
   "create_media_systems.ponder.speakers.text_6": "Set one to Left and one to Right for stereo, or leave them on Mix.",
   "create_media_systems.ponder.speakers.text_7": "Turn a speaker with a Wrench. It is loudest in front and quiet behind.",
+  "create_media_systems.ponder.speakers.text_8": "Through Engineer's Goggles the reader shows whether it plays, its disc, and how far into the track it is.",
   "create_media_systems.ponder.line_mixer.header": "Mixing Sources with the Line Mixer",
   "create_media_systems.ponder.line_mixer.text_1": "A Line Mixer, two blocks wide, mixes several sources into one line for the speakers linked to it.",
   "create_media_systems.ponder.line_mixer.text_2": "With the Range Quill, pick a source, then right-click a channel of the mixer to plug it in. Its lamp lights. Doing the same again unplugs it.",

@@ -192,5 +192,6 @@ public final class AudioClient implements ClientFeature {
         scene.idle(10);
         scene.world().setBlock(right, facingCamera.setValue(SpeakerBlock.FACING, Direction.WEST), false);
         say(scene, 90, util.vector().centerOf(right), "Turn a speaker with a Wrench. It is loudest in front and quiet behind.");
+        say(scene, 90, util.vector().topOf(reader), "Through Engineer's Goggles the reader shows whether it plays, its disc, and how far into the track it is.");
     }
 }
