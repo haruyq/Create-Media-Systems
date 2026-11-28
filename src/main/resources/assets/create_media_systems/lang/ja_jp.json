@@ -261,6 +261,7 @@
   "create_media_systems.ponder.speakers.text_5": "右",
   "create_media_systems.ponder.speakers.text_6": "片方を「左」、もう片方を「右」にするとステレオになります。「ミックス」のままでもかまいません。",
   "create_media_systems.ponder.speakers.text_7": "スピーカーはレンチで向きを変えられます。正面が一番大きく、後ろは小さく聞こえます。",
+  "create_media_systems.ponder.speakers.text_8": "エンジニアのゴーグルで見ると、ディスクリーダーが再生中かどうか、ディスク、曲の再生位置が分かります。",
   "create_media_systems.ponder.line_mixer.header": "ラインミキサーで音源をミックスする",
   "create_media_systems.ponder.line_mixer.text_1": "ラインミキサーは2ブロック幅で、複数の音源を1本のラインにまとめ、接続したスピーカーに送ります。",
   "create_media_systems.ponder.line_mixer.text_2": "範囲の羽ペンで音源を選んでから、ミキサーのチャンネルを右クリックすると接続され、ランプが点きます。同じ操作をもう一度すると外れます。",

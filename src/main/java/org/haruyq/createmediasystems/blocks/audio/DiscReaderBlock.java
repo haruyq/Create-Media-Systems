@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.blocks.audio;
 
 import org.haruyq.createmediasystems.ItemSlot;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.disc.DriveEmulatorBlock;
 import org.haruyq.createmediasystems.stream.DiscDrive;
 import org.haruyq.createmediasystems.stream.DiscKind;
 import org.haruyq.createmediasystems.stream.MediaItem;
@@ -9,11 +10,20 @@ import org.haruyq.createmediasystems.stream.MediaSource;
 import org.haruyq.createmediasystems.stream.PlaybackClock;
 import org.haruyq.createmediasystems.stream.Streams;
 
+import java.util.List;
+
 import org.jetbrains.annotations.Nullable;
 
+import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -29,7 +39,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
 /**
- * Plays a custom disc silently: it keeps the track's position so linked speakers can play it in sync.
+ * Plays a custom disc silently: it keeps the track's position so linked speakers can play it in sync. Through
+ * Engineer's Goggles it shows whether it plays, its disc and link, and how far into the track it is.
  */
 public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.SilentAssemblyRemoval {
     public DiscReaderBlock(Properties properties) {
@@ -75,10 +86,18 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
                 : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    public static class Entity extends BlockEntity implements MediaSource.Captured, DiscDrive.Fed, ItemSlot.Holder {
+    public static class Entity extends BlockEntity implements MediaSource.Captured, DiscDrive.Fed, ItemSlot.Holder,
+            IHaveGoggleInformation {
         private final ItemSlot disc = new ItemSlot("Disc", stack -> MediaItem.fits(stack, DiscKind.Slot.JUKEBOX));
         private final PlaybackClock clock = new PlaybackClock();
         private boolean powered;
+        /**
+         * Whether its clock counts on, rather than standing while its listeners load the track (see Streams#tick):
+         * clients count its position on from what the server last sent only while it does.
+         */
+        private boolean counting;
+        /** On a client: the game time the server sent its position at. */
+        private long sentAt;
 
         public Entity(BlockPos pos, BlockState state) {
             super(AudioFeature.DISC_READER_ENTITY.get(), pos, state);
@@ -127,7 +146,7 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
                 clock.stop();
             }
             powered = level != null && level.hasNeighborSignal(worldPosition);
-            setChanged();
+            changed();
         }
 
         private void play(@Nullable Player by) {
@@ -147,7 +166,7 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             } else if (!on) {
                 clock.stop();
             }
-            setChanged();
+            changed();
         }
 
         void tick() {
@@ -155,9 +174,15 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
                 return;
             }
             long now = level.getGameTime();
+            long before = clock.position();
             Streams.tick(this, clock, now);
             advance(now);
             setChanged();
+            boolean counts = clock.running() && clock.position() > before;
+            if (counts != counting) {
+                counting = counts;
+                changed();
+            }
         }
 
         @Override
@@ -170,7 +195,45 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             String url = url();
             if (url != null && clock.ended(url, now)) {
                 clock.stop();
+                counting = false;
+                changed();
             }
+        }
+
+        /** Saved, and sent to the clients watching it, for its goggle tooltip. */
+        private void changed() {
+            setChanged();
+            if (level != null && !level.isClientSide) {
+                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+            }
+        }
+
+        @Override
+        public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+            tooltip.add(Component.literal("    ").append(getBlockState().getBlock().getName()));
+            String url = url();
+            boolean playing = clock.running() && url != null;
+            tooltip.add(Component.literal("     ").append(Component.translatable(url == null ? "create_media_systems.video_player.empty"
+                    : playing ? "create_media_systems.video_player.playing" : "create_media_systems.video_player.stopped"))
+                    .withStyle(url == null ? ChatFormatting.GRAY : playing ? ChatFormatting.GREEN : ChatFormatting.RED));
+            DriveEmulatorBlock.Entity drive = disc.isEmpty() ? DriveEmulatorBlock.beside(level, worldPosition) : null;
+            if (drive != null) {
+                drive.describe(tooltip);
+            } else if (url != null && !disc.isEmpty()) {
+                tooltip.add(Component.literal("     ").append(disc.get().getHoverName()).withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("     " + (url.length() > 40 ? url.substring(0, 39) + "…" : url))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+            }
+            if (playing) {
+                long ticks = clock.position() + (counting && level != null ? Math.max(0, level.getGameTime() - sentAt) : 0);
+                tooltip.add(Component.literal("     ").append(counting
+                        ? Component.translatable("create_media_systems.video_player.position",
+                                Component.literal(PlaybackClock.format(ticks / (double) PlaybackClock.TICKS_PER_SECOND))
+                                        .withStyle(ChatFormatting.WHITE))
+                        : Component.translatable("create_media_systems.video_player.loading").withStyle(ChatFormatting.YELLOW))
+                        .withStyle(ChatFormatting.GRAY));
+            }
+            return true;
         }
 
         @Override
@@ -188,6 +251,24 @@ public class DiscReaderBlock extends Block implements EntityBlock, SableCompat.S
             disc.load(tag, registries);
             clock.load(tag.getLong("Ticks"), tag.getBoolean("Playing"));
             powered = tag.getBoolean("Powered");
+            counting = tag.getBoolean("Counting");
+            sentAt = tag.getLong("SentAt");
+        }
+
+        /** Its position as of now, and whether it counts on from there (see counting). */
+        @Override
+        public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+            CompoundTag tag = saveWithoutMetadata(registries);
+            long now = level == null ? 0 : level.getGameTime();
+            tag.putLong("Ticks", clock.position(now));
+            tag.putBoolean("Counting", counting);
+            tag.putLong("SentAt", now);
+            return tag;
+        }
+
+        @Override
+        public Packet<ClientGamePacketListener> getUpdatePacket() {
+            return ClientboundBlockEntityDataPacket.create(this);
         }
     }
 }
