@@ -66,7 +66,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
     private static final float GLOW_REACH = 0.3f;
     /** How far the glow sits off the wall behind the display, so it doesn't flicker into it. */
     static final float GLOW_LIFT = 0.01f;
-    /** The glow's brightness at a Blu-ray player's 100% lighting. */
+    /** The glow's brightness at a display's 100% ambient lighting. */
     private static final float GLOW_STRENGTH = 0.6f;
     private static ShaderInstance glowShader;
     private static ShaderInstance overdrawShader;
@@ -112,7 +112,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         });
         NeoForge.EVENT_BUS.addListener(DisplayRenderer::overdraw);
         DisplayLight.register();
-        DisplayQuillHandler.register();
+        DisplayWrenchHandler.register();
         Images.register();
     }
 
@@ -151,8 +151,8 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
         // in sight, or this wouldn't be called: getRenderBoundingBox), in the last picture, with no new one uploaded.
         boolean seen = !shadow && seen(display, display.box(GLOW_REACH * Math.max(width, height), 0.1f));
         ResourceLocation texture = frame == null ? null : seen ? frame.texture() : frame.shown();
-        float lighting = display.lighting();
-        shine(display, texture != null ? lighting * frame.brightness() : 0);
+        float cinematic = display.cinematic();
+        shine(display, texture != null ? cinematic * frame.brightness() : 0);
         if (texture == null || shadow) {
             Images.Picture still = shadow ? null : image(display);
             if (still != null) {
@@ -170,10 +170,7 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             RenderType picture = IrisCompat.shaderPackInUse() ? RenderType.eyes(texture) : RenderType.textPolygonOffset(texture);
             fit(display, buffers.getBuffer(picture), matrix, screen, width, height, frame.width(), frame.height(), texture, 0);
         }
-        if (lighting <= 0) {
-            return;
-        }
-        int glow = Math.round(255 * GLOW_STRENGTH * lighting);
+        int glow = Math.round(255 * GLOW_STRENGTH * display.ambient());
         if (seen && glow > 0) {
             // On the display's back plane: the wall it hangs on. UV 0..1 is the display, the video stretched over it.
             VertexConsumer out = buffers.getBuffer(GLOW.apply(texture));
@@ -185,7 +182,9 @@ public final class DisplayRenderer implements BlockEntityRenderer<DisplayBlock.E
             glowVertex(out, matrix, screen.at(width + rx, height + ry, lift), 1 + GLOW_REACH, -GLOW_REACH, glow);
             glowVertex(out, matrix, screen.at(-rx, height + ry, lift), -GLOW_REACH, -GLOW_REACH, glow);
         }
-        DisplayLight.render(display, screen, width, height, matrix, texture, DisplayLight.STRENGTH * lighting);
+        if (cinematic > 0) {
+            DisplayLight.render(display, screen, width, height, matrix, texture, DisplayLight.STRENGTH * cinematic);
+        }
     }
 
     /** Where {@code display} draws: {@link #PICTURES} in the world, as drawn from the player's eyes. */

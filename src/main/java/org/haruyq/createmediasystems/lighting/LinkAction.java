@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.lighting;
 
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
+import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import org.haruyq.createmediasystems.blocks.radio.RadioFeature;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.MediaSource;
@@ -135,6 +136,7 @@ public record LinkAction(Kind kind, @Nullable LightingConsoleBlock.Entity consol
                 player.getMainHandItem().set(LightingFeature.LIGHTING_TARGET.get(), GlobalPos.of(level.dimension(), link.pos()));
                 player.getMainHandItem().set(LightingFeature.LIGHTING_SOURCE.get(), link.id());
                 player.getMainHandItem().remove(RadioFeature.RADIO_TARGET.get());
+                player.getMainHandItem().remove(DisplayFeature.DISPLAY_SOURCE.get());
                 console.refreshLinks();
                 say(player, LightingText.message(LightingText.ON, "picked", groupName()));
             }

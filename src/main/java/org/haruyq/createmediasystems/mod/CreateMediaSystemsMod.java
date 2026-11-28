@@ -106,7 +106,7 @@ public final class CreateMediaSystemsMod {
         sections.put("audio", audio);
         sections.put("video", List.of(
                 VideoFeature.VIDEO_PLAYER_ITEM, DiscFeature.DRIVE_EMULATOR_ITEM, ScreenFeature.SERVER_ITEM, ScreenFeature.MONITOR_ITEM, VideoFeature.EQUALIZER_ITEM,
-                DisplayFeature.DISPLAY_ITEM, DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.REMOTE, DisplayFeature.DISPLAY_QUILL));
+                DisplayFeature.DISPLAY_ITEM, DisplayFeature.IMAGE_VIEWER_ITEM, VideoFeature.REMOTE));
         sections.put("lighting", List.of(
                 LightingFeature.STAGE_LIGHT_ITEM, LightingFeature.STRIP_LIGHT_ITEM, LightingFeature.LASER_PROJECTOR_ITEM,
                 LightingFeature.LIGHTING_CONSOLE_ITEM, LightingFeature.LIGHTING_MONITOR_ITEM, LightingFeature.LIGHTING_LINK));

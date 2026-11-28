@@ -18,7 +18,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-/** What the range quill and the display quill work alike: when, with which input, on what, and what they say. */
+/** What the range quill and the Tuning Wrench work alike: when, with which input, on what, and what they say. */
 public final class Quill {
     /** Outline colour of what is being set up: the range quill's selection, a display linked to the picked player. */
     public static final int SETTING = 0x5cc8b0;

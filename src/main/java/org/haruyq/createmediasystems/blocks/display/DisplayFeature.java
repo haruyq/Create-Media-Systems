@@ -2,6 +2,7 @@ package org.haruyq.createmediasystems.blocks.display;
 
 import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCKS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.BLOCK_ENTITIES;
+import static org.haruyq.createmediasystems.CreateMediaSystems.COMPONENTS;
 import static org.haruyq.createmediasystems.CreateMediaSystems.ITEMS;
 
 import java.util.function.Supplier;
@@ -11,7 +12,8 @@ import org.haruyq.createmediasystems.Feature;
 import com.simibubi.create.api.contraption.BlockMovementChecks;
 import com.simibubi.create.api.contraption.BlockMovementChecks.CheckResult;
 
-import net.minecraft.world.item.Item;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -24,11 +26,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 
-/** Displays that show a Blu-ray player's video, image viewers, and the display quill that links and sizes them. */
+/** Displays that show a Blu-ray player's video, and image viewers; the Tuning Wrench links and sizes them (see DisplayWrench). */
 public final class DisplayFeature implements Feature {
-    /** Display quill: links displays to a Blu-ray player and sets their size (client-side UI only). */
-    public static final DeferredItem<Item> DISPLAY_QUILL = ITEMS.register("display_quill",
-            () -> new Item(new Item.Properties().stacksTo(1)));
+    /** The Blu-ray player or hi-fi stack a Tuning Wrench has picked, which it links displays to. */
+    public static final Supplier<DataComponentType<GlobalPos>> DISPLAY_SOURCE = COMPONENTS.registerComponentType(
+            "display_source", b -> b.persistent(GlobalPos.CODEC).networkSynchronized(GlobalPos.STREAM_CODEC));
     public static final DeferredBlock<DisplayBlock> DISPLAY = BLOCKS.register("display",
             () -> new DisplayBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BLACK_CONCRETE).strength(1).noOcclusion()
                     .pushReaction(PushReaction.BLOCK)));
@@ -79,7 +81,7 @@ public final class DisplayFeature implements Feature {
 
     @Override
     public void registerPayloads(PayloadRegistrar registrar) {
-        DisplayQuill.registerPayloads(registrar);
+        DisplayWrench.registerPayloads(registrar);
         ImageViewerBlock.registerPayloads(registrar);
     }
 }

@@ -3,6 +3,7 @@ package org.haruyq.createmediasystems.blocks.radio;
 import org.haruyq.createmediasystems.Reach;
 import org.haruyq.createmediasystems.SableCompat;
 import org.haruyq.createmediasystems.blocks.audio.LineMixerBlock;
+import org.haruyq.createmediasystems.blocks.display.DisplayFeature;
 import org.haruyq.createmediasystems.lighting.LightingFeature;
 import org.haruyq.createmediasystems.stream.Link;
 import org.haruyq.createmediasystems.stream.LiveSource;
@@ -94,6 +95,7 @@ public final class RadioLink {
             // One device picked at a time: a click on a media source means this transmitter's now.
             wrench.remove(LightingFeature.LIGHTING_TARGET.get());
             wrench.remove(LightingFeature.LIGHTING_SOURCE.get());
+            wrench.remove(DisplayFeature.DISPLAY_SOURCE.get());
             say(player, message("picked"));
             return true;
         }

@@ -74,7 +74,7 @@ public final class DisplayLight {
     /** How far from the picture, in blocks, the light is drawn at least; a big screen's is further (see range). */
     private static final float MIN_RANGE = 16;
     private static final float MAX_RANGE = 64;
-    /** Its brightness at a Blu-ray player's 100% lighting. */
+    /** Its brightness at a display's 100% cinematic lighting. */
     static final float STRENGTH = 0.7f;
     /** The mobs and players whose shadows a light draws, at most (display_light.fsh's Bodies). */
     private static final int BODIES = 8;

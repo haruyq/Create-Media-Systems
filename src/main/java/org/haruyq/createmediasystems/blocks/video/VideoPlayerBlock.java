@@ -113,7 +113,7 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         return type != VideoFeature.VIDEO_PLAYER_ENTITY.get() ? null : (l, p, s, be) -> ((Entity) be).tick();
     }
 
-    /** A block entity keeps one behaviour per type, and lighting has the default one. */
+    /** Volume's own type, not the default one: worlds have it saved under "Volume". */
     private static final BehaviourType<ScrollValueBehaviour> VOLUME = new BehaviourType<>("create_media_systems_volume");
 
     public static class Entity extends SmartBlockEntity implements IHaveGoggleInformation, VideoSource, Remotable, MediaSource.Captured,
@@ -122,7 +122,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         private final ItemSlot cd = new ItemSlot("Cd", stack -> MediaItem.fits(stack, DiscKind.Slot.PICTURE));
         private final DiscTransport transport = new DiscTransport(this, false, new PlaybackClock());
         private ScrollValueBehaviour volume;
-        private ScrollValueBehaviour lighting;
         /** How much of the video playing its listeners have downloaded. Not saved. */
         private final Downloads downloads = new Downloads();
 
@@ -134,12 +133,8 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
             volume = PercentSetting.create(this, "create_media_systems.video_player.volume",
                     new CenteredSideValueBoxTransform((state, side) -> side == Direction.UP), VOLUME, "Volume");
-            lighting = PercentSetting.create(this, "create_media_systems.video_player.lighting",
-                    new CenteredSideValueBoxTransform((state, side) -> side == state.getValue(FACING)));
             volume.withCallback(percent -> soundChanged());
-            lighting.withCallback(percent -> soundChanged());
             behaviours.add(volume);
-            behaviours.add(lighting);
         }
 
         @Nullable
@@ -191,12 +186,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
         @Override
         public float volume() {
             return volume == null ? 1 : volume.getValue() / 100f;
-        }
-
-        /** How brightly its displays light their surroundings, 0..1 (0: not at all); the same for everyone. */
-        @Override
-        public float lighting() {
-            return lighting == null ? 1 : lighting.getValue() / 100f;
         }
 
         @Override
@@ -336,8 +325,6 @@ public class VideoPlayerBlock extends HorizontalDirectionalBlock implements Enti
             }
             tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.volume_value",
                     value(volume.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
-            tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.video_player.lighting_value",
-                    value(lighting.getValue() + "%", ChatFormatting.AQUA))).withStyle(ChatFormatting.GRAY));
             return true;
         }
 

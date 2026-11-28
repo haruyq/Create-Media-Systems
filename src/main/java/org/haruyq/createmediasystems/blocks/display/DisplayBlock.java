@@ -1,5 +1,6 @@
 package org.haruyq.createmediasystems.blocks.display;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.haruyq.createmediasystems.SableCompat;
@@ -13,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.MapCodec;
 import com.simibubi.create.api.equipment.goggles.IProxyHoveringInformation;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -45,7 +47,7 @@ import net.neoforged.neoforge.common.world.AuxiliaryLightManager;
 /**
  * A screen on a wall, like WaterFrames' frames: it shows its linked Blu-ray player's video over its size, from the block
  * to the right and up (as seen from the front), and plays its sound from the screen's middle, like a jukebox, while
- * no speaker plays that Blu-ray player. The display quill links it and sets its size (see DisplayQuillHandler).
+ * no speaker plays that Blu-ray player. The Tuning Wrench links it, sets its size and its lighting (see DisplayWrench).
  */
 public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBlock, SableCompat.SilentAssemblyRemoval,
         IProxyHoveringInformation {
@@ -84,7 +86,7 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
     /** Set while a screen adds or takes away its own parts, so that a part going does not break its screen. */
     private static boolean fitting;
 
-    /** How a screen's height follows its width (see DisplayQuillHandler). */
+    /** How a screen's height follows its width (see DisplayWrenchHandler). */
     public enum Ratio {
         FREE(0), WIDE(16 / 9.0), STANDARD(4 / 3.0), CINEMA(21 / 9.0), SQUARE(1), VIDEO(0);
 
@@ -99,8 +101,9 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             return Component.translatable("create_media_systems.display.ratio." + name().toLowerCase(java.util.Locale.ROOT));
         }
 
-        public Ratio next() {
-            return values()[(ordinal() + 1) % values().length];
+        /** The ratio {@code by} steps on, round the list. */
+        public Ratio step(int by) {
+            return values()[Math.floorMod(ordinal() + by, values().length)];
         }
 
         public static Ratio byId(int id) {
@@ -322,8 +325,10 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
     /** A display: the Blu-ray player it is linked to, whose video it shows and whose sound it plays. */
     public static class Entity extends ScreenEntity implements Emitter {
         private Link source = Link.NONE;
-        /** Its Blu-ray player's lighting in percent, kept here so every client has it (see VideoPlayerBlock). */
-        private int lighting = 100;
+        /** How brightly it lights the room in front of it (DisplayLight), in percent; the same for everyone. */
+        private int cinematic = 100;
+        /** How brightly it glows on the wall around it (DisplayRenderer's glow), in percent. */
+        private int ambient = 100;
         /** Its source's still picture (see VideoSource#image), kept here so every client has it; empty for none. */
         private String image = "";
 
@@ -335,9 +340,21 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             return Optional.ofNullable(source.pos());
         }
 
-        /** How brightly it lights its surroundings as it plays, 0..1, as its Blu-ray player is set. */
-        public float lighting() {
-            return lighting / 100f;
+        /** How brightly it lights the room in front of it as it plays, 0..1. */
+        public float cinematic() {
+            return cinematic / 100f;
+        }
+
+        /** How brightly it glows on the wall around it as it plays, 0..1. */
+        public float ambient() {
+            return ambient / 100f;
+        }
+
+        /** Sets {@link #cinematic} and {@link #ambient}, in percent. */
+        public void setLighting(int cinematic, int ambient) {
+            this.cinematic = Mth.clamp(cinematic, 0, 100);
+            this.ambient = Mth.clamp(ambient, 0, 100);
+            changed();
         }
 
         /** The link of the still picture it shows while it shows no video; empty for none. */
@@ -375,10 +392,6 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
             Optional<BlockPos> linked = source();
             VideoSource videoPlayer = linked.filter(level::isLoaded).map(level::getBlockEntity)
                     .orElse(null) instanceof VideoSource found ? found : null;
-            if (videoPlayer != null && Math.round(videoPlayer.lighting() * 100) != lighting) {
-                lighting = Math.round(videoPlayer.lighting() * 100);
-                changed();
-            }
             // Every client fetches the image itself: a link the server no longer allows reaches none of them.
             String shown = videoPlayer != null && UrlPolicy.isAllowed(videoPlayer.image()) ? videoPlayer.image() : "";
             if (!shown.equals(image)) {
@@ -404,6 +417,14 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         }
 
         @Override
+        public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+            super.addToGoggleTooltip(tooltip, isPlayerSneaking);
+            tooltip.add(Component.literal("     ").append(Component.translatable("create_media_systems.display.lighting_value",
+                    cinematic, ambient)).withStyle(ChatFormatting.GRAY));
+            return true;
+        }
+
+        @Override
         protected Component shows() {
             return source().map(at -> Component.translatable("create_media_systems.display.linked", at.getX(), at.getY(), at.getZ()))
                     .orElseGet(() -> Component.translatable("create_media_systems.display.unlinked"));
@@ -421,7 +442,8 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
             source.save(tag, "Source", "SourceId");
-            tag.putInt("Lighting", lighting);
+            tag.putInt("Cinematic", cinematic);
+            tag.putInt("Ambient", ambient);
             if (!image.isEmpty()) {
                 tag.putString("SourceImage", image);
             }
@@ -431,7 +453,10 @@ public class DisplayBlock extends HorizontalDirectionalBlock implements EntityBl
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
             source = Link.load(tag, "Source", "SourceId");
-            lighting = tag.contains("Lighting") ? Mth.clamp(tag.getInt("Lighting"), 0, 100) : 100;
+            // Saved before the two were apart, it had one, copied from its Blu-ray player.
+            int legacy = tag.contains("Lighting") ? tag.getInt("Lighting") : 100;
+            cinematic = Mth.clamp(tag.contains("Cinematic") ? tag.getInt("Cinematic") : legacy, 0, 100);
+            ambient = Mth.clamp(tag.contains("Ambient") ? tag.getInt("Ambient") : legacy, 0, 100);
             image = tag.getString("SourceImage");
         }
     }

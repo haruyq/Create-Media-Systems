@@ -99,7 +99,7 @@ public final class HifiClient implements ClientFeature {
         say(scene, 120, front, PonderPalette.GREEN, "Point at a button and right-click to press it. Hold right-click on a knob and look left or right to turn it. What you point at is named above the hotbar.");
         scene.overlay().showControls(front, Pointing.RIGHT, 60).rightClick()
                 .withItem(new ItemStack(DiscFeature.BLU_RAY.get()));
-        say(scene, 120, front, "Open the disc player's tray and put a CD, DVD, Blu-ray or Custom Disc on it. A DVD or Blu-ray also shows on displays linked to the stack with a Display Quill.");
+        say(scene, 120, front, "Open the disc player's tray and put a CD, DVD, Blu-ray or Custom Disc on it. A DVD or Blu-ray also shows on displays linked to the stack with a Tuning Wrench.");
         scene.overlay().showControls(front, Pointing.RIGHT, 60).rightClick()
                 .withItem(new ItemStack(DiscFeature.CASSETTE.get()));
         say(scene, 100, front, "Put a Cassette Tape in either deck. A tape remembers where it was stopped, so rewind it to hear it from the top.");

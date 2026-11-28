@@ -39,7 +39,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 /**
  * A picture on a wall, like WaterMedia's images in WaterFrames' frames: a display (same size and quill) that shows
  * an image from a link instead of a Blu-ray player's video, see-through where the image is. Right-click it with a
- * wrench to change the link; the display quill's right-click takes its frame (the black panel) away or puts it back.
+ * wrench to change the link; the Tuning Wrench's right-click takes its frame (the black panel) away or puts it back.
  */
 public class ImageViewerBlock extends DisplayBlock {
     private static final MapCodec<ImageViewerBlock> CODEC = simpleCodec(ImageViewerBlock::new);
