@@ -61,9 +61,9 @@ import net.neoforged.neoforge.common.Tags;
 /**
  * A playing display lights the room in front of it as a cinema screen does: an area light the size of the screen, its
  * colours the video's (shaders/core/display_light). Each block face it reaches is drawn again, added to what's there:
- * lit by the part of the picture it faces, shaded softly by what stands between, and by the screen's light off the
- * faces about it, in their colours, and by the mobs and players in it; and, if glossy (glass, ice, polished stone, metal, water), mirroring the
- * picture, blurred by its roughness. Under a shader pack, no reflections (the pack draws its own), and the light is
+ * lit by every part of the picture, each in its colour and the nearer the more, shaded softly by what stands between
+ * and by the mobs and players in it, and by the screen's light off the faces about it, in their colours; and, if
+ * glossy (glass, ice, polished stone, metal, water), mirroring the picture, blurred by its roughness. Under a shader pack, no reflections (the pack draws its own), and the light is
  * added once the pack has finished the frame.
  * The faces are found in the background when blocks change and kept in a vertex buffer, drawn each frame.
  */
